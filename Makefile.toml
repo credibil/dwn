@@ -1,0 +1,124 @@
+# Install: `cargo install cargo-make`
+# Help: https://sagiegurari.github.io/cargo-make/
+
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[config]
+default_to_workspace = true
+skip_core_tasks = true
+skip_crate_env_info = true
+skip_git_env_info = true
+skip_rust_env_info = true
+
+# -----------------------------------------------------------------------------
+# Build and test
+# -----------------------------------------------------------------------------
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
+
+[tasks.build]
+command = "cargo"
+args = ["build"]
+dependencies = ["clean"]
+
+[tasks.test]
+command = "cargo"
+args = ["nextest", "run", "--no-fail-fast"]
+# dependencies = ["testdocs"]
+env = { RUSTFLAGS = "-Dwarnings" }
+
+[tasks.testdocs]
+command = "cargo"
+args = ["test", "doc"]
+env = { RUSTFLAGS = "-Dwarnings" }
+
+# -----------------------------------------------------------------------------
+# Basic hygiene
+# -----------------------------------------------------------------------------
+
+[tasks.fmt]
+command = "cargo"
+args = ["fmt", "--all"]
+install_crate = "rustfmt"
+
+[tasks.lint]
+command = "cargo"
+args = ["clippy"]
+install_crate = { rustup_component_name = "clippy" }
+
+[tasks.update]
+command = "cargo"
+args = ["update"]
+
+[tasks.upgrade]
+command = "cargo"
+args = ["upgrade"]
+install_crate = "cargo-edit"
+
+[tasks.audit]
+command = "cargo"
+args = ["audit"]
+
+[tasks.unused]
+command = "cargo"
+args = ["machete", "--skip-target-dir"]
+install_crate = "cargo-machete"
+
+[tasks.outdated]
+command = "cargo"
+args = ["outdated", "--workspace", "--exit-code", "1"]
+install_crate = "cargo-outdated"
+
+[tasks.check]
+dependencies = ["audit", "fmt", "lint", "outdated", "unused"]
+
+# -----------------------------------------------------------------------------
+# Publishing
+# -----------------------------------------------------------------------------
+
+[tasks.semver]
+command = "cargo"
+args = ["semver-checks"]
+install_crate = "cargo-semver-checks"
+
+[tasks.pre-pub]
+run_task = { name = ["pre-pub-core", "pre-pub-issuer", "pre-pub-vp", "pre-pub-holder"], parallel = true }
+
+[tasks.pre-pub-core]
+command = "cargo"
+args = ["publish", "--allow-dirty", "--dry-run", "--package", "core-utils"]
+
+[tasks.pre-pub-issuer]
+command = "cargo"
+args = ["publish", "--allow-dirty", "--dry-run", "--package", "vercre-issuer"]
+
+[tasks.pre-pub-vp]
+command = "cargo"
+args = ["publish", "--allow-dirty", "--dry-run", "--package", "vercre-vp"]
+
+[tasks.pre-pub-holder]
+command = "cargo"
+args = ["publish", "--allow-dirty", "--dry-run", "--package", "vercre-holder"]
+
+# args = release level: one of `release`, `major`, `minor`, `patch`, `alpha`, `beta`, `rc`
+[tasks.release]
+command = "cargo"
+args = ["release", "${@}"]
+install_crate = "cargo-release"
+
+[tasks.publish]
+command = "cargo"
+args = ["release", "${@}", "--execute"]
+install_crate = "cargo-release"
+
+# -----------------------------------------------------------------------------
+# Type generation for Tauri wallet example
+# -----------------------------------------------------------------------------
+
+[tasks.typegen]
+command = "typeshare"
+args = ["./examples/wallet/src-tauri", "--lang=typescript", "--output-file=./examples/wallet/src/types/generated.ts"]
+install_crate = "typeshare-cli"
