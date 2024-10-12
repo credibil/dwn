@@ -20,6 +20,8 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 
@@ -57,6 +59,8 @@ assert_let_bind = "0.1.1"
 axum = { version = "0.7.7", features = ["macros"] }
 axum-extra = { version = "0.9.4", features = ["typed-header"] }
 base64ct = { version = "1.6.0", features = ["std"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = { version = "1.0.128", features = ["alloc"] }
 
 [workspace.metadata.bin]
 cargo-xcode = { version = "=1.7.0" }
