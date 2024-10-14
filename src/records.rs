@@ -116,7 +116,7 @@ pub struct DeleteDescriptor {
     pub prune: bool,
 }
 
-/// Messages filter.
+/// Records filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Filter {
@@ -169,7 +169,7 @@ pub struct Filter {
 
     /// Records with a size within the range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_size: Option<Range>,
+    pub data_size: Option<SizeRange>,
 
     /// CID of the data.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -196,7 +196,7 @@ pub enum TagFilter {
     StartsWith(String),
 
     /// Filter tags by range.
-    Range(Range),
+    Range(SizeRange),
 
     /// Filter by a specific value.
     Value(Value),
@@ -211,10 +211,10 @@ impl Default for TagFilter {
 /// Size range.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Range {
+pub struct SizeRange {
     /// The minimum size.
-    pub min: Value,
+    pub min: u64,
 
     /// The maximum size.
-    pub max: Value,
+    pub max: u64,
 }

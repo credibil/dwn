@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::infosec::{Encryption, Jws};
-use crate::{messages, records};
+use crate::{messages, protocols, records};
 
 /// Decentralized Web Node messaging is transacted via `Message` objects.
 /// Messages contain execution parameters, authorization material, authorization
@@ -79,6 +79,16 @@ pub enum Payload {
     RecordsDelete {
         /// The Subscribe descriptor.
         descriptor: records::DeleteDescriptor,
+    },
+    /// Protocols Configure payload
+    ProtocolsConfigure {
+        /// The Configure descriptor.
+        descriptor: protocols::ConfigureDescriptor,
+    },
+    /// Protocols Query payload
+    ProtocolsQuery {
+        /// The Query descriptor.
+        descriptor: protocols::QueryDescriptor,
     },
 }
 
