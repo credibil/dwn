@@ -25,7 +25,6 @@ pub struct Signature {
     pub signature: String,
 }
 
-
 /// Encryption settings.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

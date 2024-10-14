@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::infosec::Jws;
+use crate::infosec::{Encryption, Jws};
 use crate::{messages, records};
 
 /// Decentralized Web Node messaging is transacted via `Message` objects.
@@ -41,6 +41,25 @@ pub enum Payload {
         /// The Subscribe descriptor.
         descriptor: messages::SubscribeDescriptor,
     },
+    /// Records write payload
+    RecordsWrite {
+        /// The Write descriptor.
+        descriptor: records::WriteDescriptor,
+
+        /// Record CID
+        record_id: String,
+
+        /// Reord context.
+        context_id: Option<String>,
+
+        /// Record data.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attestation: Option<Jws>,
+
+        /// Record encryption.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        encryption: Option<Encryption>,
+    },
     /// Records Query payload
     RecordsQuery {
         /// The Query descriptor.
@@ -55,6 +74,11 @@ pub enum Payload {
     RecordsSubscribe {
         /// The Subscribe descriptor.
         descriptor: records::SubscribeDescriptor,
+    },
+    /// Records Delete payload
+    RecordsDelete {
+        /// The Subscribe descriptor.
+        descriptor: records::DeleteDescriptor,
     },
 }
 
@@ -108,4 +132,28 @@ pub struct DelegatedGrant {
     // descriptor: records::WriteDescriptor,
     //---
     encoded_data: String,
+}
+
+/// Message authorization.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Attestation {
+    /// The signature of the message signer.
+    /// N.B.: Not the author of the message when signer is a delegate.
+    pub signature: Jws,
+
+    /// The delegated grant required when the message is signed by an
+    /// author-delegate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author_delegated_grant: Option<DelegatedGrant>,
+
+    /// An "overriding" signature for a DWN owner or owner-delegate to store a
+    /// message authored by another entity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_signature: Option<Jws>,
+
+    /// The delegated grant required when the message is signed by an
+    /// owner-delegate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_delegated_grant: Option<DelegatedGrant>,
 }
