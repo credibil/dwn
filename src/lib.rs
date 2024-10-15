@@ -3,10 +3,20 @@
 pub mod infosec;
 pub mod messages;
 pub mod protocols;
+pub mod provider;
 pub mod records;
 pub mod service;
 
 use serde::{Deserialize, Serialize};
+
+use crate::provider::Provider;
+use crate::service::Message;
+
+/// Send a message.
+pub async fn send_message(_: Message, _: impl Provider) -> anyhow::Result<()> {
+    println!("Sending message");
+    Ok(())
+}
 
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -120,3 +130,21 @@ pub struct Cursor {
     /// The number of messages to return.
     pub value: u64,
 }
+
+// /// Filter.
+// #[derive(Clone, Debug, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub enum Filter {
+//     /// Filter by a specific value.
+//     Equal(Value),
+
+//     OneOf(Vec<Value>)
+
+//     /// Filter tags by range.
+//     Range(SizeRange),
+// }
+
+// export type EqualFilter = string | number | boolean;
+// export type OneOfFilter = EqualFilter[];
+// export type RangeFilter = (GT | LT) & Partial<GT> & Partial<LT>;
+// export type RangeValue = string | number;

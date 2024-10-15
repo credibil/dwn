@@ -199,12 +199,16 @@ pub enum TagFilter {
     Range(SizeRange),
 
     /// Filter by a specific value.
-    Value(Value),
+    Equal(Value),
 }
+
+// export type EqualFilter = string | number | boolean;
+// export type OneOfFilter = EqualFilter[];
+// export type RangeValue = string | number;
 
 impl Default for TagFilter {
     fn default() -> Self {
-        Self::Value(Value::Null)
+        Self::Equal(Value::Null)
     }
 }
 

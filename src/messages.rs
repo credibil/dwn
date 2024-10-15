@@ -66,3 +66,29 @@ pub struct Filter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message_timestamp: Option<DateRange>,
 }
+
+/// Messages sort.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sort {
+    /// Sort by `date_created`.
+    pub date_created: Option<Direction>,
+
+    /// Sort by `date_published`.
+    pub date_published: Option<Direction>,
+
+    /// Sort by `message_timestamp`.
+    pub message_timestamp: Option<Direction>,
+}
+
+/// Sort direction.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Direction {
+    /// Sort ascending.
+    #[default]
+    Ascending = 1,
+
+    /// Sort descending.
+    Descending = -1,
+}
