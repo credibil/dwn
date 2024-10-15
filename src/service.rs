@@ -10,9 +10,56 @@ use crate::{messages, protocols, records};
 /// Decentralized Web Node messaging is transacted via `Message` objects.
 /// Messages contain execution parameters, authorization material, authorization
 /// signatures, and signing/encryption information.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Message {
+    /// Authorized message.
+    Authorized(AuthorizedMessage),
+
+    /// Anonymous message.
+    Anonymous(AnonymousMessage),
+
+    /// Records write message.
+    RecordsWrite(RecordsWriteMessage),
+}
+
+impl Default for Message {
+    fn default() -> Self {
+        Message::Authorized(Default::default())
+    }
+}
+
+/// Decentralized Web Node messaging is transacted via `Message` objects.
+/// Messages contain execution parameters, authorization material, authorization
+/// signatures, and signing/encryption information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Message {
+pub struct AuthorizedMessage {
+    /// The message payload.
+    #[serde(flatten)]
+    pub payload: Payload,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// Decentralized Web Node messaging is transacted via `Message` objects.
+/// Messages contain execution parameters, authorization material, authorization
+/// signatures, and signing/encryption information.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnonymousMessage {
+    /// The message payload.
+    #[serde(flatten)]
+    pub payload: Payload,
+}
+
+/// Decentralized Web Node messaging is transacted via `Message` objects.
+/// Messages contain execution parameters, authorization material, authorization
+/// signatures, and signing/encryption information.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordsWriteMessage {
     /// The message payload.
     #[serde(flatten)]
     pub payload: Payload,
