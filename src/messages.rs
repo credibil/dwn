@@ -4,7 +4,38 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::service::Authorization;
 use crate::{Cursor, DateRange, Descriptor, Interface, Method};
+
+/// Messages Query payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Query {
+    /// The Query descriptor.
+    pub descriptor: QueryDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// Messages Read payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Read {
+    /// The Read descriptor.
+    pub descriptor: ReadDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// Messages Subscribe payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Subscribe {
+    /// The Subscribe descriptor.
+    pub descriptor: SubscribeDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
 
 /// Query descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

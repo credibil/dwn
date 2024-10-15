@@ -8,7 +8,29 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::infosec::PublicKeyJwk;
+use crate::service::Authorization;
 use crate::{records, Descriptor};
+
+/// Protocols Configure payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Configure {
+    /// The Configure descriptor.
+    pub descriptor: ConfigureDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// Protocols Query payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Query {
+    /// The Query descriptor.
+    pub descriptor: QueryDescriptor,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<Authorization>,
+}
 
 /// Configure descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -94,7 +116,7 @@ pub struct PathEncryption {
     pub public_key_jwk: PublicKeyJwk,
 }
 
-/// Rules are used to define which actors can access records for a given 
+/// Rules are used to define which actors can access records for a given
 /// protocol path. Rules take three forms, e.g.:
 ///
 /// 1. Anyone can create:
@@ -105,7 +127,7 @@ pub struct PathEncryption {
 ///   }
 /// ```
 ///
-/// 2. Author of `protocol_path` can create; OR Recipient of `protocol_path` 
+/// 2. Author of `protocol_path` can create; OR Recipient of `protocol_path`
 ///    can write:
 /// ```json
 ///   {

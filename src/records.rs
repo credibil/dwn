@@ -7,7 +7,73 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use crate::infosec::{Encryption, Jws};
+use crate::service::Authorization;
 use crate::{DateRange, Descriptor, Pagination, Quota};
+
+/// Records write payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Write {
+    /// The Write descriptor.
+    pub descriptor: WriteDescriptor,
+
+    /// Record CID
+    pub record_id: String,
+
+    /// Reord context.
+    pub context_id: Option<String>,
+
+    /// Record data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attestation: Option<Jws>,
+
+    /// Record encryption.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encryption: Option<Encryption>,
+}
+
+/// Records Query payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Query {
+    /// The Query descriptor.
+    pub descriptor: QueryDescriptor,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<Authorization>,
+}
+
+/// Records Read payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Read {
+    /// The Read descriptor.
+    pub descriptor: ReadDescriptor,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<Authorization>,
+}
+
+/// Records Subscribe payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Subscribe {
+    /// The Subscribe descriptor.
+    pub descriptor: SubscribeDescriptor,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<Authorization>,
+}
+
+/// Records Delete payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Delete {
+    /// The Subscribe descriptor.
+    pub descriptor: DeleteDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
 
 /// Write descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

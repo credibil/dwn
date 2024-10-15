@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::infosec::{Encryption, Jws};
+use crate::infosec::Jws;
 use crate::{messages, protocols, records};
 
 /// Decentralized Web Node messaging is transacted via `Message` objects.
@@ -12,139 +12,19 @@ use crate::{messages, protocols, records};
 /// signatures, and signing/encryption information.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Message {
-    /// Authorized message.
-    Authorized(AuthorizedMessage),
-
-    /// Anonymous message.
-    Anonymous(AnonymousMessage),
-
-    /// Records write message.
-    RecordsWrite(RecordsWriteMessage),
-}
-
-impl Default for Message {
-    fn default() -> Self {
-        Message::Authorized(Default::default())
-    }
-}
-
-/// Decentralized Web Node messaging is transacted via `Message` objects.
-/// Messages contain execution parameters, authorization material, authorization
-/// signatures, and signing/encryption information.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthorizedMessage {
-    /// The message payload.
-    #[serde(flatten)]
-    pub payload: Payload,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
-/// Decentralized Web Node messaging is transacted via `Message` objects.
-/// Messages contain execution parameters, authorization material, authorization
-/// signatures, and signing/encryption information.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AnonymousMessage {
-    /// The message payload.
-    #[serde(flatten)]
-    pub payload: Payload,
-}
-
-/// Decentralized Web Node messaging is transacted via `Message` objects.
-/// Messages contain execution parameters, authorization material, authorization
-/// signatures, and signing/encryption information.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecordsWriteMessage {
-    /// The message payload.
-    #[serde(flatten)]
-    pub payload: Payload,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
-/// Message payload.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 #[serde(untagged)]
-pub enum Payload {
-    /// Messages Query payload
-    MessagesQuery {
-        /// The Query descriptor.
-        descriptor: messages::QueryDescriptor,
-    },
-    /// Messages Read payload
-    MessagesRead {
-        /// The Read descriptor.
-        descriptor: messages::ReadDescriptor,
-    },
-    /// Messages Subscribe payload
-    MessagesSubscribe {
-        /// The Subscribe descriptor.
-        descriptor: messages::SubscribeDescriptor,
-    },
-    /// Records write payload
-    RecordsWrite {
-        /// The Write descriptor.
-        descriptor: records::WriteDescriptor,
-
-        /// Record CID
-        record_id: String,
-
-        /// Reord context.
-        context_id: Option<String>,
-
-        /// Record data.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        attestation: Option<Jws>,
-
-        /// Record encryption.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        encryption: Option<Encryption>,
-    },
-    /// Records Query payload
-    RecordsQuery {
-        /// The Query descriptor.
-        descriptor: records::QueryDescriptor,
-    },
-    /// Records Read payload
-    RecordsRead {
-        /// The Read descriptor.
-        descriptor: records::ReadDescriptor,
-    },
-    /// Records Subscribe payload
-    RecordsSubscribe {
-        /// The Subscribe descriptor.
-        descriptor: records::SubscribeDescriptor,
-    },
-    /// Records Delete payload
-    RecordsDelete {
-        /// The Subscribe descriptor.
-        descriptor: records::DeleteDescriptor,
-    },
-    /// Protocols Configure payload
-    ProtocolsConfigure {
-        /// The Configure descriptor.
-        descriptor: protocols::ConfigureDescriptor,
-    },
-    /// Protocols Query payload
-    ProtocolsQuery {
-        /// The Query descriptor.
-        descriptor: protocols::QueryDescriptor,
-    },
-}
-
-impl Default for Payload {
-    fn default() -> Self {
-        Payload::MessagesQuery {
-            descriptor: Default::default(),
-        }
-    }
+#[allow(missing_docs)]
+pub enum Message {
+    MessagesQuery(messages::Query),
+    MessagesRead(messages::Read),
+    MessagesSubscribe(messages::Subscribe),
+    RecordsWrite(records::Write),
+    RecordsQuery(records::Query),
+    RecordsRead(records::Read),
+    RecordsSubscribe(records::Subscribe),
+    RecordsDelete(records::Delete),
+    ProtocolsConfigure(protocols::Configure),
+    ProtocolsQuery(protocols::Query),
 }
 
 /// Message authorization.
