@@ -58,23 +58,14 @@ impl MessageStore for ProviderImpl {
         &self, tenant: &str, message: Message, _indexes: BTreeMap<&str, &str>,
     ) -> anyhow::Result<()> {
         self.db.use_ns("testing").use_db(tenant).await?;
-
-        let _: Vec<Message> = self.db.create("message").content(message).await?;
+        let _: Option<Message> =
+            self.db.create(("message", message.cid()?)).content(message).await?;
         Ok(())
     }
 
     async fn get(&self, tenant: &str, cid: &str) -> anyhow::Result<Option<Message>> {
         self.db.use_ns("testing").use_db(tenant).await?;
-
-        let response: Option<Message> = self
-            .db
-            .select(("message", cid))
-            // .query("SELECT * FROM type::table($table) WHERE cid = $cid")
-            // .bind(("table", "message"))
-            // .bind(("cid", cid))
-            .await?;
-
-        Ok(response)
+        Ok(self.db.select(("message", cid)).await?)
     }
 
     async fn query(

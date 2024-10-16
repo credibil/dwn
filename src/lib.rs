@@ -6,6 +6,7 @@ pub mod protocols;
 pub mod provider;
 pub mod records;
 pub mod service;
+pub mod cid;
 
 use serde::{Deserialize, Serialize};
 

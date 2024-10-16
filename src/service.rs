@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::infosec::Jws;
-use crate::{messages, protocols, records};
+use crate::{cid, messages, protocols, records};
 
 /// Decentralized Web Node messaging is transacted via `Message` objects.
 /// Messages contain execution parameters, authorization material, authorization
@@ -25,6 +25,13 @@ pub enum Message {
     RecordsDelete(records::Delete),
     ProtocolsConfigure(protocols::Configure),
     ProtocolsQuery(protocols::Query),
+}
+
+impl Message {
+    /// Compute the CID of the message.
+    pub fn cid(&self) -> anyhow::Result<String> {
+        cid::compute_cid(self)
+    }
 }
 
 /// Message authorization.
