@@ -16,12 +16,12 @@ use crate::provider::Provider;
 use crate::service::{Message, Response};
 
 /// Send a message.
-pub async fn send_message(message: Message, _: impl Provider) -> anyhow::Result<Response> {
+pub async fn send_message(message: Message, provider: impl Provider) -> anyhow::Result<Response> {
     println!("Sending message");
 
     match message {
         Message::MessagesQuery(query) => {
-            let reply = query::handle("tenant", query).await?;
+            let reply = query::handle("tenant", query, provider).await?;
             Ok(Response::MessagesQuery(reply))
         }
         _ => {

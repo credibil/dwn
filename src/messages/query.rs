@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::Filter;
+use crate::provider::Provider;
 use crate::service::Authorization;
 use crate::{Cursor, Descriptor};
 
@@ -46,6 +47,8 @@ pub struct QueryDescriptor {
     pub cursor: Option<Cursor>,
 }
 
-pub async fn handle(tenant: &str, message: Query) -> anyhow::Result<QueryReply> {
+pub async fn handle(
+    tenant: &str, message: Query, provider: impl Provider,
+) -> anyhow::Result<QueryReply> {
     todo!()
 }
