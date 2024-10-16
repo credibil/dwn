@@ -1,22 +1,35 @@
 //! # Decentralized Web Node (DWN)
 
+pub mod cid;
 pub mod infosec;
 pub mod messages;
 pub mod protocols;
 pub mod provider;
 pub mod records;
 pub mod service;
-pub mod cid;
 
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
+use crate::messages::query;
 use crate::provider::Provider;
-use crate::service::Message;
+use crate::service::{Message, Response};
 
 /// Send a message.
-pub async fn send_message(_: Message, _: impl Provider) -> anyhow::Result<()> {
+pub async fn send_message(message: Message, _: impl Provider) -> anyhow::Result<Response> {
     println!("Sending message");
-    Ok(())
+
+    match message {
+        Message::MessagesQuery(query) => {
+            let reply = query::handle("tenant", query).await?;
+            Ok(Response::MessagesQuery(reply))
+        }
+        _ => {
+            return Err(anyhow!("Unsupported message"));
+        }
+    }
+
+    // Ok(())
 }
 
 /// The message descriptor.

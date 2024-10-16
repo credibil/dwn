@@ -2,23 +2,16 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+pub mod query;
+
 use serde::{Deserialize, Serialize};
 
+pub use self::query::{Query, QueryDescriptor,QueryReply};
 use crate::service::Authorization;
-use crate::{Cursor, DateRange, Descriptor, Interface, Method};
-
-/// Messages Query payload
-#[derive(Clone, Debug,Default, Deserialize, Serialize)]
-pub struct Query {
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
+use crate::{DateRange, Descriptor, Interface, Method};
 
 /// Messages Read payload
-#[derive(Clone, Debug,Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Read {
     /// The Read descriptor.
     pub descriptor: ReadDescriptor,
@@ -28,29 +21,13 @@ pub struct Read {
 }
 
 /// Messages Subscribe payload
-#[derive(Clone, Debug,Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Subscribe {
     /// The Subscribe descriptor.
     pub descriptor: SubscribeDescriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
-}
-
-/// Query descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filters to apply when querying messages.
-    pub filters: Vec<Filter>,
-
-    /// The pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
 }
 
 /// Read descriptor.

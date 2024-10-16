@@ -34,6 +34,23 @@ impl Message {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(untagged)]
+#[allow(missing_docs)]
+pub enum Response {
+    MessagesQuery(messages::QueryReply),
+    // MessagesRead(messages::ReadReply),
+    // MessagesSubscribe(messages::SubscribeReply),
+    // RecordsWrite(records::WriteReply),
+    // RecordsQuery(records::QueryReply),
+    // RecordsRead(records::ReadReply),
+    // RecordsSubscribe(records::SubscribeReply),
+    // RecordsDelete(records::DeleteReply),
+    // ProtocolsConfigure(protocols::ConfigureReply),
+    // ProtocolsQuery(protocols::QueryReply),
+}
+
 /// Message authorization.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
