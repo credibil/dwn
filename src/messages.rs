@@ -8,7 +8,7 @@ use crate::service::Authorization;
 use crate::{Cursor, DateRange, Descriptor, Interface, Method};
 
 /// Messages Query payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug,Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
     pub descriptor: QueryDescriptor,
@@ -18,7 +18,7 @@ pub struct Query {
 }
 
 /// Messages Read payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug,Default, Deserialize, Serialize)]
 pub struct Read {
     /// The Read descriptor.
     pub descriptor: ReadDescriptor,
@@ -28,7 +28,7 @@ pub struct Read {
 }
 
 /// Messages Subscribe payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug,Default, Deserialize, Serialize)]
 pub struct Subscribe {
     /// The Subscribe descriptor.
     pub descriptor: SubscribeDescriptor,

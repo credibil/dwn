@@ -1,0 +1,15 @@
+[package]
+name = "vercre-test-utils"
+description = "Test utilities"
+license = "MIT OR Apache-2.0"
+publish = false
+rust-version.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+
+[dev-dependencies]

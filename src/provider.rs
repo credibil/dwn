@@ -19,11 +19,11 @@ pub trait Provider:
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.
 pub trait MessageStore: Send + Sync {
-    /// Open a connection to the underlying store.
-    fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Open a connection to the underlying store.
+    // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Close the connection to the underlying store.
-    fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Close the connection to the underlying store.
+    // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Store a message in the underlying store.
     fn put(
@@ -32,14 +32,16 @@ pub trait MessageStore: Send + Sync {
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.
-    fn get(tenant: &str, cid: &str)
-        -> impl Future<Output = anyhow::Result<Option<Message>>> + Send;
+    fn get(
+        &self, tenant: &str, cid: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Message>>> + Send;
 
     /// Queries the underlying store for messages that matches the provided
     /// filters. Supplying multiple filters establishes an OR condition between
     /// the filters.
     fn query(
-        tenant: &str, filters: Vec<Filter>, sort: Option<Sort>, pagination: Option<Pagination>,
+        &self, tenant: &str, filters: Vec<Filter>, sort: Option<Sort>,
+        pagination: Option<Pagination>,
     ) -> impl Future<Output = anyhow::Result<(Vec<Message>, Cursor)>> + Send;
 
     /// Delete message associated with the specified id.
@@ -52,11 +54,11 @@ pub trait MessageStore: Send + Sync {
 /// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
 pub trait DataStore: Send + Sync {
-    /// Open a connection to the underlying store.
-    fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Open a connection to the underlying store.
+    // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Close the connection to the underlying store.
-    fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Close the connection to the underlying store.
+    // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Store data in the underlying store.
     fn put(
@@ -66,7 +68,7 @@ pub trait DataStore: Send + Sync {
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no match was found.
     fn get(
-        tenant: &str, record_id: &str, data_cid: &str,
+        &self, tenant: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send;
 
     /// Delete data associated with the specified id.
@@ -81,11 +83,11 @@ pub trait DataStore: Send + Sync {
 /// The `TaskStore` trait is used by implementers to provide data storage
 /// capability.
 pub trait TaskStore: Send + Sync {
-    /// Open a connection to the underlying store.
-    fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Open a connection to the underlying store.
+    // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Close the connection to the underlying store.
-    fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Close the connection to the underlying store.
+    // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Registers a new resumable task that is currently in-flight/under
     /// processing to the store.
@@ -146,11 +148,11 @@ pub struct ResumableTask {
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,
 /// and `Server` metadata to the library.
 pub trait EventLog: Send + Sync {
-    /// Open a connection to the underlying store.
-    fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Open a connection to the underlying store.
+    // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Close the connection to the underlying store.
-    fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Close the connection to the underlying store.
+    // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Adds an event to a tenant's event log
     fn append(
@@ -175,12 +177,9 @@ pub trait EventLog: Send + Sync {
         tenant: &str, filters: Vec<Filter>, cursor: Cursor,
     ) -> impl Future<Output = anyhow::Result<(Vec<String>, Cursor)>> + Send;
 
-    /**
-     * deletes any events that have any of the messageCids provided
-     * @returns {Promise<number>} the number of events deleted
-     */
+    /// Deletes events for the specified `message_cids`.
     fn delete_events(
-        tenant: &str, message_ids: Vec<&str>,
+        tenant: &str, message_cids: Vec<&str>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Purge all data from the store.
@@ -190,11 +189,11 @@ pub trait EventLog: Send + Sync {
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,
 /// and `Server` metadata to the library.
 pub trait EventStream: Send + Sync {
-    /// Open a connection to the underlying store.
-    fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Open a connection to the underlying store.
+    // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Close the connection to the underlying store.
-    fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    // /// Close the connection to the underlying store.
+    // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Subscribes to a tenant's event stream.
     fn subscribe(
