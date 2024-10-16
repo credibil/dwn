@@ -47,6 +47,7 @@ pub struct QueryDescriptor {
     pub cursor: Option<Cursor>,
 }
 
+/// Handle a query message.
 pub async fn handle(
     tenant: &str, message: Query, provider: impl Provider,
 ) -> anyhow::Result<QueryReply> {

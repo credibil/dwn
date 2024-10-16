@@ -8,29 +8,9 @@ pub mod provider;
 pub mod records;
 pub mod service;
 
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
-use crate::messages::query;
-use crate::provider::Provider;
-use crate::service::{Message, Response};
-
-/// Send a message.
-pub async fn send_message(message: Message, provider: impl Provider) -> anyhow::Result<Response> {
-    println!("Sending message");
-
-    match message {
-        Message::MessagesQuery(query) => {
-            let reply = query::handle("tenant", query, provider).await?;
-            Ok(Response::MessagesQuery(reply))
-        }
-        _ => {
-            return Err(anyhow!("Unsupported message"));
-        }
-    }
-
-    // Ok(())
-}
+pub use crate::service::send_message;
 
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

@@ -2,10 +2,30 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use crate::infosec::Jws;
+use crate::messages::query;
+use crate::provider::Provider;
 use crate::{cid, messages, protocols, records};
+
+/// Send a message.
+pub async fn send_message(message: Message, provider: impl Provider) -> anyhow::Result<Reply> {
+    println!("Sending message");
+
+    match message {
+        Message::MessagesQuery(query) => {
+            let reply = query::handle("tenant", query, provider).await?;
+            Ok(Reply::MessagesQuery(reply))
+        }
+        _ => {
+            return Err(anyhow!("Unsupported message"));
+        }
+    }
+
+    // Ok(())
+}
 
 /// Decentralized Web Node messaging is transacted via `Message` objects.
 /// Messages contain execution parameters, authorization material, authorization
@@ -18,11 +38,13 @@ pub enum Message {
     MessagesQuery(messages::Query),
     MessagesRead(messages::Read),
     MessagesSubscribe(messages::Subscribe),
+
     RecordsWrite(records::Write),
     RecordsQuery(records::Query),
     RecordsRead(records::Read),
     RecordsSubscribe(records::Subscribe),
     RecordsDelete(records::Delete),
+
     ProtocolsConfigure(protocols::Configure),
     ProtocolsQuery(protocols::Query),
 }
@@ -38,7 +60,7 @@ impl Message {
 #[serde(rename_all = "camelCase")]
 #[serde(untagged)]
 #[allow(missing_docs)]
-pub enum Response {
+pub enum Reply {
     MessagesQuery(messages::QueryReply),
     // MessagesRead(messages::ReadReply),
     // MessagesSubscribe(messages::SubscribeReply),
