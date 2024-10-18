@@ -6,8 +6,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use vercre_infosec::jose::jws::Jws;
 
-use crate::infosec::{Encryption, Jws};
+use crate::infosec::Encryption;
 use crate::service::Authorization;
 use crate::{DateRange, Descriptor, Pagination, Quota};
 

@@ -4,8 +4,8 @@
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
+use vercre_infosec::Jws;
 
-use crate::infosec::Jws;
 use crate::messages::query;
 use crate::provider::Provider;
 use crate::{cid, messages, protocols, records};
@@ -70,7 +70,7 @@ pub enum Reply {
     // RecordsSubscribe(records::SubscribeReply),
     // RecordsDelete(records::DeleteReply),
     // ProtocolsConfigure(protocols::ConfigureReply),
-    // ProtocolsQuery(protocols::QueryReply),
+    ProtocolsQuery(protocols::QueryReply),
 }
 
 /// Message authorization.

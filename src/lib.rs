@@ -101,6 +101,17 @@ pub struct DateRange {
     pub to: String,
 }
 
+/// Reply status.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    /// Status code.
+    pub code: u64,
+
+    /// Status detail.
+    pub detail: Option<String>,
+}
+
 /// Pagination cursor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

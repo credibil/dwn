@@ -2,12 +2,15 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+pub mod query;
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-use crate::infosec::PublicKeyJwk;
+pub use self::query::{QueryReply,Query};
 use crate::service::Authorization;
 use crate::{records, Descriptor};
 
@@ -19,17 +22,6 @@ pub struct Configure {
 
     /// The message authorization.
     pub authorization: Authorization,
-}
-
-/// Protocols Query payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Query {
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
 }
 
 /// Configure descriptor.

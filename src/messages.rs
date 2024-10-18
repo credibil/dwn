@@ -6,9 +6,9 @@ pub mod query;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::query::{Query, QueryDescriptor,QueryReply};
+pub use self::query::{Query, QueryReply};
 use crate::service::Authorization;
-use crate::{DateRange, Descriptor, Interface, Method};
+use crate::{DateRange, Interface, Method};
 
 /// Messages Read payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -18,6 +18,18 @@ pub struct Read {
 
     /// The message authorization.
     pub authorization: Authorization,
+}
+
+/// Read descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: crate::Descriptor,
+
+    /// Message CID.
+    pub message_cid: String,
 }
 
 /// Messages Subscribe payload
@@ -30,25 +42,13 @@ pub struct Subscribe {
     pub authorization: Authorization,
 }
 
-/// Read descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Message CID.
-    pub message_cid: String,
-}
-
 /// Suscribe descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeDescriptor {
     /// The base descriptor
     #[serde(flatten)]
-    pub base: Descriptor,
+    pub base: crate::Descriptor,
 
     /// Message CID.
     pub filters: Vec<Filter>,

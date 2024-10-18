@@ -29,6 +29,7 @@ serde.workspace = true
 serde_json.workspace = true
 surrealdb.workspace = true
 tokio.workspace = true
+vercre-infosec.workspace = true
 
 [dev-dependencies]
 
@@ -72,6 +73,7 @@ serde_json = { version = "1.0.128", features = ["alloc"] }
 sha2 = "0.10.8"
 surrealdb = { version = "1.5.5", features = ["kv-mem"] }
 tokio = { version = "1.40.0", features = ["macros", "rt-multi-thread"] }
+vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 
 [profile.release]
 # Optimize for small code size
