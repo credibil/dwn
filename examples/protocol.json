@@ -1,0 +1,73 @@
+{
+    "interface": "Protocols",
+    "method": "Configure",
+    "definition": {
+        "protocol": "https://decentralized-social-example.org/protocol/",
+        "published": true,
+        "types": {
+            "post": {
+                "schema": "https://decentralized-social-example.org/schemas/post",
+                "dataFormat": [
+                    "application/json"
+                ]
+            },
+            "reply": {
+                "schema": "https://decentralized-social-example.org/schemas/reply",
+                "dataFormat": [
+                    "application/json"
+                ]
+            },
+            "image": {
+                "dataFormat": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/gif"
+                ]
+            }
+        },
+        "structure": {
+            "post": {
+                "$actions": [
+                    {
+                        "who": "anyone",
+                        "can": "read"
+                    }
+                ],
+                "reply": {
+                    "$actions": [
+                        {
+                            "who": "anyone",
+                            "can": "write"
+                        }
+                    ],
+                    "image": {
+                        "$actions": [
+                            {
+                                "who": "anyone",
+                                "can": "read"
+                            },
+                            {
+                                "who": "author",
+                                "of": "reply",
+                                "can": "write"
+                            }
+                        ]
+                    }
+                },
+                "image": {
+                    "$actions": [
+                        {
+                            "who": "anyone",
+                            "can": "read"
+                        },
+                        {
+                            "who": "author",
+                            "of": "post",
+                            "can": "write"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

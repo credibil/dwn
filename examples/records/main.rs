@@ -9,11 +9,12 @@ use serde_json::Value;
 use surrealdb::engine::local::{Db, Mem};
 use surrealdb::opt::RecordId;
 use surrealdb::Surreal;
-use vercre_dwn::messages::{Filter, Sort};
+use vercre_dwn::messages::Sort;
 use vercre_dwn::provider::{
     DataStore, DidResolver, EventLog, EventStream, EventSubscription, MessageEvent, MessageStore,
     Provider, ResumableTask, TaskStore,
 };
+use vercre_dwn::query::{Criterion, Filter};
 use vercre_dwn::service::Message;
 use vercre_dwn::{messages, Cursor, Pagination};
 
@@ -73,6 +74,31 @@ impl MessageStore for ProviderImpl {
         pagination: Option<Pagination>,
     ) -> anyhow::Result<(Vec<Message>, Cursor)> {
         self.db.use_ns("testing").use_db(tenant).await?;
+
+        // SELECT * FROM user WHERE (admin AND active) OR owner = true;
+
+        // SELECT * FROM protocol 
+        // WHERE interface = "Protocols" 
+        //  AND method = "Configure" 
+        //  AND published = true 
+        //  AND protocol = "https://decentralized-social-example.org/protocol/";
+
+        // build query
+        for filter in filters {
+            for (field, citerion) in filter.criteria {
+                match citerion {
+                    Criterion::Single(value) => {
+                        let _ = value;
+                    }
+                    Criterion::OneOf(values) => {
+                        let _ = values;
+                    }
+                    Criterion::Range(range) => {
+                        let _ = range;
+                    }
+                }
+            }
+        }
 
         let mut response =
             self.db.query("SELECT * FROM type::table($table)").bind(("table", "message")).await?;

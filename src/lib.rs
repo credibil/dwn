@@ -5,9 +5,11 @@ pub mod infosec;
 pub mod messages;
 pub mod protocols;
 pub mod provider;
+pub mod query;
 pub mod records;
 pub mod service;
 
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
 pub use crate::service::send_message;
@@ -28,7 +30,7 @@ pub struct Descriptor {
 }
 
 /// DWN interfaces.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Display, Default, Deserialize, Serialize)]
 pub enum Interface {
     /// Records interface.
     #[default]
@@ -42,7 +44,7 @@ pub enum Interface {
 }
 
 /// Interface methods.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Display, Default, Deserialize, Serialize)]
 pub enum Method {
     /// Read method.
     #[default]

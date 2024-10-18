@@ -6,7 +6,8 @@ use std::io::Read;
 
 use serde_json::Value;
 
-use crate::messages::{Filter, Sort};
+use crate::messages::Sort;
+use crate::query::Filter;
 use crate::service::Message;
 use crate::{Cursor, Pagination};
 

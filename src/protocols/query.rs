@@ -2,12 +2,16 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::protocols::Configure;
-use crate::provider::Provider;
+use crate::provider::{MessageStore, Provider};
+use crate::query::{self, Compare, Criterion};
 use crate::service::Authorization;
-use crate::{Cursor, Descriptor, Status};
+use crate::{Cursor, Descriptor, Interface, Method, Status};
 
 /// Handle a query message.
 pub async fn handle(
@@ -17,7 +21,7 @@ pub async fn handle(
     // authenticate(message.authorization, didResolver)?;
     // protocolsQuery.authorize(tenant, messageStore).await?;
 
-    let entries = fetch_config(tenant, query).await?;
+    let entries = fetch_config(tenant, query, &provider).await?;
 
     Ok(QueryReply {
         status: Status {
@@ -29,15 +33,34 @@ pub async fn handle(
     })
 }
 
-async fn fetch_config(tenant: &str, query: Query) -> anyhow::Result<Vec<Configure>> {
-    // // fetch all published `protocols::Configure` matching the query
-    // const filter = {
-    //   ...protocolsQuery.message.descriptor.filter,
-    //   interface : Interface::Protocols,
-    //   method    : Method::Configure,
-    //   published : true
-    // };
-    // const { messages: publishedProtocolsConfigure } = await this.messageStore.query(tenant, [ filter ]);
+/// Fetch published `protocols::Configure` matching the query
+async fn fetch_config(
+    tenant: &str, query: Query, provider: &impl Provider,
+) -> anyhow::Result<Vec<Configure>> {
+    let mut qf = query::Filter {
+        criteria: BTreeMap::<String, Criterion>::new(),
+    };
+
+    qf.criteria.insert(
+        "interface".to_string(),
+        Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
+    );
+    qf.criteria.insert(
+        "method".to_string(),
+        Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
+    );
+    qf.criteria
+        .insert("published".to_string(), Criterion::Single(Compare::Equal(Value::Bool(true))));
+
+    if let Some(filter) = query.descriptor.filter {
+        qf.criteria.insert(
+            "protocol".to_string(),
+            Criterion::Single(Compare::Equal(Value::String(filter.protocol))),
+        );
+    }
+
+    // execute query
+    let msg = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
 
     // return publishedProtocolsConfigure as ProtocolsConfigureMessage[];
 
