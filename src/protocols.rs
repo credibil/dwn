@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-pub use self::query::{QueryReply,Query};
+pub use self::query::{Query, QueryReply};
 use crate::service::Authorization;
 use crate::{records, Descriptor};
 
@@ -84,12 +84,14 @@ pub struct RuleSet {
     pub role: Option<bool>,
 
     /// If $size is set, the record size in bytes must be within the limits.
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$size")]
-    pub size: records::SizeRange,
+    pub size: Option<records::SizeRange>,
 
     /// Tags for this protocol path.
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$tags")]
-    pub tags: Tags,
+    pub tags: Option<Tags>,
 
     /// JSON Schema verifies that properties other than properties prefixed
     /// with $ will actually have type ProtocolRuleSet

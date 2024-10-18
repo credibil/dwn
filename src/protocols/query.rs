@@ -4,13 +4,14 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::service::Authorization;
+use crate::service::{Authorization, Message};
 use crate::{Cursor, Descriptor, Interface, Method, Status};
 
 /// Handle a query message.
@@ -42,33 +43,37 @@ async fn fetch_config(
     };
 
     qf.criteria.insert(
-        "interface".to_string(),
+        "descriptor.interface".to_string(),
         Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
     );
     qf.criteria.insert(
-        "method".to_string(),
+        "descriptor.method".to_string(),
         Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
     );
-    qf.criteria
-        .insert("published".to_string(), Criterion::Single(Compare::Equal(Value::Bool(true))));
+    qf.criteria.insert(
+        "descriptor.definition.published".to_string(),
+        Criterion::Single(Compare::Equal(Value::Bool(true))),
+    );
 
     if let Some(filter) = query.descriptor.filter {
         qf.criteria.insert(
-            "protocol".to_string(),
+            "descriptor.definition.protocol".to_string(),
             Criterion::Single(Compare::Equal(Value::String(filter.protocol))),
         );
     }
 
     // execute query
-    let msg = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
+    let (messages, cursor) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
+    let Message::ProtocolsConfigure(cfg) = messages[0].clone() else {
+        return Err(anyhow!("Unexpected message type"));
+    };
 
-    // return publishedProtocolsConfigure as ProtocolsConfigureMessage[];
-
-    todo!()
+    println!("msg: {:?}", cfg);
+    Ok(vec![cfg])
 }
 
 /// Protocols Query payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
     pub descriptor: QueryDescriptor,

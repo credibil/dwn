@@ -12,19 +12,19 @@ use crate::{cid, messages, protocols, records};
 
 /// Send a message.
 pub async fn send_message(message: Message, provider: impl Provider) -> anyhow::Result<Reply> {
-    println!("Sending message");
-
     match message {
         Message::MessagesQuery(query) => {
             let reply = query::handle("tenant", query, provider).await?;
             Ok(Reply::MessagesQuery(reply))
         }
+        Message::ProtocolsQuery(query) => {
+            let reply = protocols::query::handle("tenant", query, provider).await?;
+            Ok(Reply::ProtocolsQuery(reply))
+        }
         _ => {
             return Err(anyhow!("Unsupported message"));
         }
     }
-
-    // Ok(())
 }
 
 /// Decentralized Web Node messaging is transacted via `Message` objects.

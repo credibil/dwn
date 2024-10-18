@@ -1,73 +1,98 @@
 {
-    "interface": "Protocols",
-    "method": "Configure",
-    "definition": {
-        "protocol": "https://decentralized-social-example.org/protocol/",
-        "published": true,
-        "types": {
-            "post": {
-                "schema": "https://decentralized-social-example.org/schemas/post",
-                "dataFormat": [
-                    "application/json"
-                ]
-            },
-            "reply": {
-                "schema": "https://decentralized-social-example.org/schemas/reply",
-                "dataFormat": [
-                    "application/json"
-                ]
-            },
-            "image": {
-                "dataFormat": [
-                    "image/jpeg",
-                    "image/png",
-                    "image/gif"
-                ]
-            }
-        },
-        "structure": {
-            "post": {
-                "$actions": [
-                    {
-                        "who": "anyone",
-                        "can": "read"
-                    }
-                ],
+    "descriptor": {
+        "interface": "Protocols",
+        "method": "Configure",
+        "definition": {
+            "protocol": "https://decentralized-social-example.org/protocol/",
+            "published": true,
+            "types": {
+                "post": {
+                    "schema": "https://decentralized-social-example.org/schemas/post",
+                    "dataFormat": [
+                        "application/json"
+                    ]
+                },
                 "reply": {
+                    "schema": "https://decentralized-social-example.org/schemas/reply",
+                    "dataFormat": [
+                        "application/json"
+                    ]
+                },
+                "image": {
+                    "dataFormat": [
+                        "image/jpeg",
+                        "image/png",
+                        "image/gif"
+                    ]
+                }
+            },
+            "structure": {
+                "post": {
                     "$actions": [
                         {
                             "who": "anyone",
-                            "can": "write"
+                            "can": [
+                                "read"
+                            ]
                         }
                     ],
+                    "reply": {
+                        "$actions": [
+                            {
+                                "who": "anyone",
+                                "can": [
+                                    "write"
+                                ]
+                            }
+                        ],
+                        "image": {
+                            "$actions": [
+                                {
+                                    "who": "anyone",
+                                    "can": [
+                                        "read"
+                                    ]
+                                },
+                                {
+                                    "who": "author",
+                                    "of": "reply",
+                                    "can": [
+                                        "write"
+                                    ]
+                                }
+                            ]
+                        }
+                    },
                     "image": {
                         "$actions": [
                             {
                                 "who": "anyone",
-                                "can": "read"
+                                "can": [
+                                    "read"
+                                ]
                             },
                             {
                                 "who": "author",
-                                "of": "reply",
-                                "can": "write"
+                                "of": "post",
+                                "can": [
+                                    "write"
+                                ]
                             }
                         ]
                     }
-                },
-                "image": {
-                    "$actions": [
-                        {
-                            "who": "anyone",
-                            "can": "read"
-                        },
-                        {
-                            "who": "author",
-                            "of": "post",
-                            "can": "write"
-                        }
-                    ]
                 }
             }
+        }
+    },
+    "authorization": {
+        "signature": {
+            "payload": "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+            "signatures": [
+                {
+                    "protected": "f454w56e57r68jrhe56gw45gw35w65w4f5i54c85j84wh5jj8h5",
+                    "signature": "5678nr67e56g45wf546786n9t78r67e45657bern797t8r6e5"
+                }
+            ]
         }
     }
 }

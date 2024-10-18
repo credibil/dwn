@@ -10,20 +10,28 @@ use surrealdb::engine::local::{Db, Mem};
 use surrealdb::opt::RecordId;
 use surrealdb::Surreal;
 use vercre_dwn::messages::Sort;
+use vercre_dwn::protocols::{self, Configure};
 use vercre_dwn::provider::{
     DataStore, DidResolver, EventLog, EventStream, EventSubscription, MessageEvent, MessageStore,
     Provider, ResumableTask, TaskStore,
 };
-use vercre_dwn::query::{Criterion, Filter};
+use vercre_dwn::query::{Compare, Criterion, Filter};
 use vercre_dwn::service::Message;
-use vercre_dwn::{messages, Cursor, Pagination};
+use vercre_dwn::{Cursor, Pagination};
 
 #[tokio::main]
 async fn main() {
     let provider = ProviderImpl::new().await.expect("should create provider");
 
-    let msg = Message::MessagesQuery(messages::Query::default());
-    let _ = vercre_dwn::send_message(msg, provider).await;
+    // let msg = Message::MessagesQuery(messages::Query::default());
+
+    let mut query = protocols::Query::default();
+    query.descriptor.filter = Some(protocols::query::Filter {
+        protocol: "https://decentralized-social-example.org/protocol/".to_string(),
+    });
+    let msg = Message::ProtocolsQuery(query);
+
+    let _ = vercre_dwn::send_message(msg, provider).await.expect("should send message");
 }
 
 #[derive(Clone)]
@@ -36,7 +44,12 @@ impl Provider for ProviderImpl {}
 impl ProviderImpl {
     async fn new() -> anyhow::Result<Self> {
         let db = Surreal::new::<Mem>(()).await?;
-        db.use_ns("testing").use_db("test").await?;
+        db.use_ns("testing").use_db("tenant").await?;
+
+        let bytes = include_bytes!("../protocol.json");
+        let config: Configure =
+            serde_json::from_slice(bytes).expect("should deserialize");
+        let _: Vec<Record> = db.create("protocol").content(config).await.expect("should create");
 
         Ok(Self { db })
     }
@@ -77,18 +90,25 @@ impl MessageStore for ProviderImpl {
 
         // SELECT * FROM user WHERE (admin AND active) OR owner = true;
 
-        // SELECT * FROM protocol 
-        // WHERE interface = "Protocols" 
-        //  AND method = "Configure" 
-        //  AND published = true 
+        // SELECT * FROM protocol
+        // WHERE interface = "Protocols"
+        //  AND method = "Configure"
+        //  AND published = true
         //  AND protocol = "https://decentralized-social-example.org/protocol/";
+
+        let mut where_clause = " WHERE 1 = 1".to_string();
 
         // build query
         for filter in filters {
             for (field, citerion) in filter.criteria {
                 match citerion {
-                    Criterion::Single(value) => {
-                        let _ = value;
+                    Criterion::Single(cmp) => {
+                        match cmp {
+                            Compare::Equal(val) => {
+                                where_clause.push_str(&format!(" AND {} = {}", field, val));
+                            }
+                            _ => todo!("support other comparisons"),
+                        };
                     }
                     Criterion::OneOf(values) => {
                         let _ = values;
@@ -100,8 +120,14 @@ impl MessageStore for ProviderImpl {
             }
         }
 
-        let mut response =
-            self.db.query("SELECT * FROM type::table($table)").bind(("table", "message")).await?;
+        where_clause = where_clause.replace('"', "'");
+        println!("where_clause: {}", where_clause);
+
+        let mut response = self
+            .db
+            .query("SELECT * FROM type::table($table)".to_owned() + &where_clause)
+            .bind(("table", "protocol"))
+            .await?;
 
         let messages: Vec<Message> = response.take(0)?;
 
