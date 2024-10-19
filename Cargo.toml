@@ -21,6 +21,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64ct.workspace = true
 ciborium = "0.2.2"
 cid = "0.11.1"
 derive_more = { workspace = true, features = ["display"] }
@@ -28,6 +29,7 @@ multihash-codetable = { version = "0.1.3", features = ["sha2"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror = "1.0.64"
+vercre-did.workspace = true
 vercre-infosec.workspace = true
 
 [dev-dependencies]
@@ -73,7 +75,11 @@ serde_json = { version = "1.0.128", features = ["alloc"] }
 sha2 = "0.10.8"
 test-utils = { path = "crates/test-utils" }
 tokio = { version = "1.40.0", features = ["macros", "rt-multi-thread"] }
+vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
+
+[patch."https://github.com/vercre/infosec.git"]
+vercre-infosec = { path = "../infosec" }
 
 [profile.release]
 # Optimize for small code size

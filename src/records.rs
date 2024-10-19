@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::jws::Jws;
 
+use crate::auth::Authorization;
 use crate::infosec::Encryption;
-use crate::service::Authorization;
 use crate::{DateRange, Descriptor, Pagination, Quota};
 
 /// Records write payload

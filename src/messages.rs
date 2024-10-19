@@ -7,7 +7,7 @@ pub mod query;
 use serde::{Deserialize, Serialize};
 
 pub use self::query::{Query, QueryReply};
-use crate::service::Authorization;
+use crate::auth::Authorization;
 use crate::{DateRange, Interface, Method};
 
 /// Messages Read payload

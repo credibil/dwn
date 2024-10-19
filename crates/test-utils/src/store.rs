@@ -13,13 +13,16 @@ pub mod task;
 use std::collections::BTreeMap;
 use std::future::Future;
 
+use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use serde_json::Value;
 use surrealdb::engine::local::{Db, Mem};
 use surrealdb::opt::RecordId;
 use surrealdb::Surreal;
 use vercre_dwn::protocols::Configure;
-use vercre_dwn::provider::{DidResolver, EventStream, EventSubscription, MessageEvent, Provider};
+use vercre_dwn::provider::{
+    DidResolver, Document, EventStream, EventSubscription, MessageEvent, Provider,
+};
 
 #[derive(Clone)]
 pub struct ProviderImpl {
@@ -29,7 +32,7 @@ pub struct ProviderImpl {
 impl Provider for ProviderImpl {}
 
 impl ProviderImpl {
-    pub async fn new() -> anyhow::Result<Self> {
+    pub async fn new() -> Result<Self> {
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns("testing").use_db("tenant").await?;
 
@@ -48,15 +51,16 @@ struct Record {
 }
 
 impl DidResolver for ProviderImpl {
-    async fn resolve(&self, url: &str) -> anyhow::Result<String> {
-        todo!()
+    async fn resolve(&self, url: &str) -> Result<Document> {
+        serde_json::from_slice(include_bytes!("./store/did.json"))
+            .map_err(|e| anyhow!("issue deserializing document: {e}"))
     }
 }
 
 struct EventSubscriptionImpl;
 
 impl EventSubscription for EventSubscriptionImpl {
-    async fn close(&self) -> anyhow::Result<()> {
+    async fn close(&self) -> Result<()> {
         todo!()
     }
 }
@@ -66,7 +70,7 @@ impl EventStream for ProviderImpl {
     fn subscribe(
         &self, tenant: &str, id: &str,
         listener: impl Fn(&str, MessageEvent, BTreeMap<String, Value>),
-    ) -> impl Future<Output = anyhow::Result<(String, impl EventSubscription)>> + Send {
+    ) -> impl Future<Output = Result<(String, impl EventSubscription)>> + Send {
         async { Ok((String::new(), EventSubscriptionImpl {})) }
     }
 
@@ -75,7 +79,7 @@ impl EventStream for ProviderImpl {
     /// Emits an event to a tenant's event stream.
     async fn emit(
         &self, tenant: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         todo!()
     }
 }

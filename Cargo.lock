@@ -4176,10 +4176,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "vercre-did"
+version = "0.1.0"
+source = "git+https://github.com/vercre/did.git#5711514791368dcddc844dd085fdfaf84e582172"
+dependencies = [
+ "anyhow",
+ "base64ct",
+ "chrono",
+ "curve25519-dalek",
+ "ed25519-dalek",
+ "multibase",
+ "rand",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "url",
+ "vercre-infosec",
+]
+
+[[package]]
 name = "vercre-dwn"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
+ "base64ct",
  "ciborium",
  "cid",
  "derive_more",
@@ -4187,13 +4208,13 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "vercre-did",
  "vercre-infosec",
 ]
 
 [[package]]
 name = "vercre-infosec"
 version = "0.1.0-alpha.6"
-source = "git+https://github.com/vercre/infosec.git#4bf32bc78a93019d58dd3b544a3d707240824278"
 dependencies = [
  "aes-gcm",
  "anyhow",

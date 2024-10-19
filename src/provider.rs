@@ -5,6 +5,7 @@ use std::future::Future;
 use std::io::Read;
 
 use serde_json::Value;
+pub use vercre_did::{DidResolver, Document};
 
 use crate::messages::Sort;
 use crate::query::Filter;
@@ -224,25 +225,4 @@ pub struct MessageEvent {
     /// The initial write of the `RecordsWrite` or `RecordsDelete` message.
     pub initial_write: Option<Message>,
     // pub initial_write: Option<RecordsWriteMessage>
-}
-
-/// `DidResolver` is used to proxy the resolution of a DID document. Resolution
-/// can either be local as in the case of `did:key`, or remote as in the case of
-/// `did:web` or `did:dht`.
-///
-/// Implementers need only return the DID document specified by the url. This
-/// may be by directly dereferencing the URL, looking up a local cache, or
-/// fetching from a remote DID resolver.
-///
-/// For example, a DID resolver for `did:web` would fetch the DID document from
-/// the specified URL. A DID resolver for `did:dht`should forward the request to
-/// a remote DID resolver for the DHT network.
-pub trait DidResolver: Send + Sync {
-    /// Resolve the DID URL to a DID Document.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the DID URL cannot be resolved.
-    // fn resolve(&self, url: &str) -> impl Future<Output = anyhow::Result<Document>> + Send + Sync;
-    fn resolve(&self, url: &str) -> impl Future<Output = anyhow::Result<String>> + Send + Sync;
 }

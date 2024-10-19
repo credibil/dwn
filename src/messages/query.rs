@@ -5,8 +5,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::Filter;
+use crate::auth::Authorization;
 use crate::provider::Provider;
-use crate::service::Authorization;
 use crate::{Cursor, Status};
 
 /// Handle a query message.

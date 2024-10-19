@@ -1,6 +1,6 @@
 //! # Decentralized Web Node (DWN)
 
-mod authorize;
+mod auth;
 pub mod cid;
 pub mod infosec;
 pub mod messages;

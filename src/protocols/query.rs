@@ -8,16 +8,17 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::auth::Authorization;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::service::{Authorization, Message};
+use crate::service::Message;
 use crate::{Cursor, Descriptor, Interface, Method, Status};
 
 /// Handle a query message.
 pub async fn handle(tenant: &str, query: Query, provider: impl Provider) -> Result<Reply> {
     //
-    // authenticate(message.authorization, didResolver)?;
+    query.authorization.authenticate(&provider).await?;
     // protocolsQuery.authorize(tenant, messageStore).await?;
 
     let entries = fetch_config(tenant, query, &provider).await?;
@@ -79,8 +80,7 @@ pub struct Query {
     pub descriptor: QueryDescriptor,
 
     /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
+    pub authorization: Authorization,
 }
 
 /// Messages Query reply

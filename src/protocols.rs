@@ -11,7 +11,7 @@ use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 pub use self::query::{Query, Reply as QueryReply};
-use crate::service::Authorization;
+use crate::auth::Authorization;
 use crate::{records, Descriptor};
 
 /// Protocols Configure payload
