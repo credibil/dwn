@@ -2676,6 +2676,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4149deda5bd21e0f6ccaa2f907cd542541521dead5861bc51bebdf2af4acaf2a"
 
 [[package]]
+name = "records"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "surrealdb",
+ "test-utils",
+ "tokio",
+ "vercre-dwn",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3771,6 +3784,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-utils"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "surrealdb",
+ "vercre-dwn",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4167,7 +4191,6 @@ dependencies = [
  "multihash-codetable",
  "serde",
  "serde_json",
- "surrealdb",
  "tokio",
  "vercre-infosec",
 ]

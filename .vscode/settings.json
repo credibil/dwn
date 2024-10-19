@@ -6,10 +6,5 @@
     // "lldb.launch.envFile": "${workspaceFolder}/.env",
     "lldb.launch.env": {
         "INSTA_WORKSPACE_ROOT": "${workspaceFolder}",
-    },
-    "eslint.workingDirectories": [
-        {
-            "pattern": "examples/wallet/"
-        }
-    ],
+    }
 }

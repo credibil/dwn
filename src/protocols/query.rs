@@ -63,7 +63,7 @@ async fn fetch_config(
     }
 
     // execute query
-    let (messages, cursor) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
+    let (messages, _cursor) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
     let Message::ProtocolsConfigure(cfg) = messages[0].clone() else {
         return Err(anyhow!("Unexpected message type"));
     };

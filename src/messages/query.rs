@@ -11,7 +11,7 @@ use crate::{Cursor, Status};
 
 /// Handle a query message.
 pub async fn handle(
-    tenant: &str, message: Query, provider: impl Provider,
+    _tenant: &str, _message: Query, _provider: impl Provider,
 ) -> anyhow::Result<QueryReply> {
     todo!()
 }
