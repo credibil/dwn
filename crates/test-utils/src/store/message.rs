@@ -61,6 +61,7 @@ impl MessageStore for ProviderImpl {
             .bind(("table", "protocol"))
             .await?;
 
+        // TODO: sort and paginate
         // deserialize messages
         let mut messages = vec![];
         while let Some(msg) = response.take::<Option<Message>>(0)? {

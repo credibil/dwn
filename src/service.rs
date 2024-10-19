@@ -11,19 +11,19 @@ use crate::provider::Provider;
 use crate::{cid, messages, protocols, records};
 
 /// Send a message.
-pub async fn send_message(message: Message, provider: impl Provider) -> anyhow::Result<Reply> {
+pub async fn send_message(
+    tenant: &str, message: Message, provider: impl Provider,
+) -> anyhow::Result<Reply> {
     match message {
         Message::MessagesQuery(query) => {
-            let reply = query::handle("tenant", query, provider).await?;
+            let reply = query::handle(tenant, query, provider).await?;
             Ok(Reply::MessagesQuery(reply))
         }
         Message::ProtocolsQuery(query) => {
-            let reply = protocols::query::handle("tenant", query, provider).await?;
+            let reply = protocols::query::handle(tenant, query, provider).await?;
             Ok(Reply::ProtocolsQuery(reply))
         }
-        _ => {
-            return Err(anyhow!("Unsupported message"));
-        }
+        _ => Err(anyhow!("Unsupported message")),
     }
 }
 
@@ -101,7 +101,7 @@ pub struct Authorization {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegatedGrant {
-    /// the grant's authorization.
+    ///The grant's authorization.
     pub authorization: Box<Authorization>,
 
     /// CID referencing the record associated with the message.
@@ -111,10 +111,9 @@ pub struct DelegatedGrant {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_id: Option<String>,
 
-    //---
-    // descriptor: records::WriteDescriptor,
-    //---
-    encoded_data: String,
+    pub descriptor: records::WriteDescriptor,
+
+    pub encoded_data: String,
 }
 
 /// Message authorization.

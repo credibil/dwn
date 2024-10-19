@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -15,16 +15,17 @@ use crate::service::{Authorization, Message};
 use crate::{Cursor, Descriptor, Interface, Method, Status};
 
 /// Handle a query message.
-pub async fn handle(
-    tenant: &str, query: Query, provider: impl Provider,
-) -> anyhow::Result<QueryReply> {
+pub async fn handle(tenant: &str, query: Query, provider: impl Provider) -> Result<Reply> {
     //
     // authenticate(message.authorization, didResolver)?;
     // protocolsQuery.authorize(tenant, messageStore).await?;
 
     let entries = fetch_config(tenant, query, &provider).await?;
 
-    Ok(QueryReply {
+    // TODO: pagination & sorting
+    // TODO: return errors in Reply
+
+    Ok(Reply {
         status: Status {
             code: 200,
             detail: Some("OK".to_string()),
@@ -37,7 +38,7 @@ pub async fn handle(
 /// Fetch published `protocols::Configure` matching the query
 async fn fetch_config(
     tenant: &str, query: Query, provider: &impl Provider,
-) -> anyhow::Result<Vec<Configure>> {
+) -> Result<Vec<Configure>> {
     let mut qf = query::Filter {
         criteria: BTreeMap::<String, Criterion>::new(),
     };
@@ -68,7 +69,6 @@ async fn fetch_config(
         return Err(anyhow!("Unexpected message type"));
     };
 
-    println!("msg: {:?}", cfg);
     Ok(vec![cfg])
 }
 
@@ -85,7 +85,7 @@ pub struct Query {
 
 /// Messages Query reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct QueryReply {
+pub struct Reply {
     /// Status message to accompany the reply.
     pub status: Status,
 

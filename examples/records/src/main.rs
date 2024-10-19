@@ -1,7 +1,6 @@
+use test_utils::store::ProviderImpl;
 use vercre_dwn::protocols::{self};
 use vercre_dwn::service::Message;
-
-use test_utils::store::ProviderImpl;
 
 #[tokio::main]
 async fn main() {
@@ -15,5 +14,7 @@ async fn main() {
     });
     let msg = Message::ProtocolsQuery(query);
 
-    let _ = vercre_dwn::send_message(msg, provider).await.expect("should send message");
+    let reply =
+        vercre_dwn::send_message("tenant", msg, provider).await.expect("should send message");
+    println!("{:?}", reply);
 }

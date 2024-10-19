@@ -2679,10 +2679,6 @@ checksum = "4149deda5bd21e0f6ccaa2f907cd542541521dead5861bc51bebdf2af4acaf2a"
 name = "records"
 version = "0.0.0"
 dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "surrealdb",
  "test-utils",
  "tokio",
  "vercre-dwn",
@@ -4184,14 +4180,13 @@ name = "vercre-dwn"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
- "async-trait",
  "ciborium",
  "cid",
  "derive_more",
  "multihash-codetable",
  "serde",
  "serde_json",
- "tokio",
+ "thiserror",
  "vercre-infosec",
 ]
 

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-pub use self::query::{Query, QueryReply};
+pub use self::query::{Query, Reply as QueryReply};
 use crate::service::Authorization;
 use crate::{records, Descriptor};
 

@@ -1,5 +1,6 @@
 //! # Decentralized Web Node (DWN)
 
+mod authorize;
 pub mod cid;
 pub mod infosec;
 pub mod messages;
@@ -137,21 +138,3 @@ pub struct Cursor {
     /// The number of messages to return.
     pub value: u64,
 }
-
-// /// Filter.
-// #[derive(Clone, Debug, Deserialize, Serialize)]
-// #[serde(rename_all = "camelCase")]
-// pub enum Filter {
-//     /// Filter by a specific value.
-//     Equal(Value),
-
-//     OneOf(Vec<Value>)
-
-//     /// Filter tags by range.
-//     Range(SizeRange),
-// }
-
-// export type EqualFilter = string | number | boolean;
-// export type OneOfFilter = EqualFilter[];
-// export type RangeFilter = (GT | LT) & Partial<GT> & Partial<LT>;
-// export type RangeValue = string | number;
