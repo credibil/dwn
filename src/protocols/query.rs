@@ -5,10 +5,11 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::auth::Authorization;
+use crate::auth::{Authorization, SignaturePayload};
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
@@ -81,6 +82,41 @@ pub struct Query {
 
     /// The message authorization.
     pub authorization: Authorization,
+}
+
+impl Query {
+    /// Verify message signatures.
+    pub async fn authorize(&self, tenant: &str, provider: &impl Provider) -> Result<()> {
+        let author = self.authorization.author()?;
+
+        // if author is the same as the target tenant, we can directly grant access
+        if author == tenant {
+            return Ok(());
+        }
+
+        let base64 = &self.authorization.signature.payload;
+        let decoded = Base64UrlUnpadded::decode_vec(base64)
+            .map_err(|e| anyhow!("issue decoding header: {e}"))?;
+        let payload: SignaturePayload = serde_json::from_slice(&decoded)
+            .map_err(|e| anyhow!("issue deserializing header: {e}"))?;
+
+        if let Some(grant_id)=payload.permission_grant_id{
+            // let grant = PermissionsProtocol.fetchGrant(tenant, messageStore, grant_id).await?;
+            // ProtocolsGrantAuthorization.authorizeQuery({
+            //     expectedGrantor : tenant,
+            //     expectedGrantee : author,
+            //     incomingMessage : self,
+            //     permissionGrant : grant,
+            //     messageStore
+            // }).await?;
+        } else {
+            return Err(anyhow!("failed authorization"));
+        }
+
+
+
+        todo!()
+    }
 }
 
 /// Messages Query reply

@@ -79,6 +79,26 @@ pub struct DelegatedGrant {
     pub encoded_data: String,
 }
 
+/// Signature payload.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignaturePayload {
+    /// The CID of the message descriptor.
+    pub descriptor_cid: String,
+
+    /// The ID of the permission grant for the message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permission_grant_id: Option<String>,
+
+    /// Record ID of a permission grant DWN `RecordsWrite` with `delegated` set to `true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegated_grant_id: Option<String>,
+
+    /// Used in the Records interface to authorize role-authorized actions for protocol records.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol_role: Option<String>,
+}
+
 /// Message authorization.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -121,4 +141,26 @@ impl Authorization {
 
         Ok(())
     }
+
+    // TODO: cache this value
+    /// Get message author's DID.
+    pub fn author(&self) -> Result<String> {
+        // author from author delegated grant or signer
+        if let Some(grant) = &self.author_delegated_grant {
+            signer_did(&grant.authorization.signature)
+        } else {
+            signer_did(&self.signature)
+        }
+    }
+}
+
+/// Gets the DID of the signer of the given message, returns `undefined` if message is not signed.
+fn signer_did(jws: &Jws) -> Result<String> {
+    let Some(kid) = jws.signatures[0].protected.kid() else {
+        return Err(anyhow!("Invalid `kid`"));
+    };
+    let Some(did) = kid.split('#').nth(0) else {
+        return Err(anyhow!("Invalid DID"));
+    };
+    Ok(did.to_owned())
 }
