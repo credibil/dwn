@@ -9,7 +9,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::auth::{Authorization, SignaturePayload};
+use crate::auth::{grant, Authorization, SignaturePayload};
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
@@ -100,20 +100,34 @@ impl Query {
         let payload: SignaturePayload = serde_json::from_slice(&decoded)
             .map_err(|e| anyhow!("issue deserializing header: {e}"))?;
 
-        if let Some(grant_id)=payload.permission_grant_id{
-            // let grant = PermissionsProtocol.fetchGrant(tenant, messageStore, grant_id).await?;
-            // ProtocolsGrantAuthorization.authorizeQuery({
-            //     expectedGrantor : tenant,
-            //     expectedGrantee : author,
-            //     incomingMessage : self,
-            //     permissionGrant : grant,
-            //     messageStore
-            // }).await?;
+        if let Some(grant_id) = &payload.permission_grant_id {
+            let grant = grant::fetch(tenant, grant_id, provider).await?;
+
+            self.authorize_query(tenant, &author, grant, provider).await?;
         } else {
             return Err(anyhow!("failed authorization"));
         }
 
+        todo!()
+    }
 
+    /// Authorizes the scope of a permission grant for a ProtocolsQuery message.
+    /// @param messageStore Used to check if the grant has been revoked.
+    pub async fn authorize_query(
+        &self, grantor: &str, grantee: &str, grant: grant::PermissionGrant,
+        provider: &impl Provider,
+    ) -> Result<()> {
+        let msg = Message::ProtocolsQuery(self.clone());
+        grant.validate(grantor, grantee, msg, provider).await?;
+
+        // If the grant specifies a protocol, the query must specify the same protocol.
+        // const permissionScope = permissionGrant.scope as ProtocolPermissionScope;
+        // let grant_protocol = permissionScope.protocol;
+        // let message_protocol = message.descriptor.filter?.protocol;
+
+        // if grant_protocol !== message_protocol {
+        //   return anyhow!("scope mismatch: grant protocol {grant_protocol} does not match protocol in message {message_protocol}");
+        // }
 
         todo!()
     }

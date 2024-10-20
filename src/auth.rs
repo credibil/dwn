@@ -1,14 +1,16 @@
 //! # Authorization
 
+pub mod grant;
+
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
 use vercre_infosec::Jws;
 
-use crate::records;
+use crate::{records, Interface, Method};
 
-/// Generate a closure to resolve public key material required by `Jws::decode`.
+/// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///
 /// # Example
 ///
@@ -164,3 +166,5 @@ fn signer_did(jws: &Jws) -> Result<String> {
     };
     Ok(did.to_owned())
 }
+
+  

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::messages::query;
 use crate::provider::Provider;
-use crate::{cid, messages, protocols, records};
+use crate::{cid, messages, protocols, records, Descriptor};
 
 /// Send a message.
 pub async fn send_message(
@@ -52,6 +52,21 @@ impl Message {
     /// Compute the CID of the message.
     pub fn cid(&self) -> anyhow::Result<String> {
         cid::compute_cid(self)
+    }
+
+    pub fn descriptor(&self) -> anyhow::Result<&Descriptor> {
+        match self {
+            Message::MessagesQuery(query) => Ok(&query.descriptor.base),
+            Message::MessagesRead(read) => Ok(&read.descriptor.base),
+            Message::MessagesSubscribe(subscribe) => Ok(&subscribe.descriptor.base),
+            Message::RecordsWrite(write) => Ok(&write.descriptor.base),
+            Message::RecordsQuery(query) => Ok(&query.descriptor.base),
+            Message::RecordsRead(read) => Ok(&read.descriptor.base),
+            Message::RecordsSubscribe(subscribe) => Ok(&subscribe.descriptor.base),
+            Message::RecordsDelete(delete) => Ok(&delete.descriptor.base),
+            Message::ProtocolsConfigure(configure) => Ok(&configure.descriptor.base),
+            Message::ProtocolsQuery(query) => Ok(&query.descriptor.base),
+        }
     }
 }
 

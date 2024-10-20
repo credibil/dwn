@@ -1,0 +1,202 @@
+//! # Grant
+
+use std::collections::BTreeMap;
+
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::messages::{Direction, Sort};
+use crate::provider::{MessageStore, Provider};
+use crate::query::{self, Compare, Criterion};
+use crate::service::Message;
+use crate::{records, Interface, Method};
+
+pub async fn fetch(
+    tenant: &str, grant_id: &str, provider: &impl Provider,
+) -> Result<records::Write> {
+    let mut qf = query::Filter {
+        criteria: BTreeMap::<String, Criterion>::new(),
+    };
+    qf.criteria.insert(
+        "recordId".to_string(),
+        Criterion::Single(Compare::Equal(Value::String(grant_id.to_owned()))),
+    );
+    qf.criteria.insert(
+        "isLatestBaseState".to_string(),
+        Criterion::Single(Compare::Equal(Value::Bool(true))),
+    );
+
+    // execute query
+    let (messages, _) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
+    let Message::RecordsWrite(grant) = messages[0].clone() else {
+        return Err(anyhow!("no permission grant with ID {grant_id}"));
+    };
+
+    Ok(grant)
+}
+
+/// Message authorization.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionGrant {
+    /// The ID of the permission grant, which is the record ID DWN message.
+    pub id: String,
+
+    /// The grantor of the permission.
+    pub grantor: String,
+
+    /// The grantee of the permission.
+    pub grantee: String,
+
+    /// The date at which the grant was given.
+    pub date_granted: String,
+
+    /// Optional string that communicates what the grant would be used for
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Optional CID of a permission request. This is optional because grants may be given without being officially requested
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+
+    /// Timestamp at which this grant will no longer be active.
+    pub date_expires: String,
+
+    /// Whether this grant is delegated or not. If `true`, the `grantedTo` will be able to act as the `grantedTo` within the scope of this grant.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegated: Option<bool>,
+
+    /// The scope of the allowed access.
+    pub scope: Scope,
+
+    /// Optional conditions that must be met when the grant is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<Conditions>,
+}
+
+/// Scope of the permission grant.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Scope {
+    /// The interface the permission is applied to.
+    interface: Interface,
+
+    /// The method the permission is applied to.
+    method: Method,
+
+    /// The protocol the permission is applied to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    protocol: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conditions {
+    /// indicates whether a message written with the invocation of a permission must, may, or must not
+    /// be marked as public.
+    /// If `undefined`, it is optional to make the message public.
+    publication: Option<ConditionPublication>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub enum ConditionPublication {
+    #[default]
+    Required,
+    Prohibited,
+}
+
+impl PermissionGrant {
+    /// Performs base grant-based authorization against the given message:
+    ///
+    ///   1. Validates the `grantor` and `grantee` against specified grant.
+    ///   2. Verifies that the message is within the permuitted timeframe of
+    ///      the grant, and the grant has not been revoked.
+    ///   3. Verifies that the `interface` and `method` grant scopes match.
+    ///
+    /// N.B. Does not validate grant `conditions` or `scope` beyond `interface` and `method`
+    pub async fn validate(
+        &self, grantor: &str, grantee: &str, msg: Message, provider: &impl Provider,
+    ) -> Result<()> {
+        let desc = msg.descriptor()?;
+
+        // verify the `grantee` against intended recipient
+        if grantee != &self.grantee {
+            return Err(anyhow!("grant not granted to {grantee}"));
+        }
+
+        // verifies `grantor` against actual signer
+        if grantor != &self.grantor {
+            return Err(anyhow!("grant not granted by {grantor}"));
+        }
+
+        // verify grant scope for interface
+        if desc.interface != self.scope.interface {
+            return Err(anyhow!("message interface not within the scope of grant {}", self.id));
+        }
+
+        // verify grant scope method
+        if desc.method != self.scope.method {
+            return Err(anyhow!("message method not within the scope of grant {}", self.id));
+        }
+
+        // verify the message is within the grant's time frame
+        let Some(timestamp) = &desc.message_timestamp else {
+            return Err(anyhow!("missing message timestamp"));
+        };
+        self.verify_active(grantor, timestamp, provider);
+
+        Ok(())
+    }
+
+    /// Verify that the message is within the allowed time frame of the grant, and
+    /// the grant has not been revoked.
+    async fn verify_active(
+        &self, grantor: &str, timestamp: &str, provider: &impl Provider,
+    ) -> Result<()> {
+        // Check that message is within the grant's time frame
+        if timestamp < &self.date_granted {
+            return Err(anyhow!("grant is not yet active"));
+        }
+        if (timestamp >= &self.date_expires) {
+            return Err(anyhow!("grant has expired"));
+        }
+
+        // Check if grant has been revoked
+        let mut qf = query::Filter {
+            criteria: BTreeMap::<String, Criterion>::new(),
+        };
+        qf.criteria.insert(
+            "parentId".to_string(),
+            Criterion::Single(Compare::Equal(Value::String(self.id.clone()))),
+        );
+        qf.criteria.insert(
+            "protocolPath".to_string(),
+            Criterion::Single(Compare::Equal(Value::String("grant/revocation".to_string()))),
+        );
+        qf.criteria.insert(
+            "isLatestBaseState".to_string(),
+            Criterion::Single(Compare::Equal(Value::Bool(true))),
+        );
+
+        // find oldest message in the revocation chain
+        let sort = Some(Sort {
+            message_timestamp: Some(Direction::Descending),
+            ..Default::default()
+        });
+        let (messages, _) = MessageStore::query(provider, &grantor, vec![qf], sort, None).await?;
+        let Some(oldest) = messages.first().cloned() else {
+            return Err(anyhow!("grant has been revoked"));
+        };
+
+        let Some(message_timestamp) = &oldest.descriptor()?.message_timestamp else {
+            return Err(anyhow!("missing message timestamp"));
+        };
+
+        if message_timestamp.as_str() <= timestamp {
+            return Err(anyhow!("grant with CID ${} has been revoked", self.id));
+        }
+
+        Ok(())
+    }
+}

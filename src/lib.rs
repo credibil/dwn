@@ -31,7 +31,7 @@ pub struct Descriptor {
 }
 
 /// DWN interfaces.
-#[derive(Clone, Debug, Display, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Display, Default, Deserialize, Serialize,PartialEq, Eq)]
 pub enum Interface {
     /// Records interface.
     #[default]
@@ -45,7 +45,7 @@ pub enum Interface {
 }
 
 /// Interface methods.
-#[derive(Clone, Debug, Display, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Display, Default, Deserialize, Serialize,PartialEq, Eq)]
 pub enum Method {
     /// Read method.
     #[default]
