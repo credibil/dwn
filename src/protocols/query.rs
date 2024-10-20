@@ -103,44 +103,25 @@ impl Query {
         if let Some(grant_id) = &payload.permission_grant_id {
             let grant = grant::fetch(tenant, grant_id, provider).await?;
 
+            // generic message validation
             let msg = Message::ProtocolsQuery(self.clone());
             grant.validate(tenant, &author, msg, provider).await?;
 
-            // if the grant specifies a protocol, the query must specify the same protocol.
-            let grant_protocol = grant.scope.protocol;
-            let Some(filter) = &self.descriptor.filter else {
-                return Err(anyhow!("missing filter"));
-            };
-            if grant_protocol.as_ref() != Some(&filter.protocol) {
-                return Err(anyhow!("unauthorized protocol"));
+            // if set, query and grant protocols need to match
+            if let Some(protocol) = grant.scope.protocol {
+                let Some(filter) = &self.descriptor.filter else {
+                    return Err(anyhow!("missing filter"));
+                };
+                if protocol != filter.protocol {
+                    return Err(anyhow!("unauthorized protocol"));
+                }
             }
         } else {
             return Err(anyhow!("failed authorization"));
         }
 
-        todo!()
+        Ok(())
     }
-
-    // /// Authorizes the scope of a permission grant for a ProtocolsQuery message.
-    // /// @param messageStore Used to check if the grant has been revoked.
-    // pub async fn authorize_query(
-    //     &self, grantor: &str, grantee: &str, grant: grant::PermissionGrant,
-    //     provider: &impl Provider,
-    // ) -> Result<()> {
-    //     let msg = Message::ProtocolsQuery(self.clone());
-    //     grant.validate(grantor, grantee, msg, provider).await?;
-
-    //     // If the grant specifies a protocol, the query must specify the same protocol.
-    //     // const permissionScope = permissionGrant.scope as ProtocolPermissionScope;
-    //     // let grant_protocol = permissionScope.protocol;
-    //     // let message_protocol = message.descriptor.filter?.protocol;
-
-    //     // if grant_protocol !== message_protocol {
-    //     //   return anyhow!("scope mismatch: grant protocol {grant_protocol} does not match protocol in message {message_protocol}");
-    //     // }
-
-    //     todo!()
-    // }
 }
 
 /// Messages Query reply

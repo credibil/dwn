@@ -197,7 +197,7 @@ impl PermissionGrant {
         let Some(timestamp) = &desc.message_timestamp else {
             return Err(anyhow!("missing message timestamp"));
         };
-        self.verify_active(grantor, timestamp, provider);
+        self.verify_active(grantor, timestamp, provider).await?;
 
         Ok(())
     }

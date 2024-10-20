@@ -2,7 +2,7 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use crate::messages::query;
@@ -54,6 +54,7 @@ impl Message {
         cid::compute_cid(self)
     }
 
+    /// Base descriptor common to all messages.
     pub fn descriptor(&self) -> anyhow::Result<&Descriptor> {
         Ok(match self {
             Message::MessagesQuery(query) => &query.descriptor.base,
@@ -69,6 +70,7 @@ impl Message {
         })
     }
 
+    /// Get message signer's DID from the message authorization.
     pub fn signer(&self) -> Option<String> {
         let authzn = match self {
             Message::MessagesQuery(query) => Some(&query.authorization),
