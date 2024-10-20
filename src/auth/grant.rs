@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -10,11 +11,11 @@ use crate::messages::{Direction, Sort};
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
 use crate::service::Message;
-use crate::{records, Interface, Method};
+use crate::{Interface, Method};
 
 pub async fn fetch(
     tenant: &str, grant_id: &str, provider: &impl Provider,
-) -> Result<records::Write> {
+) -> Result<PermissionGrant> {
     let mut qf = query::Filter {
         criteria: BTreeMap::<String, Criterion>::new(),
     };
@@ -29,8 +30,31 @@ pub async fn fetch(
 
     // execute query
     let (messages, _) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
-    let Message::RecordsWrite(grant) = messages[0].clone() else {
+    let message = &messages[0];
+    let Message::RecordsWrite(write) = message.clone() else {
         return Err(anyhow!("no permission grant with ID {grant_id}"));
+    };
+    let desc = write.descriptor;
+
+    // unpack message payload
+    let Some(grant_enc) = &write.encoded_data else {
+        return Err(anyhow!("missing grant data"));
+    };
+    let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc)?;
+    let grant: PermissionGrantData = serde_json::from_slice(&grant_bytes)?;
+
+    let grant = PermissionGrant {
+        id: write.record_id,
+        grantor: message.signer().unwrap_or_default(),
+        grantee: desc.recipient.unwrap_or_default(),
+        date_granted: desc.date_created,
+        date_expires: grant.date_expires,
+        delegated: grant.delegated,
+        description: grant.description,
+        request_id: grant.request_id,
+        scope: grant.scope,
+        conditions: grant.conditions,
+        ..PermissionGrant::default()
     };
 
     Ok(grant)
@@ -52,19 +76,20 @@ pub struct PermissionGrant {
     /// The date at which the grant was given.
     pub date_granted: String,
 
-    /// Optional string that communicates what the grant would be used for
-
+    /// Describes intended grant use.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
-    /// Optional CID of a permission request. This is optional because grants may be given without being officially requested
+    /// Optional CID of a permission request. Pptional because grants may be
+    /// given without being requested.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_id: Option<String>,
 
     /// Timestamp at which this grant will no longer be active.
     pub date_expires: String,
 
-    /// Whether this grant is delegated or not. If `true`, the `grantedTo` will be able to act as the `grantedTo` within the scope of this grant.
+    /// Whether grant is delegated or not. When `true`, `granted_to` acts as
+    /// the `granted_to` within the scope of this grant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated: Option<bool>,
 
@@ -80,14 +105,14 @@ pub struct PermissionGrant {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Scope {
     /// The interface the permission is applied to.
-    interface: Interface,
+    pub interface: Interface,
 
     /// The method the permission is applied to.
-    method: Method,
+    pub method: Method,
 
     /// The protocol the permission is applied to.
     #[serde(skip_serializing_if = "Option::is_none")]
-    protocol: Option<String>,
+    pub protocol: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -96,7 +121,7 @@ pub struct Conditions {
     /// indicates whether a message written with the invocation of a permission must, may, or must not
     /// be marked as public.
     /// If `undefined`, it is optional to make the message public.
-    publication: Option<ConditionPublication>,
+    pub publication: Option<ConditionPublication>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -104,6 +129,34 @@ pub enum ConditionPublication {
     #[default]
     Required,
     Prohibited,
+}
+
+/// Permission grant message payload
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionGrantData {
+    /// Describes intended grant use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// CID of permission request. Optional as grants may be given without
+    /// being requested.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+
+    /// Datetime when grant expires.
+    pub date_expires: String,
+
+    /// Whether grant is delegated or not. When `true`, the `granted_to` acts
+    /// as the `granted_to` within the scope of the grant.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegated: Option<bool>,
+
+    /// The scope of the allowed access.
+    pub scope: Scope,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<Conditions>,
 }
 
 impl PermissionGrant {
@@ -158,7 +211,7 @@ impl PermissionGrant {
         if timestamp < &self.date_granted {
             return Err(anyhow!("grant is not yet active"));
         }
-        if (timestamp >= &self.date_expires) {
+        if timestamp >= &self.date_expires {
             return Err(anyhow!("grant has expired"));
         }
 

@@ -2,12 +2,12 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::messages::query;
 use crate::provider::Provider;
-use crate::{cid, messages, protocols, records, Descriptor};
+use crate::{auth, cid, messages, protocols, records, Descriptor};
 
 /// Send a message.
 pub async fn send_message(
@@ -55,17 +55,43 @@ impl Message {
     }
 
     pub fn descriptor(&self) -> anyhow::Result<&Descriptor> {
-        match self {
-            Message::MessagesQuery(query) => Ok(&query.descriptor.base),
-            Message::MessagesRead(read) => Ok(&read.descriptor.base),
-            Message::MessagesSubscribe(subscribe) => Ok(&subscribe.descriptor.base),
-            Message::RecordsWrite(write) => Ok(&write.descriptor.base),
-            Message::RecordsQuery(query) => Ok(&query.descriptor.base),
-            Message::RecordsRead(read) => Ok(&read.descriptor.base),
-            Message::RecordsSubscribe(subscribe) => Ok(&subscribe.descriptor.base),
-            Message::RecordsDelete(delete) => Ok(&delete.descriptor.base),
-            Message::ProtocolsConfigure(configure) => Ok(&configure.descriptor.base),
-            Message::ProtocolsQuery(query) => Ok(&query.descriptor.base),
+        Ok(match self {
+            Message::MessagesQuery(query) => &query.descriptor.base,
+            Message::MessagesRead(read) => &read.descriptor.base,
+            Message::MessagesSubscribe(subscribe) => &subscribe.descriptor.base,
+            Message::RecordsWrite(write) => &write.descriptor.base,
+            Message::RecordsQuery(query) => &query.descriptor.base,
+            Message::RecordsRead(read) => &read.descriptor.base,
+            Message::RecordsSubscribe(subscribe) => &subscribe.descriptor.base,
+            Message::RecordsDelete(delete) => &delete.descriptor.base,
+            Message::ProtocolsConfigure(configure) => &configure.descriptor.base,
+            Message::ProtocolsQuery(query) => &query.descriptor.base,
+        })
+    }
+
+    pub fn signer(&self) -> Option<String> {
+        let authzn = match self {
+            Message::MessagesQuery(query) => Some(&query.authorization),
+            Message::MessagesRead(read) => Some(&read.authorization),
+            Message::MessagesSubscribe(subscribe) => Some(&subscribe.authorization),
+            Message::RecordsWrite(write) => Some(&write.authorization),
+            Message::RecordsQuery(query) => query.authorization.as_ref(),
+            Message::RecordsRead(read) => read.authorization.as_ref(),
+            Message::RecordsSubscribe(subscribe) => subscribe.authorization.as_ref(),
+            Message::RecordsDelete(delete) => Some(&delete.authorization),
+            Message::ProtocolsConfigure(configure) => Some(&configure.authorization),
+            Message::ProtocolsQuery(query) => Some(&query.authorization),
+        };
+
+        let Some(authzn) = authzn else {
+            return None;
+            // return Err(anyhow!("No authorization found"));
+        };
+
+        if let Ok(signer) = auth::signer_did(&authzn.signature) {
+            return Some(signer);
+        } else {
+            return None;
         }
     }
 }

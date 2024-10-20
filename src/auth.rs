@@ -156,8 +156,9 @@ impl Authorization {
     }
 }
 
-/// Gets the DID of the signer of the given message, returns `undefined` if message is not signed.
-fn signer_did(jws: &Jws) -> Result<String> {
+/// Gets the DID of the signer of the given message, returning an error if the
+/// message is not signed.
+pub fn signer_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
         return Err(anyhow!("Invalid `kid`"));
     };
@@ -166,5 +167,3 @@ fn signer_did(jws: &Jws) -> Result<String> {
     };
     Ok(did.to_owned())
 }
-
-  

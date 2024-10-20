@@ -18,6 +18,9 @@ pub struct Write {
     /// The Write descriptor.
     pub descriptor: WriteDescriptor,
 
+    /// The message authorization.
+    pub authorization: Authorization,
+
     /// Record CID
     pub record_id: String,
 
@@ -31,6 +34,10 @@ pub struct Write {
     /// Record encryption.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encryption: Option<Encryption>,
+
+    /// Message data, base64url encoded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoded_data: Option<String>,
 }
 
 /// Records Query payload
