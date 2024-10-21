@@ -8,6 +8,7 @@ use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
 use vercre_infosec::Jws;
 
+pub use self::grant::PermissionGrant;
 use crate::records;
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.

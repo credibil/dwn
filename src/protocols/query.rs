@@ -5,24 +5,23 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::auth::{grant, Authorization, SignaturePayload};
+use crate::auth::Authorization;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::service::Message;
+use crate::service::{Context, Message};
 use crate::{Cursor, Descriptor, Interface, Method, Status};
 
-/// Handle a query message.
-pub async fn handle(tenant: &str, query: Query, provider: impl Provider) -> Result<Reply> {
+/// Process query message.
+pub async fn handle(ctx: &Context, query: Query, provider: impl Provider) -> Result<Reply> {
     //
     query.authorization.authenticate(&provider).await?;
-    // protocolsQuery.authorize(tenant, messageStore).await?;
+    query.authorize(ctx).await?;
 
-    let entries = fetch_config(tenant, query, &provider).await?;
+    let entries = fetch_config(&ctx.tenant, query, &provider).await?;
 
     // TODO: pagination & sorting
     // TODO: return errors in Reply
@@ -85,39 +84,23 @@ pub struct Query {
 }
 
 impl Query {
-    /// Verify message signatures.
-    pub async fn authorize(&self, tenant: &str, provider: &impl Provider) -> Result<()> {
+    /// Check message has sufficient privileges.
+    pub async fn authorize(&self, ctx: &Context) -> Result<()> {
         let author = self.authorization.author()?;
 
-        // if author is the same as the target tenant, we can directly grant access
-        if author == tenant {
+        // if tenant is author, proceed without further checks
+        if author == ctx.tenant {
             return Ok(());
         }
 
-        let base64 = &self.authorization.signature.payload;
-        let decoded = Base64UrlUnpadded::decode_vec(base64)
-            .map_err(|e| anyhow!("issue decoding header: {e}"))?;
-        let payload: SignaturePayload = serde_json::from_slice(&decoded)
-            .map_err(|e| anyhow!("issue deserializing header: {e}"))?;
-
-        if let Some(grant_id) = &payload.permission_grant_id {
-            let grant = grant::fetch(tenant, grant_id, provider).await?;
-
-            // generic message validation
-            let msg = Message::ProtocolsQuery(self.clone());
-            grant.validate(tenant, &author, msg, provider).await?;
-
-            // if set, query and grant protocols need to match
-            if let Some(protocol) = grant.scope.protocol {
-                let Some(filter) = &self.descriptor.filter else {
-                    return Err(anyhow!("missing filter"));
-                };
-                if protocol != filter.protocol {
-                    return Err(anyhow!("unauthorized protocol"));
-                }
+        // if set, query and grant protocols need to match
+        if let Some(protocol) = &ctx.grant.scope.protocol {
+            let Some(filter) = &self.descriptor.filter else {
+                return Err(anyhow!("missing filter"));
+            };
+            if protocol != &filter.protocol {
+                return Err(anyhow!("unauthorized protocol"));
             }
-        } else {
-            return Err(anyhow!("failed authorization"));
         }
 
         Ok(())

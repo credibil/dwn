@@ -160,18 +160,14 @@ pub struct PermissionGrantData {
 }
 
 impl PermissionGrant {
-    /// Performs base grant-based authorization against the given message:
+    /// Validate message is sufficiently authorized.
     ///
-    ///   1. Validates the `grantor` and `grantee` against specified grant.
-    ///   2. Verifies that the message is within the permuitted timeframe of
-    ///      the grant, and the grant has not been revoked.
-    ///   3. Verifies that the `interface` and `method` grant scopes match.
-    ///
-    /// N.B. Does not validate grant `conditions` or `scope` beyond `interface` and `method`
+    /// Does not validate grant `conditions` or `scope` beyond `interface` and
+    /// `method`
     pub async fn validate(
         &self, grantor: &str, grantee: &str, msg: Message, provider: &impl Provider,
     ) -> Result<()> {
-        let desc = msg.descriptor()?;
+        let desc = msg.descriptor();
 
         // verify the `grantee` against intended recipient
         if grantee != &self.grantee {
@@ -242,12 +238,12 @@ impl PermissionGrant {
             return Err(anyhow!("grant has been revoked"));
         };
 
-        let Some(message_timestamp) = &oldest.descriptor()?.message_timestamp else {
+        let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
             return Err(anyhow!("missing message timestamp"));
         };
 
         if message_timestamp.as_str() <= timestamp {
-            return Err(anyhow!("grant with CID ${} has been revoked", self.id));
+            return Err(anyhow!("grant with CID {} has been revoked", self.id));
         }
 
         Ok(())
