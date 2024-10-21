@@ -9,7 +9,7 @@ const RAW: u64 = 0x55;
 /// 
 /// # Errors
 /// TODO: Add errors
-pub fn compute<T: Serialize>(payload: &T) -> anyhow::Result<String> {
+pub(crate) fn compute<T: Serialize>(payload: &T) -> anyhow::Result<String> {
     // serialize to CBOR
     let mut buf = Vec::new();
     ciborium::into_writer(payload, &mut buf)?;

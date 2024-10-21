@@ -19,7 +19,7 @@ use crate::{Cursor, Descriptor, Interface, Method, Status};
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(ctx: &Context, query: Query, provider: impl Provider) -> Result<Reply> {
+pub(crate) async fn handle(ctx: &Context, query: Query, provider: impl Provider) -> Result<Reply> {
     //
     query.authorization.authenticate(&provider).await?;
     query.authorize(ctx)?;

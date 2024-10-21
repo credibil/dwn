@@ -13,9 +13,10 @@ use crate::query::{self, Compare, Criterion};
 use crate::service::Message;
 use crate::{Interface, Method};
 
-pub async fn fetch(
+/// Fetch the grant specified by `grant_id`.
+pub(crate) async fn fetch_grant(
     tenant: &str, grant_id: &str, provider: &impl Provider,
-) -> Result<PermissionGrant> {
+) -> Result<Grant> {
     let mut qf = query::Filter {
         criteria: BTreeMap::<String, Criterion>::new(),
     };
@@ -41,9 +42,9 @@ pub async fn fetch(
         return Err(anyhow!("missing grant data"));
     };
     let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc)?;
-    let grant: PermissionGrantData = serde_json::from_slice(&grant_bytes)?;
+    let grant: GrantData = serde_json::from_slice(&grant_bytes)?;
 
-    let grant = PermissionGrant {
+    Ok(Grant {
         id: write.record_id,
         grantor: message.signer().unwrap_or_default(),
         grantee: desc.recipient.unwrap_or_default(),
@@ -54,16 +55,14 @@ pub async fn fetch(
         request_id: grant.request_id,
         scope: grant.scope,
         conditions: grant.conditions,
-    };
-
-    Ok(grant)
+    })
 }
 
 /// Message authorization.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(clippy::module_name_repetitions)]
-pub struct PermissionGrant {
+pub struct Grant {
     /// The ID of the permission grant, which is the record ID DWN message.
     pub id: String,
 
@@ -115,6 +114,7 @@ pub struct Scope {
     pub protocol: Option<String>,
 }
 
+/// Conditions that must be met when the grant is used.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Conditions {
@@ -124,17 +124,21 @@ pub struct Conditions {
     pub publication: Option<ConditionPublication>,
 }
 
+/// Condition for publication of a message.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub enum ConditionPublication {
+    /// The message must be marked as public.
     #[default]
     Required,
+
+    /// The message may be marked as public.
     Prohibited,
 }
 
 /// Permission grant message payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PermissionGrantData {
+pub struct GrantData {
     /// Describes intended grant use.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -155,15 +159,19 @@ pub struct PermissionGrantData {
     /// The scope of the allowed access.
     pub scope: Scope,
 
+    /// Optional conditions that must be met when the grant is used.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Conditions>,
 }
 
-impl PermissionGrant {
+impl Grant {
     /// Validate message is sufficiently authorized.
     ///
     /// Does not validate grant `conditions` or `scope` beyond `interface` and
-    /// `method`
+    /// `method`.
+    ///
+    /// # Errors
+    /// TODO: Add errors
     pub async fn validate(
         &self, grantor: &str, grantee: &str, msg: Message, provider: &impl Provider,
     ) -> Result<()> {

@@ -1,14 +1,12 @@
 //! # Authorization
 
-pub mod grant;
-
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
 use vercre_infosec::Jws;
 
-pub use self::grant::PermissionGrant;
+pub use crate::permission::Grant;
 use crate::records;
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
@@ -128,7 +126,7 @@ pub struct Attestation {
 
 impl Authorization {
     /// Verify message signatures.
-    pub async fn authenticate(&self, resolver: &impl DidResolver) -> Result<()> {
+    pub(crate) async fn authenticate(&self, resolver: &impl DidResolver) -> Result<()> {
         let verifier = verify_key!(resolver);
         self.signature.verify(verifier).await?;
 
@@ -147,7 +145,7 @@ impl Authorization {
 
     // TODO: cache this value
     /// Get message author's DID.
-    pub fn author(&self) -> Result<String> {
+    pub(crate) fn author(&self) -> Result<String> {
         self.author_delegated_grant.as_ref().map_or_else(
             || signer_did(&self.signature),
             |grant| signer_did(&grant.authorization.signature),
@@ -157,7 +155,7 @@ impl Authorization {
 
 /// Gets the DID of the signer of the given message, returning an error if the
 /// message is not signed.
-pub fn signer_did(jws: &Jws) -> Result<String> {
+pub(crate) fn signer_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
         return Err(anyhow!("Invalid `kid`"));
     };

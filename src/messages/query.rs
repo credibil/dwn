@@ -13,7 +13,7 @@ use crate::{Cursor, Status};
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(
+pub(crate) fn handle(
     _tenant: &str, _message: Query, _provider: impl Provider,
 ) -> anyhow::Result<QueryReply> {
     todo!()

@@ -9,17 +9,17 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::auth::{grant, Authorization, PermissionGrant, SignaturePayload};
+use crate::auth::{Authorization, Grant, SignaturePayload};
 use crate::messages::{Direction, Sort};
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::{auth, cid, messages, protocols, records, Descriptor};
+use crate::{auth, cid, messages, permission, protocols, records, Descriptor};
 
 /// Process web node messages.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn message(
+pub async fn handle_message(
     tenant: &str, message: Message, provider: impl Provider,
 ) -> anyhow::Result<Reply> {
     let mut ctx = Context {
@@ -31,10 +31,10 @@ pub async fn message(
     message.authorize(&mut ctx, &provider).await?;
 
     match message {
-        Message::MessagesQuery(query) => {
-            let reply = messages::query::handle(&ctx.tenant, query, provider).await?;
-            Ok(Reply::MessagesQuery(reply))
-        }
+        // Message::MessagesQuery(query) => {
+        //     let reply = messages::query::handle(&ctx.tenant, query, provider).await?;
+        //     Ok(Reply::MessagesQuery(reply))
+        // }
         Message::ProtocolsQuery(query) => {
             let reply = protocols::query::handle(&ctx, query, provider).await?;
             Ok(Reply::ProtocolsQuery(reply))
@@ -50,7 +50,7 @@ pub struct Context {
     pub tenant: String,
 
     /// The permission grant used to authorize the message
-    pub grant: Option<PermissionGrant>,
+    pub grant: Option<Grant>,
 }
 
 /// Decentralized Web Node messaging is transacted via `Message` objects.
@@ -106,7 +106,7 @@ impl Message {
         let Some(grant_id) = &payload.permission_grant_id else {
             return Err(anyhow!("`grant_id` not found in signature payload"));
         };
-        let grant = grant::fetch(&ctx.tenant, grant_id, provider).await?;
+        let grant = permission::fetch_grant(&ctx.tenant, grant_id, provider).await?;
 
         let author = authzn.author()?;
         let desc = self.descriptor();
@@ -242,7 +242,7 @@ impl Message {
         if let Ok(signer) = auth::signer_did(&authzn.signature) {
             return Some(signer);
         }
-        
+
         None
     }
 }
