@@ -2679,6 +2679,7 @@ checksum = "4149deda5bd21e0f6ccaa2f907cd542541521dead5861bc51bebdf2af4acaf2a"
 name = "records"
 version = "0.0.0"
 dependencies = [
+ "serde_json",
  "test-utils",
  "tokio",
  "vercre-dwn",

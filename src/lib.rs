@@ -1,15 +1,15 @@
 //! # Decentralized Web Node (DWN)
 
-mod auth;
+pub mod auth;
 pub mod cid;
 pub mod infosec;
 pub mod messages;
+pub mod permission;
 pub mod protocols;
 pub mod provider;
 pub mod query;
 pub mod records;
 pub mod service;
-pub mod permission;
 
 use derive_more::Display;
 use serde::{Deserialize, Serialize};

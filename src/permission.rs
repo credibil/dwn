@@ -33,7 +33,7 @@ pub(crate) async fn fetch_grant(
     let (messages, _) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
     let message = &messages[0];
     let Message::RecordsWrite(write) = message.clone() else {
-        return Err(anyhow!("no permission grant with ID {grant_id}"));
+        return Err(anyhow!("no permission grant for {grant_id}"));
     };
     let desc = write.descriptor;
 

@@ -89,7 +89,7 @@
             "payload": "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
             "signatures": [
                 {
-                    "protected": "f454w56e57r68jrhe56gw45gw35w65w4f5i54c85j84wh5jj8h5",
+                    "protected": "eyJhbGciOiJFZERTQSIsInR5cCI6Im9wZW5pZDR2Y2ktcHJvb2Yrand0Iiwia2lkIjoiZGlkOmtleTp6Nk1rajhKcjFyZzNZalZXV2hnN2FoRVlKaWJxaGpCZ1p0MXBEQ2JUNEx2N0Q0SFgjejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYIn0",
                     "signature": "5678nr67e56g45wf546786n9t78r67e45657bern797t8r6e5"
                 }
             ]
