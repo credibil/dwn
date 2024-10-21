@@ -6,7 +6,10 @@ use serde::Serialize;
 const RAW: u64 = 0x55;
 
 /// Compute a CID from provided payload.
-pub fn compute_cid<T: Serialize>(payload: &T) -> anyhow::Result<String> {
+/// 
+/// # Errors
+/// TODO: Add errors
+pub fn compute<T: Serialize>(payload: &T) -> anyhow::Result<String> {
     // serialize to CBOR
     let mut buf = Vec::new();
     ciborium::into_writer(payload, &mut buf)?;

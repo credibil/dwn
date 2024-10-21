@@ -13,7 +13,7 @@ pub mod service;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-pub use crate::service::send_message;
+pub use crate::service::message;
 
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

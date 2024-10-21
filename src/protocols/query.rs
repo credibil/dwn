@@ -16,10 +16,13 @@ use crate::service::{Context, Message};
 use crate::{Cursor, Descriptor, Interface, Method, Status};
 
 /// Process query message.
+///
+/// # Errors
+/// TODO: Add errors
 pub async fn handle(ctx: &Context, query: Query, provider: impl Provider) -> Result<Reply> {
     //
     query.authorization.authenticate(&provider).await?;
-    query.authorize(ctx).await?;
+    query.authorize(ctx)?;
 
     let entries = fetch_config(&ctx.tenant, query, &provider).await?;
 
@@ -74,6 +77,9 @@ async fn fetch_config(
 }
 
 /// Protocols Query payload
+///
+/// # Errors
+/// TODO: Add errors
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
@@ -85,16 +91,16 @@ pub struct Query {
 
 impl Query {
     /// Check message has sufficient privileges.
-    pub async fn authorize(&self, ctx: &Context) -> Result<()> {
-        let author = self.authorization.author()?;
-
-        // if tenant is author, proceed without further checks
-        if author == ctx.tenant {
-            return Ok(());
-        }
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub fn authorize(&self, ctx: &Context) -> Result<()> {
+        let Some(grant) = &ctx.grant else {
+            return Err(anyhow!("missing grant"));
+        };
 
         // if set, query and grant protocols need to match
-        if let Some(protocol) = &ctx.grant.scope.protocol {
+        if let Some(protocol) = &grant.scope.protocol {
             let Some(filter) = &self.descriptor.filter else {
                 return Err(anyhow!("missing filter"));
             };
@@ -125,6 +131,7 @@ pub struct Reply {
 /// Query descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::module_name_repetitions)]
 pub struct QueryDescriptor {
     /// The base descriptor
     #[serde(flatten)]

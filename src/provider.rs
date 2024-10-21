@@ -172,7 +172,7 @@ pub trait EventLog: Send + Sync {
     /// Retrieves a filtered set of events that occurred after a the cursor
     /// provided, accepts multiple filters. If no cursor is provided, all
     /// events for a given tenant and filter combo will be returned. The cursor
-    /// is a message_cid.
+    /// is a `message_cid`.
     ///
     /// Returns an array of `message_cid`s that represent the events.
     fn query_events(
@@ -210,13 +210,13 @@ pub trait EventStream: Send + Sync {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-/// EventSubscription is a subscription to an event stream.
+/// `EventSubscription` is a subscription to an event stream.
 pub trait EventSubscription {
     /// Close the subscription to the event stream.
     fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-/// MessageEvent contains the message being emitted and an optional initial
+/// `MessageEvent` contains the message being emitted and an optional initial
 /// write message.
 pub struct MessageEvent {
     /// The message being emitted.

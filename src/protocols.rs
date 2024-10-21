@@ -94,7 +94,7 @@ pub struct RuleSet {
     pub tags: Option<Tags>,
 
     /// JSON Schema verifies that properties other than properties prefixed
-    /// with $ will actually have type ProtocolRuleSet
+    /// with $ will actually have type `ProtocolRuleSet`
     #[serde(flatten)]
     pub other: BTreeMap<String, Value>,
 }

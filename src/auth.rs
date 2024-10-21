@@ -148,12 +148,10 @@ impl Authorization {
     // TODO: cache this value
     /// Get message author's DID.
     pub fn author(&self) -> Result<String> {
-        // author from author delegated grant or signer
-        if let Some(grant) = &self.author_delegated_grant {
-            signer_did(&grant.authorization.signature)
-        } else {
-            signer_did(&self.signature)
-        }
+        self.author_delegated_grant.as_ref().map_or_else(
+            || signer_did(&self.signature),
+            |grant| signer_did(&grant.authorization.signature),
+        )
     }
 }
 
@@ -163,7 +161,7 @@ pub fn signer_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
         return Err(anyhow!("Invalid `kid`"));
     };
-    let Some(did) = kid.split('#').nth(0) else {
+    let Some(did) = kid.split('#').next() else {
         return Err(anyhow!("Invalid DID"));
     };
     Ok(did.to_owned())

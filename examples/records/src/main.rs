@@ -15,6 +15,6 @@ async fn main() {
     let msg = Message::ProtocolsQuery(query);
 
     let reply =
-        vercre_dwn::send_message("tenant", msg, provider).await.expect("should send message");
+        vercre_dwn::message("tenant", msg, provider).await.expect("should send message");
     println!("{:?}", reply);
 }

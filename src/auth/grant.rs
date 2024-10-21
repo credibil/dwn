@@ -54,7 +54,6 @@ pub async fn fetch(
         request_id: grant.request_id,
         scope: grant.scope,
         conditions: grant.conditions,
-        ..PermissionGrant::default()
     };
 
     Ok(grant)
@@ -63,6 +62,7 @@ pub async fn fetch(
 /// Message authorization.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::module_name_repetitions)]
 pub struct PermissionGrant {
     /// The ID of the permission grant, which is the record ID DWN message.
     pub id: String,
@@ -170,12 +170,12 @@ impl PermissionGrant {
         let desc = msg.descriptor();
 
         // verify the `grantee` against intended recipient
-        if grantee != &self.grantee {
+        if grantee != self.grantee {
             return Err(anyhow!("grant not granted to {grantee}"));
         }
 
         // verifies `grantor` against actual signer
-        if grantor != &self.grantor {
+        if grantor != self.grantor {
             return Err(anyhow!("grant not granted by {grantor}"));
         }
 
@@ -233,7 +233,7 @@ impl PermissionGrant {
             message_timestamp: Some(Direction::Descending),
             ..Default::default()
         });
-        let (messages, _) = MessageStore::query(provider, &grantor, vec![qf], sort, None).await?;
+        let (messages, _) = MessageStore::query(provider, grantor, vec![qf], sort, None).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(anyhow!("grant has been revoked"));
         };

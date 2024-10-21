@@ -10,6 +10,9 @@ use crate::provider::Provider;
 use crate::{Cursor, Status};
 
 /// Handle a query message.
+///
+/// # Errors
+/// TODO: Add errors
 pub async fn handle(
     _tenant: &str, _message: Query, _provider: impl Provider,
 ) -> anyhow::Result<QueryReply> {
@@ -28,6 +31,7 @@ pub struct Query {
 
 /// Messages Query reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
 pub struct QueryReply {
     /// Status message to accompany the reply.
     pub status: Status,
