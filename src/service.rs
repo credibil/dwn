@@ -20,19 +20,26 @@ use crate::{auth, cid, messages, permission, protocols, records, Descriptor};
 /// # Errors
 /// TODO: Add errors
 pub async fn handle_message(
-    tenant: &str, message: Message, provider: impl Provider,
+    owner: &str, message: Message, provider: impl Provider,
 ) -> anyhow::Result<Reply> {
     let mut ctx = Context {
-        tenant: tenant.to_string(),
+        owner: owner.to_string(),
         grant: None,
     };
 
-    // general message authorization
+    // authenticate author, if set
+    // N.B. `authorize()` will determine whether `authorization` should be set
+    if let Some(authzn) = message.authorization() {
+        authzn.authenticate(&provider).await?;
+    };
+
+    // authorize
     message.authorize(&mut ctx, &provider).await?;
 
+    // route to appropriate handler
     match message {
         // Message::MessagesQuery(query) => {
-        //     let reply = messages::query::handle(&ctx.tenant, query, provider).await?;
+        //     let reply = messages::query::handle(&ctx.owner, query, provider).await?;
         //     Ok(Reply::MessagesQuery(reply))
         // }
         Message::ProtocolsQuery(query) => {
@@ -46,8 +53,8 @@ pub async fn handle_message(
 /// Message context for attaching information used during processing.
 #[derive(Clone, Debug, Default)]
 pub struct Context {
-    /// The web node tenant (or owner)
-    pub tenant: String,
+    /// The web node owner (or owner)
+    pub owner: String,
 
     /// The permission grant used to authorize the message
     pub grant: Option<Grant>,
@@ -92,8 +99,8 @@ impl Message {
             return Ok(());
         };
 
-        // when tenant is author, we don't need any further checks
-        if ctx.tenant == authzn.author()? {
+        // when owner is author, we don't need any further checks
+        if ctx.owner == authzn.author()? {
             return Ok(());
         }
 
@@ -106,7 +113,7 @@ impl Message {
         let Some(grant_id) = &payload.permission_grant_id else {
             return Err(anyhow!("`grant_id` not found in signature payload"));
         };
-        let grant = permission::fetch_grant(&ctx.tenant, grant_id, provider).await?;
+        let grant = permission::fetch_grant(&ctx.owner, grant_id, provider).await?;
 
         let author = authzn.author()?;
         let desc = self.descriptor();
@@ -117,7 +124,7 @@ impl Message {
         }
 
         // verifies `grantor` against actual signer
-        if ctx.tenant != grant.grantor {
+        if ctx.owner != grant.grantor {
             return Err(anyhow!("invalid grantor"));
         }
 
@@ -181,8 +188,7 @@ impl Message {
             message_timestamp: Some(Direction::Descending),
             ..Default::default()
         });
-        let (messages, _) =
-            MessageStore::query(provider, &ctx.tenant, vec![qf], sort, None).await?;
+        let (messages, _) = MessageStore::query(provider, &ctx.owner, vec![qf], sort, None).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(anyhow!("grant has been revoked"));
         };

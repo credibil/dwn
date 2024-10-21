@@ -24,6 +24,8 @@ use vercre_dwn::provider::{
     DidResolver, Document, EventStream, EventSubscription, MessageEvent, Provider,
 };
 
+use crate::signer::OWNER_DID;
+
 #[derive(Clone)]
 pub struct ProviderImpl {
     db: Surreal<Db>,
@@ -34,7 +36,7 @@ impl Provider for ProviderImpl {}
 impl ProviderImpl {
     pub async fn new() -> Result<Self> {
         let db = Surreal::new::<Mem>(()).await?;
-        db.use_ns("testing").use_db("tenant").await?;
+        db.use_ns("testing").use_db(OWNER_DID).await?;
 
         let bytes = include_bytes!("./store/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
@@ -66,9 +68,9 @@ impl EventSubscription for EventSubscriptionImpl {
 }
 
 impl EventStream for ProviderImpl {
-    /// Subscribes to a tenant's event stream.
+    /// Subscribes to a owner's event stream.
     fn subscribe(
-        &self, tenant: &str, id: &str,
+        &self, owner: &str, id: &str,
         listener: impl Fn(&str, MessageEvent, BTreeMap<String, Value>),
     ) -> impl Future<Output = Result<(String, impl EventSubscription)>> + Send {
         async { Ok((String::new(), EventSubscriptionImpl {})) }
@@ -76,9 +78,9 @@ impl EventStream for ProviderImpl {
 
     //: Promise<EventSubscription>;
 
-    /// Emits an event to a tenant's event stream.
+    /// Emits an event to a owner's event stream.
     async fn emit(
-        &self, tenant: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
+        &self, owner: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
     ) -> Result<()> {
         todo!()
     }

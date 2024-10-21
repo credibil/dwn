@@ -9,22 +9,22 @@ use super::ProviderImpl;
 
 impl EventLog for ProviderImpl {
     async fn append(
-        &self, tenant: &str, message_cid: &str, indexes: BTreeMap<String, Value>,
+        &self, owner: &str, message_cid: &str, indexes: BTreeMap<String, Value>,
     ) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn events(tenant: &str, cursor: Option<Cursor>) -> anyhow::Result<(Vec<String>, Cursor)> {
+    async fn events(owner: &str, cursor: Option<Cursor>) -> anyhow::Result<(Vec<String>, Cursor)> {
         todo!()
     }
 
     async fn query_events(
-        tenant: &str, filters: Vec<Filter>, cursor: Cursor,
+        owner: &str, filters: Vec<Filter>, cursor: Cursor,
     ) -> anyhow::Result<(Vec<String>, Cursor)> {
         todo!()
     }
 
-    async fn delete_events(tenant: &str, message_cids: Vec<&str>) -> anyhow::Result<()> {
+    async fn delete_events(owner: &str, message_cids: Vec<&str>) -> anyhow::Result<()> {
         todo!()
     }
 

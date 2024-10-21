@@ -2679,6 +2679,7 @@ checksum = "4149deda5bd21e0f6ccaa2f907cd542541521dead5861bc51bebdf2af4acaf2a"
 name = "records"
 version = "0.0.0"
 dependencies = [
+ "base64ct",
  "serde_json",
  "test-utils",
  "tokio",
@@ -3785,10 +3786,13 @@ name = "test-utils"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
+ "base64ct",
+ "ed25519-dalek",
  "serde",
  "serde_json",
  "surrealdb",
  "vercre-dwn",
+ "vercre-infosec",
 ]
 
 [[package]]

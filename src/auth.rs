@@ -21,7 +21,6 @@ use crate::records;
 /// ...
 /// ```
 #[doc(hidden)]
-// #[macro_export]
 macro_rules! verify_key {
     ($resolver:expr) => {{
         // create local reference before moving into closure
@@ -75,8 +74,10 @@ pub struct DelegatedGrant {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_id: Option<String>,
 
+    /// The grant's descriptor.
     pub descriptor: records::WriteDescriptor,
 
+    /// Encoded grant data.
     pub encoded_data: String,
 }
 

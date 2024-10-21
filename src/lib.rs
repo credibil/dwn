@@ -26,9 +26,9 @@ pub struct Descriptor {
     /// The interface method.
     pub method: Method,
 
-    // The timestamp of the message.
+    /// The timestamp of the message.
     #[serde(skip_serializing_if = "Option::is_none")]
-    message_timestamp: Option<String>,
+    pub message_timestamp: Option<String>,
 }
 
 /// DWN interfaces.

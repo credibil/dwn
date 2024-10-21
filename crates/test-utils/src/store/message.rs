@@ -10,24 +10,24 @@ use super::ProviderImpl;
 
 impl MessageStore for ProviderImpl {
     async fn put(
-        &self, tenant: &str, message: Message, _indexes: BTreeMap<&str, &str>,
+        &self, owner: &str, message: Message, _indexes: BTreeMap<&str, &str>,
     ) -> anyhow::Result<()> {
-        self.db.use_ns("testing").use_db(tenant).await?;
+        self.db.use_ns("testing").use_db(owner).await?;
         let _: Option<Message> =
             self.db.create(("message", message.cid()?)).content(message).await?;
         Ok(())
     }
 
-    async fn get(&self, tenant: &str, cid: &str) -> anyhow::Result<Option<Message>> {
-        self.db.use_ns("testing").use_db(tenant).await?;
+    async fn get(&self, owner: &str, cid: &str) -> anyhow::Result<Option<Message>> {
+        self.db.use_ns("testing").use_db(owner).await?;
         Ok(self.db.select(("message", cid)).await?)
     }
 
     async fn query(
-        &self, tenant: &str, filters: Vec<Filter>, sort: Option<Sort>,
+        &self, owner: &str, filters: Vec<Filter>, sort: Option<Sort>,
         pagination: Option<Pagination>,
     ) -> anyhow::Result<(Vec<Message>, Cursor)> {
-        self.db.use_ns("testing").use_db(tenant).await?;
+        self.db.use_ns("testing").use_db(owner).await?;
 
         // build SQL-like statement
         let mut where_clause = " WHERE 1 = 1".to_string();
@@ -71,8 +71,8 @@ impl MessageStore for ProviderImpl {
         Ok((messages, Cursor::default()))
     }
 
-    async fn delete(&self, tenant: &str, cid: &str) -> anyhow::Result<()> {
-        self.db.use_ns("testing").use_db(tenant).await?;
+    async fn delete(&self, owner: &str, cid: &str) -> anyhow::Result<()> {
+        self.db.use_ns("testing").use_db(owner).await?;
         let person: Option<Message> = self.db.delete(("message", cid)).await?;
         Ok(())
     }

@@ -3,33 +3,33 @@
         "https://www.w3.org/ns/did/v1",
         "https://w3id.org/security/data-integrity/v1"
     ],
-    "id": "did:web:demo.credibil.io",
+    "id": "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX",
     "verificationMethod": [
         {
-            "id": "did:web:demo.credibil.io#key-0",
+            "id": "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX",
+            "controller": "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX",
             "type": "Multikey",
-            "controller": "did:web:demo.credibil.io",
-            "publicKeyMultibase": "z6Mkr1NtupNezZtcUAMxJ79HPex6ZTR9RnGh8xfV257ZQdss"
+            "publicKeyMultibase": "z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"
         }
     ],
     "authentication": [
-        "did:web:demo.credibil.io#key-0"
+        "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"
     ],
     "assertionMethod": [
-        "did:web:demo.credibil.io#key-0"
-    ],
-    "capabilityInvocation": [
-        "did:web:demo.credibil.io#key-0"
-    ],
-    "capabilityDelegation": [
-        "did:web:demo.credibil.io#key-0"
+        "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"
     ],
     "keyAgreement": [
         {
-            "id": "did:web:demo.credibil.io#key-1",
+            "id": "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6LSbzAC2VY7pbmwQhzbXVWDj1H9oAQxgbo7x4sGre6HNkm4",
+            "controller": "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX",
             "type": "Multikey",
-            "controller": "did:web:demo.credibil.io",
-            "publicKeyMultibase": "z6LSo1jPr1g7qoR9UsYWoJs66FiaoHGAK5cJzBGSvQpuVEQv"
+            "publicKeyMultibase": "z6LSbzAC2VY7pbmwQhzbXVWDj1H9oAQxgbo7x4sGre6HNkm4"
         }
+    ],
+    "capabilityInvocation": [
+        "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"
+    ],
+    "capabilityDelegation": [
+        "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"
     ]
 }

@@ -1,34 +1,48 @@
+use base64ct::{Base64UrlUnpadded, Encoding};
 use serde_json::json;
+use test_utils::signer::{self, OWNER_DID};
 use test_utils::store::ProviderImpl;
-use vercre_dwn::auth::Authorization;
-use vercre_dwn::protocols::{self};
 use vercre_dwn::service::Message;
 
 #[tokio::main]
 async fn main() {
     let provider = ProviderImpl::new().await.expect("should create provider");
 
-    let authorization = json!({
-        "signature": {
-            "payload": "eyJkZXNjcmlwdG9yQ2lkIjogIlBlRmNIYUthTlpMOVJSbnRLUHlTTW1oR0xFMnNNOWxWdThRNGtjdyIsInBlcm1pc3Npb25HcmFudElkIjoiZ3JhbnRfaWRfMSJ9",
-            "signatures": [
-                {
-                    "protected": "eyJhbGciOiJFZERTQSIsInR5cCI6Im9wZW5pZDR2Y2ktcHJvb2Yrand0Iiwia2lkIjoiZGlkOmtleTp6Nk1rajhKcjFyZzNZalZXV2hnN2FoRVlKaWJxaGpCZ1p0MXBEQ2JUNEx2N0Q0SFgjejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYIn0",
-                    "signature": "5678nr67e56g45wf546786n9t78r67e45657bern797t8r6e5"
-                }
-            ]
+    // JWS JSON serialization
+    let payload = Base64UrlUnpadded::encode_string(
+        br#"{"descriptorCid":"PeFcHaKaNZL9RRntKPySMmhGLE2sM9lVu8Q4kcw","permissionGrantId":"grant_id_1"}"#,
+    );
+    let protected = Base64UrlUnpadded::encode_string(
+        br#"{"alg":"EdDSA","typ":"jwt","kid":"did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"}"#
+    );
+    let sig_bytes =
+        signer::try_sign(format!("{protected}.{payload}").as_bytes()).expect("should sign");
+    let signature = Base64UrlUnpadded::encode_string(&sig_bytes);
+
+    let query_json = json!({
+        "descriptor": {
+            "interface": "Protocols",
+            "method": "Query",
+            "filter": {
+                "protocol": "https://decentralized-social-example.org/protocol/"
+            }
+        },
+        "authorization": {
+            "signature": {
+                "payload": payload,
+                "signatures": [{
+                    "protected": protected,
+                    "signature": signature
+                }]
+            }
         }
     });
 
-    let mut query = protocols::Query::default();
-    query.descriptor.filter = Some(protocols::query::Filter {
-        protocol: "https://decentralized-social-example.org/protocol/".to_string(),
-    });
-    query.authorization = serde_json::from_value(authorization).expect("should deserialize");
-
+    let query = serde_json::from_value(query_json).expect("should deserialize");
     let msg = Message::ProtocolsQuery(query);
 
     let reply =
-        vercre_dwn::handle_message("tenant", msg, provider).await.expect("should send message");
+        vercre_dwn::handle_message(OWNER_DID, msg, provider).await.expect("should send message");
+
     println!("{:?}", reply);
 }

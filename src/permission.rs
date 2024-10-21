@@ -15,7 +15,7 @@ use crate::{Interface, Method};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
-    tenant: &str, grant_id: &str, provider: &impl Provider,
+    owner: &str, grant_id: &str, provider: &impl Provider,
 ) -> Result<Grant> {
     let mut qf = query::Filter {
         criteria: BTreeMap::<String, Criterion>::new(),
@@ -30,10 +30,10 @@ pub(crate) async fn fetch_grant(
     );
 
     // execute query
-    let (messages, _) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
+    let (messages, _) = MessageStore::query(provider, owner, vec![qf], None, None).await?;
     let message = &messages[0];
     let Message::RecordsWrite(write) = message.clone() else {
-        return Err(anyhow!("no permission grant for {grant_id}"));
+        return Err(anyhow!("no grant matching {grant_id}"));
     };
     let desc = write.descriptor;
 

@@ -13,18 +13,16 @@ use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
 use crate::service::{Context, Message};
-use crate::{Cursor, Descriptor, Interface, Method, Status};
+use crate::{Cursor, Descriptor as Base, Interface, Method, Status};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
 pub(crate) async fn handle(ctx: &Context, query: Query, provider: impl Provider) -> Result<Reply> {
-    //
-    query.authorization.authenticate(&provider).await?;
     query.authorize(ctx)?;
 
-    let entries = fetch_config(&ctx.tenant, query, &provider).await?;
+    let entries = fetch_config(&ctx.owner, query, &provider).await?;
 
     // TODO: pagination & sorting
     // TODO: return errors in Reply
@@ -41,7 +39,7 @@ pub(crate) async fn handle(ctx: &Context, query: Query, provider: impl Provider)
 
 /// Fetch published `protocols::Configure` matching the query
 async fn fetch_config(
-    tenant: &str, query: Query, provider: &impl Provider,
+    owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Vec<Configure>> {
     let mut qf = query::Filter {
         criteria: BTreeMap::<String, Criterion>::new(),
@@ -68,12 +66,15 @@ async fn fetch_config(
     }
 
     // execute query
-    let (messages, _cursor) = MessageStore::query(provider, tenant, vec![qf], None, None).await?;
-    let Message::ProtocolsConfigure(cfg) = messages[0].clone() else {
+    let (messages, _cursor) = MessageStore::query(provider, owner, vec![qf], None, None).await?;
+    let Some(msg) = messages.get(0) else {
+        return Err(anyhow!("no matching message"));
+    };
+    let Message::ProtocolsConfigure(cfg) = msg else {
         return Err(anyhow!("Unexpected message type"));
     };
 
-    Ok(vec![cfg])
+    Ok(vec![cfg.clone()])
 }
 
 /// Protocols Query payload
@@ -83,7 +84,7 @@ async fn fetch_config(
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
+    pub descriptor: Descriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
@@ -95,8 +96,9 @@ impl Query {
     /// # Errors
     /// TODO: Add errors
     pub fn authorize(&self, ctx: &Context) -> Result<()> {
+        // no grant -> author == owner
         let Some(grant) = &ctx.grant else {
-            return Err(anyhow!("missing grant"));
+            return Ok(());
         };
 
         // if set, query and grant protocols need to match
@@ -132,10 +134,10 @@ pub struct Reply {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(clippy::module_name_repetitions)]
-pub struct QueryDescriptor {
+pub struct Descriptor {
     /// The base descriptor
     #[serde(flatten)]
-    pub base: Descriptor,
+    pub base: Base,
 
     /// Filter Records for query.
     pub filter: Option<Filter>,

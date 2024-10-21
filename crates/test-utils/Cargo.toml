@@ -11,9 +11,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
+base64ct.workspace = true
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 serde.workspace = true
 serde_json.workspace = true
 surrealdb = { version = "1.5.5", features = ["kv-mem"] }
 vercre-dwn = { path = "../.." }
+vercre-infosec.workspace = true
 
 [dev-dependencies]

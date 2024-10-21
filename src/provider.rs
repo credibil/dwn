@@ -29,25 +29,25 @@ pub trait MessageStore: Send + Sync {
 
     /// Store a message in the underlying store.
     fn put(
-        &self, tenant: &str, message: Message, indexes: BTreeMap<&str, &str>,
+        &self, owner: &str, message: Message, indexes: BTreeMap<&str, &str>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.
     fn get(
-        &self, tenant: &str, cid: &str,
+        &self, owner: &str, cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<Message>>> + Send;
 
     /// Queries the underlying store for messages that matches the provided
     /// filters. Supplying multiple filters establishes an OR condition between
     /// the filters.
     fn query(
-        &self, tenant: &str, filters: Vec<Filter>, sort: Option<Sort>,
+        &self, owner: &str, filters: Vec<Filter>, sort: Option<Sort>,
         pagination: Option<Pagination>,
     ) -> impl Future<Output = anyhow::Result<(Vec<Message>, Cursor)>> + Send;
 
     /// Delete message associated with the specified id.
-    fn delete(&self, tenant: &str, cid: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn delete(&self, owner: &str, cid: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Purge all records from the store.
     fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
@@ -64,18 +64,18 @@ pub trait DataStore: Send + Sync {
 
     /// Store data in the underlying store.
     fn put(
-        &self, tenant: &str, record_id: &str, data_cid: &str, data: impl Read,
+        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no match was found.
     fn get(
-        &self, tenant: &str, record_id: &str, data_cid: &str,
+        &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send;
 
     /// Delete data associated with the specified id.
     fn delete(
-        &self, tenant: &str, record_id: &str, data_cid: &str,
+        &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Purge all data from the store.
@@ -156,32 +156,32 @@ pub trait EventLog: Send + Sync {
     // /// Close the connection to the underlying store.
     // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Adds an event to a tenant's event log
+    /// Adds an event to a owner's event log
     fn append(
-        &self, tenant: &str, message_cid: &str, indexes: BTreeMap<String, Value>,
+        &self, owner: &str, message_cid: &str, indexes: BTreeMap<String, Value>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Retrieves all of a tenant's events that occurred after the cursor provided.
-    /// If no cursor is provided, all events for a given tenant will be returned.
+    /// Retrieves all of a owner's events that occurred after the cursor provided.
+    /// If no cursor is provided, all events for a given owner will be returned.
     ///
     /// The cursor is a messageCid.
     fn events(
-        tenant: &str, cursor: Option<Cursor>,
+        owner: &str, cursor: Option<Cursor>,
     ) -> impl Future<Output = anyhow::Result<(Vec<String>, Cursor)>> + Send;
 
     /// Retrieves a filtered set of events that occurred after a the cursor
     /// provided, accepts multiple filters. If no cursor is provided, all
-    /// events for a given tenant and filter combo will be returned. The cursor
+    /// events for a given owner and filter combo will be returned. The cursor
     /// is a `message_cid`.
     ///
     /// Returns an array of `message_cid`s that represent the events.
     fn query_events(
-        tenant: &str, filters: Vec<Filter>, cursor: Cursor,
+        owner: &str, filters: Vec<Filter>, cursor: Cursor,
     ) -> impl Future<Output = anyhow::Result<(Vec<String>, Cursor)>> + Send;
 
     /// Deletes events for the specified `message_cids`.
     fn delete_events(
-        tenant: &str, message_cids: Vec<&str>,
+        owner: &str, message_cids: Vec<&str>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Purge all data from the store.
@@ -197,16 +197,16 @@ pub trait EventStream: Send + Sync {
     // /// Close the connection to the underlying store.
     // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Subscribes to a tenant's event stream.
+    /// Subscribes to a owner's event stream.
     fn subscribe(
-        &self, tenant: &str, id: &str,
+        &self, owner: &str, id: &str,
         listener: impl Fn(&str, MessageEvent, BTreeMap<String, Value>),
     ) -> impl Future<Output = anyhow::Result<(String, impl EventSubscription)>> + Send;
     //: Promise<EventSubscription>;
 
-    /// Emits an event to a tenant's event stream.
+    /// Emits an event to a owner's event stream.
     fn emit(
-        &self, tenant: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
+        &self, owner: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
