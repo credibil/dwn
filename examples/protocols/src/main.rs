@@ -19,6 +19,7 @@ async fn main() {
         signer::try_sign(format!("{protected}.{payload}").as_bytes()).expect("should sign");
     let signature = Base64UrlUnpadded::encode_string(&sig_bytes);
 
+    // Query message
     let query_json = json!({
         "descriptor": {
             "interface": "Protocols",
@@ -40,7 +41,6 @@ async fn main() {
 
     let query = serde_json::from_value(query_json).expect("should deserialize");
     let msg = Message::ProtocolsQuery(query);
-
     let reply =
         vercre_dwn::handle_message(OWNER_DID, msg, provider).await.expect("should send message");
 

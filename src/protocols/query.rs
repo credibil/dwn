@@ -67,7 +67,7 @@ async fn fetch_config(
 
     // execute query
     let (messages, _cursor) = MessageStore::query(provider, owner, vec![qf], None, None).await?;
-    let Some(msg) = messages.get(0) else {
+    let Some(msg) = messages.first() else {
         return Err(anyhow!("no matching message"));
     };
     let Message::ProtocolsConfigure(cfg) = msg else {
