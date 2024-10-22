@@ -4213,6 +4213,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "url",
  "vercre-did",
  "vercre-infosec",
 ]

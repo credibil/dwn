@@ -13,7 +13,7 @@ use crate::auth::{Authorization, Grant, SignaturePayload};
 use crate::messages::{Direction, Sort};
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::{auth, cid, messages, permission, protocols, records, Descriptor};
+use crate::{auth, cid, messages, permissions, protocols, records, Descriptor};
 
 /// Process web node messages.
 ///
@@ -113,7 +113,7 @@ impl Message {
         let Some(grant_id) = &payload.permission_grant_id else {
             return Err(anyhow!("`grant_id` not found in signature payload"));
         };
-        let grant = permission::fetch_grant(&ctx.owner, grant_id, provider).await?;
+        let grant = permissions::fetch_grant(&ctx.owner, grant_id, provider).await?;
 
         let author = authzn.author()?;
         let desc = self.descriptor();

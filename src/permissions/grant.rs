@@ -3,7 +3,6 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -13,52 +12,7 @@ use crate::query::{self, Compare, Criterion};
 use crate::service::Message;
 use crate::{Interface, Method};
 
-/// Fetch the grant specified by `grant_id`.
-pub(crate) async fn fetch_grant(
-    owner: &str, grant_id: &str, provider: &impl Provider,
-) -> Result<Grant> {
-    let mut qf = query::Filter {
-        criteria: BTreeMap::<String, Criterion>::new(),
-    };
-    qf.criteria.insert(
-        "recordId".to_string(),
-        Criterion::Single(Compare::Equal(Value::String(grant_id.to_owned()))),
-    );
-    qf.criteria.insert(
-        "isLatestBaseState".to_string(),
-        Criterion::Single(Compare::Equal(Value::Bool(true))),
-    );
-
-    // execute query
-    let (messages, _) = MessageStore::query(provider, owner, vec![qf], None, None).await?;
-    let message = &messages[0];
-    let Message::RecordsWrite(write) = message.clone() else {
-        return Err(anyhow!("no grant matching {grant_id}"));
-    };
-    let desc = write.descriptor;
-
-    // unpack message payload
-    let Some(grant_enc) = &write.encoded_data else {
-        return Err(anyhow!("missing grant data"));
-    };
-    let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc)?;
-    let grant: GrantData = serde_json::from_slice(&grant_bytes)?;
-
-    Ok(Grant {
-        id: write.record_id,
-        grantor: message.signer().unwrap_or_default(),
-        grantee: desc.recipient.unwrap_or_default(),
-        date_granted: desc.date_created,
-        date_expires: grant.date_expires,
-        delegated: grant.delegated,
-        description: grant.description,
-        request_id: grant.request_id,
-        scope: grant.scope,
-        conditions: grant.conditions,
-    })
-}
-
-/// Message authorization.
+/// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(clippy::module_name_repetitions)]

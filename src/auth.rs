@@ -6,7 +6,7 @@ use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
 use vercre_infosec::Jws;
 
-pub use crate::permission::Grant;
+pub use crate::permissions::grant::Grant;
 use crate::records;
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
