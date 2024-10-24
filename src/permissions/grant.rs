@@ -63,7 +63,8 @@ pub struct Scope {
     /// The method the permission is applied to.
     pub method: Method,
 
-    /// The protocol the permission is applied to.
+    /// The protocol the permission is applied to. This connects
+    /// the grant to protocol access rules, formats, etc.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
 }

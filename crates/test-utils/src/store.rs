@@ -23,8 +23,9 @@ use vercre_dwn::protocols::Configure;
 use vercre_dwn::provider::{
     DidResolver, Document, EventStream, EventSubscription, MessageEvent, Provider,
 };
+use vercre_infosec::{Algorithm, Cipher, KeyOps, Signer};
 
-use crate::signer::OWNER_DID;
+use crate::keystore::{Keystore, OWNER_DID};
 
 #[derive(Clone)]
 pub struct ProviderImpl {
@@ -82,6 +83,50 @@ impl EventStream for ProviderImpl {
     async fn emit(
         &self, owner: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
     ) -> Result<()> {
+        todo!()
+    }
+}
+
+struct KeyOpsImpl(Keystore);
+
+impl KeyOps for ProviderImpl {
+    fn signer(&self, _identifier: &str) -> anyhow::Result<impl Signer> {
+        Ok(KeyOpsImpl(Keystore {}))
+    }
+
+    fn cipher(&self, _identifier: &str) -> anyhow::Result<impl Cipher> {
+        Ok(KeyOpsImpl(Keystore {}))
+    }
+}
+
+impl Signer for KeyOpsImpl {
+    async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
+        Keystore::try_sign(msg)
+    }
+
+    async fn public_key(&self) -> Result<Vec<u8>> {
+        Keystore::public_key()
+    }
+
+    fn algorithm(&self) -> Algorithm {
+        Keystore::algorithm()
+    }
+
+    fn verification_method(&self) -> String {
+        Keystore::verification_method()
+    }
+}
+
+impl Cipher for KeyOpsImpl {
+    async fn encrypt(&self, _plaintext: &[u8], _recipient_public_key: &[u8]) -> Result<Vec<u8>> {
+        todo!()
+    }
+
+    fn ephemeral_public_key(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    async fn decrypt(&self, _ciphertext: &[u8], _sender_public_key: &[u8]) -> Result<Vec<u8>> {
         todo!()
     }
 }

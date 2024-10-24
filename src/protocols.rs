@@ -231,22 +231,3 @@ pub struct Tags {
     pub other: BTreeMap<String, Value>,
 }
 
-/// Query descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filter Records for query.
-    pub filter: Option<Filter>,
-}
-
-/// Protocol filter.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Filter {
-    /// Protocol matching the specified protocol.
-    pub protocol: String,
-}

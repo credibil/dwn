@@ -10,6 +10,7 @@ pub mod provider;
 pub mod query;
 pub mod records;
 pub mod service;
+mod utils;
 
 use derive_more::Display;
 use serde::{Deserialize, Serialize};

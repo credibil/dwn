@@ -7,15 +7,17 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use url::Url;
+use serde_json::{Map, Value};
 
 use self::grant::{Conditions, Grant, GrantData, Scope};
-use crate::protocols::{Definition, Tags};
+use crate::protocols::Definition;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
 use crate::service::Message;
-use crate::Interface;
+use crate::{records, utils, Interface};
+
+/// Default protocol for managing web node permission grants.
+pub const PROTOCOL: &str = "https://vercre.website/dwn/permissions";
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -51,25 +53,22 @@ pub struct GrantOptions {
 }
 
 /// Create a permission grant.
-pub(crate) async fn create_grant(options: GrantOptions, provider: &impl Provider) -> Result<()> {
+pub(crate) async fn create_grant(
+    owner: &str, options: GrantOptions, provider: &impl Provider,
+) -> Result<records::Write> {
     if options.scope.interface == Interface::Records && options.scope.protocol.is_none() {
         return Err(anyhow!("`Records` grants must have scope `protocol` property set"));
     }
 
-    let mut tags = None;
-
-    let mut scope = options.scope;
-    if let Some(protocol) = &scope.protocol {
-        let uri = Url::parse(protocol)?;
-        let protocol = uri.origin().ascii_serialization() + uri.path();
-        scope.protocol = Some(protocol.to_string());
-
-        // protocol tag must be included when scoped to protocol
-        tags = Some(Tags {
-            required_tags: Some(vec![protocol.to_string()]),
-            ..Tags::default()
-        });
-    }
+    let scope = options.scope;
+    let tags = if let Some(protocol) = &scope.protocol {
+        let protocol = utils::clean_url(protocol)?;
+        let mut map = Map::new();
+        map.insert("protocol".to_string(), Value::String(protocol));
+        Some(map)
+    } else {
+        None
+    };
 
     let grant_data = GrantData {
         date_expires: options.date_expires,
@@ -81,22 +80,25 @@ pub(crate) async fn create_grant(options: GrantOptions, provider: &impl Provider
     };
     let grant_bytes = serde_json::to_vec(&grant_data)?;
 
-    // let grant_record = RecordsWrite.create({
-    //   signer           : options.signer,
-    //   messageTimestamp : options.dateGranted,
-    //   dateCreated      : options.dateGranted,
-    //   recipient        : options.grantedTo,
-    //   protocol         : PermissionsProtocol.uri,
-    //   protocolPath     : PermissionsProtocol.grantPath,
-    //   dataFormat       : 'application/json',
-    //   data             : permissionGrantBytes,
-    //   tags             : permissionTags,
-    // });
+    let options = records::WriteOptions {
+        message_timestamp: options.date_granted.clone(),
+        date_created: options.date_granted.clone(),
+        recipient: Some(options.granted_to.clone()),
+        protocol: Some(records::write::Protocol {
+            protocol: PROTOCOL.to_string(),
+            protocol_path: "grant".to_string(),
+        }),
+        data_format: "application/json".to_string(),
+        data: records::write::Data::Bytes {
+            data: grant_bytes.clone(),
+        },
+        tags,
+        ..records::WriteOptions::default()
+    };
+    let mut write = records::write::create(owner, options, provider).await?;
+    write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
 
-    // let encoded: DataEncodedRecordsWriteMessage = {
-    //   ...grant_record.message,
-    //   encodedData: Encoder.bytesToBase64Url(grant_bytes)
-    // };
+    Ok(write)
 
     // return {
     //     grant_record: RecordsWrite,
@@ -104,8 +106,6 @@ pub(crate) async fn create_grant(options: GrantOptions, provider: &impl Provider
     //     grant_bytes: Uint8Array,
     //     encoded: DataEncodedRecordsWriteMessage,
     // };
-
-    Ok(())
 }
 
 /// Fetch the grant specified by `grant_id`.

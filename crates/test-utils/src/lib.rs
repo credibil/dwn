@@ -1,2 +1,2 @@
-pub mod signer;
+pub mod keystore;
 pub mod store;

@@ -6,6 +6,7 @@ use std::io::Read;
 
 use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
+pub use vercre_infosec::KeyOps;
 
 use crate::messages::Sort;
 use crate::query::Filter;
@@ -14,7 +15,7 @@ use crate::{Cursor, Pagination};
 
 /// Issuer Provider trait.
 pub trait Provider:
-    MessageStore + DataStore + TaskStore + EventLog + EventStream + DidResolver + Clone
+    MessageStore + DataStore + TaskStore + EventLog + EventStream + KeyOps + DidResolver + Clone
 {
 }
 

@@ -2,43 +2,16 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+pub mod write;
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
-use vercre_infosec::jose::jws::Jws;
+use serde_json::Value;
 
+pub use self::write::{Write, WriteDescriptor, WriteOptions};
 use crate::auth::Authorization;
-use crate::infosec::Encryption;
 use crate::{DateRange, Descriptor, Pagination, Quota};
-
-/// Records write payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Write {
-    /// The Write descriptor.
-    pub descriptor: WriteDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-
-    /// Record CID
-    pub record_id: String,
-
-    /// Reord context.
-    pub context_id: Option<String>,
-
-    /// Record data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attestation: Option<Jws>,
-
-    /// Record encryption.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption: Option<Encryption>,
-
-    /// Message data, base64url encoded.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encoded_data: Option<String>,
-}
 
 /// Records Query payload
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -81,59 +54,6 @@ pub struct Delete {
 
     /// The message authorization.
     pub authorization: Authorization,
-}
-
-/// Write descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WriteDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Record's protocol.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol: Option<String>,
-
-    /// The protocol path.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol_path: Option<String>,
-
-    /// The record's recipient.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub recipient: Option<String>,
-
-    /// The record's schema.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub schema: Option<String>,
-
-    /// Tags associated with the record
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Map<String, Value>>,
-
-    /// The CID of the record's parent (if exists).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_id: Option<String>,
-
-    /// CID of the record's data.
-    pub data_cid: String,
-
-    /// The record's size in bytes.
-    pub data_size: u64,
-
-    /// The record's MIME type. For example, `application/json`.
-    pub data_format: String,
-
-    /// The datatime the record was created.
-    pub date_created: String,
-
-    /// Indicates whether the record is published.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
-
-    /// The datetime of publishing, if published.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<String>,
 }
 
 /// Query descriptor.
