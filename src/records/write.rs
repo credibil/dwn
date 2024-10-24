@@ -6,11 +6,10 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use vercre_infosec::jose::{Jws, Type};
+use vercre_infosec::jose::{Jwe, Jws, Type};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{Authorization, DelegatedGrant};
-use crate::infosec::Encryption;
 use crate::provider::Provider;
 use crate::{cid, utils, Descriptor, Interface, Method};
 
@@ -216,7 +215,7 @@ pub(crate) async fn create(
 }
 
 /// Encrypt message
-async fn encrypt(_descriptor: &WriteDescriptor, _encryptor: &impl Cipher) -> Result<Encryption> {
+async fn encrypt(_descriptor: &WriteDescriptor, _encryptor: &impl Cipher) -> Result<Jwe> {
     // encrypt the data encryption key once per encryption input
 
     //     const keyEncryption: EncryptedKey[] = [];
@@ -296,7 +295,7 @@ pub struct Write {
 
     /// Record encryption.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption: Option<Encryption>,
+    pub encryption: Option<Jwe>,
 
     /// Message data, base64url encoded.
     #[serde(skip_serializing_if = "Option::is_none")]

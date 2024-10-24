@@ -2,7 +2,6 @@
 
 pub mod auth;
 pub mod cid;
-pub mod infosec;
 pub mod messages;
 pub mod permissions;
 pub mod protocols;
