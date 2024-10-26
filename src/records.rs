@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use self::write::{Write, WriteDescriptor, WriteOptions};
+pub use self::write::{Write, WriteDescriptor, WriteBuilder};
 use crate::auth::Authorization;
 use crate::{DateRange, Descriptor, Pagination, Quota};
 

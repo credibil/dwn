@@ -3878,8 +3878,10 @@ name = "test-utils"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64ct",
  "ed25519-dalek",
+ "multibase",
  "serde",
  "serde_json",
  "surrealdb",
@@ -4338,7 +4340,9 @@ dependencies = [
  "multihash-codetable",
  "serde",
  "serde_json",
+ "test-utils",
  "thiserror",
+ "tokio",
  "url",
  "vercre-did",
  "vercre-infosec",

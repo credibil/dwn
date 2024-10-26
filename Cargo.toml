@@ -35,6 +35,8 @@ vercre-did.workspace = true
 vercre-infosec.workspace = true
 
 [dev-dependencies]
+test-utils.workspace = true
+tokio.workspace = true
 
 [workspace]
 members = ["crates/*", "examples/*"]

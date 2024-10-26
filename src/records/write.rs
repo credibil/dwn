@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use vercre_infosec::jose::{Jwe, Jws, Type};
+use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{Authorization, DelegatedGrant};
@@ -14,71 +14,25 @@ use crate::provider::Provider;
 use crate::{cid, utils, Descriptor, Interface, Method};
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct WriteOptions {
-    /// Record recipient.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub recipient: Option<String>,
-
-    /// Record protocol.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol: Option<Protocol>,
-
-    /// Protocol role.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol_role: Option<String>,
-
-    /// Schema.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub schema: Option<String>,
-
-    /// Protocol path.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Map<String, Value>>,
-
-    /// Auto-populated if not set.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub record_id: Option<String>,
-
-    /// Required for a non-root protocol record.
-    /// When not set, the write must be for a root protocol or flat-space record.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_context_id: Option<String>,
-
-    /// Record data as CID or raw bytes.
-    #[serde(flatten)]
-    pub data: Data,
-
-    /// The datetime the record was created. If unset, the current time will be used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<String>,
-
-    /// Timestamp of the message.  If unset, the current time will be used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_timestamp: Option<String>,
-
-    /// Whether the grant is delegated.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
-
-    /// The datetime the record was published.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<String>,
-
-    /// The record's MIME type. For example, `application/json`.
-    pub data_format: String,
-
-    /// Delegated grant.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delegated_grant: Option<DelegatedGrant>,
-
-    /// Whether the record should be encrypted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encrypt: Option<bool>,
-
-    /// Grant id
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub permission_grant_id: Option<String>,
+#[derive(Clone, Debug, Default)]
+pub struct WriteBuilder {
+    owner: String,
+    recipient: Option<String>,
+    protocol: Option<Protocol>,
+    protocol_role: Option<String>,
+    schema: Option<String>,
+    tags: Option<Map<String, Value>>,
+    record_id: Option<String>,
+    parent_context_id: Option<String>,
+    data: Data,
+    date_created: Option<String>,
+    message_timestamp: Option<String>,
+    published: Option<bool>,
+    date_published: Option<String>,
+    data_format: String,
+    delegated_grant: Option<DelegatedGrant>,
+    encrypt: Option<bool>,
+    permission_grant_id: Option<String>,
 }
 
 /// Protocol.
@@ -125,97 +79,226 @@ struct Payload {
     descriptor_cid: String,
 }
 
-pub(crate) async fn create(
-    owner: &str, options: WriteOptions, provider: &impl Provider,
-) -> Result<Write> {
-    // CID
-    let (data_cid, data_size) = match options.data {
-        Data::Cid { data_cid, data_size } => (data_cid, data_size),
-        Data::Bytes { data } => {
-            let data_cid = cid::compute(&data)?;
-            let data_size = data.len() as u64;
-            (data_cid, data_size)
+impl WriteBuilder {
+    /// Returns a new [`GrantBuilder`]
+    pub fn new(owner: &str) -> Self {
+        let now = Utc::now().to_rfc3339();
+
+        // set defaults
+        let builder = Self {
+            owner: owner.to_string(),
+            date_created: Some(now.clone()),
+            message_timestamp: Some(now),
+            data_format: "application/json".to_string(),
+            ..WriteBuilder::default()
+        };
+
+        builder
+    }
+
+    /// Specify the write record's recipient .
+    #[must_use]
+    pub fn recipient(mut self, recipient: String) -> Self {
+        self.recipient = Some(recipient);
+        self
+    }
+
+    /// Set a protocol for the record.
+    #[must_use]
+    pub fn protocol(mut self, protocol: Protocol) -> Self {
+        self.protocol = Some(protocol);
+        self
+    }
+
+    /// Specify a protocol role for the record.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: String) -> Self {
+        self.protocol_role = Some(protocol_role);
+        self
+    }
+
+    /// Specify a schema to use with the record.
+    #[must_use]
+    pub fn schema(mut self, schema: String) -> Self {
+        self.schema = Some(schema);
+        self
+    }
+
+    /// Add a tag to the record.
+    #[must_use]
+    pub fn add_tag(mut self, name: String, value: Value) -> Self {
+        self.tags.get_or_insert_with(Map::new).insert(name, value);
+        self
+    }
+
+    /// Specify an ID to use for the permission request.
+    #[must_use]
+    pub fn record_id(mut self, record_id: String) -> Self {
+        self.record_id = Some(record_id);
+        self
+    }
+
+    /// Required for a child (non-root) protocol record.
+    #[must_use]
+    pub fn parent_context_id(mut self, parent_context_id: String) -> Self {
+        self.parent_context_id = Some(parent_context_id);
+        self
+    }
+
+    /// Record data as a CID or raw bytes.
+    #[must_use]
+    pub fn data(mut self, data: Data) -> Self {
+        self.data = data;
+        self
+    }
+
+    /// The datetime the record was created. Defaults to now.
+    #[must_use]
+    pub fn date_created(mut self, date_created: String) -> Self {
+        self.date_created = Some(date_created);
+        self
+    }
+
+    /// The datetime the record was created. Defaults to now.
+    #[must_use]
+    pub fn message_timestamp(mut self, message_timestamp: String) -> Self {
+        self.message_timestamp = Some(message_timestamp);
+        self
+    }
+
+    /// Whether the record is published.
+    #[must_use]
+    pub fn published(mut self, published: bool) -> Self {
+        self.published = Some(published);
+        self
+    }
+
+    /// The datetime the record was published. Defaults to now.
+    #[must_use]
+    pub fn date_published(mut self, date_published: String) -> Self {
+        self.date_published = Some(date_published);
+        self
+    }
+
+    /// The record's MIME type. Defaults to `application/json`.
+    #[must_use]
+    pub fn data_format(mut self, data_format: String) -> Self {
+        self.data_format = data_format;
+        self
+    }
+
+    /// The delegated grant used with this record.
+    #[must_use]
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
+        self.delegated_grant = Some(delegated_grant);
+        self
+    }
+
+    /// Specifies whether the record should be encrypted.
+    #[must_use]
+    pub fn encrypt(mut self, encrypt: bool) -> Self {
+        self.encrypt = Some(encrypt);
+        self
+    }
+
+    /// Specifies the permission grant ID.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
+        self.permission_grant_id = Some(permission_grant_id);
+        self
+    }
+
+    /// Build the write message.
+    pub async fn build(self, provider: &impl Provider) -> Result<Write> {
+        // CID
+        let (data_cid, data_size) = match self.data {
+            Data::Cid { data_cid, data_size } => (data_cid, data_size),
+            Data::Bytes { data } => {
+                let data_cid = cid::compute(&data)?;
+                let data_size = data.len() as u64;
+                (data_cid, data_size)
+            }
+        };
+
+        // timestamp
+        let timestamp = self.message_timestamp.unwrap_or_else(|| Utc::now().to_rfc3339());
+
+        let mut descriptor = WriteDescriptor {
+            base: Descriptor {
+                interface: Interface::Records,
+                method: Method::Write,
+                message_timestamp: Some(timestamp.clone()),
+            },
+            recipient: self.recipient,
+            tags: self.tags,
+            data_cid,
+            data_size,
+            date_created: self.date_created.unwrap_or_else(|| timestamp.clone()),
+            published: self.published,
+            data_format: self.data_format,
+            parent_id: self.parent_context_id.clone(),
+            ..WriteDescriptor::default()
+        };
+
+        // protocol, protoco_ path
+        if let Some(p) = self.protocol {
+            let normalized = utils::clean_url(&p.protocol)?;
+            descriptor.protocol = Some(normalized);
+            descriptor.protocol_path = Some(p.protocol_path);
         }
-    };
 
-    // timestamp
-    let timestamp = options.message_timestamp.unwrap_or_else(|| Utc::now().to_rfc3339());
+        // schema
+        if let Some(s) = self.schema {
+            descriptor.schema = Some(utils::clean_url(&s)?);
+        }
 
-    let mut descriptor = WriteDescriptor {
-        base: Descriptor {
-            interface: Interface::Records,
-            method: Method::Write,
-            message_timestamp: Some(timestamp.clone()),
-        },
-        recipient: options.recipient,
-        tags: options.tags,
-        data_cid,
-        data_size,
-        date_created: options.date_created.unwrap_or_else(|| timestamp.clone()),
-        published: options.published,
-        data_format: options.data_format,
-        parent_id: options.parent_context_id.clone(),
-        ..WriteDescriptor::default()
-    };
+        // parent_id - first segment of  `parent_context_id`
+        if let Some(id) = self.parent_context_id {
+            let parent_id = id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
+            descriptor.parent_id = parent_id;
+        }
 
-    // protocol, protoco_ path
-    if let Some(p) = options.protocol {
-        let normalized = utils::clean_url(&p.protocol)?;
-        descriptor.protocol = Some(normalized);
-        descriptor.protocol_path = Some(p.protocol_path);
+        // set `date_published`
+        if self.published.unwrap_or_default() && self.date_published.is_none() {
+            descriptor.date_published = Some(timestamp);
+        }
+
+        // attestation
+        let payload = Payload {
+            descriptor_cid: cid::compute(&descriptor)?,
+        };
+        let signer = provider.signer(&self.owner)?;
+        let jws = Jws::new(Type::Jwt, &payload, &signer).await?;
+
+        // encryption
+        let encryption = if self.encrypt.unwrap_or_default() {
+            let cipher = provider.cipher(&self.owner)?;
+            let encrypted = encrypt(&descriptor, &cipher).await?;
+            Some(encrypted)
+        } else {
+            None
+        };
+
+        let mut write = Write {
+            record_id: self.record_id.unwrap_or_default(),
+            descriptor,
+            attestation: Some(jws),
+            encryption,
+            ..Write::default()
+        };
+
+        // sign message
+        let signer = provider.signer(&self.owner)?;
+        write
+            .sign(self.delegated_grant, self.permission_grant_id, self.protocol_role, &signer)
+            .await?;
+
+        Ok(write)
     }
-
-    // schema
-    if let Some(s) = options.schema {
-        descriptor.schema = Some(utils::clean_url(&s)?);
-    }
-
-    // parent_id - first segment of  `parent_context_id`
-    if let Some(id) = options.parent_context_id {
-        let parent_id = id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-        descriptor.parent_id = parent_id;
-    }
-
-    // set `date_published`
-    if options.published.unwrap_or_default() && options.date_published.is_none() {
-        descriptor.date_published = Some(timestamp.clone());
-    }
-
-    // attestation
-    let payload = Payload {
-        descriptor_cid: cid::compute(&descriptor)?,
-    };
-    let signer = provider.signer(owner)?;
-    let jws = Jws::new(Type::Jwt, &payload, &signer).await?;
-
-    // encryption
-    let encryption = if options.encrypt.unwrap_or_default() {
-        let cipher = provider.cipher(owner)?;
-        let encrypted = encrypt(&descriptor, &cipher).await?;
-        Some(encrypted)
-    } else {
-        None
-    };
-
-    let mut write = Write {
-        record_id: options.record_id.unwrap_or_default(),
-        descriptor,
-        attestation: Some(jws),
-        encryption,
-        ..Write::default()
-    };
-
-    // sign message
-    let signer = provider.signer(owner)?;
-    write
-        .sign(options.delegated_grant, options.permission_grant_id, options.protocol_role, &signer)
-        .await?;
-
-    Ok(write)
 }
 
 /// Encrypt message
-async fn encrypt(_descriptor: &WriteDescriptor, _encryptor: &impl Cipher) -> Result<Jwe> {
+async fn encrypt(_descriptor: &WriteDescriptor, _encryptor: &impl Cipher) -> Result<Encryption> {
     // encrypt the data encryption key once per encryption input
 
     //     const keyEncryption: EncryptedKey[] = [];
@@ -295,7 +378,7 @@ pub struct Write {
 
     /// Record encryption.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption: Option<Jwe>,
+    pub encryption: Option<Encryption>,
 
     /// Message data, base64url encoded.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -451,4 +534,69 @@ pub struct WriteDescriptor {
     /// The datetime of publishing, if published.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<String>,
+}
+
+/// Encryption settings.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Encryption {
+    /// Encryption algorithm.
+    pub algorithm: EncryptionAlgorithm,
+
+    /// The initialization vector.
+    pub initialization_vector: String,
+
+    /// The encrypted CEK.
+    pub key_encryption: Vec<EncryptedKey>,
+}
+
+/// Encrypted key.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptedKey {
+    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id) of
+    /// the root public key used to encrypt the symmetric encryption key.
+    pub root_key_d: String,
+
+    /// The derived public key.
+    pub derived_public_key: Option<PublicKeyJwk>,
+
+    /// Encryption key derivation scheme.
+    pub derivation_scheme: Option<KeyDerivationScheme>,
+
+    /// The encryption algorithm.
+    pub algorithm: EncryptionAlgorithm,
+
+    /// The initialization vector.
+    pub initialization_vector: String,
+
+    /// The ephemeral public key.
+    pub ephemeral_public_key: PublicKeyJwk,
+
+    /// The MAC
+    pub message_authentication_code: String,
+
+    /// The encrypted key.
+    pub encrypted_key: String,
+}
+
+/// Key derivation schemes.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub enum KeyDerivationScheme {
+    /// Key derivation using the `dataFormat` value for Flat-space records.
+    #[serde(rename = "dataFormats")]
+    #[default]
+    DataFormats,
+
+    /// Key derivation using protocol context.
+    #[serde(rename = "protocolContext")]
+    ProtocolContext,
+
+    /// Key derivation using the protocol path.
+    #[serde(rename = "protocolPath")]
+    ProtocolPath,
+
+    /// Key derivation using the `schema` value for Flat-space records.
+    #[serde(rename = "schemas")]
+    Schemas,
 }

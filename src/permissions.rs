@@ -6,106 +6,150 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
-use self::grant::{Conditions, Grant, GrantData, Scope};
+pub use self::grant::{Conditions, Grant, GrantData, Scope};
 use crate::protocols::Definition;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
+use crate::records::{self, write};
 use crate::service::Message;
-use crate::{records, utils, Interface};
+use crate::{utils, Interface, Method};
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL: &str = "https://vercre.website/dwn/permissions";
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GrantOptions {
-    /// The entity this grant is for.
-    granted_to: String,
-
-    /// The datetime this grant is given.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    date_granted: Option<String>,
-
-    /// The datetime (UTC ISO-8601) this grant will expire.
-    pub date_expires: String,
-
-    /// The ID of the permission request.
-    #[serde(skip_serializing_if = "Option::is_none")]
+#[derive(Clone, Debug, Default)]
+pub struct GrantBuilder {
+    owner: String,
+    issued_to: String,
+    date_expires: String,
     request_id: Option<String>,
-
-    /// Describes the purpose of the grant.
-    #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
-
-    /// Whether the grant is delegated.
-    #[serde(skip_serializing_if = "Option::is_none")]
     delegated: Option<bool>,
-
-    /// The scope of the grant.
-    scope: Scope,
-
-    /// Conditions that must be met when the grant is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    scope: Option<Scope>,
     conditions: Option<Conditions>,
 }
 
-/// Create a permission grant.
-pub(crate) async fn create_grant(
-    owner: &str, options: GrantOptions, provider: &impl Provider,
-) -> Result<records::Write> {
-    if options.scope.interface == Interface::Records && options.scope.protocol.is_none() {
-        return Err(anyhow!("`Records` grants must have scope `protocol` property set"));
+/// Builder for creating a permission grant.
+impl GrantBuilder {
+    /// Returns a new [`GrantBuilder`]
+    pub fn new(owner: String) -> Self {
+        // set defaults
+        let builder = Self {
+            owner,
+            date_expires: (Utc::now() + Duration::seconds(100)).to_rfc3339(),
+            ..GrantBuilder::default()
+        };
+
+        builder
     }
 
-    let scope = options.scope;
-    let tags = if let Some(protocol) = &scope.protocol {
-        let protocol = utils::clean_url(protocol)?;
-        let mut map = Map::new();
-        map.insert("protocol".to_string(), Value::String(protocol));
-        Some(map)
-    } else {
-        None
-    };
+    /// Specify who the grant is issued to.
+    #[must_use]
+    pub fn issued_to(mut self, issued_to: String) -> Self {
+        self.issued_to = issued_to;
+        self
+    }
 
-    let grant_data = GrantData {
-        date_expires: options.date_expires,
-        request_id: options.request_id,
-        description: options.description,
-        delegated: options.delegated,
-        scope,
-        conditions: options.conditions,
-    };
-    let grant_bytes = serde_json::to_vec(&grant_data)?;
+    /// The time in seconds after which the issued grant will expire. Defaults
+    /// to 100 seconds.
+    #[must_use]
+    pub fn expires_in(mut self, seconds: i64) -> Self {
+        if seconds <= 0 {
+            return self;
+        }
+        self.date_expires = (Utc::now() + Duration::seconds(seconds)).to_rfc3339();
+        self
+    }
 
-    let options = records::WriteOptions {
-        message_timestamp: options.date_granted.clone(),
-        date_created: options.date_granted.clone(),
-        recipient: Some(options.granted_to.clone()),
-        protocol: Some(records::write::Protocol {
-            protocol: PROTOCOL.to_string(),
-            protocol_path: "grant".to_string(),
-        }),
-        data_format: "application/json".to_string(),
-        data: records::write::Data::Bytes {
-            data: grant_bytes.clone(),
-        },
-        tags,
-        ..records::WriteOptions::default()
-    };
-    let mut write = records::write::create(owner, options, provider).await?;
-    write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
+    /// Specify an ID to use for the permission request.
+    #[must_use]
+    pub fn request_id(mut self, request_id: String) -> Self {
+        self.request_id = Some(request_id);
+        self
+    }
 
-    Ok(write)
+    /// Describe the purpose of the grant.
+    #[must_use]
+    pub fn description(mut self, description: String) -> Self {
+        self.description = Some(description);
+        self
+    }
 
-    // return {
-    //     grant_record: RecordsWrite,
-    //     grant_data: PermissionGrantData,
-    //     grant_bytes: Uint8Array,
-    //     encoded: DataEncodedRecordsWriteMessage,
-    // };
+    /// Specify whether the grant is delegated or not.
+    #[must_use]
+    pub fn delegated(mut self, delegated: bool) -> Self {
+        self.delegated = Some(delegated);
+        self
+    }
+
+    /// Specify the scope of the grant.
+    #[must_use]
+    pub fn scope(mut self, interface: Interface, method: Method, protocol: Option<String>) -> Self {
+        self.scope = Some(Scope {
+            interface,
+            method,
+            protocol,
+        });
+        self
+    }
+
+    /// Specify conditions that must be met when the grant is used.
+    #[must_use]
+    pub fn conditions(mut self, conditions: Conditions) -> Self {
+        self.conditions = Some(conditions);
+        self
+    }
+
+    /// Generate the permission grant.
+    pub async fn build(self, provider: &impl Provider) -> Result<records::Write> {
+        if self.issued_to.is_empty() {
+            return Err(anyhow!("missing `issued_to`"));
+        }
+        let Some(scope) = self.scope else {
+            return Err(anyhow!("missing `scope`"));
+        };
+
+        let grant_bytes = serde_json::to_vec(&GrantData {
+            date_expires: self.date_expires,
+            request_id: self.request_id,
+            description: self.description,
+            delegated: self.delegated,
+            scope: scope.clone(),
+            conditions: self.conditions,
+        })?;
+
+        let mut builder = write::WriteBuilder::new(&self.owner)
+            .recipient(self.issued_to)
+            .protocol(write::Protocol {
+                protocol: PROTOCOL.to_string(),
+                protocol_path: "grant".to_string(),
+            })
+            .data(write::Data::Bytes {
+                data: grant_bytes.clone(),
+            });
+
+        if let Some(protocol) = &scope.protocol {
+            let protocol = utils::clean_url(protocol)?;
+            builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
+        };
+
+        let mut write = builder.build(provider).await?;
+        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
+
+        Ok(write)
+
+        // Ok(Grant {
+        //     grant_record: RecordsWrite,
+        //     grant_data: PermissionGrantData,
+        //     grant_bytes: Uint8Array,
+        //     encoded: DataEncodedRecordsWriteMessage,
+        // })
+    }
 }
 
 /// Fetch the grant specified by `grant_id`.
