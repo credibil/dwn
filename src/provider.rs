@@ -6,7 +6,7 @@ use std::io::Read;
 
 use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
-pub use vercre_infosec::KeyOps;
+pub use vercre_infosec::{KeyOps, Signer};
 
 use crate::messages::Sort;
 use crate::query::Filter;

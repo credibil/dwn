@@ -81,19 +81,18 @@ struct Payload {
 
 impl WriteBuilder {
     /// Returns a new [`GrantBuilder`]
+    #[must_use]
     pub fn new(owner: &str) -> Self {
         let now = Utc::now().to_rfc3339();
 
         // set defaults
-        let builder = Self {
+        Self {
             owner: owner.to_string(),
             date_created: Some(now.clone()),
             message_timestamp: Some(now),
             data_format: "application/json".to_string(),
-            ..WriteBuilder::default()
-        };
-
-        builder
+            ..Self::default()
+        }
     }
 
     /// Specify the write record's recipient .
@@ -168,7 +167,7 @@ impl WriteBuilder {
 
     /// Whether the record is published.
     #[must_use]
-    pub fn published(mut self, published: bool) -> Self {
+    pub const fn published(mut self, published: bool) -> Self {
         self.published = Some(published);
         self
     }
@@ -196,7 +195,7 @@ impl WriteBuilder {
 
     /// Specifies whether the record should be encrypted.
     #[must_use]
-    pub fn encrypt(mut self, encrypt: bool) -> Self {
+    pub const fn encrypt(mut self, encrypt: bool) -> Self {
         self.encrypt = Some(encrypt);
         self
     }
@@ -209,6 +208,9 @@ impl WriteBuilder {
     }
 
     /// Build the write message.
+    ///
+    /// # Errors
+    /// TODO: Add errors
     pub async fn build(self, provider: &impl Provider) -> Result<Write> {
         // CID
         let (data_cid, data_size) = match self.data {

@@ -37,15 +37,14 @@ pub struct GrantBuilder {
 /// Builder for creating a permission grant.
 impl GrantBuilder {
     /// Returns a new [`GrantBuilder`]
+    #[must_use]
     pub fn new(owner: String) -> Self {
         // set defaults
-        let builder = Self {
+        Self {
             owner,
             date_expires: (Utc::now() + Duration::seconds(100)).to_rfc3339(),
-            ..GrantBuilder::default()
-        };
-
-        builder
+            ..Self::default()
+        }
     }
 
     /// Specify who the grant is issued to.
@@ -82,7 +81,7 @@ impl GrantBuilder {
 
     /// Specify whether the grant is delegated or not.
     #[must_use]
-    pub fn delegated(mut self, delegated: bool) -> Self {
+    pub const fn delegated(mut self, delegated: bool) -> Self {
         self.delegated = Some(delegated);
         self
     }
@@ -100,12 +99,15 @@ impl GrantBuilder {
 
     /// Specify conditions that must be met when the grant is used.
     #[must_use]
-    pub fn conditions(mut self, conditions: Conditions) -> Self {
+    pub const fn conditions(mut self, conditions: Conditions) -> Self {
         self.conditions = Some(conditions);
         self
     }
 
     /// Generate the permission grant.
+    ///
+    /// # Errors
+    /// TODO: Add errors
     pub async fn build(self, provider: &impl Provider) -> Result<records::Write> {
         if self.issued_to.is_empty() {
             return Err(anyhow!("missing `issued_to`"));

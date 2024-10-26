@@ -167,10 +167,10 @@ impl Grant {
         &self, grantor: &str, timestamp: &str, provider: &impl Provider,
     ) -> Result<()> {
         // Check that message is within the grant's time frame
-        if timestamp < &self.date_granted {
+        if timestamp < self.date_granted.as_str() {
             return Err(anyhow!("grant is not yet active"));
         }
-        if timestamp >= &self.date_expires {
+        if timestamp >= self.date_expires.as_str() {
             return Err(anyhow!("grant has expired"));
         }
 

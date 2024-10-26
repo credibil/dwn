@@ -13,7 +13,7 @@ use crate::auth::{Authorization, Grant, SignaturePayload};
 use crate::messages::{Direction, Sort};
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::{auth, cid, messages, permissions, protocols, records, Descriptor};
+use crate::{auth, cid, messages, permissions, protocols, records, schema, Descriptor};
 
 /// Process web node messages.
 ///
@@ -197,7 +197,7 @@ impl Message {
             return Err(anyhow!("missing message timestamp"));
         };
 
-        if message_timestamp.as_str() <= timestamp {
+        if message_timestamp <= timestamp {
             return Err(anyhow!("grant with CID {} has been revoked", grant.id));
         }
 
@@ -250,6 +250,16 @@ impl Message {
         }
 
         None
+    }
+
+    /// Validate a message against the corresponding JSON schema.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub fn validate_schema(&self) -> Result<()> {
+        let descriptor = self.descriptor();
+        let key = format!("{}{}", descriptor.interface, descriptor.method);
+        schema::validate_schema(&key, self)
     }
 }
 

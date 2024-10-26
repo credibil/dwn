@@ -8,6 +8,7 @@ pub mod protocols;
 pub mod provider;
 pub mod query;
 pub mod records;
+mod schema;
 pub mod service;
 mod utils;
 

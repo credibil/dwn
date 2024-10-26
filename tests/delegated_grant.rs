@@ -2,7 +2,7 @@
 
 use test_utils::store::ProviderImpl;
 use test_utils::test_data;
-use vercre_dwn::permissions::{GrantBuilder, Scope};
+use vercre_dwn::permissions::GrantBuilder;
 use vercre_dwn::protocols::Definition as ProtocolDefinition;
 use vercre_dwn::service::Message;
 use vercre_dwn::{Interface, Method};
@@ -31,20 +31,20 @@ async fn configure() {
     println!("{:?}", email_proto);
 
     // Bob attempts to configure a protocol
-    let input = test_data::ProtocolsConfigureInput {
+    let input = test_data::ConfigureInput {
         delegated_grant: Some(grant),
         author: Some(test_data::Persona {
             did: BOB_DID.to_string(),
         }),
         protocol_definition: Some(email_proto),
-        ..test_data::ProtocolsConfigureInput::default()
+        ..test_data::ConfigureInput::default()
     };
 
     let configure = test_data::protocols_configure(input).await.expect("should configure protocol");
     let message = Message::ProtocolsConfigure(configure.message);
 
     // Bob should be able to configure a protocol on Alice's behalf
-    let reply = vercre_dwn::handle_message(ALICE_DID, message, provider)
+    let _reply = vercre_dwn::handle_message(ALICE_DID, message, provider)
         .await
         .expect("should configure protocol");
 

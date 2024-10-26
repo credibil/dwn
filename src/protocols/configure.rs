@@ -9,7 +9,8 @@ use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::Authorization;
-use crate::{records, Descriptor};
+use crate::records::SizeRange;
+use crate::Descriptor;
 
 /// Protocols Configure payload
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -33,7 +34,7 @@ pub struct ConfigureDescriptor {
     pub definition: Definition,
 }
 
-/// Protocols definition.
+/// Protocol definition.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Definition {
@@ -83,7 +84,7 @@ pub struct RuleSet {
     /// If $size is set, the record size in bytes must be within the limits.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$size")]
-    pub size: Option<records::SizeRange>,
+    pub size: Option<SizeRange>,
 
     /// Tags for this protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -93,7 +94,7 @@ pub struct RuleSet {
     /// JSON Schema verifies that properties other than properties prefixed
     /// with $ will actually have type `ProtocolRuleSet`
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub nested: BTreeMap<String, RuleSet>,
 }
 
 /// Config for protocol-path encryption scheme.
@@ -159,7 +160,7 @@ pub struct ActionRule {
 }
 
 /// Actor types.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Actor {
     /// Anyone can perform the action.
@@ -174,7 +175,7 @@ pub enum Actor {
 }
 
 /// Rule actions.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Action {
     /// Co-delete
@@ -223,7 +224,7 @@ pub struct Tags {
     #[serde(rename = "$allowUndefinedTags")]
     pub allow_undefined_tags: Option<bool>,
 
-    /// Other ??
+    /// Tag properties
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub undefined_tags: BTreeMap<String, Value>,
 }

@@ -4,10 +4,11 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
-use vercre_infosec::Jws;
+use vercre_infosec::jose::Type;
+use vercre_infosec::{Jws, Signer};
 
 pub use crate::permissions::grant::Grant;
-use crate::records;
+use crate::{cid, records};
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///
@@ -34,6 +35,70 @@ macro_rules! verify_key {
             vm.method_type.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
         }
     }};
+}
+
+/// Options to use when creating a permission grant.
+#[derive(Clone, Debug, Default)]
+pub struct AuthorizationBuilder {
+    descriptor_cid: Option<String>,
+    delegated_grant: Option<DelegatedGrant>,
+    permission_grant_id: Option<String>,
+    protocol_role: Option<String>,
+}
+
+/// Builder for creating a permission grant.
+impl AuthorizationBuilder {
+    /// Returns a new [`GrantBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the `Descriptor`.
+    #[must_use]
+    pub fn descriptor_cid(mut self, descriptor_cid: String) -> Self {
+        self.descriptor_cid = Some(descriptor_cid);
+        self
+    }
+
+    /// Specify a grant ID to use.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
+        self.permission_grant_id = Some(permission_grant_id);
+        self
+    }
+
+    /// Specify a protocol role to use.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: String) -> Self {
+        self.protocol_role = Some(protocol_role);
+        self
+    }
+
+    /// Generate the permission grant.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
+        let descriptor_cid = self.descriptor_cid.ok_or_else(|| anyhow!("descriptor not found"))?;
+        let delegated_grant_id =
+            if let Some(grant) = &self.delegated_grant { Some(cid::compute(grant)?) } else { None };
+
+        let payload = SignaturePayload {
+            descriptor_cid,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant_id,
+            protocol_role: self.protocol_role,
+        };
+        let signature = Jws::new(Type::Jwt, &payload, signer).await?;
+
+        Ok(Authorization {
+            signature,
+            author_delegated_grant: self.delegated_grant,
+            owner_signature: None,
+            owner_delegated_grant: None,
+        })
+    }
 }
 
 /// Message authorization.

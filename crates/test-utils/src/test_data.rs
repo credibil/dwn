@@ -1,5 +1,7 @@
 use anyhow::Result;
-use vercre_dwn::protocols::{Configure, Definition as ProtocolDefinition, RuleSet, Type};
+use vercre_dwn::protocols::{
+    Configure, ConfigureBuilder, Definition as ProtocolDefinition, RuleSet, Type,
+};
 use vercre_dwn::records::Write;
 use vercre_infosec::KeyOps;
 
@@ -7,6 +9,7 @@ use crate::keystore::OWNER_DID;
 use crate::store::ProviderImpl;
 
 // A logical grouping of user data used to generate test messages.
+#[derive(Clone, Debug)]
 pub struct Persona {
     pub did: String,
 }
@@ -21,7 +24,7 @@ impl Persona {
 }
 
 #[derive(Default)]
-pub struct ProtocolsConfigureInput {
+pub struct ConfigureInput {
     pub published: Option<bool>,
     pub author: Option<Persona>,
     pub message_timestamp: Option<String>,
@@ -30,7 +33,7 @@ pub struct ProtocolsConfigureInput {
     pub delegated_grant: Option<Write>,
 }
 
-pub struct ProtocolsConfigureOutput {
+pub struct ConfigureOutput {
     pub author: Persona,
     pub message: Configure,
     pub protocols_configure: Configure,
@@ -39,9 +42,7 @@ pub struct ProtocolsConfigureOutput {
 /// Generates a ProtocolsConfigure message for testing.
 /// Optional parameters are generated if not given.
 /// Implementation currently uses `ProtocolsConfigure.create()`.
-pub async fn protocols_configure(
-    input: ProtocolsConfigureInput,
-) -> Result<ProtocolsConfigureOutput> {
+pub async fn protocols_configure(input: ConfigureInput) -> Result<ConfigureOutput> {
     let provider = ProviderImpl::new().await?;
 
     let author = input.author.unwrap_or_else(|| Persona::new());
@@ -69,23 +70,20 @@ pub async fn protocols_configure(
         }
     };
 
-    let signer = provider.signer(&author.did);
+    let mut builder = ConfigureBuilder::new().definition(definition);
+    if let Some(delegated_grant) = input.delegated_grant {
+        builder = builder.delegated_grant(delegated_grant);
+    }
+    if let Some(permission_grant_id) = input.permission_grant_id {
+        builder = builder.permission_grant_id(permission_grant_id);
+    }
 
-    // const options: ProtocolsConfigureOptions = {
-    //   messageTimestamp  : input?.messageTimestamp,
-    //   definition,
-    //   signer,
-    //   permissionGrantId : input?.permissionGrantId,
-    //   delegatedGrant    : input?.delegatedGrant
-    // };
+    let signer = provider.signer(&author.did)?;
+    let configure = builder.build(&signer).await?;
 
-    // const protocolsConfigure = await ProtocolsConfigure.create(options);
-
-    // return {
-    //   author,
-    //   message: protocolsConfigure.message,
-    //   protocolsConfigure
-    // };
-
-    todo!()
+    Ok(ConfigureOutput {
+        author: author.clone(),
+        message: configure.clone(),
+        protocols_configure: configure,
+    })
 }

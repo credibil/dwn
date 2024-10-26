@@ -2,6 +2,13 @@ use anyhow::Result;
 use url::Url;
 
 pub fn clean_url(url: &str) -> Result<String> {
-    let uri = Url::parse(url)?;
-    Ok(uri.origin().ascii_serialization() + uri.path())
+    let p = Url::parse(url)?;
+    Ok(p.origin().ascii_serialization() + p.path())
 }
+
+// pub fn validate_url(url: &str) -> Result<()> {
+//     if url != clean_url(url)? {
+//         return Err(anyhow!("protocol URI ${url} must be normalized"));
+//     }
+//     Ok(())
+// }
