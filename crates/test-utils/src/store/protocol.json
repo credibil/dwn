@@ -41,7 +41,8 @@
                             {
                                 "who": "anyone",
                                 "can": [
-                                    "write"
+                                    "create",
+                                    "update"
                                 ]
                             }
                         ],
@@ -57,7 +58,8 @@
                                     "who": "author",
                                     "of": "reply",
                                     "can": [
-                                        "write"
+                                        "create",
+                                        "update"
                                     ]
                                 }
                             ]
@@ -75,7 +77,8 @@
                                 "who": "author",
                                 "of": "post",
                                 "can": [
-                                    "write"
+                                    "co-update",
+                                    "co-delete"
                                 ]
                             }
                         ]

@@ -22,13 +22,13 @@ async fn configure() {
         .scope(Interface::Protocols, Method::Configure, None);
     let grant = builder.build(&provider).await.expect("should create grant");
 
-    println!("{:?}", grant);
+    // println!("{:?}", grant);
 
     let email_json = include_bytes!("protocols/email.json");
     let email_proto: ProtocolDefinition =
         serde_json::from_slice(email_json).expect("should deserialize");
 
-    println!("{:?}", email_proto);
+    // println!("{:?}", email_proto);
 
     // Bob attempts to configure a protocol
     let input = test_data::ConfigureInput {

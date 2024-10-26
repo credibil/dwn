@@ -7,9 +7,9 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 
 pub use self::configure::{
-    Action, Actor, Configure, ConfigureDescriptor, Definition, RuleSet, Type,
+    Action, Actor, Configure, ConfigureDescriptor, ConfigureReply, Definition, RuleSet, Type,
 };
-pub use self::query::{Query, Reply as QueryReply};
+pub use self::query::{Query, QueryReply};
 use crate::auth::AuthorizationBuilder;
 use crate::provider::Signer;
 use crate::records::Write;

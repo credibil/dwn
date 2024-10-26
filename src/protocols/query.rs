@@ -13,21 +13,22 @@ use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
 use crate::service::{Context, Message};
-use crate::{Cursor, Descriptor as Base, Interface, Method, Status};
+use crate::{Cursor, Descriptor, Interface, Method, Status};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(ctx: &Context, query: Query, provider: impl Provider) -> Result<Reply> {
+pub(crate) async fn handle(
+    ctx: &Context, query: Query, provider: impl Provider,
+) -> Result<QueryReply> {
     query.authorize(ctx)?;
-
     let entries = fetch_config(&ctx.owner, query, &provider).await?;
 
     // TODO: pagination & sorting
     // TODO: return errors in Reply
 
-    Ok(Reply {
+    Ok(QueryReply {
         status: Status {
             code: 200,
             detail: Some("OK".to_string()),
@@ -84,7 +85,7 @@ async fn fetch_config(
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
-    pub descriptor: Descriptor,
+    pub descriptor: QueryDescriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
@@ -117,7 +118,7 @@ impl Query {
 
 /// Messages Query reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Reply {
+pub struct QueryReply {
     /// Status message to accompany the reply.
     pub status: Status,
 
@@ -134,10 +135,10 @@ pub struct Reply {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(clippy::module_name_repetitions)]
-pub struct Descriptor {
+pub struct QueryDescriptor {
     /// The base descriptor
     #[serde(flatten)]
-    pub base: Base,
+    pub base: Descriptor,
 
     /// Filter Records for query.
     pub filter: Option<Filter>,

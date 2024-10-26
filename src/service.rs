@@ -46,6 +46,10 @@ pub async fn handle_message(
             let reply = protocols::query::handle(&ctx, query, provider).await?;
             Ok(Reply::ProtocolsQuery(reply))
         }
+        Message::ProtocolsConfigure(configure) => {
+            let reply = protocols::configure::handle(&ctx, configure, provider).await?;
+            Ok(Reply::ProtocolsConfigure(reply))
+        }
         _ => Err(anyhow!("Unsupported message")),
     }
 }
@@ -276,6 +280,6 @@ pub enum Reply {
     // RecordsRead(records::ReadReply),
     // RecordsSubscribe(records::SubscribeReply),
     // RecordsDelete(records::DeleteReply),
-    // ProtocolsConfigure(protocols::ConfigureReply),
+    ProtocolsConfigure(protocols::ConfigureReply),
     ProtocolsQuery(protocols::QueryReply),
 }

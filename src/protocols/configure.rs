@@ -4,13 +4,39 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::Authorization;
+use crate::provider::Provider;
 use crate::records::SizeRange;
-use crate::Descriptor;
+use crate::service::Context;
+use crate::{Cursor, Descriptor, Status};
+
+/// Process query message.
+///
+/// # Errors
+/// TODO: Add errors
+pub(crate) async fn handle(
+    _ctx: &Context, _configure: Configure, _provider: impl Provider,
+) -> Result<ConfigureReply> {
+    // configure.authorize(ctx)?;
+    // let entries = fetch_config(&ctx.owner, query, &provider).await?;
+
+    // TODO: pagination & sorting
+    // TODO: return errors in Reply
+
+    Ok(ConfigureReply {
+        status: Status {
+            code: 200,
+            detail: Some("OK".to_string()),
+        },
+        entries: None, //Some(entries),
+        cursor: None,
+    })
+}
 
 /// Protocols Configure payload
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -20,6 +46,21 @@ pub struct Configure {
 
     /// The message authorization.
     pub authorization: Authorization,
+}
+
+/// Messages Query reply
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ConfigureReply {
+    /// Status message to accompany the reply.
+    pub status: Status,
+
+    /// The Query descriptor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Vec<Configure>>,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
 }
 
 /// Configure descriptor.
@@ -178,15 +219,6 @@ pub enum Actor {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Action {
-    /// Co-delete
-    CoDelete,
-
-    /// Co-prune
-    CoPrune,
-
-    /// Co-update
-    CoUpdate,
-
     /// Create
     Create,
 
@@ -199,15 +231,27 @@ pub enum Action {
     /// Query
     Query,
 
+    /// Subscribe
+    Subscribe,
+
     /// Read
     #[default]
     Read,
 
-    /// Subscribe
-    Subscribe,
-
     /// Update
     Update,
+
+    /// Co-delete
+    #[serde(rename = "co-delete")]
+    CoDelete,
+
+    /// Co-prune
+    #[serde(rename = "co-prune")]
+    CoPrune,
+
+    /// Co-update
+    #[serde(rename = "co-update")]
+    CoUpdate,
 }
 
 /// Protocol tags
