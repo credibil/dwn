@@ -79,13 +79,12 @@ impl EventStream for ProviderImpl {
         async { Ok((String::new(), EventSubscriptionImpl {})) }
     }
 
-    //: Promise<EventSubscription>;
-
     /// Emits an event to a owner's event stream.
     async fn emit(
         &self, owner: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
     ) -> Result<()> {
-        todo!()
+        // todo!()
+        Ok(())
     }
 }
 

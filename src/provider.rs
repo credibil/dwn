@@ -205,7 +205,6 @@ pub trait EventStream: Send + Sync {
         &self, owner: &str, id: &str,
         listener: impl Fn(&str, MessageEvent, BTreeMap<String, Value>),
     ) -> impl Future<Output = anyhow::Result<(String, impl EventSubscription)>> + Send;
-    //: Promise<EventSubscription>;
 
     /// Emits an event to a owner's event stream.
     fn emit(

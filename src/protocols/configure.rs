@@ -12,7 +12,7 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::protocols::query::{self, Filter};
-use crate::provider::{EventLog, MessageStore, Provider, Signer};
+use crate::provider::{EventLog, EventStream, MessageEvent, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Message};
 use crate::{cid, utils, Cursor, Descriptor, Interface, Method, Status};
@@ -46,7 +46,6 @@ pub(crate) async fn handle(
             });
 
         // delete all entries except the most recent
-        // let mut deleted_cids = vec![];
         let timestamp = &latest_entry.descriptor.base.message_timestamp;
         for e in existing {
             if &e.descriptor.base.message_timestamp < timestamp {
@@ -64,13 +63,16 @@ pub(crate) async fn handle(
     // save the incoming message when latest
     let reply = if incoming_is_latest {
         let cid = cid::compute(&configure)?;
-        MessageStore::put(&provider, &ctx.owner, Message::ProtocolsConfigure(configure)).await?;
+        let msg = Message::ProtocolsConfigure(configure);
+        
+        MessageStore::put(&provider, &ctx.owner, msg.clone()).await?;
         EventLog::append(&provider, &ctx.owner, &cid, BTreeMap::new()).await?;
 
-        // // only emit if the event stream is set
-        // if (this.eventStream !== undefined) {
-        //     this.eventStream.emit(tenant, { message }, indexes);
-        // }
+        let event = MessageEvent {
+            message: msg,
+            initial_write: None,
+        };
+        EventStream::emit(&provider, &ctx.owner, event, BTreeMap::new()).await?;
 
         ConfigureReply {
             status: Status {
