@@ -141,8 +141,9 @@ impl Grant {
     /// Verify that the message is within the allowed time frame of the grant, and
     /// the grant has not been revoked.
     async fn is_current(
-        &self, grantor: &str, timestamp: &str, provider: &impl Provider,
+        &self, grantor: &str, timestamp: &str, store: &impl MessageStore,
     ) -> Result<()> {
+        // TODO: use chrono dattime for compare
         // Check that message is within the grant's time frame
         if timestamp < self.date_granted.as_str() {
             return Err(anyhow!("grant is not yet active"));
@@ -173,15 +174,13 @@ impl Grant {
             message_timestamp: Some(Direction::Descending),
             ..Default::default()
         });
-        let (messages, _) = MessageStore::query(provider, grantor, vec![qf], sort, None).await?;
+        let (messages, _) = store.query(grantor, vec![qf], sort, None).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(anyhow!("grant has been revoked"));
         };
-
         let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
             return Err(anyhow!("missing message timestamp"));
         };
-
         if message_timestamp.as_str() <= timestamp {
             return Err(anyhow!("grant with CID {} has been revoked", self.id));
         }

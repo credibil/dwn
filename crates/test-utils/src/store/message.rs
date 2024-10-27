@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use vercre_dwn::messages::Sort;
 use vercre_dwn::provider::MessageStore;
 use vercre_dwn::query::{Compare, Criterion, Filter};
@@ -9,9 +7,7 @@ use vercre_dwn::{Cursor, Pagination};
 use super::ProviderImpl;
 
 impl MessageStore for ProviderImpl {
-    async fn put(
-        &self, owner: &str, message: Message, _indexes: BTreeMap<&str, &str>,
-    ) -> anyhow::Result<()> {
+    async fn put(&self, owner: &str, message: Message) -> anyhow::Result<()> {
         self.db.use_ns("testing").use_db(owner).await?;
         let _: Option<Message> =
             self.db.create(("message", message.cid()?)).content(message).await?;

@@ -24,7 +24,7 @@ pub(crate) async fn handle(
     ctx: &Context, query: Query, provider: impl Provider,
 ) -> Result<QueryReply> {
     query.authorize(ctx)?;
-    let entries = fetch_config(&ctx.owner, query, &provider).await?;
+    let entries = fetch_config(&ctx.owner, query.descriptor.filter, &provider).await?;
 
     // TODO: pagination & sorting
     // TODO: return errors in Reply
@@ -34,15 +34,15 @@ pub(crate) async fn handle(
             code: 200,
             detail: Some("OK".to_string()),
         },
-        entries: Some(entries),
+        entries,
         cursor: None,
     })
 }
 
 /// Fetch published `protocols::Configure` matching the query
-async fn fetch_config(
-    owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Vec<Configure>> {
+pub(crate) async fn fetch_config(
+    owner: &str, filter: Option<Filter>, store: &impl MessageStore,
+) -> Result<Option<Vec<Configure>>> {
     let mut qf = query::Filter {
         criteria: BTreeMap::<String, Criterion>::new(),
     };
@@ -60,7 +60,7 @@ async fn fetch_config(
         Criterion::Single(Compare::Equal(Value::Bool(true))),
     );
 
-    if let Some(filter) = query.descriptor.filter {
+    if let Some(filter) = filter {
         qf.criteria.insert(
             "descriptor.definition.protocol".to_string(),
             Criterion::Single(Compare::Equal(Value::String(filter.protocol))),
@@ -68,15 +68,20 @@ async fn fetch_config(
     }
 
     // execute query
-    let (messages, _cursor) = MessageStore::query(provider, owner, vec![qf], None, None).await?;
-    let Some(msg) = messages.first() else {
-        return Err(anyhow!("no matching message"));
-    };
-    let Message::ProtocolsConfigure(cfg) = msg else {
-        return Err(anyhow!("Unexpected message type"));
-    };
+    let (messages, _cursor) = store.query(owner, vec![qf], None, None).await?;
+    if messages.is_empty() {
+        return Ok(None);
+    }
 
-    Ok(vec![cfg.clone()])
+    let mut entries = Vec::new();
+    for msg in messages {
+        let Message::ProtocolsConfigure(cfg) = msg else {
+            return Err(anyhow!("Unexpected message type"));
+        };
+        entries.push(cfg);
+    }
+
+    Ok(Some(entries))
 }
 
 /// Protocols Query payload

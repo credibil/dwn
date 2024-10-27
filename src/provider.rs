@@ -29,9 +29,8 @@ pub trait MessageStore: Send + Sync {
     // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Store a message in the underlying store.
-    fn put(
-        &self, owner: &str, message: Message, indexes: BTreeMap<&str, &str>,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn put(&self, owner: &str, message: Message)
+        -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.

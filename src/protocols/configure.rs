@@ -11,7 +11,8 @@ use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::provider::{Provider, Signer};
+use crate::protocols::query::{self, Filter};
+use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Message};
 use crate::{cid, utils, Cursor, Descriptor, Interface, Method, Status};
@@ -25,71 +26,79 @@ pub(crate) async fn handle(
 ) -> Result<ConfigureReply> {
     configure.authorize(ctx, &provider).await?;
 
-    // // attempt to get existing protocol
-    // const query = {
-    //   interface : DwnInterfaceName.Protocols,
-    //   method    : DwnMethodName.Configure,
-    //   protocol  : message.descriptor.definition.protocol
-    // };
-    // const { messages: existingMessages } = await this.messageStore.query(tenant, [ query ]);
+    // attempt to get existing protocol
+    let filter = Filter {
+        protocol: configure.descriptor.definition.protocol.clone(),
+    };
 
-    // // find newest message, and if the incoming message is the newest
-    // let newestMessage = await Message.getNewestMessage(existingMessages);
-    // let incomingMessageIsNewest = false;
-    // if (newestMessage === undefined || await Message.isNewer(message, newestMessage)) {
-    //   incomingMessageIsNewest = true;
-    //   newestMessage = message;
-    // }
+    let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
 
-    // // write the incoming message to DB if incoming message is newest
-    // let messageReply: GenericMessageReply;
-    // if (incomingMessageIsNewest) {
-    //   const indexes = ProtocolsConfigureHandler.constructIndexes(protocolsConfigure);
+    // find newest message, and if the incoming message is the newest
+    let newest = if let Some(entries) = &results {
+        let mut newest = true;
+        for entry in entries {
+            if entry.descriptor.base.message_timestamp > configure.descriptor.base.message_timestamp
+            {
+                newest = false;
+                break;
+            }
+        }
+        newest
+    } else {
+        true
+    };
 
-    //   await this.messageStore.put(tenant, message, indexes);
-    //   const messageCid = await Message.getCid(message);
-    //   await this.eventLog.append(tenant, messageCid, indexes);
+    let reply: ConfigureReply;
+    if newest {
+        // write the incoming message to DB if incoming message is newest
+        let msg = Message::ProtocolsConfigure(configure.clone());
+        MessageStore::put(&provider, &ctx.owner, msg).await?;
 
-    //   // only emit if the event stream is set
-    //   if (this.eventStream !== undefined) {
-    //     this.eventStream.emit(tenant, { message }, indexes);
-    //   }
+        // // log event
+        // let cid = cid::compute(&configure)?;
+        // await this.eventLog.append(tenant, messageCid, indexes);
 
-    //   messageReply = {
-    //     status: { code: 202, detail: 'Accepted' }
-    //   };
-    // } else {
-    //   messageReply = {
-    //     status: { code: 409, detail: 'Conflict' }
-    //   };
-    // }
+        // // only emit if the event stream is set
+        // if (this.eventStream !== undefined) {
+        //     this.eventStream.emit(tenant, { message }, indexes);
+        // }
 
-    // // delete all existing records that are smaller
-    // const deletedMessageCids: string[] = [];
-    // for (const message of existingMessages) {
-    //   if (await Message.isNewer(newestMessage, message)) {
-    //     const messageCid = await Message.getCid(message);
-    //     deletedMessageCids.push(messageCid);
+        reply = ConfigureReply {
+            status: Status {
+                code: 202,
+                detail: Some("Accepted".to_string()),
+            },
+            ..ConfigureReply::default()
+        };
+    } else {
+        reply = ConfigureReply {
+            status: Status {
+                code: 409,
+                detail: Some("Conflict".to_string()),
+            },
+            ..ConfigureReply::default()
+        };
+    }
 
-    //     await this.messageStore.delete(tenant, messageCid);
-    //   }
-    // }
+    //  delete all existing records that are smaller
+    if let Some(entries) = &results {
+        let mut deleted_cids = vec![];
 
-    // await this.eventLog.deleteEventsByCid(tenant, deletedMessageCids);
+        for entry in entries {
+            if entry.descriptor.base.message_timestamp < configure.descriptor.base.message_timestamp
+            {
+                let cid = cid::compute(&entry)?;
+                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
+                deleted_cids.push(cid);
+            }
 
-    // return messageReply;
+            // log event
+            // await this.eventLog.deleteEventsByCid(tenant, deletedMessageCids);
+        }
+    }
 
-    // TODO: pagination & sorting
     // TODO: return errors in Reply
-
-    Ok(ConfigureReply {
-        status: Status {
-            code: 200,
-            detail: Some("OK".to_string()),
-        },
-        entries: None, //Some(entries),
-        cursor: None,
-    })
+    Ok(reply)
 }
 
 /// Protocols Configure payload
