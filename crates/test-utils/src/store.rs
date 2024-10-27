@@ -27,6 +27,8 @@ use vercre_infosec::{Algorithm, Cipher, KeyOps, Signer};
 
 use crate::keystore::{Keystore, OWNER_DID};
 
+const NAMESPACE: &str = "integration-test";
+
 #[derive(Clone)]
 pub struct ProviderImpl {
     db: Surreal<Db>,

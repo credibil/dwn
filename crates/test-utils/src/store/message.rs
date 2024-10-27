@@ -5,25 +5,28 @@ use vercre_dwn::service::Message;
 use vercre_dwn::{Cursor, Pagination};
 
 use super::ProviderImpl;
+use crate::store::NAMESPACE;
+
+const DATABASE: &str = "message";
 
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, message: Message) -> anyhow::Result<()> {
-        self.db.use_ns("testing").use_db(owner).await?;
+        self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<Message> =
-            self.db.create(("message", message.cid()?)).content(message).await?;
+            self.db.create((DATABASE, message.cid()?)).content(message).await?;
         Ok(())
     }
 
-    async fn get(&self, owner: &str, cid: &str) -> anyhow::Result<Option<Message>> {
-        self.db.use_ns("testing").use_db(owner).await?;
-        Ok(self.db.select(("message", cid)).await?)
+    async fn get(&self, owner: &str, message_cid: &str) -> anyhow::Result<Option<Message>> {
+        self.db.use_ns(NAMESPACE).use_db(owner).await?;
+        Ok(self.db.select((DATABASE, message_cid)).await?)
     }
 
     async fn query(
         &self, owner: &str, filters: Vec<Filter>, sort: Option<Sort>,
         pagination: Option<Pagination>,
     ) -> anyhow::Result<(Vec<Message>, Cursor)> {
-        self.db.use_ns("testing").use_db(owner).await?;
+        self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
         // build SQL-like statement
         let mut where_clause = " WHERE 1 = 1".to_string();
@@ -67,14 +70,14 @@ impl MessageStore for ProviderImpl {
         Ok((messages, Cursor::default()))
     }
 
-    async fn delete(&self, owner: &str, cid: &str) -> anyhow::Result<()> {
-        self.db.use_ns("testing").use_db(owner).await?;
-        let person: Option<Message> = self.db.delete(("message", cid)).await?;
+    async fn delete(&self, owner: &str, message_cid: &str) -> anyhow::Result<()> {
+        self.db.use_ns(NAMESPACE).use_db(owner).await?;
+        let _: Option<Message> = self.db.delete((DATABASE, message_cid)).await?;
         Ok(())
     }
 
     async fn purge(&self) -> anyhow::Result<()> {
-        // self.db.use_ns("testing");
+        // self.db.use_ns(NAMESPACE);
 
         Ok(())
     }

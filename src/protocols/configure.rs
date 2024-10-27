@@ -12,7 +12,7 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::protocols::query::{self, Filter};
-use crate::provider::{MessageStore, Provider, Signer};
+use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Message};
 use crate::{cid, utils, Cursor, Descriptor, Interface, Method, Status};
@@ -26,83 +26,74 @@ pub(crate) async fn handle(
 ) -> Result<ConfigureReply> {
     configure.authorize(ctx, &provider).await?;
 
-    // attempt to get existing protocol
+    // find any matching protocol entries
     let filter = Filter {
         protocol: configure.descriptor.definition.protocol.clone(),
     };
-
     let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
 
-    // find newest message, and if the incoming message is the newest
-    let newest = if let Some(entries) = &results {
-        let mut newest = true;
-        for entry in entries {
-            if entry.descriptor.base.message_timestamp > configure.descriptor.base.message_timestamp
-            {
-                newest = false;
-                break;
+    // determine if incoming message is the latest
+    let incoming_is_latest = if let Some(existing) = &results {
+        // find latest matching protocol entry
+        let timestamp = &configure.descriptor.base.message_timestamp;
+        let (incoming_is_latest, latest_entry) =
+            existing.iter().fold((true, &configure), |(_, _), e| {
+                if &e.descriptor.base.message_timestamp > timestamp {
+                    (false, e)
+                } else {
+                    (true, &configure)
+                }
+            });
+
+        // delete all entries except the most recent
+        // let mut deleted_cids = vec![];
+        let timestamp = &latest_entry.descriptor.base.message_timestamp;
+        for e in existing {
+            if &e.descriptor.base.message_timestamp < timestamp {
+                let cid = cid::compute(&e)?;
+                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
+                EventLog::delete(&provider, &ctx.owner, &cid).await?;
             }
         }
-        newest
+
+        incoming_is_latest
     } else {
         true
     };
 
-    let reply: ConfigureReply;
-    if newest {
-        // write the incoming message to DB if incoming message is newest
-        let msg = Message::ProtocolsConfigure(configure.clone());
-        MessageStore::put(&provider, &ctx.owner, msg).await?;
-
-        // // log event
-        // let cid = cid::compute(&configure)?;
-        // await this.eventLog.append(tenant, messageCid, indexes);
+    // save the incoming message when latest
+    let reply = if incoming_is_latest {
+        let cid = cid::compute(&configure)?;
+        MessageStore::put(&provider, &ctx.owner, Message::ProtocolsConfigure(configure)).await?;
+        EventLog::append(&provider, &ctx.owner, &cid, BTreeMap::new()).await?;
 
         // // only emit if the event stream is set
         // if (this.eventStream !== undefined) {
         //     this.eventStream.emit(tenant, { message }, indexes);
         // }
 
-        reply = ConfigureReply {
+        ConfigureReply {
             status: Status {
                 code: 202,
                 detail: Some("Accepted".to_string()),
             },
             ..ConfigureReply::default()
-        };
+        }
     } else {
-        reply = ConfigureReply {
+        ConfigureReply {
             status: Status {
                 code: 409,
                 detail: Some("Conflict".to_string()),
             },
             ..ConfigureReply::default()
-        };
-    }
-
-    //  delete all existing records that are smaller
-    if let Some(entries) = &results {
-        let mut deleted_cids = vec![];
-
-        for entry in entries {
-            if entry.descriptor.base.message_timestamp < configure.descriptor.base.message_timestamp
-            {
-                let cid = cid::compute(&entry)?;
-                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-                deleted_cids.push(cid);
-            }
-
-            // log event
-            // await this.eventLog.deleteEventsByCid(tenant, deletedMessageCids);
         }
-    }
+    };
 
-    // TODO: return errors in Reply
     Ok(reply)
 }
 
 /// Protocols Configure payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Configure {
     /// The Configure descriptor.
     pub descriptor: ConfigureDescriptor,

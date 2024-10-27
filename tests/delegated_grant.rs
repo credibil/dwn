@@ -15,7 +15,7 @@ async fn configure() {
     let provider = ProviderImpl::new().await.expect("should create provider");
 
     // ------------------------------
-    // Alice grants Bob ability to configure any protocol
+    // Alice grants Bob the ability to configure any protocol
     // ------------------------------
     let builder = GrantBuilder::new(ALICE_DID.to_string())
         .issued_to(BOB_DID.to_string())

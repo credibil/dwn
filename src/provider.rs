@@ -35,7 +35,7 @@ pub trait MessageStore: Send + Sync {
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.
     fn get(
-        &self, owner: &str, cid: &str,
+        &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<Message>>> + Send;
 
     /// Queries the underlying store for messages that matches the provided
@@ -47,7 +47,7 @@ pub trait MessageStore: Send + Sync {
     ) -> impl Future<Output = anyhow::Result<(Vec<Message>, Cursor)>> + Send;
 
     /// Delete message associated with the specified id.
-    fn delete(&self, owner: &str, cid: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Purge all records from the store.
     fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
@@ -156,7 +156,10 @@ pub trait EventLog: Send + Sync {
     // /// Close the connection to the underlying store.
     // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Adds an event to a owner's event log
+    /// Adds an event to a owner's event log.
+    /// 
+    /// The `indexes` parameter is a map of key-value pairs that can be used to
+    /// filter events.
     fn append(
         &self, owner: &str, message_cid: &str, indexes: BTreeMap<String, Value>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
@@ -166,7 +169,7 @@ pub trait EventLog: Send + Sync {
     ///
     /// The cursor is a messageCid.
     fn events(
-        owner: &str, cursor: Option<Cursor>,
+        &self, owner: &str, cursor: Option<Cursor>,
     ) -> impl Future<Output = anyhow::Result<(Vec<String>, Cursor)>> + Send;
 
     /// Retrieves a filtered set of events that occurred after a the cursor
@@ -175,13 +178,13 @@ pub trait EventLog: Send + Sync {
     /// is a `message_cid`.
     ///
     /// Returns an array of `message_cid`s that represent the events.
-    fn query_events(
-        owner: &str, filters: Vec<Filter>, cursor: Cursor,
+    fn query(
+        &self, owner: &str, filters: Vec<Filter>, cursor: Cursor,
     ) -> impl Future<Output = anyhow::Result<(Vec<String>, Cursor)>> + Send;
 
-    /// Deletes events for the specified `message_cids`.
-    fn delete_events(
-        owner: &str, message_cids: Vec<&str>,
+    /// Deletes event for the specified `message_cid`.
+    fn delete(
+        &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Purge all data from the store.

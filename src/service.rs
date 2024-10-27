@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, SignaturePayload};
 use crate::permissions::Grant;
 use crate::provider::Provider;
-use crate::{auth, cid, messages, permissions, protocols, records, schema, Descriptor};
+use crate::{auth, cid, messages, permissions, protocols, records, schema, Descriptor, Status};
 
 /// Process web node messages.
 ///
@@ -18,6 +18,24 @@ use crate::{auth, cid, messages, permissions, protocols, records, schema, Descri
 pub async fn handle_message(
     owner: &str, message: Message, provider: impl Provider,
 ) -> anyhow::Result<Reply> {
+    // if !tenant_gate.active(owner)? {
+    //     return Ok(Reply::GenericReply(GenericReply {
+    //         status: Status {
+    //             code: 401,
+    //             detail: Some("{tenant} is not active".to_string()),
+    //         },
+    //     }));
+    // }
+
+    if let Err(e) = message.validate_schema() {
+        return Ok(Reply::GenericReply(GenericReply {
+            status: Status {
+                code: 400,
+                detail: Some(e.to_string()),
+            },
+        }));
+    }
+
     let mut ctx = Context {
         owner: owner.to_string(),
         ..Context::default()
@@ -188,6 +206,7 @@ impl Message {
 #[serde(untagged)]
 #[allow(missing_docs)]
 pub enum Reply {
+    GenericReply(GenericReply),
     MessagesQuery(messages::QueryReply),
     // MessagesRead(messages::ReadReply),
     // MessagesSubscribe(messages::SubscribeReply),
@@ -198,4 +217,10 @@ pub enum Reply {
     // RecordsDelete(records::DeleteReply),
     ProtocolsConfigure(protocols::ConfigureReply),
     ProtocolsQuery(protocols::QueryReply),
+}
+
+/// Generic reply.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GenericReply {
+    status: Status,
 }
