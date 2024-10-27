@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use self::grant::{Conditions, Grant, GrantData, Scope};
-use crate::protocols::Definition;
+use crate::protocols::ProtocolDefinition;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
 use crate::records::{self, write};
@@ -190,12 +190,7 @@ pub(crate) async fn fetch_grant(
         grantor: message.signer().unwrap_or_default(),
         grantee: desc.recipient.unwrap_or_default(),
         date_granted: desc.date_created,
-        date_expires: grant.date_expires,
-        delegated: grant.delegated,
-        description: grant.description,
-        request_id: grant.request_id,
-        scope: grant.scope,
-        conditions: grant.conditions,
+        data: grant,
     })
 }
 
@@ -215,7 +210,7 @@ pub struct Protocol {
     pub revocation_path: String,
 
     /// Permissions protocol definition.
-    pub definition: Definition,
+    pub definition: ProtocolDefinition,
 }
 
 #[cfg(test)]

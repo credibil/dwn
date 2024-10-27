@@ -5,15 +5,16 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::auth::Authorization;
+use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::protocols::Configure;
-use crate::provider::{MessageStore, Provider};
+use crate::provider::{MessageStore, Provider, Signer};
 use crate::query::{self, Compare, Criterion};
 use crate::service::{Context, Message};
-use crate::{Cursor, Descriptor, Interface, Method, Status};
+use crate::{cid, Cursor, Descriptor, Interface, Method, Status};
 
 /// Process query message.
 ///
@@ -103,7 +104,7 @@ impl Query {
         };
 
         // if set, query and grant protocols need to match
-        if let Some(protocol) = &grant.scope.protocol {
+        if let Some(protocol) = &grant.data.scope.protocol {
             let Some(filter) = &self.descriptor.filter else {
                 return Err(anyhow!("missing filter"));
             };
@@ -150,4 +151,71 @@ pub struct QueryDescriptor {
 pub struct Filter {
     /// Protocol matching the specified protocol.
     pub protocol: String,
+}
+
+/// Options to use when creating a permission grant.
+#[derive(Clone, Debug, Default)]
+pub struct QueryBuilder {
+    message_timestamp: Option<String>,
+    filter: Option<Filter>,
+    permission_grant_id: Option<String>,
+}
+
+/// Builder for creating a permission grant.
+impl QueryBuilder {
+    /// Returns a new [`QueryBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        // set defaults
+        Self {
+            message_timestamp: Some(Utc::now().to_rfc3339()),
+            ..Self::default()
+        }
+    }
+
+    /// Specify a permission grant ID to use with the configuration.
+    #[must_use]
+    pub fn filter(mut self, protocol: String) -> Self {
+        self.filter = Some(Filter { protocol });
+        self
+    }
+
+    /// Specify a permission grant ID to use with the configuration.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
+        self.permission_grant_id = Some(permission_grant_id);
+        self
+    }
+
+    /// Generate the permission grant.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
+        let descriptor = QueryDescriptor {
+            base: Descriptor {
+                interface: Interface::Protocols,
+                method: Method::Query,
+                message_timestamp: self.message_timestamp,
+            },
+            filter: self.filter,
+        };
+
+        // authorization
+        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::compute(&descriptor)?);
+        if let Some(id) = self.permission_grant_id {
+            builder = builder.permission_grant_id(id);
+        }
+        let authorization = builder.build(signer).await?;
+
+        let query = Query {
+            descriptor,
+            authorization,
+        };
+
+        let message = Message::ProtocolsQuery(query.clone());
+        message.validate_schema()?;
+
+        Ok(query)
+    }
 }

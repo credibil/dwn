@@ -9,15 +9,14 @@ use serde_json::Value;
 use crate::messages::{Direction, Sort};
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::service::Message;
-use crate::{Interface, Method};
+use crate::{Descriptor, Interface, Method};
 
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(clippy::module_name_repetitions)]
 pub struct Grant {
-    /// The ID of the permission grant, which is the record ID DWN message.
+    /// The ID of the permission grant — the record ID message.
     pub id: String,
 
     /// The grantor of the permission.
@@ -29,20 +28,29 @@ pub struct Grant {
     /// The date at which the grant was given.
     pub date_granted: String,
 
+    /// The grant's descriptor.
+    #[serde(flatten)]
+    pub data: GrantData,
+}
+
+/// Permission grant message payload
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrantData {
     /// Describes intended grant use.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
-    /// Optional CID of a permission request. Pptional because grants may be
-    /// given without being requested.
+    /// CID of permission request. Optional as grants may be given without
+    /// being requested.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_id: Option<String>,
 
-    /// Timestamp at which this grant will no longer be active.
+    /// Datetime when grant expires.
     pub date_expires: String,
 
-    /// Whether grant is delegated or not. When `true`, `granted_to` acts as
-    /// the `granted_to` within the scope of this grant.
+    /// Whether grant is delegated or not. When `true`, the `granted_to` acts
+    /// as the `granted_to` within the scope of the grant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated: Option<bool>,
 
@@ -90,35 +98,6 @@ pub enum ConditionPublication {
     Prohibited,
 }
 
-/// Permission grant message payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GrantData {
-    /// Describes intended grant use.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-
-    /// CID of permission request. Optional as grants may be given without
-    /// being requested.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub request_id: Option<String>,
-
-    /// Datetime when grant expires.
-    pub date_expires: String,
-
-    /// Whether grant is delegated or not. When `true`, the `granted_to` acts
-    /// as the `granted_to` within the scope of the grant.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delegated: Option<bool>,
-
-    /// The scope of the allowed access.
-    pub scope: Scope,
-
-    /// Optional conditions that must be met when the grant is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Conditions>,
-}
-
 impl Grant {
     /// Validate message is sufficiently authorized.
     ///
@@ -127,11 +106,9 @@ impl Grant {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn validate(
-        &self, grantor: &str, grantee: &str, msg: Message, provider: &impl Provider,
+    pub async fn verify(
+        &self, grantor: &str, grantee: &str, descriptor: &Descriptor, provider: &impl Provider,
     ) -> Result<()> {
-        let desc = msg.descriptor();
-
         // verify the `grantee` against intended recipient
         if grantee != self.grantee {
             return Err(anyhow!("grant not granted to {grantee}"));
@@ -143,34 +120,34 @@ impl Grant {
         }
 
         // verify grant scope for interface
-        if desc.interface != self.scope.interface {
+        if descriptor.interface != self.data.scope.interface {
             return Err(anyhow!("message interface not within the scope of grant {}", self.id));
         }
 
         // verify grant scope method
-        if desc.method != self.scope.method {
+        if descriptor.method != self.data.scope.method {
             return Err(anyhow!("message method not within the scope of grant {}", self.id));
         }
 
         // verify the message is within the grant's time frame
-        let Some(timestamp) = &desc.message_timestamp else {
+        let Some(timestamp) = &descriptor.message_timestamp else {
             return Err(anyhow!("missing message timestamp"));
         };
-        self.verify_active(grantor, timestamp, provider).await?;
+        self.is_current(grantor, timestamp, provider).await?;
 
         Ok(())
     }
 
     /// Verify that the message is within the allowed time frame of the grant, and
     /// the grant has not been revoked.
-    async fn verify_active(
+    async fn is_current(
         &self, grantor: &str, timestamp: &str, provider: &impl Provider,
     ) -> Result<()> {
         // Check that message is within the grant's time frame
         if timestamp < self.date_granted.as_str() {
             return Err(anyhow!("grant is not yet active"));
         }
-        if timestamp >= self.date_expires.as_str() {
+        if timestamp >= self.data.date_expires.as_str() {
             return Err(anyhow!("grant has expired"));
         }
 

@@ -1,14 +1,15 @@
 //! # Authorization
 
 use anyhow::{anyhow, Result};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
 use vercre_infosec::jose::Type;
 use vercre_infosec::{Jws, Signer};
 
-pub use crate::permissions::grant::Grant;
-use crate::{cid, records};
+use crate::records::WriteDescriptor;
+use crate::{cid, permissions};
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///
@@ -48,7 +49,7 @@ pub struct AuthorizationBuilder {
 
 /// Builder for creating a permission grant.
 impl AuthorizationBuilder {
-    /// Returns a new [`GrantBuilder`]
+    /// Returns a new [`AuthorizationBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -140,10 +141,29 @@ pub struct DelegatedGrant {
     pub context_id: Option<String>,
 
     /// The grant's descriptor.
-    pub descriptor: records::WriteDescriptor,
+    pub descriptor: WriteDescriptor,
 
     /// Encoded grant data.
     pub encoded_data: String,
+}
+
+impl DelegatedGrant {
+    /// Convert [`DelegatedGrant`] to `permissions::Grant`.
+    /// 
+    /// # Errors
+    /// TODO: Add errors
+    pub fn to_grant(&self) -> Result<permissions::Grant> {
+        let bytes = Base64UrlUnpadded::decode_vec(&self.encoded_data)?;
+        let mut grant: permissions::Grant = serde_json::from_slice(&bytes)
+            .map_err(|e| anyhow!("issue deserializing grant: {e}"))?;
+
+        grant.id.clone_from(&self.record_id);
+        grant.grantor = self.authorization.signer()?;
+        grant.grantee = self.descriptor.recipient.clone().unwrap_or_default();
+        grant.date_granted.clone_from(&self.descriptor.date_created);
+
+        Ok(grant)
+    }
 }
 
 /// Signature payload.
@@ -216,6 +236,11 @@ impl Authorization {
             || signer_did(&self.signature),
             |grant| signer_did(&grant.authorization.signature),
         )
+    }
+
+    /// Get message signer's DID from the message authorization.
+    pub(crate) fn signer(&self) -> Result<String> {
+        signer_did(&self.signature)
     }
 }
 

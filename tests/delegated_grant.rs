@@ -1,11 +1,11 @@
 //! Delegated grant test
 
 use test_utils::store::ProviderImpl;
-use test_utils::test_data;
 use vercre_dwn::permissions::GrantBuilder;
-use vercre_dwn::protocols::Definition as ProtocolDefinition;
-use vercre_dwn::service::Message;
+use vercre_dwn::protocols::{ConfigureBuilder, ProtocolDefinition, QueryBuilder};
+use vercre_dwn::service::{Message, Reply};
 use vercre_dwn::{Interface, Method};
+use vercre_infosec::KeyOps;
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -30,60 +30,40 @@ async fn configure() {
 
     // println!("{:?}", email_proto);
 
-    // Bob attempts to configure a protocol
-    let input = test_data::ConfigureInput {
-        delegated_grant: Some(grant),
-        author: Some(test_data::Persona {
-            did: BOB_DID.to_string(),
-        }),
-        protocol_definition: Some(email_proto),
-        ..test_data::ConfigureInput::default()
-    };
-
-    let configure = test_data::protocols_configure(input).await.expect("should configure protocol");
-    let message = Message::ProtocolsConfigure(configure.message);
-
     // Bob should be able to configure a protocol on Alice's behalf
-    let _reply = vercre_dwn::handle_message(ALICE_DID, message, provider)
+    let signer = provider.signer(BOB_DID).expect("should get signer");
+    let configure = ConfigureBuilder::new()
+        .definition(email_proto.clone())
+        .delegated_grant(grant)
+        .build(&signer)
+        .await
+        .expect("should build");
+    let message = Message::ProtocolsConfigure(configure);
+
+    let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
         .await
         .expect("should configure protocol");
 
-    // // JWS JSON serialization
-    // let payload = Base64UrlUnpadded::encode_string(
-    //     br#"{"descriptorCid":"PeFcHaKaNZL9RRntKPySMmhGLE2sM9lVu8Q4kcw","permissionGrantId":"grant_id_1"}"#,
-    // );
+    let Reply::ProtocolsConfigure(reply) = reply else {
+        panic!("unexpected reply: {:?}", reply);
+    };
+    assert_eq!(reply.status.code, 200);
 
-    // let protected = Base64UrlUnpadded::encode_string(
-    //     br#"{"alg":"EdDSA","typ":"jwt","kid":"did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"}"#
-    // );
-    // let sig_bytes =
-    //     keystore::try_sign(format!("{protected}.{payload}").as_bytes()).expect("should sign");
-    // let signature = Base64UrlUnpadded::encode_string(&sig_bytes);
+    // verify the protocol configure message was processed
+    let signer = provider.signer(ALICE_DID).expect("should get signer");
+    let query = QueryBuilder::new()
+        .filter(email_proto.protocol)
+        .build(&signer)
+        .await
+        .expect("should build");
+    let message = Message::ProtocolsQuery(query);
 
-    // // Query message
-    // let query_json = json!({
-    //     "descriptor": {
-    //         "interface": "Protocols",
-    //         "method": "Query",
-    //         "filter": {
-    //             "protocol": "https://decentralized-social-example.org/protocol/"
-    //         }
-    //     },
-    //     "authorization": {
-    //         "signature": {
-    //             "payload": payload,
-    //             "signatures": [{
-    //                 "protected": protected,
-    //                 "signature": signature
-    //             }]
-    //         }
-    //     }
-    // });
+    let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
+        .await
+        .expect("should find protocol");
 
-    // let query = serde_json::from_value(query_json).expect("should deserialize");
-    // let msg = Message::ProtocolsQuery(query);
-    // let reply =
-    //     vercre_dwn::handle_message(OWNER_DID, msg, provider).await.expect("should send message");
-
-    // println!("{:?}", reply);
+    let Reply::ProtocolsQuery(reply) = reply else {
+        panic!("unexpected reply: {:?}", reply);
+    };
+    assert_eq!(reply.status.code, 200);
 }

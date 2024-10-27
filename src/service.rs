@@ -2,17 +2,13 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::collections::BTreeMap;
-
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::auth::{Authorization, Grant, SignaturePayload};
-use crate::messages::{Direction, Sort};
-use crate::provider::{MessageStore, Provider};
-use crate::query::{self, Compare, Criterion};
+use crate::auth::{Authorization, SignaturePayload};
+use crate::permissions::Grant;
+use crate::provider::Provider;
 use crate::{auth, cid, messages, permissions, protocols, records, schema, Descriptor};
 
 /// Process web node messages.
@@ -24,7 +20,7 @@ pub async fn handle_message(
 ) -> anyhow::Result<Reply> {
     let mut ctx = Context {
         owner: owner.to_string(),
-        grant: None,
+        ..Context::default()
     };
 
     // authenticate author, if set
@@ -57,8 +53,11 @@ pub async fn handle_message(
 /// Message context for attaching information used during processing.
 #[derive(Clone, Debug, Default)]
 pub struct Context {
-    /// The web node owner (or owner)
+    /// The web node owner (aka tenant).
     pub owner: String,
+
+    /// The author of the message.
+    pub author: String,
 
     /// The permission grant used to authorize the message
     pub grant: Option<Grant>,
@@ -102,9 +101,10 @@ impl Message {
         let Some(authzn) = self.authorization() else {
             return Ok(());
         };
+        ctx.author = authzn.author()?;
 
-        // when owner is author, we don't need any further checks
-        if ctx.owner == authzn.author()? {
+        // no checks needed when message author is web node owner
+        if ctx.author == ctx.owner {
             return Ok(());
         }
 
@@ -117,93 +117,12 @@ impl Message {
         let Some(grant_id) = &payload.permission_grant_id else {
             return Err(anyhow!("`grant_id` not found in signature payload"));
         };
+
         let grant = permissions::fetch_grant(&ctx.owner, grant_id, provider).await?;
+        grant.verify(&ctx.author, &ctx.owner, self.descriptor(), provider).await?;
 
-        let author = authzn.author()?;
-        let desc = self.descriptor();
-
-        // verify the `grantee` against intended recipient
-        if author != grant.grantee {
-            return Err(anyhow!("invalid grantee"));
-        }
-
-        // verifies `grantor` against actual signer
-        if ctx.owner != grant.grantor {
-            return Err(anyhow!("invalid grantor"));
-        }
-
-        // verify grant scope for interface
-        if desc.interface != grant.scope.interface {
-            return Err(anyhow!("message interface not within the scope of grant {}", grant.id));
-        }
-
-        // verify grant scope method
-        if desc.method != grant.scope.method {
-            return Err(anyhow!("message method not within the scope of grant {}", grant.id));
-        }
-
-        // verify the message is within the grant's time frame
-        self.is_grant_current(ctx, provider).await?;
-
-        // save grant for later use
+        // save for later use
         ctx.grant = Some(grant);
-
-        Ok(())
-    }
-
-    /// Verify the message is 1) within the grant's time frame, and 2) the grant
-    /// has not been revoked
-    async fn is_grant_current(&self, ctx: &Context, provider: &impl Provider) -> Result<()> {
-        let Some(timestamp) = &self.descriptor().message_timestamp else {
-            return Err(anyhow!("missing message timestamp"));
-        };
-
-        let Some(grant) = &ctx.grant else {
-            return Err(anyhow!("missing grant"));
-        };
-
-        // Check that message is within the grant's time frame
-        if timestamp < &grant.date_granted {
-            return Err(anyhow!("grant is not yet active"));
-        }
-        if timestamp >= &grant.date_expires {
-            return Err(anyhow!("grant has expired"));
-        }
-
-        // Check if grant has been revoked
-        let mut qf = query::Filter {
-            criteria: BTreeMap::<String, Criterion>::new(),
-        };
-        qf.criteria.insert(
-            "parentId".to_string(),
-            Criterion::Single(Compare::Equal(Value::String(grant.id.clone()))),
-        );
-        qf.criteria.insert(
-            "protocolPath".to_string(),
-            Criterion::Single(Compare::Equal(Value::String("grant/revocation".to_string()))),
-        );
-        qf.criteria.insert(
-            "isLatestBaseState".to_string(),
-            Criterion::Single(Compare::Equal(Value::Bool(true))),
-        );
-
-        // find oldest message in the revocation chain
-        let sort = Some(Sort {
-            message_timestamp: Some(Direction::Descending),
-            ..Default::default()
-        });
-        let (messages, _) = MessageStore::query(provider, &ctx.owner, vec![qf], sort, None).await?;
-        let Some(oldest) = messages.first().cloned() else {
-            return Err(anyhow!("grant has been revoked"));
-        };
-
-        let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
-            return Err(anyhow!("missing message timestamp"));
-        };
-
-        if message_timestamp <= timestamp {
-            return Err(anyhow!("grant with CID {} has been revoked", grant.id));
-        }
 
         Ok(())
     }
@@ -245,10 +164,7 @@ impl Message {
     /// Get message signer's DID from the message authorization.
     #[must_use]
     pub fn signer(&self) -> Option<String> {
-        let Some(authzn) = self.authorization() else {
-            return None;
-            // return Err(anyhow!("no authorization found"));
-        };
+        let authzn = self.authorization()?;
         if let Ok(signer) = auth::signer_did(&authzn.signature) {
             return Some(signer);
         }
