@@ -6,10 +6,9 @@
 
 use rand::RngCore;
 use test_utils::store::ProviderImpl;
-use vercre_dwn::auth::DelegatedGrant;
 use vercre_dwn::permissions::GrantBuilder;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, WriteData};
+use vercre_dwn::records::{DelegatedGrant, WriteBuilder, WriteData};
 use vercre_dwn::{Interface, Method};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";

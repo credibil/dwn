@@ -1,15 +1,14 @@
 //! # Authorization
 
 use anyhow::{anyhow, Result};
-use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
 use vercre_infosec::jose::Type;
 use vercre_infosec::{Jws, Signer};
 
-use crate::records::WriteDescriptor;
-use crate::{cid, permissions};
+use crate::cid;
+use crate::records::DelegatedGrant;
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///
@@ -38,70 +37,6 @@ macro_rules! verify_key {
     }};
 }
 
-/// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct AuthorizationBuilder {
-    descriptor_cid: Option<String>,
-    delegated_grant: Option<DelegatedGrant>,
-    permission_grant_id: Option<String>,
-    protocol_role: Option<String>,
-}
-
-/// Builder for creating a permission grant.
-impl AuthorizationBuilder {
-    /// Returns a new [`AuthorizationBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set the `Descriptor`.
-    #[must_use]
-    pub fn descriptor_cid(mut self, descriptor_cid: String) -> Self {
-        self.descriptor_cid = Some(descriptor_cid);
-        self
-    }
-
-    /// Specify a grant ID to use.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
-        self.permission_grant_id = Some(permission_grant_id);
-        self
-    }
-
-    /// Specify a protocol role to use.
-    #[must_use]
-    pub fn protocol_role(mut self, protocol_role: String) -> Self {
-        self.protocol_role = Some(protocol_role);
-        self
-    }
-
-    /// Generate the permission grant.
-    ///
-    /// # Errors
-    /// TODO: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
-        let descriptor_cid = self.descriptor_cid.ok_or_else(|| anyhow!("descriptor not found"))?;
-        let delegated_grant_id =
-            if let Some(grant) = &self.delegated_grant { Some(cid::compute(grant)?) } else { None };
-
-        let payload = SignaturePayload {
-            descriptor_cid,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant_id,
-            protocol_role: self.protocol_role,
-        };
-        let signature = Jws::new(Type::Jwt, &payload, signer).await?;
-
-        Ok(Authorization {
-            signature,
-            author_delegated_grant: self.delegated_grant,
-            owner_signature: None,
-            owner_delegated_grant: None,
-        })
-    }
-}
-
 /// Message authorization.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,60 +45,20 @@ pub struct Authorization {
     /// N.B.: Not the author of the message when signer is a delegate.
     pub signature: Jws,
 
+    /// An "overriding" signature for a web node owner or owner-delegate to
+    /// store a message authored by another entity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_signature: Option<Jws>,
+
     /// The delegated grant required when the message is signed by an
     /// author-delegate.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author_delegated_grant: Option<DelegatedGrant>,
 
-    /// An "overriding" signature for a DWN owner or owner-delegate to store a
-    /// message authored by another entity.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner_signature: Option<Jws>,
-
     /// The delegated grant required when the message is signed by an
     /// owner-delegate.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner_delegated_grant: Option<DelegatedGrant>,
-}
-
-/// Delegated grant.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DelegatedGrant {
-    ///The grant's authorization.
-    pub authorization: Box<Authorization>,
-
-    /// CID referencing the record associated with the message.
-    pub record_id: String,
-
-    /// Context id.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
-
-    /// The grant's descriptor.
-    pub descriptor: WriteDescriptor,
-
-    /// Encoded grant data.
-    pub encoded_data: String,
-}
-
-impl DelegatedGrant {
-    /// Convert [`DelegatedGrant`] to `permissions::Grant`.
-    /// 
-    /// # Errors
-    /// TODO: Add errors
-    pub fn to_grant(&self) -> Result<permissions::Grant> {
-        let bytes = Base64UrlUnpadded::decode_vec(&self.encoded_data)?;
-        let mut grant: permissions::Grant = serde_json::from_slice(&bytes)
-            .map_err(|e| anyhow!("issue deserializing grant: {e}"))?;
-
-        grant.id.clone_from(&self.record_id);
-        grant.grantor = self.authorization.signer()?;
-        grant.grantee = self.descriptor.recipient.clone().unwrap_or_default();
-        grant.date_granted.clone_from(&self.descriptor.date_created);
-
-        Ok(grant)
-    }
 }
 
 /// Signature payload.
@@ -254,4 +149,69 @@ pub(crate) fn signer_did(jws: &Jws) -> Result<String> {
         return Err(anyhow!("Invalid DID"));
     };
     Ok(did.to_owned())
+}
+
+/// Options to use when creating a permission grant.
+#[derive(Clone, Debug, Default)]
+pub struct AuthorizationBuilder {
+    descriptor_cid: Option<String>,
+    delegated_grant: Option<DelegatedGrant>,
+    permission_grant_id: Option<String>,
+    protocol_role: Option<String>,
+}
+
+/// Builder for creating a permission grant.
+impl AuthorizationBuilder {
+    /// Returns a new [`AuthorizationBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the `Descriptor`.
+    #[must_use]
+    pub fn descriptor_cid(mut self, descriptor_cid: String) -> Self {
+        self.descriptor_cid = Some(descriptor_cid);
+        self
+    }
+
+    /// Specify a grant ID to use.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
+        self.permission_grant_id = Some(permission_grant_id);
+        self
+    }
+
+    /// Specify a protocol role to use.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: String) -> Self {
+        self.protocol_role = Some(protocol_role);
+        self
+    }
+
+    /// Generate the permission grant.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
+        let descriptor_cid = self.descriptor_cid.ok_or_else(|| anyhow!("descriptor not found"))?;
+        let delegated_grant_id =
+            if let Some(grant) = &self.delegated_grant { Some(cid::compute(grant)?) } else { None };
+
+        let payload = SignaturePayload {
+            descriptor_cid,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant_id,
+            protocol_role: self.protocol_role,
+            ..SignaturePayload::default()
+        };
+        let signature = Jws::new(Type::Jwt, &payload, signer).await?;
+
+        Ok(Authorization {
+            signature,
+            author_delegated_grant: self.delegated_grant,
+            owner_signature: None,
+            owner_delegated_grant: None,
+        })
+    }
 }

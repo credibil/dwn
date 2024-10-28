@@ -3,19 +3,21 @@
 //! `Write` is a message type used to create a new record in the DWN.
 
 use anyhow::{anyhow, Result};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
-use crate::auth::{Authorization, DelegatedGrant};
+use crate::auth::{Authorization, SignaturePayload};
 use crate::provider::Keyring;
 use crate::service::Message;
-use crate::{cid, utils, Descriptor, Interface, Method};
+use crate::{cid, permissions, utils, Descriptor, Interface, Method};
 
 /// Records write payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Write {
     /// The Write descriptor.
     pub descriptor: WriteDescriptor,
@@ -58,8 +60,8 @@ impl Write {
             (signer.verification_method().split('#').next().map(ToString::to_string), None)
         };
 
-        let descriptor = &self.descriptor;
-        let descriptor_cid = cid::compute(descriptor)?;
+
+        let descriptor_cid = cid::compute(&self.descriptor)?;
 
         // compute `record_id` if not given at construction time
         if self.record_id.is_empty() {
@@ -70,7 +72,7 @@ impl Write {
                 author: String,
             }
             let id_input = EntryIdInput {
-                descriptor: descriptor.clone(),
+                descriptor: self.descriptor.clone(),
                 author: author_did.unwrap_or_default(),
             };
             self.record_id = cid::compute(&id_input)?;
@@ -96,15 +98,17 @@ impl Write {
             None
         };
 
-        let payload = SignaturePayload {
+        let payload = WriteSignaturePayload {
+            base: SignaturePayload {
+                descriptor_cid,
+                permission_grant_id,
+                delegated_grant_id,
+                protocol_role,
+            },
             record_id: self.record_id.clone(),
-            descriptor_cid,
             context_id: self.context_id.clone(),
             attestation_cid,
             encryption_cid,
-            delegated_grant_id,
-            permission_grant_id,
-            protocol_role,
         };
 
         let jws = Jws::new(Type::Jwt, &payload, signer).await?;
@@ -123,7 +127,7 @@ impl Write {
     /// message that the owner did not author.
     ///
     /// N.B. requires `Write` to have previously beeen signed by the author.
-    /// 
+    ///
     /// # Errors
     /// TODO: add errors
     pub async fn sign_as_delegate(
@@ -156,31 +160,72 @@ impl Write {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
-struct SignaturePayload {
-    descriptor_cid: String,
+/// Signature payload.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteSignaturePayload {
+    /// The standard signature payload.
+    #[serde(flatten)]
+    pub base: SignaturePayload,
 
+    /// The ID of the record being signed.
+    pub record_id: String,
+
+    /// The context ID of the record being signed.
     #[serde(skip_serializing_if = "Option::is_none")]
-    permission_grant_id: Option<String>,
+    pub context_id: Option<String>,
 
-    // Record ID of a permission grant DWN `RecordsWrite` with `delegated` set to `true`.
+    /// Attestation CID.
     #[serde(skip_serializing_if = "Option::is_none")]
-    delegated_grant_id: Option<String>,
+    pub attestation_cid: Option<String>,
 
-    // Used in the Records interface to authorize role-authorized actions for protocol records.
+    /// Encryption CID .
     #[serde(skip_serializing_if = "Option::is_none")]
-    protocol_role: Option<String>,
+    pub encryption_cid: Option<String>,
+}
 
-    record_id: String,
+/// Delegated Grant is a special case of `records::Write` used in
+/// `Authorization` and `Attestation` grant references
+/// (`author_delegated_grant` and `owner_delegated_grant`).
+///
+/// It is structured to cope with recursive references to `Authorization`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegatedGrant {
+    /// The grant's descriptor.
+    pub descriptor: WriteDescriptor,
 
+    ///The grant's authorization.
+    pub authorization: Box<Authorization>,
+
+    /// CID referencing the record associated with the message.
+    pub record_id: String,
+
+    /// Context id.
     #[serde(skip_serializing_if = "Option::is_none")]
-    context_id: Option<String>,
+    pub context_id: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    attestation_cid: Option<String>,
+    /// Encoded grant data.
+    pub encoded_data: String,
+}
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    encryption_cid: Option<String>,
+impl DelegatedGrant {
+    /// Convert [`DelegatedGrant`] to `permissions::Grant`.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub fn to_grant(&self) -> Result<permissions::Grant> {
+        let bytes = Base64UrlUnpadded::decode_vec(&self.encoded_data)?;
+        let mut grant: permissions::Grant = serde_json::from_slice(&bytes)
+            .map_err(|e| anyhow!("issue deserializing grant: {e}"))?;
+
+        grant.id.clone_from(&self.record_id);
+        grant.grantor = self.authorization.signer()?;
+        grant.grantee = self.descriptor.recipient.clone().unwrap_or_default();
+        grant.date_granted.clone_from(&self.descriptor.date_created);
+
+        Ok(grant)
+    }
 }
 
 /// Write descriptor.
@@ -282,22 +327,19 @@ pub struct EncryptedKey {
 
 /// Key derivation schemes.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum KeyDerivationScheme {
     /// Key derivation using the `dataFormat` value for Flat-space records.
-    #[serde(rename = "dataFormats")]
     #[default]
     DataFormats,
 
     /// Key derivation using protocol context.
-    #[serde(rename = "protocolContext")]
     ProtocolContext,
 
     /// Key derivation using the protocol path.
-    #[serde(rename = "protocolPath")]
     ProtocolPath,
 
     /// Key derivation using the `schema` value for Flat-space records.
-    #[serde(rename = "schemas")]
     Schemas,
 }
 
@@ -324,6 +366,7 @@ pub struct WriteBuilder {
 
 /// Protocol.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WriteProtocol {
     /// Record protocol.
     pub protocol: String,
@@ -362,6 +405,7 @@ impl Default for WriteData {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Payload {
     descriptor_cid: String,
 }
