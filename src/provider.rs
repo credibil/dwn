@@ -6,7 +6,7 @@ use std::io::Read;
 
 use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
-pub use vercre_infosec::{KeyOps, Signer};
+pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::messages::Sort;
 use crate::query::Filter;
@@ -15,9 +15,55 @@ use crate::{Cursor, Pagination};
 
 /// Issuer Provider trait.
 pub trait Provider:
-    MessageStore + DataStore + TaskStore + EventLog + EventStream + KeyOps + DidResolver + Clone
+    MessageStore + DataStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver + Clone
 {
 }
+
+/// The `SecOps` trait is used to provide methods needed for signing,
+/// encrypting, verifying, and decrypting data.
+///
+/// Implementers of this trait are expected to provide the necessary
+/// cryptographic functionality to support Verifiable Credential issuance and
+/// Verifiable Presentation submissions.
+pub trait KeyStore: Send + Sync {
+    /// Signer provides digital signing function.
+    ///
+    /// The `controller` parameter uniquely identifies the controller of the
+    /// private key used in the signing operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the signer cannot be created.
+    fn keyring(&self, controller: &str) -> anyhow::Result<impl Keyring>;
+
+    /// Signer provides digital signing function.
+    ///
+    /// The `controller` parameter uniquely identifies the controller of the
+    /// private key used in the signing operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the signer cannot be created.
+    fn signer(&self, controller: &str) -> anyhow::Result<impl Signer>;
+
+    /// Cipher provides data encryption/decryption functionality.
+    ///
+    /// The `controller` parameter uniquely identifies the controller of the
+    /// private key used in the signing operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the encryptor cannot be created.
+    fn cipher(&self, controller: &str) -> anyhow::Result<impl Cipher>;
+}
+
+/// The `SecOps` trait is used to provide methods needed for signing,
+/// encrypting, verifying, and decrypting data.
+///
+/// Implementers of this trait are expected to provide the necessary
+/// cryptographic functionality to support Verifiable Credential issuance and
+/// Verifiable Presentation submissions.
+pub trait Keyring: Signer + Cipher + Send + Sync {}
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.
@@ -47,7 +93,9 @@ pub trait MessageStore: Send + Sync {
     ) -> impl Future<Output = anyhow::Result<(Vec<Message>, Cursor)>> + Send;
 
     /// Delete message associated with the specified id.
-    fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn delete(
+        &self, owner: &str, message_cid: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Purge all records from the store.
     fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
@@ -157,7 +205,7 @@ pub trait EventLog: Send + Sync {
     // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Adds an event to a owner's event log.
-    /// 
+    ///
     /// The `indexes` parameter is a map of key-value pairs that can be used to
     /// filter events.
     fn append(

@@ -12,9 +12,9 @@ use serde_json::Value;
 
 pub use self::grant::{Conditions, Grant, GrantData, Scope};
 use crate::protocols::ProtocolDefinition;
-use crate::provider::{MessageStore, Provider};
+use crate::provider::{Keyring, MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
-use crate::records::{self, write};
+use crate::records::{self,WriteProtocol, WriteBuilder, WriteData};
 use crate::service::Message;
 use crate::{utils, Interface, Method};
 
@@ -24,8 +24,7 @@ pub const PROTOCOL: &str = "https://vercre.website/dwn/permissions";
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct GrantBuilder {
-    owner: String,
-    issued_to: String,
+    granted_to: String,
     date_expires: String,
     request_id: Option<String>,
     description: Option<String>,
@@ -38,10 +37,9 @@ pub struct GrantBuilder {
 impl GrantBuilder {
     /// Returns a new [`GrantBuilder`]
     #[must_use]
-    pub fn new(owner: String) -> Self {
+    pub fn new() -> Self {
         // set defaults
         Self {
-            owner,
             date_expires: (Utc::now() + Duration::seconds(100)).to_rfc3339(),
             ..Self::default()
         }
@@ -49,8 +47,8 @@ impl GrantBuilder {
 
     /// Specify who the grant is issued to.
     #[must_use]
-    pub fn issued_to(mut self, issued_to: String) -> Self {
-        self.issued_to = issued_to;
+    pub fn granted_to(mut self, granted_to: String) -> Self {
+        self.granted_to = granted_to;
         self
     }
 
@@ -108,9 +106,9 @@ impl GrantBuilder {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn build(self, provider: &impl Provider) -> Result<records::Write> {
-        if self.issued_to.is_empty() {
-            return Err(anyhow!("missing `issued_to`"));
+    pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
+        if self.granted_to.is_empty() {
+            return Err(anyhow!("missing `granted_to`"));
         }
         let Some(scope) = self.scope else {
             return Err(anyhow!("missing `scope`"));
@@ -125,13 +123,13 @@ impl GrantBuilder {
             conditions: self.conditions,
         })?;
 
-        let mut builder = write::WriteBuilder::new(&self.owner)
-            .recipient(self.issued_to)
-            .protocol(write::Protocol {
+        let mut builder = WriteBuilder::new()
+            .recipient(self.granted_to)
+            .protocol(WriteProtocol {
                 protocol: PROTOCOL.to_string(),
                 protocol_path: "grant".to_string(),
             })
-            .data(write::Data::Bytes {
+            .data(WriteData::Bytes {
                 data: grant_bytes.clone(),
             });
 
@@ -140,17 +138,10 @@ impl GrantBuilder {
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
-        let mut write = builder.build(provider).await?;
+        let mut write = builder.build(keyring).await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
 
         Ok(write)
-
-        // Ok(Grant {
-        //     grant_record: RecordsWrite,
-        //     grant_data: PermissionGrantData,
-        //     grant_bytes: Uint8Array,
-        //     encoded: DataEncodedRecordsWriteMessage,
-        // })
     }
 }
 

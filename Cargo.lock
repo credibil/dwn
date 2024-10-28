@@ -4778,6 +4778,7 @@ dependencies = [
  "derive_more",
  "jsonschema",
  "multihash-codetable",
+ "rand",
  "serde",
  "serde_json",
  "test-utils",

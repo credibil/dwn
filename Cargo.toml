@@ -38,6 +38,7 @@ vercre-infosec.workspace = true
 [dev-dependencies]
 test-utils.workspace = true
 tokio.workspace = true
+rand.workspace = true
 
 [workspace]
 members = ["crates/*", "examples/*"]
@@ -76,6 +77,7 @@ axum-extra = { version = "0.9.4", features = ["typed-header"] }
 base64ct = { version = "1.6.0", features = ["std"] }
 chrono = "0.4.38"
 derive_more = "1.0.0"
+rand = "0.8.5"
 serde = { version = "1.0.213", features = ["derive"] }
 serde_json = { version = "1.0.132", features = ["alloc"] }
 sha2 = "0.10.8"

@@ -21,9 +21,10 @@ use surrealdb::opt::RecordId;
 use surrealdb::Surreal;
 use vercre_dwn::protocols::Configure;
 use vercre_dwn::provider::{
-    DidResolver, Document, EventStream, EventSubscription, MessageEvent, Provider,
+    DidResolver, Document, EventStream, EventSubscription, KeyStore, Keyring, MessageEvent,
+    Provider,
 };
-use vercre_infosec::{Algorithm, Cipher, KeyOps, Signer};
+use vercre_infosec::{Algorithm, Cipher, Signer};
 
 use crate::keystore::{Keystore, OWNER_DID};
 
@@ -88,19 +89,25 @@ impl EventStream for ProviderImpl {
     }
 }
 
-struct KeyOpsImpl(Keystore);
+struct KeyStoreImpl(Keystore);
 
-impl KeyOps for ProviderImpl {
+impl KeyStore for ProviderImpl {
+    fn keyring(&self, _identifier: &str) -> anyhow::Result<impl Keyring> {
+        Ok(KeyStoreImpl(Keystore {}))
+    }
+
     fn signer(&self, _identifier: &str) -> anyhow::Result<impl Signer> {
-        Ok(KeyOpsImpl(Keystore {}))
+        Ok(KeyStoreImpl(Keystore {}))
     }
 
     fn cipher(&self, _identifier: &str) -> anyhow::Result<impl Cipher> {
-        Ok(KeyOpsImpl(Keystore {}))
+        Ok(KeyStoreImpl(Keystore {}))
     }
 }
 
-impl Signer for KeyOpsImpl {
+impl Keyring for KeyStoreImpl {}
+
+impl Signer for KeyStoreImpl {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         Keystore::try_sign(msg)
     }
@@ -118,7 +125,7 @@ impl Signer for KeyOpsImpl {
     }
 }
 
-impl Cipher for KeyOpsImpl {
+impl Cipher for KeyStoreImpl {
     async fn encrypt(&self, _plaintext: &[u8], _recipient_public_key: &[u8]) -> Result<Vec<u8>> {
         todo!()
     }
