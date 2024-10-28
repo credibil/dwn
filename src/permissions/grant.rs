@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -32,7 +32,7 @@ pub struct Grant {
     pub grantee: String,
 
     /// The date at which the grant was given.
-    pub date_granted: String,
+    pub date_granted: DateTime<Utc>,
 
     /// The grant's descriptor.
     #[serde(flatten)]
@@ -82,14 +82,14 @@ impl Grant {
     /// Verify that the message is within the allowed time frame of the grant, and
     /// the grant has not been revoked.
     async fn is_current(
-        &self, grantor: &str, timestamp: &str, store: &impl MessageStore,
+        &self, grantor: &str, timestamp: &DateTime<Utc>, store: &impl MessageStore,
     ) -> Result<()> {
         // TODO: use chrono dattime for compare
         // Check that message is within the grant's time frame
-        if timestamp < self.date_granted.as_str() {
+        if timestamp.lt(&self.date_granted) {
             return Err(anyhow!("grant is not yet active"));
         }
-        if timestamp >= self.data.date_expires.as_str() {
+        if timestamp.ge(&self.data.date_expires) {
             return Err(anyhow!("grant has expired"));
         }
 
@@ -122,7 +122,7 @@ impl Grant {
         let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
             return Err(anyhow!("missing message timestamp"));
         };
-        if message_timestamp.as_str() <= timestamp {
+        if message_timestamp.lt(timestamp) {
             return Err(anyhow!("grant with CID {} has been revoked", self.id));
         }
 
@@ -144,7 +144,7 @@ pub struct GrantData {
     pub request_id: Option<String>,
 
     /// Datetime when grant expires.
-    pub date_expires: String,
+    pub date_expires: DateTime<Utc>,
 
     /// Whether grant is delegated or not. When `true`, the `granted_to` acts
     /// as the `granted_to` within the scope of the grant.
@@ -199,7 +199,7 @@ pub enum ConditionPublication {
 #[derive(Clone, Debug, Default)]
 pub struct GrantBuilder {
     granted_to: String,
-    date_expires: String,
+    date_expires: DateTime<Utc>,
     request_id: Option<String>,
     description: Option<String>,
     delegated: Option<bool>,
@@ -214,7 +214,7 @@ impl GrantBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            date_expires: (Utc::now() + Duration::seconds(100)).to_rfc3339(),
+            date_expires: Utc::now() + Duration::seconds(100),
             ..Self::default()
         }
     }
@@ -233,7 +233,7 @@ impl GrantBuilder {
         if seconds <= 0 {
             return self;
         }
-        self.date_expires = (Utc::now() + Duration::seconds(seconds)).to_rfc3339();
+        self.date_expires = Utc::now() + Duration::seconds(seconds);
         self
     }
 

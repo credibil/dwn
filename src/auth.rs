@@ -203,7 +203,6 @@ impl AuthorizationBuilder {
             permission_grant_id: self.permission_grant_id,
             delegated_grant_id,
             protocol_role: self.protocol_role,
-            ..SignaturePayload::default()
         };
         let signature = Jws::new(Type::Jwt, &payload, signer).await?;
 

@@ -26,7 +26,8 @@ chrono.workspace = true
 ciborium = "0.2.2"
 cid = "0.11.1"
 derive_more = { workspace = true, features = ["display"] }
-jsonschema = "0.26.0"
+jsonschema = { version = "0.26.0", default-features = false, features = ["resolve-file"] }
+lazy_static.workspace = true
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -36,9 +37,9 @@ vercre-did.workspace = true
 vercre-infosec.workspace = true
 
 [dev-dependencies]
+rand.workspace = true
 test-utils.workspace = true
 tokio.workspace = true
-rand.workspace = true
 
 [workspace]
 members = ["crates/*", "examples/*"]
@@ -75,8 +76,9 @@ async-trait = "0.1.83"
 axum = { version = "0.7.7", features = ["macros"] }
 axum-extra = { version = "0.9.4", features = ["typed-header"] }
 base64ct = { version = "1.6.0", features = ["std"] }
-chrono = "0.4.38"
+chrono = { version = "0.4.38", features = ["serde"] }
 derive_more = "1.0.0"
+lazy_static = "1.5.0"
 rand = "0.8.5"
 serde = { version = "1.0.213", features = ["derive"] }
 serde_json = { version = "1.0.132", features = ["alloc"] }

@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -161,7 +161,7 @@ pub struct Filter {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct QueryBuilder {
-    message_timestamp: Option<String>,
+    message_timestamp: Option<DateTime<Utc>>,
     filter: Option<Filter>,
     permission_grant_id: Option<String>,
 }
@@ -173,7 +173,7 @@ impl QueryBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now().to_rfc3339()),
+            message_timestamp: Some(Utc::now()),
             ..Self::default()
         }
     }

@@ -4,7 +4,7 @@
 
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
@@ -59,7 +59,6 @@ impl Write {
         } else {
             (signer.verification_method().split('#').next().map(ToString::to_string), None)
         };
-
 
         let descriptor_cid = cid::compute(&self.descriptor)?;
 
@@ -270,7 +269,7 @@ pub struct WriteDescriptor {
     pub data_format: String,
 
     /// The datatime the record was created.
-    pub date_created: String,
+    pub date_created: DateTime<Utc>,
 
     /// Indicates whether the record is published.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -278,7 +277,7 @@ pub struct WriteDescriptor {
 
     /// The datetime of publishing, if published.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<String>,
+    pub date_published: Option<DateTime<Utc>>,
 }
 
 /// Encryption settings.
@@ -354,8 +353,8 @@ pub struct WriteBuilder {
     record_id: Option<String>,
     parent_context_id: Option<String>,
     data: WriteData,
-    date_created: Option<String>,
-    message_timestamp: Option<String>,
+    date_created: Option<DateTime<Utc>>,
+    message_timestamp: Option<DateTime<Utc>>,
     published: Option<bool>,
     date_published: Option<String>,
     data_format: String,
@@ -414,7 +413,7 @@ impl WriteBuilder {
     /// Returns a new [`GrantBuilder`]
     #[must_use]
     pub fn new() -> Self {
-        let now = Utc::now().to_rfc3339();
+        let now = Utc::now();
 
         // set defaults
         Self {
@@ -483,14 +482,14 @@ impl WriteBuilder {
 
     /// The datetime the record was created. Defaults to now.
     #[must_use]
-    pub fn date_created(mut self, date_created: String) -> Self {
+    pub fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
         self.date_created = Some(date_created);
         self
     }
 
     /// The datetime the record was created. Defaults to now.
     #[must_use]
-    pub fn message_timestamp(mut self, message_timestamp: String) -> Self {
+    pub fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
         self.message_timestamp = Some(message_timestamp);
         self
     }
@@ -553,7 +552,7 @@ impl WriteBuilder {
         };
 
         // timestamp
-        let timestamp = self.message_timestamp.unwrap_or_else(|| Utc::now().to_rfc3339());
+        let timestamp = self.message_timestamp.unwrap_or_else(|| Utc::now());
 
         let mut descriptor = WriteDescriptor {
             base: Descriptor {

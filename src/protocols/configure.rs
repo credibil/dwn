@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
@@ -64,7 +64,7 @@ pub(crate) async fn handle(
     let reply = if incoming_is_latest {
         let cid = cid::compute(&configure)?;
         let msg = Message::ProtocolsConfigure(configure);
-        
+
         MessageStore::put(&provider, &ctx.owner, msg.clone()).await?;
         EventLog::append(&provider, &ctx.owner, &cid, BTreeMap::new()).await?;
 
@@ -370,7 +370,7 @@ pub struct Tags {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct ConfigureBuilder {
-    message_timestamp: Option<String>,
+    message_timestamp: Option<DateTime<Utc>>,
     definition: Option<ProtocolDefinition>,
     delegated_grant: Option<Write>,
     permission_grant_id: Option<String>,
@@ -383,7 +383,7 @@ impl ConfigureBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now().to_rfc3339()),
+            message_timestamp: Some(Utc::now()),
             ..Self::default()
         }
     }
