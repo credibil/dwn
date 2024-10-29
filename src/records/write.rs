@@ -417,7 +417,7 @@ impl WriteBuilder {
 
         // set defaults
         Self {
-            date_created: Some(now.clone()),
+            date_created: Some(now),
             message_timestamp: Some(now),
             data_format: "application/json".to_string(),
             ..Self::default()
@@ -482,14 +482,14 @@ impl WriteBuilder {
 
     /// The datetime the record was created. Defaults to now.
     #[must_use]
-    pub fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
+    pub const fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
         self.date_created = Some(date_created);
         self
     }
 
     /// The datetime the record was created. Defaults to now.
     #[must_use]
-    pub fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
         self.message_timestamp = Some(message_timestamp);
         self
     }
@@ -552,19 +552,19 @@ impl WriteBuilder {
         };
 
         // timestamp
-        let timestamp = self.message_timestamp.unwrap_or_else(|| Utc::now());
+        let timestamp = self.message_timestamp.unwrap_or_else(Utc::now);
 
         let mut descriptor = WriteDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
                 method: Method::Write,
-                message_timestamp: Some(timestamp.clone()),
+                message_timestamp: Some(timestamp),
             },
             recipient: self.recipient,
             tags: self.tags,
             data_cid,
             data_size,
-            date_created: self.date_created.unwrap_or_else(|| timestamp.clone()),
+            date_created: self.date_created.unwrap_or(timestamp),
             published: self.published,
             data_format: self.data_format,
             parent_id: self.parent_context_id.clone(),

@@ -15,7 +15,8 @@ impl EventLog for ProviderImpl {
         &self, owner: &str, message_cid: &str, indexes: BTreeMap<String, Value>,
     ) -> anyhow::Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<BTreeMap<String, Value>> = self.db.create((DATABASE, message_cid)).content(indexes).await?;
+        let _: Option<BTreeMap<String, Value>> =
+            self.db.create((DATABASE, message_cid)).content(indexes).await?;
         Ok(())
     }
 

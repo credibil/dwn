@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use jsonschema;
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
 // use lazy_static::lazy_static;
@@ -23,8 +22,6 @@ fn precompiled(schema_name: &str) -> Result<Value> {
     }
 }
 
-// let precompiled: HashMap<&str, Value> = {
-
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
 pub fn validate_schema(schema_name: &str, message: &Message) -> Result<()> {
@@ -32,19 +29,14 @@ pub fn validate_schema(schema_name: &str, message: &Message) -> Result<()> {
 
     let schema = precompiled(schema_name)?;
     let validator = jsonschema::options().with_retriever(retriever).build(&schema)?;
-    let instance = serde_json::to_value(&message)?;
-
-    // validator.is_valid(&instance);
-    // if let Err(e) = validator.validate(&instance) {
-    //     eprintln!("Error: {}", e);
-    // }
+    let instance = serde_json::to_value(message)?;
 
     // check for validation errors
     let errors: Vec<ValidationError> = validator.iter_errors(&instance).collect();
     if !errors.is_empty() {
         let mut error = String::new();
         for e in errors {
-            error = error + &format!("\n - {} at {}", e, e.instance_path);
+            error.push_str(&format!("\n - {e} at {}", e.instance_path));
         }
         return Err(anyhow!("validation failed for {schema_name}: {error}"));
     }
