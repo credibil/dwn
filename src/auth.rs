@@ -170,22 +170,22 @@ impl AuthorizationBuilder {
 
     /// Set the `Descriptor`.
     #[must_use]
-    pub fn descriptor_cid(mut self, descriptor_cid: String) -> Self {
-        self.descriptor_cid = Some(descriptor_cid);
+    pub fn descriptor_cid(mut self, descriptor_cid: impl Into<String>) -> Self {
+        self.descriptor_cid = Some(descriptor_cid.into());
         self
     }
 
     /// Specify a grant ID to use.
     #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
-        self.permission_grant_id = Some(permission_grant_id);
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
         self
     }
 
     /// Specify a protocol role to use.
     #[must_use]
-    pub fn protocol_role(mut self, protocol_role: String) -> Self {
-        self.protocol_role = Some(protocol_role);
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
         self
     }
 

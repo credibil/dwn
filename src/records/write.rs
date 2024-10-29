@@ -356,7 +356,7 @@ pub struct WriteBuilder {
     date_created: Option<DateTime<Utc>>,
     message_timestamp: Option<DateTime<Utc>>,
     published: Option<bool>,
-    date_published: Option<String>,
+    date_published: Option<DateTime<Utc>>,
     data_format: String,
     delegated_grant: Option<DelegatedGrant>,
     encrypt: Option<bool>,
@@ -410,7 +410,7 @@ struct Payload {
 }
 
 impl WriteBuilder {
-    /// Returns a new [`GrantBuilder`]
+    /// Returns a new [`WriteBuilder`]
     #[must_use]
     pub fn new() -> Self {
         let now = Utc::now();
@@ -426,8 +426,8 @@ impl WriteBuilder {
 
     /// Specify the write record's recipient .
     #[must_use]
-    pub fn recipient(mut self, recipient: String) -> Self {
-        self.recipient = Some(recipient);
+    pub fn recipient(mut self, recipient: impl Into<String>) -> Self {
+        self.recipient = Some(recipient.into());
         self
     }
 
@@ -440,15 +440,15 @@ impl WriteBuilder {
 
     /// Specify a protocol role for the record.
     #[must_use]
-    pub fn protocol_role(mut self, protocol_role: String) -> Self {
-        self.protocol_role = Some(protocol_role);
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
         self
     }
 
     /// Specify a schema to use with the record.
     #[must_use]
-    pub fn schema(mut self, schema: String) -> Self {
-        self.schema = Some(schema);
+    pub fn schema(mut self, schema: impl Into<String>) -> Self {
+        self.schema = Some(schema.into());
         self
     }
 
@@ -461,15 +461,15 @@ impl WriteBuilder {
 
     /// Specify an ID to use for the permission request.
     #[must_use]
-    pub fn record_id(mut self, record_id: String) -> Self {
-        self.record_id = Some(record_id);
+    pub fn record_id(mut self, record_id: impl Into<String>) -> Self {
+        self.record_id = Some(record_id.into());
         self
     }
 
     /// Required for a child (non-root) protocol record.
     #[must_use]
-    pub fn parent_context_id(mut self, parent_context_id: String) -> Self {
-        self.parent_context_id = Some(parent_context_id);
+    pub fn parent_context_id(mut self, parent_context_id: impl Into<String>) -> Self {
+        self.parent_context_id = Some(parent_context_id.into());
         self
     }
 
@@ -503,15 +503,15 @@ impl WriteBuilder {
 
     /// The datetime the record was published. Defaults to now.
     #[must_use]
-    pub fn date_published(mut self, date_published: String) -> Self {
+    pub fn date_published(mut self, date_published: DateTime<Utc>) -> Self {
         self.date_published = Some(date_published);
         self
     }
 
     /// The record's MIME type. Defaults to `application/json`.
     #[must_use]
-    pub fn data_format(mut self, data_format: String) -> Self {
-        self.data_format = data_format;
+    pub fn data_format(mut self, data_format: impl Into<String>) -> Self {
+        self.data_format = data_format.into();
         self
     }
 
@@ -531,8 +531,8 @@ impl WriteBuilder {
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
-        self.permission_grant_id = Some(permission_grant_id);
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
         self
     }
 

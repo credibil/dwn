@@ -221,8 +221,8 @@ impl GrantBuilder {
 
     /// Specify who the grant is issued to.
     #[must_use]
-    pub fn granted_to(mut self, granted_to: String) -> Self {
-        self.granted_to = granted_to;
+    pub fn granted_to(mut self, granted_to: impl Into<String>) -> Self {
+        self.granted_to = granted_to.into();
         self
     }
 
@@ -239,15 +239,15 @@ impl GrantBuilder {
 
     /// Specify an ID to use for the permission request.
     #[must_use]
-    pub fn request_id(mut self, request_id: String) -> Self {
-        self.request_id = Some(request_id);
+    pub fn request_id(mut self, request_id: impl Into<String>) -> Self {
+        self.request_id = Some(request_id.into());
         self
     }
 
     /// Describe the purpose of the grant.
     #[must_use]
-    pub fn description(mut self, description: String) -> Self {
-        self.description = Some(description);
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
         self
     }
 

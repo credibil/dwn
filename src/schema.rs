@@ -10,8 +10,7 @@ use crate::service::Message;
 fn precompiled(schema_name: &str) -> Result<Value> {
     match schema_name {
         "protocols-configure" => {
-            let schema =
-                include_bytes!("../schemas/interface-methods/protocols-configure.json");
+            let schema = include_bytes!("../schemas/interface-methods/protocols-configure.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "protocols-query" => {
@@ -63,20 +62,17 @@ impl Retrieve for Retriever {
                 Ok(serde_json::from_slice(schema)?)
             }
             "records-write-data-encoded.json" => {
-                let schema = include_bytes!(
-                    "../schemas/interface-methods/records-write-data-encoded.json"
-                );
+                let schema =
+                    include_bytes!("../schemas/interface-methods/records-write-data-encoded.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "protocol-rule-set.json" => {
-                let schema =
-                    include_bytes!("../schemas/interface-methods/protocol-rule-set.json");
+                let schema = include_bytes!("../schemas/interface-methods/protocol-rule-set.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "records-write-unidentified.json" => {
-                let schema = include_bytes!(
-                    "../schemas/interface-methods/records-write-unidentified.json"
-                );
+                let schema =
+                    include_bytes!("../schemas/interface-methods/records-write-unidentified.json");
                 Ok(serde_json::from_slice(schema)?)
             }
 

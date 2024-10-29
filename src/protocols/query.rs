@@ -180,15 +180,17 @@ impl QueryBuilder {
 
     /// Specify a permission grant ID to use with the configuration.
     #[must_use]
-    pub fn filter(mut self, protocol: String) -> Self {
-        self.filter = Some(Filter { protocol });
+    pub fn filter(mut self, protocol: impl Into<String>) -> Self {
+        self.filter = Some(Filter {
+            protocol: protocol.into(),
+        });
         self
     }
 
     /// Specify a permission grant ID to use with the configuration.
     #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: String) -> Self {
-        self.permission_grant_id = Some(permission_grant_id);
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
         self
     }
 

@@ -26,9 +26,9 @@ async fn configure() {
     // Alice grants App X to write as her for the `chat` protocol
     // ------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(APPX_DID.to_string())
-        .request_id("grant_id_1".to_string())
-        .description("Allow App X to write as me in chat protocol".to_string())
+        .granted_to(APPX_DID)
+        .request_id("grant_id_1")
+        .description("allow App X to write as me in chat protocol")
         .delegated(true)
         .scope(Interface::Records, Method::Write, Some("chat".to_string()));
 
@@ -42,7 +42,7 @@ async fn configure() {
     let write_data = WriteData::Bytes { data: data.to_vec() };
 
     let mut write = WriteBuilder::new()
-        .data_format("application/octet-stream".to_string())
+        .data_format("application/octet-stream")
         .data(write_data)
         .build(&bob_keyring)
         .await

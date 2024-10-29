@@ -24,9 +24,9 @@ async fn configure() {
     // Alice grants Bob the ability to configure any protocol
     // ------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(BOB_DID.to_string())
-        .request_id("grant_id_1".to_string())
-        .description("Allow Bob to configure any protocol".to_string())
+        .granted_to(BOB_DID)
+        .request_id("grant_id_1")
+        .description("Allow Bob to configure any protocol")
         .delegated(true)
         .scope(Interface::Protocols, Method::Configure, None);
 
