@@ -36,25 +36,25 @@ pub trait KeyStore: Send + Sync {
     /// Returns an error if the signer cannot be created.
     fn keyring(&self, controller: &str) -> anyhow::Result<impl Keyring>;
 
-    /// Signer provides digital signing function.
-    ///
-    /// The `controller` parameter uniquely identifies the controller of the
-    /// private key used in the signing operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the signer cannot be created.
-    fn signer(&self, controller: &str) -> anyhow::Result<impl Signer>;
+    // /// Signer provides digital signing function.
+    // ///
+    // /// The `controller` parameter uniquely identifies the controller of the
+    // /// private key used in the signing operation.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Returns an error if the signer cannot be created.
+    // fn signer(&self, controller: &str) -> anyhow::Result<impl Signer>;
 
-    /// Cipher provides data encryption/decryption functionality.
-    ///
-    /// The `controller` parameter uniquely identifies the controller of the
-    /// private key used in the signing operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the encryptor cannot be created.
-    fn cipher(&self, controller: &str) -> anyhow::Result<impl Cipher>;
+    // /// Cipher provides data encryption/decryption functionality.
+    // ///
+    // /// The `controller` parameter uniquely identifies the controller of the
+    // /// private key used in the signing operation.
+    // ///
+    // /// # Errors
+    // ///
+    // /// Returns an error if the encryptor cannot be created.
+    // fn cipher(&self, controller: &str) -> anyhow::Result<impl Cipher>;
 }
 
 /// The `SecOps` trait is used to provide methods needed for signing,

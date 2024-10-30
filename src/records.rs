@@ -8,10 +8,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-pub use self::write::{
-    DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
+pub use write::{
+    DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol, WriteReply,
 };
+
 use crate::auth::Authorization;
 use crate::{DateRange, Descriptor, Pagination, Quota};
 

@@ -14,8 +14,9 @@ use vercre_dwn::{Interface, Method};
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
+// Allow author-delegated grant to configure any protocols.
 #[tokio::test]
-async fn configure() {
+async fn configure_any() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Alice's keyring");
@@ -76,4 +77,23 @@ async fn configure() {
     };
 
     assert_eq!(reply.status.code, 200);
+}
+
+// Allow author-delegated grant to configure a specific protocol.
+#[tokio::test]
+async fn configure_one() {
+
+}
+
+// Error reply when message invokes a author-delegated grant but no grant is given.
+#[tokio::test]
+async fn no_grant() {
+
+}
+
+// Error when message includes an author-delegated grant but does not reference it in 
+// author signature.
+#[tokio::test]
+async fn no_grant_reference() {
+
 }

@@ -11,9 +11,25 @@ use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{Authorization, SignaturePayload};
-use crate::provider::Keyring;
-use crate::service::Message;
-use crate::{cid, permissions, utils, Descriptor, Interface, Method};
+use crate::provider::{Keyring, Provider};
+use crate::service::{Context, Message};
+use crate::{cid, permissions, utils, Cursor, Descriptor, Interface, Method, Status};
+
+/// Process query message.
+///
+/// # Errors
+/// TODO: Add errors
+pub(crate) async fn handle(
+    _ctx: &Context, _write: Write, _provider: impl Provider,
+) -> Result<WriteReply> {
+    Ok(WriteReply {
+        status: Status {
+            code: 202,
+            detail: Some("Accepted".to_string()),
+        },
+        ..WriteReply::default()
+    })
+}
 
 /// Records write payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -29,6 +45,7 @@ pub struct Write {
     pub record_id: String,
 
     /// Record context.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub context_id: Option<String>,
 
     /// Record data.
@@ -37,7 +54,7 @@ pub struct Write {
 
     /// Record encryption.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption: Option<Encryption>,
+    pub encryption: Option<EncryptionProperty>,
 
     /// Message data, base64url encoded.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -121,6 +138,28 @@ impl Write {
         Ok(())
     }
 
+    /// Signs the `RecordsWrite` as the DWN owner.
+    ///
+    /// This is used when the DWN owner wants to retain a copy of a message that
+    /// the owner did not author.
+    /// N.B.: requires the `RecordsWrite` to already have the author's signature.
+    pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
+        // HACK: temporary solution to get the message author
+        if Message::RecordsWrite(self.clone()).author().is_none() {
+            // owner delegate needs to sign over `record_id` using author DID.
+            return Err(anyhow!("message signature is required in order to sign as owner"));
+        }
+
+        let payload = SignaturePayload {
+            descriptor_cid: cid::compute(&self.descriptor)?,
+            ..SignaturePayload::default()
+        };
+        let owner_jws = Jws::new(Type::Jwt, &payload, signer).await?;
+        self.authorization.owner_signature = Some(owner_jws);
+
+        Ok(())
+    }
+
     /// Signs the `Write` record as a delegate of the web node owner. This is
     /// used when a web node owner-delegate wants to retain a copy of a
     /// message that the owner did not author.
@@ -156,6 +195,69 @@ impl Write {
         self.authorization.owner_delegated_grant = Some(delegated_grant);
 
         Ok(())
+    }
+
+    /// Encrypt message
+    async fn encrypt(
+        &self, input: &EncryptionInput, _encryptor: &impl Cipher,
+    ) -> Result<EncryptionProperty> {
+        // encrypt the data encryption key once per encryption input
+
+        for key in &input.keys {
+            if key.derivation_scheme == Some(DerivationScheme::ProtocolPath)
+                && self.descriptor.protocol.is_none()
+            {
+                return Err(anyhow!(
+                    "`protocol` must be specified to use `protocols` encryption scheme"
+                ));
+            }
+            if key.derivation_scheme == Some(DerivationScheme::Schemas)
+                && self.descriptor.schema.is_none()
+            {
+                return Err(anyhow!(
+                    "`schema` must be specified to use `schema` encryption scheme"
+                ));
+            }
+
+            // NOTE: right now only `ECIES-ES256K` algorithm is supported for asymmetric encryption,
+            // so we will assume that's the algorithm without additional switch/if statements
+
+            // let pk_bytes = Secp256k1.publicJwkToBytes(key.public_key);
+            // let output = await Encryption.eciesSecp256k1Encrypt(pk_bytes, input.key);
+
+            //   let encryptedKey = Encoder.bytesToBase64Url(output.ciphertext);
+            //   let ephemeralPublicKey = await Secp256k1.publicKeyToJwk(output.ephemeralPublicKey);
+            //   let keyEncryptionInitializationVector = Encoder.bytesToBase64Url(output.initializationVector);
+            //   let messageAuthenticationCode = Encoder.bytesToBase64Url(output.messageAuthenticationCode);
+            //   let encryptedKeyData= EncryptedKey {
+            //     rootKeyId            : key.publicKeyId,
+            //     algorithm            : key.algorithm ?? EncryptionAlgorithm.EciesSecp256k1,
+            //     derivationScheme     : key.derivationScheme,
+            //     ephemeralPublicKey,
+            //     initializationVector : keyEncryptionInitializationVector,
+            //     messageAuthenticationCode,
+            //     encryptedKey
+            //   };
+
+            //   // we need to attach the actual public key if derivation scheme is protocol-context,
+            //   // so that the responder to this message is able to encrypt the message/symmetric key using the same protocol-context derived public key,
+            //   // without needing the knowledge of the corresponding private key
+            //   if (key.derivationScheme === KeyDerivationScheme.ProtocolContext) {
+            //     encryptedKeyData.derivedPublicKey = key.publicKey;
+            //   }
+
+            //   keyEncryption.push(encryptedKeyData);
+        }
+
+        // const encryption: EncryptionProperty = {
+        //   algorithm            : input.algorithm ?? EncryptionAlgorithm.Aes256Ctr,
+        //   initializationVector : Encoder.bytesToBase64Url(input.initializationVector),
+        //   keyEncryption
+        // };
+
+        // return encryption;
+
+        todo!()
     }
 }
 
@@ -214,14 +316,22 @@ impl DelegatedGrant {
     /// # Errors
     /// TODO: Add errors
     pub fn to_grant(&self) -> Result<permissions::Grant> {
-        let bytes = Base64UrlUnpadded::decode_vec(&self.encoded_data)?;
+        self.clone().try_into()
+    }
+}
+
+impl TryFrom<DelegatedGrant> for permissions::Grant {
+    type Error = anyhow::Error;
+
+    fn try_from(value: DelegatedGrant) -> Result<Self> {
+        let bytes = Base64UrlUnpadded::decode_vec(&value.encoded_data)?;
         let mut grant: permissions::Grant = serde_json::from_slice(&bytes)
             .map_err(|e| anyhow!("issue deserializing grant: {e}"))?;
 
-        grant.id.clone_from(&self.record_id);
-        grant.grantor = self.authorization.signer()?;
-        grant.grantee = self.descriptor.recipient.clone().unwrap_or_default();
-        grant.date_granted.clone_from(&self.descriptor.date_created);
+        grant.id.clone_from(&value.record_id);
+        grant.grantor = value.authorization.signer()?;
+        grant.grantee = value.descriptor.recipient.clone().unwrap_or_default();
+        grant.date_granted.clone_from(&value.descriptor.date_created);
 
         Ok(grant)
     }
@@ -280,68 +390,6 @@ pub struct WriteDescriptor {
     pub date_published: Option<DateTime<Utc>>,
 }
 
-/// Encryption settings.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Encryption {
-    /// Encryption algorithm.
-    pub algorithm: EncryptionAlgorithm,
-
-    /// The initialization vector.
-    pub initialization_vector: String,
-
-    /// The encrypted CEK.
-    pub key_encryption: Vec<EncryptedKey>,
-}
-
-/// Encrypted key.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EncryptedKey {
-    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id) of
-    /// the root public key used to encrypt the symmetric encryption key.
-    pub root_key_d: String,
-
-    /// The derived public key.
-    pub derived_public_key: Option<PublicKeyJwk>,
-
-    /// Encryption key derivation scheme.
-    pub derivation_scheme: Option<KeyDerivationScheme>,
-
-    /// The encryption algorithm.
-    pub algorithm: EncryptionAlgorithm,
-
-    /// The initialization vector.
-    pub initialization_vector: String,
-
-    /// The ephemeral public key.
-    pub ephemeral_public_key: PublicKeyJwk,
-
-    /// The MAC
-    pub message_authentication_code: String,
-
-    /// The encrypted key.
-    pub encrypted_key: String,
-}
-
-/// Key derivation schemes.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum KeyDerivationScheme {
-    /// Key derivation using the `dataFormat` value for Flat-space records.
-    #[default]
-    DataFormats,
-
-    /// Key derivation using protocol context.
-    ProtocolContext,
-
-    /// Key derivation using the protocol path.
-    ProtocolPath,
-
-    /// Key derivation using the `schema` value for Flat-space records.
-    Schemas,
-}
-
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct WriteBuilder {
@@ -359,8 +407,11 @@ pub struct WriteBuilder {
     date_published: Option<DateTime<Utc>>,
     data_format: String,
     delegated_grant: Option<DelegatedGrant>,
-    encrypt: Option<bool>,
     permission_grant_id: Option<String>,
+
+    // Encryption settings
+    encryption_input: Option<EncryptionInput>,
+    // attestation_signers: Option<Vec<Signer>>,
 }
 
 /// Protocol.
@@ -401,6 +452,43 @@ impl Default for WriteData {
     fn default() -> Self {
         Self::Bytes { data: Vec::new() }
     }
+}
+
+/// Encryption settings.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptionInput {
+    /// Encryption algorithm.
+    pub algorithm: EncryptionAlgorithm,
+
+    /// The initialization vector.
+    pub initialization_vector: String,
+
+    /// Symmetric key used to encrypt the data.
+    pub key: Vec<u8>,
+
+    /// Array of input that specifies how the symmetric key is encrypted. Each
+    /// entry in the array will result in a unique ciphertext of the symmetric
+    /// key.
+    pub keys: Vec<EncryptionKeyInput>,
+}
+
+/// Encryption key settings.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptionKeyInput {
+    /// Encryption key derivation scheme.
+    pub derivation_scheme: Option<DerivationScheme>,
+
+    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id) of
+    /// the public key used to encrypt the symmetric key.
+    pub public_key_id: String,
+
+    /// The recipient's public key.
+    pub public_key: PublicKeyJwk,
+
+    /// The encryption algorithm.
+    pub algorithm: EncryptionAlgorithm,
 }
 
 #[derive(Serialize)]
@@ -524,8 +612,8 @@ impl WriteBuilder {
 
     /// Specifies whether the record should be encrypted.
     #[must_use]
-    pub const fn encrypt(mut self, encrypt: bool) -> Self {
-        self.encrypt = Some(encrypt);
+    pub fn encryption_input(mut self, encryption_input: EncryptionInput) -> Self {
+        self.encryption_input = Some(encryption_input);
         self
     }
 
@@ -601,20 +689,17 @@ impl WriteBuilder {
         let jws = Jws::new(Type::Jwt, &payload, keyring).await?;
 
         // encryption
-        let encryption = if self.encrypt.unwrap_or_default() {
-            let encrypted = encrypt(&descriptor, keyring).await?;
-            Some(encrypted)
-        } else {
-            None
-        };
 
         let mut write = Write {
             record_id: self.record_id.unwrap_or_default(),
             descriptor,
             attestation: Some(jws),
-            encryption,
             ..Write::default()
         };
+
+        if let Some(ecryption_input) = &self.encryption_input {
+            write.encrypt(ecryption_input, keyring).await?;
+        }
 
         // sign message
         write
@@ -625,62 +710,63 @@ impl WriteBuilder {
     }
 }
 
-/// Encrypt message
-async fn encrypt(_descriptor: &WriteDescriptor, _encryptor: &impl Cipher) -> Result<Encryption> {
-    // encrypt the data encryption key once per encryption input
+/// Encryption output.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptionProperty {
+    algorithm: EncryptionAlgorithm,
+    initialization_vector: String,
+    key_encryption: Vec<EncryptedKey>,
+}
 
-    //     const keyEncryption: EncryptedKey[] = [];
-    //     for (const keyEncryptionInput of encryptionInput.keyEncryptionInputs) {
-    //       if (keyEncryptionInput.derivationScheme === KeyDerivationScheme.ProtocolPath && descriptor.protocol === undefined) {
-    //         throw new DwnError(
-    //           DwnErrorCode.RecordsWriteMissingProtocol,
-    //           '`protocols` encryption scheme cannot be applied to record without the `protocol` property.'
-    //         );
-    //       }
+/// Encrypted key.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptedKey {
+    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
+    /// of the root public key used to encrypt the symmetric encryption key.
+    root_key_id: String,
 
-    //       if (keyEncryptionInput.derivationScheme === KeyDerivationScheme.Schemas && descriptor.schema === undefined) {
-    //         throw new DwnError(
-    //           DwnErrorCode.RecordsWriteMissingSchema,
-    //           '`schemas` encryption scheme cannot be applied to record without the `schema` property.'
-    //         );
-    //       }
+    /// The actual derived public key.
+    derived_public_key: PublicKeyJwk,
+    derivation_scheme: DerivationScheme,
+    algorithm: EncryptionAlgorithm,
+    initialization_vector: String,
+    ephemeral_public_key: PublicKeyJwk,
+    message_authentication_code: String,
+    encrypted_key: String,
+}
 
-    //       // NOTE: right now only `ECIES-ES256K` algorithm is supported for asymmetric encryption,
-    //       // so we will assume that's the algorithm without additional switch/if statements
-    //       const publicKeyBytes = Secp256k1.publicJwkToBytes(keyEncryptionInput.publicKey);
-    //       const keyEncryptionOutput = await Encryption.eciesSecp256k1Encrypt(publicKeyBytes, encryptionInput.key);
+/// Key derivation schemes.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DerivationScheme {
+    /// Key derivation using the `dataFormat` value for Flat-space records.
+    #[default]
+    DataFormats,
 
-    //       const encryptedKey = Encoder.bytesToBase64Url(keyEncryptionOutput.ciphertext);
-    //       const ephemeralPublicKey = await Secp256k1.publicKeyToJwk(keyEncryptionOutput.ephemeralPublicKey);
-    //       const keyEncryptionInitializationVector = Encoder.bytesToBase64Url(keyEncryptionOutput.initializationVector);
-    //       const messageAuthenticationCode = Encoder.bytesToBase64Url(keyEncryptionOutput.messageAuthenticationCode);
-    //       const encryptedKeyData: EncryptedKey = {
-    //         rootKeyId            : keyEncryptionInput.publicKeyId,
-    //         algorithm            : keyEncryptionInput.algorithm ?? EncryptionAlgorithm.EciesSecp256k1,
-    //         derivationScheme     : keyEncryptionInput.derivationScheme,
-    //         ephemeralPublicKey,
-    //         initializationVector : keyEncryptionInitializationVector,
-    //         messageAuthenticationCode,
-    //         encryptedKey
-    //       };
+    /// Key derivation using protocol context.
+    ProtocolContext,
 
-    //       // we need to attach the actual public key if derivation scheme is protocol-context,
-    //       // so that the responder to this message is able to encrypt the message/symmetric key using the same protocol-context derived public key,
-    //       // without needing the knowledge of the corresponding private key
-    //       if (keyEncryptionInput.derivationScheme === KeyDerivationScheme.ProtocolContext) {
-    //         encryptedKeyData.derivedPublicKey = keyEncryptionInput.publicKey;
-    //       }
+    /// Key derivation using the protocol path.
+    ProtocolPath,
 
-    //       keyEncryption.push(encryptedKeyData);
-    //     }
+    /// Key derivation using the `schema` value for Flat-space records.
+    Schemas,
+}
 
-    //     const encryption: EncryptionProperty = {
-    //       algorithm            : encryptionInput.algorithm ?? EncryptionAlgorithm.Aes256Ctr,
-    //       initializationVector : Encoder.bytesToBase64Url(encryptionInput.initializationVector),
-    //       keyEncryption
-    //     };
+/// Records Write reply
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct WriteReply {
+    /// Status message to accompany the reply.
+    pub status: Status,
 
-    //     return encryption;
+    /// The Query descriptor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Vec<String>>,
 
-    todo!()
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
 }

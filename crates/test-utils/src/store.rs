@@ -96,13 +96,13 @@ impl KeyStore for ProviderImpl {
         Ok(KeyStoreImpl(Keystore {}))
     }
 
-    fn signer(&self, _identifier: &str) -> anyhow::Result<impl Signer> {
-        Ok(KeyStoreImpl(Keystore {}))
-    }
+    // fn signer(&self, _identifier: &str) -> anyhow::Result<impl Signer> {
+    //     Ok(KeyStoreImpl(Keystore {}))
+    // }
 
-    fn cipher(&self, _identifier: &str) -> anyhow::Result<impl Cipher> {
-        Ok(KeyStoreImpl(Keystore {}))
-    }
+    // fn cipher(&self, _identifier: &str) -> anyhow::Result<impl Cipher> {
+    //     Ok(KeyStoreImpl(Keystore {}))
+    // }
 }
 
 impl Keyring for KeyStoreImpl {}

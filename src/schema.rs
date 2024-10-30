@@ -6,21 +6,6 @@ use serde_json::Value;
 
 use crate::service::Message;
 
-/// Precompiled JSON schemas.
-fn precompiled(schema_name: &str) -> Result<Value> {
-    match schema_name {
-        "protocols-configure" => {
-            let schema = include_bytes!("../schemas/interface-methods/protocols-configure.json");
-            Ok(serde_json::from_slice(schema)?)
-        }
-        "protocols-query" => {
-            let schema = include_bytes!("../schemas/interface-methods/protocols-query.json");
-            Ok(serde_json::from_slice(schema)?)
-        }
-        _ => Err(anyhow!("Schema not found: {schema_name}")),
-    }
-}
-
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
 pub fn validate_schema(schema_name: &str, message: &Message) -> Result<()> {
@@ -41,6 +26,25 @@ pub fn validate_schema(schema_name: &str, message: &Message) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Precompiled JSON schemas.
+fn precompiled(schema_name: &str) -> Result<Value> {
+    match schema_name {
+        "records-write" => {
+            let schema = include_bytes!("../schemas/interface-methods/records-write.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
+        "protocols-configure" => {
+            let schema = include_bytes!("../schemas/interface-methods/protocols-configure.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
+        "protocols-query" => {
+            let schema = include_bytes!("../schemas/interface-methods/protocols-query.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
+        _ => Err(anyhow!("Schema not found: {schema_name}")),
+    }
 }
 
 struct Retriever {

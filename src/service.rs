@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, SignaturePayload};
 use crate::permissions::Grant;
 use crate::provider::Provider;
-use crate::records::Write;
+use crate::records::{Write, WriteReply};
 use crate::{auth, cid, messages, permissions, protocols, records, schema, Descriptor, Status};
 
 /// Process web node messages.
@@ -64,6 +64,10 @@ pub async fn handle_message(
         Message::ProtocolsConfigure(configure) => {
             let reply = protocols::configure::handle(&ctx, configure, provider).await?;
             Ok(Reply::ProtocolsConfigure(reply))
+        }
+        Message::RecordsWrite(write) => {
+            let reply = records::write::handle(&ctx, write, provider).await?;
+            Ok(Reply::RecordsWrite(reply))
         }
         _ => Err(anyhow!("Unsupported message")),
     }
@@ -225,7 +229,7 @@ pub enum Reply {
     MessagesQuery(messages::QueryReply),
     // MessagesRead(messages::ReadReply),
     // MessagesSubscribe(messages::SubscribeReply),
-    // RecordsWrite(records::WriteReply),
+    RecordsWrite(records::WriteReply),
     // RecordsQuery(records::QueryReply),
     // RecordsRead(records::ReadReply),
     // RecordsSubscribe(records::SubscribeReply),
