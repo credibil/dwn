@@ -181,7 +181,7 @@ pub struct ProtocolDefinition {
     pub published: bool,
 
     /// Protocol types.
-    pub types: BTreeMap<String, Type>,
+    pub types: BTreeMap<String, ProtocolType>,
 
     /// Protocol rules.
     pub structure: BTreeMap<String, RuleSet>,
@@ -190,7 +190,7 @@ pub struct ProtocolDefinition {
 /// Protocol type
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Type {
+pub struct ProtocolType {
     /// The protocol schema.
     pub schema: Option<String>,
 

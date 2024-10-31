@@ -12,6 +12,7 @@ use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{Authorization, SignaturePayload};
 use crate::provider::{Keyring, Provider};
+use crate::records::protocol_auth;
 use crate::service::{Context, Message};
 use crate::{cid, permissions, utils, Cursor, Descriptor, Interface, Method, Status};
 
@@ -20,8 +21,135 @@ use crate::{cid, permissions, utils, Cursor, Descriptor, Interface, Method, Stat
 /// # Errors
 /// TODO: Add errors
 pub(crate) async fn handle(
-    _ctx: &Context, _write: Write, _provider: impl Provider,
+    ctx: &Context, write: Write, provider: impl Provider,
 ) -> Result<WriteReply> {
+    // Protocol-authorized record specific validation
+    if write.descriptor.protocol.is_some() {
+        protocol_auth::verify_integrity(&ctx.owner, &write, provider).await?;
+    }
+
+    // authorization
+    // await RecordsWriteHandler.authorizeRecordsWrite(tenant, recordsWrite, this.messageStore);
+
+    //     // get existing messages matching the `recordId`
+    //     const query = {
+    //       interface : DwnInterfaceName.Records,
+    //       recordId  : message.recordId
+    //     };
+    //     const { messages: existingMessages } = await this.messageStore.query(tenant, [ query ]);
+
+    //     // if the incoming write is not the initial write, then it must not modify any immutable properties defined by the initial write
+    //     const newMessageIsInitialWrite = await recordsWrite.isInitialWrite();
+    //     let initialWrite: RecordsWriteMessage | undefined;
+    //     if (!newMessageIsInitialWrite) {
+    //       try {
+    //         initialWrite = await RecordsWrite.getInitialWrite(existingMessages);
+    //         RecordsWrite.verifyEqualityOfImmutableProperties(initialWrite, message);
+    //       } catch (e) {
+    //         return messageReplyFromError(e, 400);
+    //       }
+    //     }
+
+    //     const newestExistingMessage = await Message.getNewestMessage(existingMessages);
+
+    //     let incomingMessageIsNewest = false;
+    //     let newestMessage; // keep reference of newest message for pruning later
+    //     if (newestExistingMessage === undefined || await Message.isNewer(message, newestExistingMessage)) {
+    //       incomingMessageIsNewest = true;
+    //       newestMessage = message;
+    //     } else { // existing message is the same age or newer than the incoming message
+    //       newestMessage = newestExistingMessage;
+    //     }
+
+    //     if (!incomingMessageIsNewest) {
+    //       return {
+    //         status: { code: 409, detail: 'Conflict' }
+    //       };
+    //     }
+
+    //     try {
+    //       if (newestExistingMessage?.descriptor.method === DwnMethodName.Delete) {
+    //         throw new DwnError(
+    //           DwnErrorCode.RecordsWriteNotAllowedAfterDelete,
+    //           'RecordsWrite is not allowed after a RecordsDelete.'
+    //         );
+    //       }
+
+    //       // NOTE: We want to perform additional validation before storing the RecordsWrite.
+    //       // This is necessary for core DWN RecordsWrite that needs additional processing and allows us to fail before the storing and post processing.
+    //       //
+    //       // Example: Ensures that the protocol tag of a permission revocation RecordsWrite and the parent grant's scoped protocol match.
+    //       await this.preProcessingForCoreRecordsWrite(tenant, message);
+
+    //       // NOTE: We allow isLatestBaseState to be true ONLY if the incoming message comes with data, or if the incoming message is NOT an initial write
+    //       // This would allow an initial write to be written to the DB without data, but having it not queryable,
+    //       // because query implementation filters on `isLatestBaseState` being `true`
+    //       // thus preventing a user's attempt to gain authorized access to data by referencing the dataCid of a private data in their initial writes,
+    //       // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
+    //       let isLatestBaseState = false;
+    //       let messageWithOptionalEncodedData = message as RecordsQueryReplyEntry;
+
+    //       if (dataStream !== undefined) {
+    //         messageWithOptionalEncodedData = await this.processMessageWithDataStream(tenant, message, dataStream);
+    //         isLatestBaseState = true;
+    //       } else {
+    //         // else data stream is NOT provided
+
+    //         // if the incoming message is not an initial write, and no dataStream is provided, we would allow it provided it passes validation
+    //         // processMessageWithoutDataStream() abstracts that logic
+    //         if (!newMessageIsInitialWrite) {
+    //           const newestExistingWrite = newestExistingMessage as RecordsQueryReplyEntry;
+    //           messageWithOptionalEncodedData = await this.processMessageWithoutDataStream(tenant, message, newestExistingWrite );
+    //           isLatestBaseState = true;
+    //         }
+    //       }
+
+    //       const indexes = await recordsWrite.constructIndexes(isLatestBaseState);
+    //       await this.messageStore.put(tenant, messageWithOptionalEncodedData, indexes);
+    //       await this.eventLog.append(tenant, await Message.getCid(message), indexes);
+
+    //       // NOTE: We only emit a `RecordsWrite` when the message is the latest base state.
+    //       // Because we allow a `RecordsWrite` which is not the latest state to be written, but not queried, we shouldn't emit it either.
+    //       // It will be emitted as a part of a subsequent next write, if it is the latest base state.
+    //       if (this.eventStream !== undefined && isLatestBaseState) {
+    //         this.eventStream.emit(tenant, { message, initialWrite }, indexes);
+    //       }
+    //     } catch (error) {
+    //       const e = error as any;
+    //       if (e.code !== undefined) {
+    //         if (e.code === DwnErrorCode.RecordsWriteMissingEncodedDataInPrevious ||
+    //           e.code === DwnErrorCode.RecordsWriteMissingDataInPrevious ||
+    //           e.code === DwnErrorCode.RecordsWriteNotAllowedAfterDelete ||
+    //           e.code === DwnErrorCode.RecordsWriteDataCidMismatch ||
+    //           e.code === DwnErrorCode.RecordsWriteDataSizeMismatch ||
+    //           e.code.startsWith('PermissionsProtocolValidate') ||
+    //           e.code.startsWith('SchemaValidator')) {
+    //           return messageReplyFromError(error, 400);
+    //         }
+    //       }
+
+    //       // else throw
+    //       throw error;
+    //     }
+
+    //     const messageReply = {
+    //       // In order to discern between something that was accepted as a queryable write and something that was accepted
+    //       // as an initial state we use separate response codes. See https://github.com/TBD54566975/dwn-sdk-js/issues/695
+    //       // for more details.
+    //       status: (newMessageIsInitialWrite && dataStream === undefined) ?
+    //         { code: 204, detail: 'No Content' } :
+    //         { code: 202, detail: 'Accepted' }
+    //     };
+
+    //     // delete all existing messages of the same record that are not newest, except for the initial write
+    //     await StorageController.deleteAllOlderMessagesButKeepInitialWrite(
+    //       tenant, existingMessages, newestMessage, this.messageStore, this.dataStore, this.eventLog
+    //     );
+
+    //     await this.postProcessingForCoreRecordsWrite(tenant, recordsWrite);
+
+    //     return messageReply;
+
     Ok(WriteReply {
         status: Status {
             code: 202,

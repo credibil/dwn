@@ -81,19 +81,13 @@ async fn configure_any() {
 
 // Allow author-delegated grant to configure a specific protocol.
 #[tokio::test]
-async fn configure_one() {
-
-}
+async fn configure_one() {}
 
 // Error reply when message invokes a author-delegated grant but no grant is given.
 #[tokio::test]
-async fn no_grant() {
+async fn no_grant() {}
 
-}
-
-// Error when message includes an author-delegated grant but does not reference it in 
+// Error when message includes an author-delegated grant but does not reference it in
 // author signature.
 #[tokio::test]
-async fn no_grant_reference() {
-
-}
+async fn no_grant_reference() {}

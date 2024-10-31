@@ -4,6 +4,7 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
+use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::permissions::GrantBuilder;
 use vercre_dwn::protocols::{ConfigureBuilder, ProtocolDefinition, QueryBuilder};
@@ -25,15 +26,13 @@ async fn flat_space() {
     // ------------------------------
     // Bob writes a message to his web node
     // ------------------------------
-    //   const { message, dataStream, dataBytes } = await TestDataGenerator.generateRecordsWrite({ author: bob, published: true });
-    //   const writeReply = await dwn.processMessage(bob.did, message, { dataStream });
-    //   expect(writeReply.status.code).to.equal(202);
+    let data = serde_json::to_vec(&json!({
+        "message": "test record write",
+    }))
+    .expect("should serialize");
 
-    let data = WriteData::Bytes {
-        data: vec![1, 2, 3, 4, 5, 6, 7, 8],
-    };
     let write = WriteBuilder::new()
-        .data(data)
+        .data(WriteData::Bytes { data })
         .published(true)
         .build(&bob_keyring)
         .await
@@ -47,9 +46,19 @@ async fn flat_space() {
     };
     assert_eq!(reply.status.code, 202);
 
-    // // ------------------------------
-    // // Alice grants Bob the ability to configure any protocol
-    // // ------------------------------
+    // ------------------------------
+    // Alice fetches the message from Bob's web node
+    // ------------------------------
+    // const recordsRead = await RecordsRead.create({
+    //     filter : { recordId: message.recordId },
+    //     signer : Jws.createSigner(alice)
+    //   });
+
+    //   const readReply = await dwn.processMessage(bob.did, recordsRead.message);
+    //   expect(readReply.status.code).to.equal(200);
+    //   expect(readReply.entry!.recordsWrite).to.exist;
+    //   expect(readReply.entry!.recordsWrite?.descriptor).to.exist;
+
     // let builder = GrantBuilder::new()
     //     .granted_to(BOB_DID)
     //     .request_id("grant_id_1")

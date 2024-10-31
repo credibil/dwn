@@ -2,6 +2,7 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+pub(crate) mod protocol_auth;
 pub mod write;
 
 use std::collections::BTreeMap;
@@ -198,10 +199,6 @@ pub enum TagFilter {
     Equal(Value),
 }
 
-// export type EqualFilter = string | number | boolean;
-// export type OneOfFilter = EqualFilter[];
-// export type RangeValue = string | number;
-
 impl Default for TagFilter {
     fn default() -> Self {
         Self::Equal(Value::Null)
@@ -213,8 +210,10 @@ impl Default for TagFilter {
 #[serde(rename_all = "camelCase")]
 pub struct SizeRange {
     /// The minimum size.
-    pub min: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<u64>,
 
     /// The maximum size.
-    pub max: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<u64>,
 }

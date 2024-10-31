@@ -12,10 +12,7 @@ use crate::messages::{Direction, Sort};
 use crate::provider::{Keyring, MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
 use crate::records::{self, WriteBuilder, WriteData, WriteProtocol};
-use crate::{utils, Descriptor, Interface, Method};
-
-/// Default protocol for managing web node permission grants.
-pub const PROTOCOL: &str = "https://vercre.website/dwn/permissions";
+use crate::{protocols, utils, Descriptor, Interface, Method};
 
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -300,7 +297,7 @@ impl GrantBuilder {
         let mut builder = WriteBuilder::new()
             .recipient(self.granted_to)
             .protocol(WriteProtocol {
-                protocol: PROTOCOL.to_string(),
+                protocol: protocols::PROTOCOL_URI.to_string(),
                 protocol_path: "grant".to_string(),
             })
             .data(WriteData::Bytes {

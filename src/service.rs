@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, SignaturePayload};
 use crate::permissions::Grant;
 use crate::provider::Provider;
-use crate::records::{Write, WriteReply};
+use crate::records::Write;
 use crate::{auth, cid, messages, permissions, protocols, records, schema, Descriptor, Status};
 
 /// Process web node messages.

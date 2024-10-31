@@ -1,4 +1,4 @@
-//! # Datse Query Utilities
+//! # Database Query Utilities
 
 use std::collections::BTreeMap;
 
