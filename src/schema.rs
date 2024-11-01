@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
-// use lazy_static::lazy_static;
 use serde_json::Value;
 
 use crate::service::Message;

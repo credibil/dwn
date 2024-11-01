@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use self::grant::{Conditions, Grant, GrantBuilder, GrantData, Scope};
-use crate::protocols::ProtocolDefinition;
+use crate::protocols::Definition;
 use crate::provider::{MessageStore, Provider};
 use crate::query::{self, Compare, Criterion};
 use crate::service::Message;
@@ -71,7 +71,7 @@ pub struct Protocol {
     pub revocation_path: String,
 
     /// Permissions protocol definition.
-    pub definition: ProtocolDefinition,
+    pub definition: Definition,
 }
 
 #[cfg(test)]

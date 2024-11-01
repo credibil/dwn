@@ -6,7 +6,7 @@
 
 use test_utils::store::ProviderImpl;
 use vercre_dwn::permissions::GrantBuilder;
-use vercre_dwn::protocols::{ConfigureBuilder, ProtocolDefinition, QueryBuilder};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::service::{Message, Reply};
 use vercre_dwn::{Interface, Method};
@@ -37,8 +37,7 @@ async fn configure_any() {
     // Bob configures the email protocol on Alice's behalf
     // ------------------------------
     let email_json = include_bytes!("protocols/email.json");
-    let email_proto: ProtocolDefinition =
-        serde_json::from_slice(email_json).expect("should deserialize");
+    let email_proto: Definition = serde_json::from_slice(email_json).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
         .definition(email_proto.clone())

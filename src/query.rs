@@ -30,10 +30,10 @@ pub enum Criterion {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Range {
     /// Filter values starting from.
-    from: Compare,
+    pub from: Compare,
 
     /// Filter values up to.
-    to: Compare,
+    pub to: Compare,
 }
 
 /// Comparators for filtering value ranges.

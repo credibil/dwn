@@ -166,17 +166,17 @@ pub struct ConfigureDescriptor {
     pub base: Descriptor,
 
     /// The protocol definition.
-    pub definition: ProtocolDefinition,
+    pub definition: Definition,
 }
 
 /// Protocol definition.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProtocolDefinition {
+pub struct Definition {
     /// Protocol name.
     pub protocol: String,
 
-    /// Specifies whether the `ProtocolDefinition` can be returned by unauthorized
+    /// Specifies whether the `Definition` can be returned by unauthorized
     /// `ProtocolsQuery`.
     pub published: bool,
 
@@ -229,7 +229,7 @@ pub struct RuleSet {
     /// JSON Schema verifies that properties other than properties prefixed
     /// with $ will actually have type `ProtocolRuleSet`
     #[serde(flatten)]
-    pub nested: BTreeMap<String, RuleSet>,
+    pub structure: BTreeMap<String, RuleSet>,
 }
 
 /// Config for protocol-path encryption scheme.
@@ -371,7 +371,7 @@ pub struct Tags {
 #[derive(Clone, Debug, Default)]
 pub struct ConfigureBuilder {
     message_timestamp: Option<DateTime<Utc>>,
-    definition: Option<ProtocolDefinition>,
+    definition: Option<Definition>,
     delegated_grant: Option<Write>,
     permission_grant_id: Option<String>,
 }
@@ -390,7 +390,7 @@ impl ConfigureBuilder {
 
     /// Specify the protocol's definition.
     #[must_use]
-    pub fn definition(mut self, definition: ProtocolDefinition) -> Self {
+    pub fn definition(mut self, definition: Definition) -> Self {
         self.definition = Some(definition);
         self
     }
@@ -456,7 +456,7 @@ impl ConfigureBuilder {
     }
 }
 
-fn verify_structure(definition: &ProtocolDefinition) -> Result<()> {
+fn verify_structure(definition: &Definition) -> Result<()> {
     let keys = definition.types.keys().collect::<Vec<&String>>();
 
     // validate the entire rule set
@@ -565,7 +565,7 @@ fn verify_rule_set(
     }
 
     // verify nested rule sets
-    for (set_name, rule_set) in &rule_set.nested {
+    for (set_name, rule_set) in &rule_set.structure {
         if !types.contains(&set_name) {
             return Err(anyhow!("rule set {set_name} is not declared as an allowed type"));
         }
@@ -587,7 +587,7 @@ fn role_paths(protocol_path: &str, rule_set: &RuleSet, roles: Vec<String>) -> Re
         return Err(anyhow!("Record nesting depth exceeded 10 levels."));
     }
 
-    for (rule_name, rule_set) in &rule_set.nested {
+    for (rule_name, rule_set) in &rule_set.structure {
         let protocol_path = if protocol_path.is_empty() {
             rule_name
         } else {
