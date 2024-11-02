@@ -35,7 +35,7 @@ pub struct Descriptor {
 }
 
 /// DWN interfaces.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
 // #[serde(rename_all = "camelCase")]
 pub enum Interface {
     /// Records interface.
@@ -49,14 +49,14 @@ pub enum Interface {
     Messages,
 }
 
-impl Display for Interface {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format!("{self:?}").to_lowercase())
-    }
-}
+// impl Display for Interface {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", format!("{self:?}").to_lowercase())
+//     }
+// }
 
 /// Interface methods.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
 pub enum Method {
     /// Read method.
     #[default]
@@ -78,11 +78,11 @@ pub enum Method {
     Delete,
 }
 
-impl Display for Method {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format!("{self:?}").to_lowercase())
-    }
-}
+// impl Display for Method {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", format!("{self:?}").to_lowercase())
+//     }
+// }
 
 /// Interface protocols.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

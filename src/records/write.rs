@@ -12,7 +12,7 @@ use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{Authorization, SignaturePayload};
 use crate::provider::{Keyring, Provider};
-use crate::records::protocol_auth;
+use crate::records::protocol;
 use crate::service::{Context, Message};
 use crate::{cid, permissions, utils, Cursor, Descriptor, Interface, Method, Status};
 
@@ -25,7 +25,7 @@ pub(crate) async fn handle(
 ) -> Result<WriteReply> {
     // Protocol-authorized record specific validation
     if write.descriptor.protocol.is_some() {
-        protocol_auth::verify_integrity(&ctx.owner, &write, provider).await?;
+        protocol::verify_integrity(&ctx.owner, &write, provider).await?;
     }
 
     // authorization

@@ -2,17 +2,13 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::collections::BTreeMap;
-
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::query::{self, Compare, Criterion};
 use crate::service::{Context, Message};
 use crate::{cid, Cursor, Descriptor, Interface, Method, Status};
 
@@ -43,32 +39,52 @@ pub(crate) async fn handle(
 pub(crate) async fn fetch_config(
     owner: &str, filter: Option<Filter>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
-    let mut qf = query::Filter {
-        criteria: BTreeMap::<String, Criterion>::new(),
+    // let mut qf = query::Filter {
+    //     criteria: BTreeMap::<String, Criterion>::new(),
+    // };
+
+    // qf.criteria.insert(
+    //     "descriptor.interface".to_string(),
+    //     Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
+    // );
+    // qf.criteria.insert(
+    //     "descriptor.method".to_string(),
+    //     Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
+    // );
+    // qf.criteria.insert(
+    //     "descriptor.definition.published".to_string(),
+    //     Criterion::Single(Compare::Equal(Value::Bool(true))),
+    // );
+
+    let mut protocol = String::new();
+    if let Some(filter) = filter {
+        // qf.criteria.insert(
+        //     "descriptor.definition.protocol".to_string(),
+        //     Criterion::Single(Compare::Equal(Value::String(filter.protocol))),
+        // );
+        protocol = format!("AND descriptor.definition.protocol = '{}'", filter.protocol);
     };
 
-    qf.criteria.insert(
-        "descriptor.interface".to_string(),
-        Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
-    );
-    qf.criteria.insert(
-        "descriptor.method".to_string(),
-        Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
-    );
-    qf.criteria.insert(
-        "descriptor.definition.published".to_string(),
-        Criterion::Single(Compare::Equal(Value::Bool(true))),
-    );
+    // // execute query
+    // let (messages, _cursor) = store.query(owner, vec![qf], None, None).await?;
+    // if messages.is_empty() {
+    //     return Ok(None);
+    // }
 
-    if let Some(filter) = filter {
-        qf.criteria.insert(
-            "descriptor.definition.protocol".to_string(),
-            Criterion::Single(Compare::Equal(Value::String(filter.protocol))),
-        );
-    }
+    let sql = format!(
+        "
+        SELECT * FROM protocol
+        WHERE descriptor.interface = '{}'
+        AND descriptor.method = '{}'
+        AND descriptor.definition.published = true
+        {protocol}
+        ",
+        Interface::Protocols,
+        Method::Configure,
+    );
 
     // execute query
-    let (messages, _cursor) = store.query(owner, vec![qf], None, None).await?;
+    let (messages, _cursor) = store.query(owner, &sql).await?;
     if messages.is_empty() {
         return Ok(None);
     }

@@ -8,10 +8,9 @@ use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
-use crate::messages::Sort;
 use crate::query::Filter;
 use crate::service::Message;
-use crate::{Cursor, Pagination};
+use crate::Cursor;
 
 /// Issuer Provider trait.
 pub trait Provider:
@@ -88,9 +87,16 @@ pub trait MessageStore: Send + Sync {
     /// filters. Supplying multiple filters establishes an OR condition between
     /// the filters.
     fn query(
-        &self, owner: &str, filters: Vec<Filter>, sort: Option<Sort>,
-        pagination: Option<Pagination>,
+        &self, owner: &str, sql: &str,
     ) -> impl Future<Output = anyhow::Result<(Vec<Message>, Cursor)>> + Send;
+
+    // /// Queries the underlying store for messages that matches the provided
+    // /// filters. Supplying multiple filters establishes an OR condition between
+    // /// the filters.
+    // fn query(
+    //     &self, owner: &str, filters: Vec<Filter>, sort: Option<Sort>,
+    //     pagination: Option<Pagination>,
+    // ) -> impl Future<Output = anyhow::Result<(Vec<Message>, Cursor)>> + Send;
 
     /// Delete message associated with the specified id.
     fn delete(

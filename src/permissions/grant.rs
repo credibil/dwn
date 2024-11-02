@@ -1,16 +1,12 @@
 //! # Grant
 
-use std::collections::BTreeMap;
-
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::messages::{Direction, Sort};
 use crate::provider::{Keyring, MessageStore, Provider};
-use crate::query::{self, Compare, Criterion};
 use crate::records::{self, WriteBuilder, WriteData, WriteProtocol};
 use crate::{protocols, utils, Descriptor, Interface, Method};
 
@@ -91,28 +87,41 @@ impl Grant {
         }
 
         // Check if grant has been revoked
-        let mut qf = query::Filter {
-            criteria: BTreeMap::<String, Criterion>::new(),
-        };
-        qf.criteria.insert(
-            "parentId".to_string(),
-            Criterion::Single(Compare::Equal(Value::String(self.id.clone()))),
-        );
-        qf.criteria.insert(
-            "protocolPath".to_string(),
-            Criterion::Single(Compare::Equal(Value::String("grant/revocation".to_string()))),
-        );
-        qf.criteria.insert(
-            "isLatestBaseState".to_string(),
-            Criterion::Single(Compare::Equal(Value::Bool(true))),
+        // let mut qf = query::Filter {
+        //     criteria: BTreeMap::<String, Criterion>::new(),
+        // };
+        // qf.criteria.insert(
+        //     "parentId".to_string(),
+        //     Criterion::Single(Compare::Equal(Value::String(self.id.clone()))),
+        // );
+        // qf.criteria.insert(
+        //     "protocolPath".to_string(),
+        //     Criterion::Single(Compare::Equal(Value::String("grant/revocation".to_string()))),
+        // );
+        // qf.criteria.insert(
+        //     "isLatestBaseState".to_string(),
+        //     Criterion::Single(Compare::Equal(Value::Bool(true))),
+        // );
+
+        // let sort = Some(Sort {
+        //     message_timestamp: Some(Direction::Descending),
+        //     ..Default::default()
+        // });
+
+        let sql = format!(
+            "
+            SELECT * FROM protocol
+            WHERE parentId = '{}'
+            AND protocolPath = 'grant/revocation'
+            AND isLatestBaseState = true
+            ORDER BY messageTimestamp DESC
+            ",
+            self.id
         );
 
         // find oldest message in the revocation chain
-        let sort = Some(Sort {
-            message_timestamp: Some(Direction::Descending),
-            ..Default::default()
-        });
-        let (messages, _) = store.query(grantor, vec![qf], sort, None).await?;
+
+        let (messages, _) = store.query(grantor, &sql).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(anyhow!("grant has been revoked"));
         };

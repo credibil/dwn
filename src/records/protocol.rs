@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use serde_json::{json, Value};
+use serde_json::json;
 
 use crate::protocols::{self, Definition, ProtocolType, RuleSet};
 use crate::provider::MessageStore;
-use crate::query::{Compare, Criterion, Filter, Range};
 use crate::records::Write;
 use crate::service::Message;
 use crate::{Interface, Method};
@@ -46,24 +45,35 @@ async fn fetch_definition(
     }
 
     // fetch the corresponding protocol definition
-    let query = Filter {
-        criteria: BTreeMap::from([
-            (
-                "interface".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
-            ),
-            (
-                "method".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
-            ),
-            (
-                "protocol".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(protocol_uri.to_string()))),
-            ),
-        ]),
-    };
+    // let query = Filter {
+    //     criteria: BTreeMap::from([
+    //         (
+    //             "interface".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
+    //         ),
+    //         (
+    //             "method".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
+    //         ),
+    //         (
+    //             "protocol".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(protocol_uri.to_string()))),
+    //         ),
+    //     ]),
+    // };
 
-    let (protocols, _) = store.query(owner, vec![query], None, None).await?;
+    let sql = format!(
+        "
+        SELECT * FROM protocol
+        WHERE descriptor.interface = '{}'
+        AND descriptor.method = '{}'
+        AND protocol = '{protocol_uri}'
+        ",
+        Interface::Protocols,
+        Method::Configure,
+    );
+
+    let (protocols, _) = store.query(owner, &sql).await?;
     if protocols.is_empty() {
         return Err(anyhow!("unable to find protocol definition for {protocol_uri}"));
     }
@@ -119,32 +129,45 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
         return Err(anyhow!("missing protocol"));
     };
 
-    let query = Filter {
-        criteria: BTreeMap::from([
-            (
-                "interface".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
-            ),
-            (
-                "method".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
-            ),
-            (
-                "is_latest_base_state".to_string(),
-                Criterion::Single(Compare::Equal(Value::Bool(true))),
-            ),
-            (
-                "protocol".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(protocol.to_string()))),
-            ),
-            (
-                "record_id".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(parent_id.to_owned()))),
-            ),
-        ]),
-    };
+    // let query = Filter {
+    //     criteria: BTreeMap::from([
+    //         (
+    //             "interface".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
+    //         ),
+    //         (
+    //             "method".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
+    //         ),
+    //         (
+    //             "is_latest_base_state".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::Bool(true))),
+    //         ),
+    //         (
+    //             "protocol".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(protocol.to_string()))),
+    //         ),
+    //         (
+    //             "record_id".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(parent_id.to_owned()))),
+    //         ),
+    //     ]),
+    // };
 
-    let (records, _) = store.query(owner, vec![query], None, None).await?;
+    let sql = format!(
+        "
+        SELECT * FROM protocol
+        WHERE descriptor.interface = '{}'
+        AND descriptor.method = '{}'
+        AND protocol = '{protocol}'
+        AND recordId = '{parent_id}'
+        AND isLatestBaseState = true
+        ",
+        Interface::Protocols,
+        Method::Configure,
+    );
+
+    let (records, _) = store.query(owner, &sql).await?;
     if records.is_empty() {
         return Err(anyhow!("unable to find Write Record for parent_id {parent_id}"));
     }
@@ -188,7 +211,6 @@ async fn verify_role_record(
     let Some(recipient) = &write.descriptor.recipient else {
         return Err(anyhow!("role record is missing recipient"));
     };
-
     let Some(protocol) = &write.descriptor.protocol else {
         return Err(anyhow!("missing protocol"));
     };
@@ -196,51 +218,69 @@ async fn verify_role_record(
         return Err(anyhow!("missing protocol_path"));
     };
 
-    let mut query = Filter {
-        criteria: BTreeMap::from([
-            (
-                "interface".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(Interface::Records.to_string()))),
-            ),
-            (
-                "method".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(Method::Write.to_string()))),
-            ),
-            (
-                "is_latest_base_state".to_string(),
-                Criterion::Single(Compare::Equal(Value::Bool(true))),
-            ),
-            (
-                "protocol".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(protocol.to_string()))),
-            ),
-            (
-                "protocol_path".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(protocol_path.to_owned()))),
-            ),
-            (
-                "recipient".to_string(),
-                Criterion::Single(Compare::Equal(Value::String(recipient.to_owned()))),
-            ),
-        ]),
-    };
+    // let mut query = Filter {
+    //     criteria: BTreeMap::from([
+    //         (
+    //             "interface".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(Interface::Records.to_string()))),
+    //         ),
+    //         (
+    //             "method".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(Method::Write.to_string()))),
+    //         ),
+    //         (
+    //             "is_latest_base_state".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::Bool(true))),
+    //         ),
+    //         (
+    //             "protocol".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(protocol.to_string()))),
+    //         ),
+    //         (
+    //             "protocol_path".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(protocol_path.to_owned()))),
+    //         ),
+    //         (
+    //             "recipient".to_string(),
+    //             Criterion::Single(Compare::Equal(Value::String(recipient.to_owned()))),
+    //         ),
+    //     ]),
+    // };
 
     // if this is not the root record, add a prefix filter to the query
+    let mut context = String::new();
     if let Some(parent_context) = if let Some(context_id) = &write.context_id {
         context_id.rsplitn(2, '/').nth(1)
     } else {
         None
     } {
-        query.criteria.insert(
-            "context_id".to_string(),
-            Criterion::Range(Range {
-                from: Compare::GreaterThanOrEqual(Value::String(parent_context.to_owned())),
-                to: Compare::LessThan(Value::String(format!("{parent_context}\u{ffff}"))),
-            }),
-        );
+        // query.criteria.insert(
+        //     "context_id".to_string(),
+        //     Criterion::Range(Range {
+        //         from: Compare::GreaterThanOrEqual(Value::String(parent_context.to_owned())),
+        //         to: Compare::LessThan(Value::String(format!("{parent_context}\u{ffff}"))),
+        //     }),
+        // );
+        context =
+            format!("AND context_id BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
     };
 
-    let (records, _) = store.query(owner, vec![query], None, None).await?;
+    let sql = format!(
+        "
+        SELECT * FROM protocol
+        WHERE descriptor.interface = '{}'
+        AND descriptor.method = '{}'
+        AND isLatestBaseState = true
+        AND protocol = '{protocol}'
+        AND protocol_path = '{protocol_path}'
+        AND recipient = '{recipient}'
+        {context}
+        ",
+        Interface::Protocols,
+        Method::Configure,
+    );
+
+    let (records, _) = store.query(owner, &sql).await?;
     // if records.is_empty() {
     //     return Err(anyhow!("unable to find Write Record for parent_id {parent_id}"));
     // }

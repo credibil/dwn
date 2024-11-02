@@ -2,7 +2,7 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-pub(crate) mod protocol_auth;
+pub(crate) mod protocol;
 pub mod write;
 
 use std::collections::BTreeMap;

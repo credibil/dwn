@@ -215,7 +215,7 @@ impl Message {
     /// TODO: Add errors
     pub fn validate_schema(&self) -> Result<()> {
         let descriptor = self.descriptor();
-        let key = format!("{}-{}", descriptor.interface, descriptor.method);
+        let key = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
         schema::validate_schema(&key, self)
     }
 }

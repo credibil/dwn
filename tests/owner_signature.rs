@@ -6,21 +6,21 @@
 
 use serde_json::json;
 use test_utils::store::ProviderImpl;
-use vercre_dwn::permissions::GrantBuilder;
-use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+// use vercre_dwn::permissions::GrantBuilder;
+// use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{DelegatedGrant, WriteBuilder, WriteData};
+use vercre_dwn::records::{WriteBuilder, WriteData};
 use vercre_dwn::service::{Message, Reply};
-use vercre_dwn::{Interface, Method};
+// use vercre_dwn::{Interface, Method};
 
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
+// const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
-// Use `ownerignature` for authorization when it is provided.
+// Use owner signature for authorization when it is provided.
 #[tokio::test]
 async fn flat_space() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    // let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Alice's keyring");
 
     // ------------------------------
