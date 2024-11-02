@@ -33,10 +33,10 @@ pub(crate) async fn handle(
     let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
 
     // determine if incoming message is the latest
-    let incoming_is_latest = if let Some(existing) = &results {
+    let is_latest = if let Some(existing) = &results {
         // find latest matching protocol entry
         let timestamp = &configure.descriptor.base.message_timestamp;
-        let (incoming_is_latest, latest_entry) =
+        let (is_latest, latest_entry) =
             existing.iter().fold((true, &configure), |(_, _), e| {
                 if &e.descriptor.base.message_timestamp > timestamp {
                     (false, e)
@@ -55,13 +55,13 @@ pub(crate) async fn handle(
             }
         }
 
-        incoming_is_latest
+        is_latest
     } else {
         true
     };
 
     // save the incoming message when latest
-    let reply = if incoming_is_latest {
+    let reply = if is_latest {
         let cid = cid::compute(&configure)?;
         let msg = Message::ProtocolsConfigure(configure);
 

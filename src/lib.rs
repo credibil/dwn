@@ -10,6 +10,7 @@ pub mod query;
 pub mod records;
 mod schema;
 pub mod service;
+mod store;
 mod utils;
 
 use chrono::{DateTime, Utc};

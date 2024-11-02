@@ -159,6 +159,15 @@ pub(crate) async fn handle(
     })
 }
 
+// TODO:figure out what isLatestBaseState is
+// We allow `isLatestBaseState` to be true ONLY if the incoming message comes
+// with data, or if the incoming message is NOT an initial write. This would allow
+// an initial write to be written to the DB without data, but having it not queryable,
+// because query implementation filters on `isLatestBaseState` being `true`
+// thus preventing a user's attempt to gain authorized access to data by referencing
+// the dataCid of a private data in their initial writes,
+// See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
+
 /// Records write payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

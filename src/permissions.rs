@@ -8,35 +8,21 @@ use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Conditions, Grant, GrantBuilder, GrantData, Scope};
 use crate::protocols::Definition;
-use crate::provider::{MessageStore, Provider};
+use crate::provider::MessageStore;
 use crate::service::Message;
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
-    owner: &str, grant_id: &str, provider: &impl Provider,
+    owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
-    // let mut qf = query::Filter {
-    //     criteria: BTreeMap::<String, Criterion>::new(),
-    // };
-    // qf.criteria.insert(
-    //     "recordId".to_string(),
-    //     Criterion::Single(Compare::Equal(Value::String(grant_id.to_owned()))),
-    // );
-    // qf.criteria.insert(
-    //     "isLatestBaseState".to_string(),
-    //     Criterion::Single(Compare::Equal(Value::Bool(true))),
-    // );
-
     let sql = format!(
         "
-        SELECT * FROM protocol
         WHERE recordId = '{grant_id}'
-        AND isLatestBaseState = true
-        "
+        " // AND isLatestBaseState = true
     );
 
     // execute query
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
+    let (messages, _) = store.query(owner, &sql).await?;
     let message = &messages[0];
     let Message::RecordsWrite(write) = message.clone() else {
         return Err(anyhow!("no grant matching {grant_id}"));

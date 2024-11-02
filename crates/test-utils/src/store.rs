@@ -29,7 +29,7 @@ use vercre_infosec::{Algorithm, Cipher, Signer};
 use crate::keystore::{Keystore, OWNER_DID};
 
 const NAMESPACE: &str = "integration-test";
-const PROTOCOL: &str = "protocol";
+const MESSAGE: &str = "message";
 
 #[derive(Clone)]
 pub struct ProviderImpl {
@@ -45,7 +45,7 @@ impl ProviderImpl {
 
         let bytes = include_bytes!("./store/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
-        let _: Vec<Record> = db.create(PROTOCOL).content(config).await.expect("should create");
+        let _: Vec<Record> = db.create(MESSAGE).content(config).await.expect("should create");
 
         Ok(Self { db })
     }

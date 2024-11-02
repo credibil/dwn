@@ -7,7 +7,7 @@ use crate::protocols::{self, Definition, ProtocolType, RuleSet};
 use crate::provider::MessageStore;
 use crate::records::Write;
 use crate::service::Message;
-use crate::{Interface, Method};
+use crate::{utils, Interface, Method};
 
 /// Performs validation on the structure of RecordsWrite messages that use a protocol.
 pub async fn verify_integrity(owner: &str, write: &Write, store: impl MessageStore) -> Result<()> {
@@ -39,38 +39,22 @@ pub async fn verify_integrity(owner: &str, write: &Write, store: impl MessageSto
 async fn fetch_definition(
     owner: &str, protocol_uri: &str, store: &impl MessageStore,
 ) -> Result<Definition> {
+    let protocol_uri = utils::clean_url(protocol_uri)?;
+
     // use default definition if first-class protocol
     if protocol_uri == protocols::PROTOCOL_URI {
         return Ok(Definition::default());
     }
 
     // fetch the corresponding protocol definition
-    // let query = Filter {
-    //     criteria: BTreeMap::from([
-    //         (
-    //             "interface".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
-    //         ),
-    //         (
-    //             "method".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
-    //         ),
-    //         (
-    //             "protocol".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(protocol_uri.to_string()))),
-    //         ),
-    //     ]),
-    // };
-
     let sql = format!(
         "
-        SELECT * FROM protocol
-        WHERE descriptor.interface = '{}'
-        AND descriptor.method = '{}'
-        AND protocol = '{protocol_uri}'
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND descriptor.definition.protocol = '{protocol_uri}'
         ",
-        Interface::Protocols,
-        Method::Configure,
+        interface = Interface::Protocols,
+        method = Method::Configure,
     );
 
     let (protocols, _) = store.query(owner, &sql).await?;
@@ -129,42 +113,16 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
         return Err(anyhow!("missing protocol"));
     };
 
-    // let query = Filter {
-    //     criteria: BTreeMap::from([
-    //         (
-    //             "interface".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
-    //         ),
-    //         (
-    //             "method".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
-    //         ),
-    //         (
-    //             "is_latest_base_state".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::Bool(true))),
-    //         ),
-    //         (
-    //             "protocol".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(protocol.to_string()))),
-    //         ),
-    //         (
-    //             "record_id".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(parent_id.to_owned()))),
-    //         ),
-    //     ]),
-    // };
-
     let sql = format!(
         "
-        SELECT * FROM protocol
-        WHERE descriptor.interface = '{}'
-        AND descriptor.method = '{}'
-        AND protocol = '{protocol}'
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND descriptor.protocol = '{protocol}'
         AND recordId = '{parent_id}'
-        AND isLatestBaseState = true
         ",
-        Interface::Protocols,
-        Method::Configure,
+        interface = Interface::Records,
+        method = Method::Write,
+        // AND isLatestBaseState = true
     );
 
     let (records, _) = store.query(owner, &sql).await?;
@@ -218,35 +176,6 @@ async fn verify_role_record(
         return Err(anyhow!("missing protocol_path"));
     };
 
-    // let mut query = Filter {
-    //     criteria: BTreeMap::from([
-    //         (
-    //             "interface".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(Interface::Records.to_string()))),
-    //         ),
-    //         (
-    //             "method".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(Method::Write.to_string()))),
-    //         ),
-    //         (
-    //             "is_latest_base_state".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::Bool(true))),
-    //         ),
-    //         (
-    //             "protocol".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(protocol.to_string()))),
-    //         ),
-    //         (
-    //             "protocol_path".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(protocol_path.to_owned()))),
-    //         ),
-    //         (
-    //             "recipient".to_string(),
-    //             Criterion::Single(Compare::Equal(Value::String(recipient.to_owned()))),
-    //         ),
-    //     ]),
-    // };
-
     // if this is not the root record, add a prefix filter to the query
     let mut context = String::new();
     if let Some(parent_context) = if let Some(context_id) = &write.context_id {
@@ -254,30 +183,22 @@ async fn verify_role_record(
     } else {
         None
     } {
-        // query.criteria.insert(
-        //     "context_id".to_string(),
-        //     Criterion::Range(Range {
-        //         from: Compare::GreaterThanOrEqual(Value::String(parent_context.to_owned())),
-        //         to: Compare::LessThan(Value::String(format!("{parent_context}\u{ffff}"))),
-        //     }),
-        // );
         context =
-            format!("AND context_id BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
+            format!("AND contextId BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
     };
 
     let sql = format!(
         "
-        SELECT * FROM protocol
-        WHERE descriptor.interface = '{}'
-        AND descriptor.method = '{}'
-        AND isLatestBaseState = true
-        AND protocol = '{protocol}'
-        AND protocol_path = '{protocol_path}'
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND descriptor.protocol = '{protocol}'
+        AND descriptor.protocolPath = '{protocol_path}'
         AND recipient = '{recipient}'
         {context}
         ",
-        Interface::Protocols,
-        Method::Configure,
+        interface = Interface::Records,
+        method = Method::Write,
+        // AND isLatestBaseState = true
     );
 
     let (records, _) = store.query(owner, &sql).await?;
@@ -286,8 +207,8 @@ async fn verify_role_record(
     // }
 
     for record in records {
-        if let Message::RecordsWrite(write_record) = record {
-            if write_record.record_id != write.record_id {
+        if let Message::RecordsWrite(write) = record {
+            if write.record_id != write.record_id {
                 return Err(anyhow!("DID '{recipient}' is already recipient of a role record"));
             }
         }

@@ -86,40 +86,16 @@ impl Grant {
             return Err(anyhow!("grant has expired"));
         }
 
-        // Check if grant has been revoked
-        // let mut qf = query::Filter {
-        //     criteria: BTreeMap::<String, Criterion>::new(),
-        // };
-        // qf.criteria.insert(
-        //     "parentId".to_string(),
-        //     Criterion::Single(Compare::Equal(Value::String(self.id.clone()))),
-        // );
-        // qf.criteria.insert(
-        //     "protocolPath".to_string(),
-        //     Criterion::Single(Compare::Equal(Value::String("grant/revocation".to_string()))),
-        // );
-        // qf.criteria.insert(
-        //     "isLatestBaseState".to_string(),
-        //     Criterion::Single(Compare::Equal(Value::Bool(true))),
-        // );
-
-        // let sort = Some(Sort {
-        //     message_timestamp: Some(Direction::Descending),
-        //     ..Default::default()
-        // });
-
+        // Check if grant has been revoked — using latest revocation message
         let sql = format!(
             "
-            SELECT * FROM protocol
-            WHERE parentId = '{}'
-            AND protocolPath = 'grant/revocation'
-            AND isLatestBaseState = true
-            ORDER BY messageTimestamp DESC
+            WHERE descriptor.parentId = '{parent_id}'
+            AND descriptor.protocolPath = 'grant/revocation'
+            ORDER BY descriptor.messageTimestamp DESC
             ",
-            self.id
+            parent_id = self.id
+            // AND isLatestBaseState = true
         );
-
-        // find oldest message in the revocation chain
 
         let (messages, _) = store.query(grantor, &sql).await?;
         let Some(oldest) = messages.first().cloned() else {

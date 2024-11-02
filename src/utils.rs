@@ -8,8 +8,10 @@ pub fn clean_url(url: &str) -> Result<String> {
         &format!("http://{url}")
     };
 
-    let p = Url::parse(url)?;
-    Ok(p.origin().ascii_serialization() + p.path())
+    let parsed = Url::parse(url)?;
+    let cleaned = parsed.origin().ascii_serialization() + parsed.path();
+
+    Ok(cleaned.trim_end_matches('/').to_owned())
 }
 
 // pub fn validate_url(url: &str) -> Result<()> {

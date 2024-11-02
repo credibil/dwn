@@ -10,7 +10,7 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::service::{Context, Message};
-use crate::{cid, Cursor, Descriptor, Interface, Method, Status};
+use crate::{cid, utils, Cursor, Descriptor, Interface, Method, Status};
 
 /// Process query message.
 ///
@@ -39,48 +39,21 @@ pub(crate) async fn handle(
 pub(crate) async fn fetch_config(
     owner: &str, filter: Option<Filter>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
-    // let mut qf = query::Filter {
-    //     criteria: BTreeMap::<String, Criterion>::new(),
-    // };
-
-    // qf.criteria.insert(
-    //     "descriptor.interface".to_string(),
-    //     Criterion::Single(Compare::Equal(Value::String(Interface::Protocols.to_string()))),
-    // );
-    // qf.criteria.insert(
-    //     "descriptor.method".to_string(),
-    //     Criterion::Single(Compare::Equal(Value::String(Method::Configure.to_string()))),
-    // );
-    // qf.criteria.insert(
-    //     "descriptor.definition.published".to_string(),
-    //     Criterion::Single(Compare::Equal(Value::Bool(true))),
-    // );
-
     let mut protocol = String::new();
     if let Some(filter) = filter {
-        // qf.criteria.insert(
-        //     "descriptor.definition.protocol".to_string(),
-        //     Criterion::Single(Compare::Equal(Value::String(filter.protocol))),
-        // );
-        protocol = format!("AND descriptor.definition.protocol = '{}'", filter.protocol);
+        let protocol_uri = utils::clean_url(&filter.protocol)?;
+        protocol = format!("AND descriptor.definition.protocol = '{protocol_uri}'");
     };
-
-    // // execute query
-    // let (messages, _cursor) = store.query(owner, vec![qf], None, None).await?;
-    // if messages.is_empty() {
-    //     return Ok(None);
-    // }
 
     let sql = format!(
         "
-        SELECT * FROM protocol
-        WHERE descriptor.interface = '{}'
-        AND descriptor.method = '{}'
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
         AND descriptor.definition.published = true
         {protocol}
         ",
-        Interface::Protocols,
-        Method::Configure,
+        interface = Interface::Protocols,
+        method = Method::Configure,
     );
 
     // execute query
