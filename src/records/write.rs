@@ -280,6 +280,9 @@ impl Write {
     /// This is used when the DWN owner wants to retain a copy of a message that
     /// the owner did not author.
     /// N.B.: requires the `RecordsWrite` to already have the author's signature.
+    ///
+    /// # Errors
+    /// TODO: add errors
     pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
         // HACK: temporary solution to get the message author
         if Message::RecordsWrite(self.clone()).author().is_none() {
@@ -462,7 +465,7 @@ impl TryFrom<DelegatedGrant> for permissions::Grant {
 
     fn try_from(value: DelegatedGrant) -> Result<Self> {
         let bytes = Base64UrlUnpadded::decode_vec(&value.encoded_data)?;
-        let mut grant: permissions::Grant = serde_json::from_slice(&bytes)
+        let mut grant: Self = serde_json::from_slice(&bytes)
             .map_err(|e| anyhow!("issue deserializing grant: {e}"))?;
 
         grant.id.clone_from(&value.record_id);
@@ -728,7 +731,7 @@ impl WriteBuilder {
 
     /// The datetime the record was published. Defaults to now.
     #[must_use]
-    pub fn date_published(mut self, date_published: DateTime<Utc>) -> Self {
+    pub const fn date_published(mut self, date_published: DateTime<Utc>) -> Self {
         self.date_published = Some(date_published);
         self
     }

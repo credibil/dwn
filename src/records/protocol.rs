@@ -9,14 +9,14 @@ use crate::records::Write;
 use crate::service::Message;
 use crate::{utils, Interface, Method};
 
-/// Performs validation on the structure of RecordsWrite messages that use a protocol.
+/// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
 pub async fn verify_integrity(owner: &str, write: &Write, store: impl MessageStore) -> Result<()> {
     let Some(protocol) = &write.descriptor.protocol else {
         return Err(anyhow!("missing protocol"));
     };
     let definition = fetch_definition(owner, protocol, &store).await?;
 
-    verify_type(write, definition.types)?;
+    verify_type(write, &definition.types)?;
     verify_protocol_path(owner, write, &store).await?;
 
     let Some(protocol_path) = &write.descriptor.protocol_path else {
@@ -30,7 +30,7 @@ pub async fn verify_integrity(owner: &str, write: &Write, store: impl MessageSto
     }
 
     verify_size_limit(write.descriptor.data_size, &rule_set)?;
-    verify_tags(&write, &rule_set)?;
+    verify_tags(write, &rule_set)?;
 
     Ok(())
 }
@@ -69,7 +69,7 @@ async fn fetch_definition(
 }
 
 /// Verifies the `data_format` and `schema` parameters .
-fn verify_type(write: &Write, types: BTreeMap<String, ProtocolType>) -> Result<()> {
+fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(anyhow!("missing protocol path"));
     };
@@ -157,7 +157,7 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
 
 fn rule_set(path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {
     let Some((type_name, path)) = path.split_once('/') else {
-        return structure.get(path).map(|rs| rs.clone());
+        return structure.get(path).cloned();
     };
     rule_set(path, &structure.get(type_name)?.structure)
 }
@@ -178,11 +178,9 @@ async fn verify_role_record(
 
     // if this is not the root record, add a prefix filter to the query
     let mut context = String::new();
-    if let Some(parent_context) = if let Some(context_id) = &write.context_id {
-        context_id.rsplitn(2, '/').nth(1)
-    } else {
-        None
-    } {
+    if let Some(parent_context) =
+        write.context_id.as_ref().and_then(|context_id| context_id.rsplit_once('/').map(|x| x.0))
+    {
         context =
             format!("AND contextId BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
     };
@@ -207,8 +205,8 @@ async fn verify_role_record(
     // }
 
     for record in records {
-        if let Message::RecordsWrite(write) = record {
-            if write.record_id != write.record_id {
+        if let Message::RecordsWrite(matched) = record {
+            if matched.record_id != write.record_id {
                 return Err(anyhow!("DID '{recipient}' is already recipient of a role record"));
             }
         }
@@ -259,7 +257,7 @@ fn verify_tags(write: &Write, rule_set: &RuleSet) -> Result<()> {
     // }
 
     // validate tags against schema
-    let instance = serde_json::to_value(&tags)?;
+    let instance = serde_json::to_value(tags)?;
     if !jsonschema::is_valid(&schema, &instance) {
         return Err(anyhow!("tags do not match schema"));
     }

@@ -36,14 +36,13 @@ pub(crate) async fn handle(
     let is_latest = if let Some(existing) = &results {
         // find latest matching protocol entry
         let timestamp = &configure.descriptor.base.message_timestamp;
-        let (is_latest, latest_entry) =
-            existing.iter().fold((true, &configure), |(_, _), e| {
-                if &e.descriptor.base.message_timestamp > timestamp {
-                    (false, e)
-                } else {
-                    (true, &configure)
-                }
-            });
+        let (is_latest, latest_entry) = existing.iter().fold((true, &configure), |(_, _), e| {
+            if &e.descriptor.base.message_timestamp > timestamp {
+                (false, e)
+            } else {
+                (true, &configure)
+            }
+        });
 
         // delete all entries except the most recent
         let timestamp = &latest_entry.descriptor.base.message_timestamp;

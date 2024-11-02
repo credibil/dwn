@@ -93,8 +93,7 @@ impl Grant {
             AND descriptor.protocolPath = 'grant/revocation'
             ORDER BY descriptor.messageTimestamp DESC
             ",
-            parent_id = self.id
-            // AND isLatestBaseState = true
+            parent_id = self.id // AND isLatestBaseState = true
         );
 
         let (messages, _) = store.query(grantor, &sql).await?;
