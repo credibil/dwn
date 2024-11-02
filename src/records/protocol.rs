@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
-use serde_json::json;
+use serde_json::{json, Map, Value};
 
 use crate::protocols::{self, Definition, ProtocolType, RuleSet};
 use crate::provider::MessageStore;
@@ -26,11 +26,11 @@ pub async fn verify_integrity(owner: &str, write: &Write, store: impl MessageSto
         return Err(anyhow!("no rule set defined for protocol path"));
     };
     if rule_set.role.is_some() {
-        verify_role_record(owner, write, &rule_set, &store).await?;
+        verify_role_record(owner, write, &store).await?;
     }
 
     verify_size_limit(write.descriptor.data_size, &rule_set)?;
-    verify_tags(write, &rule_set)?;
+    verify_tags(write.descriptor.tags.as_ref(), &rule_set)?;
 
     Ok(())
 }
@@ -163,9 +163,7 @@ fn rule_set(path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet
 }
 
 /// Verify the integrity of the `records::Write` as a role record.
-async fn verify_role_record(
-    owner: &str, write: &Write, rule_set: &RuleSet, store: &impl MessageStore,
-) -> Result<()> {
+async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(recipient) = &write.descriptor.recipient else {
         return Err(anyhow!("role record is missing recipient"));
     };
@@ -235,15 +233,15 @@ fn verify_size_limit(data_size: u64, rule_set: &RuleSet) -> Result<()> {
     Ok(())
 }
 
-fn verify_tags(write: &Write, rule_set: &RuleSet) -> Result<()> {
-    let Some(tags) = &rule_set.tags else {
+fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<()> {
+    let Some(rule_set_tags) = &rule_set.tags else {
         return Ok(());
     };
 
-    let additional_properties = tags.allow_undefined_tags.unwrap_or_default();
+    let additional_properties = rule_set_tags.allow_undefined_tags.unwrap_or_default();
     let required_default = vec![];
-    let required = tags.required_tags.as_ref().unwrap_or(&required_default);
-    let properties = &tags.undefined_tags;
+    let required = rule_set_tags.required_tags.as_ref().unwrap_or(&required_default);
+    let properties = &rule_set_tags.undefined_tags;
 
     let schema = json!({
         "type": "object",

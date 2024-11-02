@@ -16,7 +16,7 @@ use crate::records::protocol;
 use crate::service::{Context, Message};
 use crate::{cid, permissions, utils, Cursor, Descriptor, Interface, Method, Status};
 
-/// Process query message.
+/// Process `Write` message.
 ///
 /// # Errors
 /// TODO: Add errors

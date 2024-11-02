@@ -10,16 +10,30 @@ pub use self::grant::{Conditions, Grant, GrantBuilder, GrantData, Scope};
 use crate::protocols::Definition;
 use crate::provider::MessageStore;
 use crate::service::Message;
+use crate::{Interface, Method};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
+    // WHERE descriptor.interface = '{interface}'
+    // AND descriptor.method = '{method}'
+    // AND descriptor.parentId = '{parent_id}'
+    // AND descriptor.protocolPath = 'grant/revocation'
+    // ORDER BY descriptor.messageTimestamp DESC
+    // ",
+    // interface = Interface::Records,
+    // method = Method::Write,
+
     let sql = format!(
         "
-        WHERE recordId = '{grant_id}'
-        " // AND isLatestBaseState = true
-    );
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND recordId = '{grant_id}'
+        ",
+        interface = Interface::Records,
+        method = Method::Write,
+    ); // AND isLatestBaseState = true
 
     // execute query
     let (messages, _) = store.query(owner, &sql).await?;

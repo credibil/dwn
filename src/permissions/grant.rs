@@ -89,10 +89,14 @@ impl Grant {
         // Check if grant has been revoked — using latest revocation message
         let sql = format!(
             "
-            WHERE descriptor.parentId = '{parent_id}'
+            WHERE descriptor.interface = '{interface}'
+            AND descriptor.method = '{method}'
+            AND descriptor.parentId = '{parent_id}'
             AND descriptor.protocolPath = 'grant/revocation'
             ORDER BY descriptor.messageTimestamp DESC
             ",
+            interface = Interface::Records,
+            method = Method::Write,
             parent_id = self.id // AND isLatestBaseState = true
         );
 
