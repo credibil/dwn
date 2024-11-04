@@ -3,69 +3,34 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
 
-use crate::protocols::{self, Definition, ProtocolType, RuleSet};
+use crate::protocols::{self, Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
 use crate::provider::MessageStore;
 use crate::records::Write;
 use crate::service::Message;
 use crate::{utils, Interface, Method};
 
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
-pub async fn verify_integrity(owner: &str, write: &Write, store: impl MessageStore) -> Result<()> {
+pub async fn verify_integrity(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(protocol) = &write.descriptor.protocol else {
         return Err(anyhow!("missing protocol"));
     };
-    let definition = fetch_definition(owner, protocol, &store).await?;
-
-    verify_type(write, &definition.types)?;
-    verify_protocol_path(owner, write, &store).await?;
-
+    let definition = protocol_definition(owner, protocol, store).await?;
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(anyhow!("missing protocol"));
     };
     let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
         return Err(anyhow!("no rule set defined for protocol path"));
     };
-    if rule_set.role.is_some() {
-        verify_role_record(owner, write, &store).await?;
-    }
 
+    verify_type(write, &definition.types)?;
+    verify_protocol_path(owner, write, store).await?;
+    if rule_set.role.is_some() {
+        verify_role_record(owner, write, store).await?;
+    }
     verify_size_limit(write.descriptor.data_size, &rule_set)?;
     verify_tags(write.descriptor.tags.as_ref(), &rule_set)?;
 
     Ok(())
-}
-
-/// Fetches the protocol definition for the the protocol specified in the message.
-async fn fetch_definition(
-    owner: &str, protocol_uri: &str, store: &impl MessageStore,
-) -> Result<Definition> {
-    let protocol_uri = utils::clean_url(protocol_uri)?;
-
-    // use default definition if first-class protocol
-    if protocol_uri == protocols::PROTOCOL_URI {
-        return Ok(Definition::default());
-    }
-
-    // fetch the corresponding protocol definition
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.definition.protocol = '{protocol_uri}'
-        ",
-        interface = Interface::Protocols,
-        method = Method::Configure,
-    );
-
-    let (protocols, _) = store.query(owner, &sql).await?;
-    if protocols.is_empty() {
-        return Err(anyhow!("unable to find protocol definition for {protocol_uri}"));
-    }
-    let Message::ProtocolsConfigure(protocol_message) = &protocols[0] else {
-        return Err(anyhow!("unexpected message type"));
-    };
-
-    Ok(protocol_message.descriptor.definition.clone())
 }
 
 /// Verifies the `data_format` and `schema` parameters .
@@ -155,13 +120,6 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
     Ok(())
 }
 
-fn rule_set(path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {
-    let Some((type_name, path)) = path.split_once('/') else {
-        return structure.get(path).cloned();
-    };
-    rule_set(path, &structure.get(type_name)?.structure)
-}
-
 /// Verify the integrity of the `records::Write` as a role record.
 async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(recipient) = &write.descriptor.recipient else {
@@ -213,6 +171,64 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
     Ok(())
 }
 
+// Check if the incoming message is invoking a role. If so, validate the invoked role.
+async fn verify_invoked_role(
+    owner: &str, write: &Write, definition: &Definition, store: &impl MessageStore,
+) -> Result<()> {
+    let Some(protocol_role) = write.authorization.jws_payload()?.protocol_role else {
+        return Ok(());
+    };
+    let author = write.authorization.author()?;
+
+    let Some(protocol_uri) = &write.descriptor.protocol else {
+        return Err(anyhow!("missing protocol"));
+    };
+
+    let Some(rule_set) = rule_set(&protocol_role, &definition.structure) else {
+        return Err(anyhow!("no rule set defined for protocol role"));
+    };
+    if !rule_set.role.unwrap_or_default() {
+        return Err(anyhow!("protocol path {protocol_role} does not match role record type"));
+    }
+
+    let segment_count = protocol_role.split('/').count();
+    if write.context_id.is_none() && segment_count > 1 {
+        return Err(anyhow!("unable verify role without `context_id`"));
+    }
+
+    // `context_id` prefix filter
+    let context_prefix = if segment_count > 0 {
+        // context_id segment count is never shorter than the role path count.
+        let context_id = write.context_id.clone().unwrap_or_default();
+        let context_id_segments: Vec<&str> = context_id.split('/').collect();
+        let prefix = context_id_segments[..segment_count].join("/");
+        format!("AND contextId BETWEEN '{prefix}' AND '{prefix}\u{ffff}'")
+    } else {
+        String::new()
+    };
+
+    // fetch the invoked role record
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND protocol = '{protocol_uri}'
+        AND protocolPath = '{protocol_role}'
+        AND recipient = '{author}'
+        {context_prefix}
+        ",
+        interface = Interface::Records,
+        method = Method::Write,
+        // isLatestBaseState : true,
+    );
+    let (records, _) = store.query(owner, &sql).await?;
+    if records.is_empty() {
+        return Err(anyhow!("unable to find records for {protocol_role}"));
+    }
+
+    Ok(())
+}
+
 // Verify write record adheres to the $size constraints.
 fn verify_size_limit(data_size: u64, rule_set: &RuleSet) -> Result<()> {
     let Some(range) = &rule_set.size else {
@@ -250,10 +266,6 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
         "additionalProperties": additional_properties,
     });
 
-    // for (tag,value) in &tags.undefined_tags {
-    //     schema.as_object_mut()
-    // }
-
     // validate tags against schema
     let instance = serde_json::to_value(tags)?;
     if !jsonschema::is_valid(&schema, &instance) {
@@ -261,4 +273,279 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
     }
 
     Ok(())
+}
+
+// Verifies the given message is authorized by one of the action rules in the given protocol rule set.
+async fn verify_actions(
+    owner: &str, write: &Write, rule_set: &RuleSet, record_chain: Vec<Write>,
+    store: &impl MessageStore,
+) -> Result<()> {
+    let author = write.authorization.author()?;
+    let allowed_actions = allowed_actions(owner, write, store).await?;
+
+    // NOTE: We have already checked that the message is not from tenant, owner,
+    // or permission grant authorized prior to this method being called.
+
+    let Some(action_rules) = &rule_set.actions else {
+        return Err(anyhow!("no action rule defined for RecordsWrite, ${author} is unauthorized"));
+    };
+
+    let invoked_role = write.authorization.jws_payload()?.protocol_role;
+
+    // find a rule that authorizes the incoming message
+    for rule in action_rules {
+        if !rule.can.iter().any(|action| allowed_actions.contains(action)) {
+            continue;
+        }
+        if rule.who == Some(Actor::Anyone) {
+            return Ok(());
+        }
+        // if author.is_none() {
+        //     continue;
+        // }
+
+        // role validation
+        if invoked_role.is_some() {
+            if rule.role == invoked_role {
+                return Ok(());
+            }
+            continue;
+        }
+
+        // actor validation
+        if rule.who == Some(Actor::Recipient) && rule.of.is_none() {
+            let message = if write.descriptor.base.method == Method::Write {
+                write
+            } else {
+                // the incoming message must be a `RecordsDelete` because only
+                // `co-update`, `co-delete`, `co-prune` are allowed recipient actions,
+                &record_chain[record_chain.len() - 1]
+            };
+
+            if message.descriptor.recipient.as_ref() == Some(&author) {
+                return Ok(());
+            }
+            continue;
+        }
+
+        // is actor allowed by the current action rule?
+        if check_actor(&author, rule, &record_chain)? {
+            return Ok(());
+        }
+    }
+
+    Err(anyhow!("RecordsWrite by {author} not allowed"))
+}
+
+// Protocol-based authorization for records::Write messages.
+pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+    let record_id = &write.record_id;
+
+    let record_chain = if initial_write(owner, record_id, store).await?.is_some() {
+        record_chain(owner, &write.record_id, store).await?
+    } else {
+        // NOTE: we can assume this message is an initial write because an existing
+        // initial write does not exist.  Additionally, we check further down in the
+        // `RecordsWriteHandler` if the incoming message is an initialWrite,
+        // so we don't check explicitly here to avoid an unnecessary duplicate check.
+        if let Some(parent_id) = &write.descriptor.parent_id {
+            record_chain(owner, parent_id, store).await?
+        } else {
+            vec![]
+        }
+    };
+
+    // protocol definition
+    let Some(protocol) = &write.descriptor.protocol else {
+        return Err(anyhow!("missing protocol"));
+    };
+    let definition = protocol_definition(owner, protocol, store).await?;
+
+    // rule set
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(anyhow!("missing protocol"));
+    };
+    let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
+        return Err(anyhow!("no rule set defined for protocol path"));
+    };
+
+    verify_invoked_role(owner, write, &definition, store).await?;
+    verify_actions(owner, write, &rule_set, record_chain, store).await?;
+
+    Ok(())
+}
+
+// Fetches the protocol definition for the the protocol specified in the message.
+async fn protocol_definition(
+    owner: &str, protocol_uri: &str, store: &impl MessageStore,
+) -> Result<Definition> {
+    let protocol_uri = utils::clean_url(protocol_uri)?;
+
+    // use default definition if first-class protocol
+    if protocol_uri == protocols::PROTOCOL_URI {
+        return Ok(Definition::default());
+    }
+
+    // fetch the corresponding protocol definition
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND descriptor.definition.protocol = '{protocol_uri}'
+        ",
+        interface = Interface::Protocols,
+        method = Method::Configure,
+    );
+
+    let (protocols, _) = store.query(owner, &sql).await?;
+    if protocols.is_empty() {
+        return Err(anyhow!("unable to find protocol definition for {protocol_uri}"));
+    }
+    let Message::ProtocolsConfigure(protocol_message) = &protocols[0] else {
+        return Err(anyhow!("unexpected message type"));
+    };
+
+    Ok(protocol_message.descriptor.definition.clone())
+}
+
+fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {
+    let Some((type_name, protocol_path)) = protocol_path.split_once('/') else {
+        return structure.get(protocol_path).cloned();
+    };
+    rule_set(protocol_path, &structure.get(type_name)?.structure)
+}
+
+// Fetches the initial records::Write message associated with the given (owner + recordId).
+async fn initial_write(
+    owner: &str, record_id: &str, store: &impl MessageStore,
+) -> Result<Option<Write>> {
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND recordId = '{record_id}'
+        ",
+        interface = Interface::Records,
+        method = Method::Write,
+    );
+
+    let (records, _) = store.query(owner, &sql).await?;
+    if records.is_empty() {
+        return Err(anyhow!("unable to find records for {}", record_id));
+    }
+
+    for record in records {
+        // find initial write for `record_id`
+        if let Message::RecordsWrite(matched) = record {
+            if matched.is_initial_write()? {
+                return Ok(Some(matched));
+            }
+        }
+    }
+
+    Err(anyhow!("unable to find initial write for {}", record_id))
+}
+
+// Constructs the chain of EXISTING records in the datastore where the first record is the root initial `RecordsWrite` of the record chain
+// and last record is the initial `RecordsWrite` of the descendant record specified.
+async fn record_chain(
+    owner: &str, record_id: &str, store: &impl MessageStore,
+) -> Result<Vec<Write>> {
+    let mut chain = vec![];
+
+    // keep walking up the chain from the inbound message's parent, until there
+    // is no more parent
+    let mut current_id = Some(record_id.to_owned());
+
+    while let Some(record_id) = &current_id {
+        let Some(initial_write) = initial_write(owner, record_id, store).await? else {
+            // RecordsWrite needed should be available since we perform necessary
+            // checks at the time of writes, eg. check the immediate parent in
+            // `verifyProtocolPathAndContextId` at the time of writing, so if this
+            // condition is triggered, it means there is an unexpected bug that
+            // caused an incomplete chain. We add additional defensive check here
+            // because returning an unexpected/incorrect record chain could lead
+            // to security vulnerabilities.
+            return Err(anyhow!(
+                "no parent found with ID {record_id} when constructing record chain."
+            ));
+        };
+
+        chain.push(initial_write.clone());
+        current_id.clone_from(&initial_write.descriptor.parent_id);
+    }
+
+    // root record first
+    chain.reverse();
+    Ok(chain)
+}
+
+// Match `Action`s that authorize the incoming message.
+//
+// N.B. keep in mind an author's 'write' access may be revoked.
+async fn allowed_actions(
+    owner: &str, write: &Write, store: &impl MessageStore,
+) -> Result<Vec<Action>> {
+    match write.descriptor.base.method {
+        Method::Write => {
+            if write.is_initial_write()? {
+                return Ok(vec![Action::Create]);
+            }
+            let Some(initial_write) = initial_write(owner, &write.record_id, store).await? else {
+                return Ok(Vec::new());
+            };
+            if write.authorization.author()? == initial_write.authorization.author()? {
+                return Ok(vec![Action::CoUpdate, Action::Update]);
+            }
+
+            Ok(vec![Action::CoUpdate])
+        }
+        Method::Query => Ok(vec![Action::Query]),
+        Method::Read => Ok(vec![Action::Read]),
+        Method::Subscribe => Ok(vec![Action::Subscribe]),
+        Method::Delete => {
+            //   let Message::RecordsDelete(delete) = message else {
+            //     return Err(anyhow!("unexpected message type"));
+            //   };
+            //   let Some(initial_write) = initial_write(owner, &delete.record_id, store).await? else {
+            //     return Ok(vec![]);
+            //   };
+
+            let actions = vec![];
+            // let author= delete.authorization.author()?;
+            // let initial_author = initial_write.authorization.author()?;
+
+            //   if delete.descriptor.prune {
+            //     actions.push(Action::CoPrune);
+            //     if author == initial_author {
+            //       actions.push(Action::Prune);
+            //     }
+            //   }
+
+            //   actions.push(Action::CoDelete);
+            //   if author === initial_author {
+            //       actions.push(Action::Delete);
+            //   }
+
+            Ok(actions)
+        }
+
+        Method::Configure => Err(anyhow!("configure method not allowed")),
+    }
+}
+
+// Checks for a match with the `who` rule in record chain.
+fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -> Result<bool> {
+    // find a message with matching protocolPath
+    let ancestor =
+        record_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
+    let Some(ancestor) = ancestor else {
+        // reaching this block means there is an issue with the protocol definition
+        // this check should happen `protocols::Configure`
+        return Ok(false);
+    };
+    if action_rule.who == Some(Actor::Recipient) {
+        return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
+    }
+    Ok(author == ancestor.authorization.author()?)
 }

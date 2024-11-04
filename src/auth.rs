@@ -1,6 +1,7 @@
 //! # Authorization
 
 use anyhow::{anyhow, Result};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
@@ -64,7 +65,7 @@ pub struct Authorization {
 /// Signature payload.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SignaturePayload {
+pub struct JwsPayload {
     /// The CID of the message descriptor.
     pub descriptor_cid: String,
 
@@ -133,9 +134,35 @@ impl Authorization {
         )
     }
 
+    pub(crate) fn owner(&self) -> Result<Option<String>> {
+        let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
+            signer_did(&grant.authorization.signature)?
+        } else {
+            let Some(signature) = &self.owner_signature else {
+                return Ok(None);
+            };
+            signer_did(signature)?
+        };
+        Ok(Some(signer))
+    }
+
     /// Get message signer's DID from the message authorization.
     pub(crate) fn signer(&self) -> Result<String> {
         signer_did(&self.signature)
+    }
+
+    pub(crate) fn owner_signer(&self) -> Result<String> {
+        let Some(grant) = self.owner_delegated_grant.as_ref() else {
+            return Err(anyhow!("owner delegated grant not found"));
+        };
+        signer_did(&grant.authorization.signature)
+    }
+
+    pub(crate) fn jws_payload(&self) -> Result<JwsPayload> {
+        let base64 = &self.signature.payload;
+        let decoded = Base64UrlUnpadded::decode_vec(base64)
+            .map_err(|e| anyhow!("issue decoding header: {e}"))?;
+        serde_json::from_slice(&decoded).map_err(|e| anyhow!("issue deserializing header: {e}"))
     }
 }
 
@@ -198,7 +225,7 @@ impl AuthorizationBuilder {
         let delegated_grant_id =
             if let Some(grant) = &self.delegated_grant { Some(cid::compute(grant)?) } else { None };
 
-        let payload = SignaturePayload {
+        let payload = JwsPayload {
             descriptor_cid,
             permission_grant_id: self.permission_grant_id,
             delegated_grant_id,

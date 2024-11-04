@@ -3,14 +3,12 @@
 //! Decentralized Web Node messaging framework.
 
 use anyhow::{anyhow, Result};
-use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Authorization, SignaturePayload};
+use crate::auth::Authorization;
 use crate::permissions::Grant;
-use crate::provider::Provider;
-use crate::records::Write;
-use crate::{auth, cid, messages, permissions, protocols, records, schema, Descriptor, Status};
+use crate::provider::{MessageStore, Provider};
+use crate::{cid, messages, permissions, protocols, records, schema, Descriptor, Status};
 
 /// Process web node messages.
 ///
@@ -149,36 +147,11 @@ impl Message {
         }
     }
 
-    /// Get message author's DID.
-    #[must_use]
-    pub fn author(&self) -> Option<String> {
-        if let Some(author_grant) = &self.authorization()?.author_delegated_grant {
-            // HACK: temporary solution to get the signer DID
-            return Self::RecordsWrite(Write {
-                authorization: (*author_grant.authorization).clone(),
-                ..Write::default()
-            })
-            .signer();
-        }
-
-        self.signer()
-    }
-
-    /// Get message signer's DID.
-    #[must_use]
-    pub fn signer(&self) -> Option<String> {
-        let authzn = self.authorization()?;
-        if let Ok(signer) = auth::signer_did(&authzn.signature) {
-            return Some(signer);
-        }
-        None
-    }
-
     /// Authorize the message.
     ///
     /// # Errors
     /// TODO: Add errors
-    async fn authorize(&self, ctx: &mut Context, provider: &impl Provider) -> Result<()> {
+    async fn authorize(&self, ctx: &mut Context, store: &impl MessageStore) -> Result<()> {
         // message has no authorization
         let Some(authzn) = self.authorization() else {
             return Ok(());
@@ -190,18 +163,13 @@ impl Message {
             return Ok(());
         }
 
-        let base64 = &authzn.signature.payload;
-        let decoded = Base64UrlUnpadded::decode_vec(base64)
-            .map_err(|e| anyhow!("issue decoding header: {e}"))?;
-        let payload: SignaturePayload = serde_json::from_slice(&decoded)
-            .map_err(|e| anyhow!("issue deserializing header: {e}"))?;
-
+        let payload = authzn.jws_payload()?;
         let Some(grant_id) = &payload.permission_grant_id else {
             return Err(anyhow!("`grant_id` not found in signature payload"));
         };
 
-        let grant = permissions::fetch_grant(&ctx.owner, grant_id, provider).await?;
-        grant.verify(&ctx.author, &ctx.owner, self.descriptor(), provider).await?;
+        let grant = permissions::fetch_grant(&ctx.owner, grant_id, store).await?;
+        grant.verify(&ctx.author, &ctx.owner, self.descriptor(), store).await?;
 
         // save for later use
         ctx.grant = Some(grant);

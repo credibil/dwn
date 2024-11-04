@@ -10,10 +10,10 @@ use serde_json::{Map, Value};
 use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
-use crate::auth::{Authorization, SignaturePayload};
-use crate::provider::{Keyring, Provider};
+use crate::auth::{Authorization, JwsPayload};
+use crate::provider::{Keyring, MessageStore, Provider};
 use crate::records::protocol;
-use crate::service::{Context, Message};
+use crate::service::Context;
 use crate::{cid, permissions, utils, Cursor, Descriptor, Interface, Method, Status};
 
 /// Process `Write` message.
@@ -25,32 +25,45 @@ pub(crate) async fn handle(
 ) -> Result<WriteReply> {
     // Protocol-authorized record specific validation
     if write.descriptor.protocol.is_some() {
-        protocol::verify_integrity(&ctx.owner, &write, provider).await?;
+        protocol::verify_integrity(&ctx.owner, &write, &provider).await?;
     }
 
-    // authorization
-    // await RecordsWriteHandler.authorizeRecordsWrite(tenant, recordsWrite, this.messageStore);
+    authorize(&ctx.owner, &write, &provider).await?;
 
-    //     // get existing messages matching the `recordId`
-    //     const query = {
-    //       interface : DwnInterfaceName.Records,
-    //       recordId  : message.recordId
-    //     };
-    //     const { messages: existingMessages } = await this.messageStore.query(tenant, [ query ]);
+    // get `record_id` matches
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND recordId = '{record_id}'
+        ",
+        interface = Interface::Records,
+        method = Method::Write,
+        record_id = write.record_id,
+    );
 
-    //     // if the incoming write is not the initial write, then it must not modify any immutable properties defined by the initial write
-    //     const newMessageIsInitialWrite = await recordsWrite.isInitialWrite();
+    let (records, _) = MessageStore::query(&provider, &ctx.owner, &sql).await?;
+    if records.is_empty() {
+        return Err(anyhow!("unable to find records for {}", write.record_id));
+    }
+    // let Message::RecordsWrite(record) = &records[0] else {
+    //     return Err(anyhow!("unexpected message type"));
+    // };
+
+    //     // if the incoming write is not the initial write, then it must not modify any
+    //     // immutable properties defined by the initial write
+    //     const is_initial_write = await recordsWrite.isInitialWrite();
     //     let initialWrite: RecordsWriteMessage | undefined;
     //     if (!newMessageIsInitialWrite) {
     //       try {
-    //         initialWrite = await RecordsWrite.getInitialWrite(existingMessages);
+    //         initialWrite = await RecordsWrite.getInitialWrite(records);
     //         RecordsWrite.verifyEqualityOfImmutableProperties(initialWrite, message);
     //       } catch (e) {
     //         return messageReplyFromError(e, 400);
     //       }
     //     }
 
-    //     const newestExistingMessage = await Message.getNewestMessage(existingMessages);
+    //     const newestExistingMessage = await Message.getNewestMessage(records);
 
     //     let incomingMessageIsNewest = false;
     //     let newestMessage; // keep reference of newest message for pruning later
@@ -143,7 +156,7 @@ pub(crate) async fn handle(
 
     //     // delete all existing messages of the same record that are not newest, except for the initial write
     //     await StorageController.deleteAllOlderMessagesButKeepInitialWrite(
-    //       tenant, existingMessages, newestMessage, this.messageStore, this.dataStore, this.eventLog
+    //       tenant, records, newestMessage, this.messageStore, this.dataStore, this.eventLog
     //     );
 
     //     await this.postProcessingForCoreRecordsWrite(tenant, recordsWrite);
@@ -157,6 +170,62 @@ pub(crate) async fn handle(
         },
         ..WriteReply::default()
     })
+}
+
+async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+    let authzn = &write.authorization;
+    let record_owner = authzn.owner()?;
+
+    // if owner signature is set, it must be the same as the tenant DID
+    if record_owner.as_ref().is_some_and(|ro| ro != owner) {
+        return Err(anyhow!("record owner is not web node owner"));
+    };
+
+    let author = authzn.author()?;
+
+    // authorize author delegate
+    if let Some(delegated_grant) = &authzn.author_delegated_grant {
+        let signer = authzn.signer()?;
+        let grant = delegated_grant.to_grant()?;
+        grant.permit_records_write(&author, &signer, write, store).await?;
+    }
+
+    // authorize owner delegate
+    if let Some(delegated_grant) = &authzn.owner_delegated_grant {
+        let Some(owner) = &record_owner else {
+            return Err(anyhow!("owner is required to authorize owner delegate"));
+        };
+        let signer = authzn.owner_signer()?;
+        let grant = delegated_grant.to_grant()?;
+        grant.permit_records_write(owner, &signer, write, store).await?;
+    }
+
+    // when record owner is set, we can directly grant access
+    // (we established `record_owner`== web node owner above)
+    if record_owner.is_some() {
+        return Ok(());
+    };
+
+    // when author is the owner, we can directly grant access
+    if author == owner {
+        return Ok(());
+    }
+
+    // permission grant
+    let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
+    let payload: WriteSignaturePayload = serde_json::from_slice(&decoded)?;
+
+    if let Some(permission_grant_id) = &payload.base.permission_grant_id {
+        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+        return grant.permit_records_write(owner, &author, write, store).await;
+    };
+
+    // protocol-specific authorization
+    if write.descriptor.protocol.is_some() {
+        return protocol::permit_write(owner, write, store).await;
+    }
+
+    Err(anyhow!("message failed authorization"))
 }
 
 // TODO:figure out what isLatestBaseState is
@@ -252,7 +321,7 @@ impl Write {
         };
 
         let payload = WriteSignaturePayload {
-            base: SignaturePayload {
+            base: JwsPayload {
                 descriptor_cid,
                 permission_grant_id,
                 delegated_grant_id,
@@ -284,15 +353,13 @@ impl Write {
     /// # Errors
     /// TODO: add errors
     pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
-        // HACK: temporary solution to get the message author
-        if Message::RecordsWrite(self.clone()).author().is_none() {
-            // owner delegate needs to sign over `record_id` using author DID.
+        if self.authorization.author().is_err() {
             return Err(anyhow!("message signature is required in order to sign as owner"));
         }
 
-        let payload = SignaturePayload {
+        let payload = JwsPayload {
             descriptor_cid: cid::compute(&self.descriptor)?,
-            ..SignaturePayload::default()
+            ..JwsPayload::default()
         };
         let owner_jws = Jws::new(Type::Jwt, &payload, signer).await?;
         self.authorization.owner_signature = Some(owner_jws);
@@ -311,12 +378,8 @@ impl Write {
     pub async fn sign_as_delegate(
         &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
     ) -> Result<()> {
-        // HACK: temporary solution to get the message author
-        if Message::RecordsWrite(self.clone()).author().is_none() {
-            // owner delegate needs to sign over `record_id` using author DID.
-            return Err(anyhow!(
-                "message signature is required in order to sign as owner delegate"
-            ));
+        if self.authorization.author().is_err() {
+            return Err(anyhow!("signature is required in order to sign as owner delegate"));
         }
 
         //  descriptorCid, delegatedGrantId, permissionGrantId, protocolRole
@@ -324,10 +387,10 @@ impl Write {
         let delegated_grant_id = cid::compute(&delegated_grant)?;
         let descriptor_cid = cid::compute(&self.descriptor)?;
 
-        let payload = SignaturePayload {
+        let payload = JwsPayload {
             descriptor_cid,
             delegated_grant_id: Some(delegated_grant_id),
-            ..SignaturePayload::default()
+            ..JwsPayload::default()
         };
         let owner_jws = Jws::new(Type::Jwt, &payload, signer).await?;
 
@@ -399,6 +462,18 @@ impl Write {
 
         todo!()
     }
+
+    // Computes the deterministic Entry ID of the message.
+    pub(crate) fn entry_id(&self) -> Result<String> {
+        let author = self.authorization.author()?;
+        let mut descriptor = self.descriptor.clone();
+        descriptor.author = Some(author);
+        cid::compute(&descriptor)
+    }
+
+    pub(crate) fn is_initial_write(&self) -> Result<bool> {
+        Ok(self.entry_id()? == self.record_id)
+    }
 }
 
 /// Signature payload.
@@ -407,7 +482,7 @@ impl Write {
 pub struct WriteSignaturePayload {
     /// The standard signature payload.
     #[serde(flatten)]
-    pub base: SignaturePayload,
+    pub base: JwsPayload,
 
     /// The ID of the record being signed.
     pub record_id: String,
@@ -528,6 +603,11 @@ pub struct WriteDescriptor {
     /// The datetime of publishing, if published.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<DateTime<Utc>>,
+
+    // TODO: fix this
+    /// used to calculate CID during test for intial write.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    author: Option<String>,
 }
 
 /// Options to use when creating a permission grant.

@@ -6,8 +6,8 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::provider::{Keyring, MessageStore, Provider};
-use crate::records::{self, WriteBuilder, WriteData, WriteProtocol};
+use crate::provider::{Keyring, MessageStore};
+use crate::records::{self, Write, WriteBuilder, WriteData, WriteProtocol};
 use crate::{protocols, utils, Descriptor, Interface, Method};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -41,7 +41,7 @@ impl Grant {
     /// # Errors
     /// TODO: Add errors
     pub async fn verify(
-        &self, grantor: &str, grantee: &str, descriptor: &Descriptor, provider: &impl Provider,
+        &self, grantor: &str, grantee: &str, descriptor: &Descriptor, store: &impl MessageStore,
     ) -> Result<()> {
         // verify the `grantee` against intended recipient
         if grantee != self.grantee {
@@ -67,7 +67,7 @@ impl Grant {
         let Some(timestamp) = &descriptor.message_timestamp else {
             return Err(anyhow!("missing message timestamp"));
         };
-        self.is_current(grantor, timestamp, provider).await?;
+        self.is_current(grantor, timestamp, store).await?;
 
         Ok(())
     }
@@ -113,6 +113,71 @@ impl Grant {
 
         Ok(())
     }
+
+    /// Verify the grant allows the `records::Write` message to be written.
+    /// 
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn permit_records_write(
+        &self, grantor: &str, grantee: &str, write: &Write, store: &impl MessageStore,
+    ) -> Result<()> {
+        self.verify(grantor, grantee, &write.descriptor.base, store).await?;
+        self.verify_scope(write)?;
+        self.verify_conditions(write)?;
+        Ok(())
+    }
+
+    fn verify_scope(&self, write: &Write) -> Result<()> {
+        let ScopeType::Records { protocol, option } = &self.data.scope.scope_type else {
+            return Err(anyhow!("invalid scope type"));
+        };
+        if Some(protocol) != write.descriptor.protocol.as_ref() {
+            return Err(anyhow!("incorrect scope `protocol`"));
+        }
+        let Some(option) = option else {
+            return Ok(());
+        };
+
+        match option {
+            RecordsOptions::ContextId(context_id) => {
+                if Some(context_id) != write.context_id.as_ref() {
+                    return Err(anyhow!("incorrect scope `context_id`"));
+                }
+            }
+            RecordsOptions::ProtocolPath(protocol_path) => {
+                if Some(protocol_path) != write.descriptor.protocol_path.as_ref() {
+                    return Err(anyhow!("incorrect scope `protocol_path`"));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn verify_conditions(&self, write: &Write) -> Result<()> {
+        let Some(conditions) = &self.data.conditions else {
+            return Ok(());
+        };
+        let Some(publication) = &conditions.publication else {
+            return Ok(());
+        };
+
+        let published = write.descriptor.published.unwrap_or_default();
+        match publication {
+            ConditionPublication::Required => {
+                if !published {
+                    return Err(anyhow!("grant requires message to be published"));
+                }
+            }
+            ConditionPublication::Prohibited => {
+                if published {
+                    return Err(anyhow!("grant prohibits publishing message"));
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Permission grant message payload
@@ -153,10 +218,62 @@ pub struct Scope {
     /// The method the permission is applied to.
     pub method: Method,
 
-    /// The protocol the permission is applied to. This connects
-    /// the grant to protocol access rules, formats, etc.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol: Option<String>,
+    /// Variant scope fields.
+    #[serde(flatten)]
+    pub scope_type: ScopeType,
+}
+
+/// Scope type variants.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum ScopeType {
+    /// Protocols scope fields.
+    Protocols {
+        /// The protocol the permission is applied to.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        protocol: Option<String>,
+    },
+
+    /// Messages scope fields.
+    Messages {
+        /// The protocol the permission is applied to.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        protocol: Option<String>,
+    },
+
+    /// Records scope fields.
+    Records {
+        /// The protocol the permission is applied to.
+        protocol: String,
+
+        /// Context ID or protocol path.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(flatten)]
+        option: Option<RecordsOptions>,
+    },
+}
+
+impl Default for ScopeType {
+    fn default() -> Self {
+        Self::Protocols { protocol: None }
+    }
+}
+
+/// Fields specific to the `records` scope.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RecordsOptions {
+    /// The context ID of the record.
+    ContextId(String),
+
+    /// The protocol path of the record.
+    ProtocolPath(String),
+}
+
+impl Default for RecordsOptions {
+    fn default() -> Self {
+        Self::ContextId(String::new())
+    }
 }
 
 /// Conditions that must be met when the grant is used.
@@ -170,7 +287,7 @@ pub struct Conditions {
 }
 
 /// Condition for publication of a message.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub enum ConditionPublication {
     /// The message must be marked as public.
     #[default]
@@ -245,11 +362,11 @@ impl GrantBuilder {
 
     /// Specify the scope of the grant.
     #[must_use]
-    pub fn scope(mut self, interface: Interface, method: Method, protocol: Option<String>) -> Self {
+    pub fn scope(mut self, interface: Interface, method: Method, scope_type: ScopeType) -> Self {
         self.scope = Some(Scope {
             interface,
             method,
-            protocol,
+            scope_type,
         });
         self
     }
@@ -292,7 +409,14 @@ impl GrantBuilder {
                 data: grant_bytes.clone(),
             });
 
-        if let Some(protocol) = &scope.protocol {
+        // add protocol tag
+        let protocol = match &scope.scope_type {
+            ScopeType::Protocols { protocol } | ScopeType::Messages { protocol } => {
+                protocol.as_ref()
+            }
+            ScopeType::Records { protocol, .. } => Some(protocol),
+        };
+        if let Some(protocol) = protocol {
             let protocol = utils::clean_url(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };

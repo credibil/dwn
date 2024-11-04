@@ -5,7 +5,7 @@
 //! grants Bob the ability to configure a protocol on her behalf.
 
 use test_utils::store::ProviderImpl;
-use vercre_dwn::permissions::GrantBuilder;
+use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::service::{Message, Reply};
@@ -24,12 +24,13 @@ async fn configure_any() {
     // ------------------------------
     // Alice grants Bob the ability to configure any protocol
     // ------------------------------
+
     let builder = GrantBuilder::new()
         .granted_to(BOB_DID)
         .request_id("grant_id_1")
         .description("Allow Bob to configure any protocol")
         .delegated(true)
-        .scope(Interface::Protocols, Method::Configure, None);
+        .scope(Interface::Protocols, Method::Configure, ScopeType::Protocols { protocol: None });
 
     let grant_to_bob = builder.build(&alice_keyring).await.expect("should create grant");
 

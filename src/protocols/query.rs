@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::service::{Context, Message};
@@ -98,7 +99,10 @@ impl Query {
         };
 
         // if set, query and grant protocols need to match
-        if let Some(protocol) = &grant.data.scope.protocol {
+        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
+            return Err(anyhow!("missing protocol in grant scope"));
+        };
+        if let Some(protocol) = &protocol {
             let Some(filter) = &self.descriptor.filter else {
                 return Err(anyhow!("missing filter"));
             };

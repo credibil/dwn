@@ -11,6 +11,7 @@ use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageEvent, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
@@ -129,7 +130,10 @@ impl Configure {
         let grant = ctx.grant.as_ref().ok_or_else(|| anyhow!("missing grant"))?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
-        let Some(protocol) = &grant.data.scope.protocol else {
+        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
+            return Err(anyhow!("missing protocol in grant scope"));
+        };
+        let Some(protocol) = &protocol else {
             return Ok(());
         };
 

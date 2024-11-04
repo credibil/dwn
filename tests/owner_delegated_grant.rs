@@ -6,7 +6,7 @@
 
 use rand::RngCore;
 use test_utils::store::ProviderImpl;
-use vercre_dwn::permissions::GrantBuilder;
+use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{DelegatedGrant, WriteBuilder, WriteData};
 use vercre_dwn::{Interface, Method};
@@ -30,7 +30,14 @@ async fn configure() {
         .request_id("grant_id_1")
         .description("allow App X to write as me in chat protocol")
         .delegated(true)
-        .scope(Interface::Records, Method::Write, Some("chat".to_string()));
+        .scope(
+            Interface::Records,
+            Method::Write,
+            ScopeType::Records {
+                protocol: "chat".to_string(),
+                option: None,
+            },
+        );
 
     let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
 

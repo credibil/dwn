@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
-pub use self::grant::{Conditions, Grant, GrantBuilder, GrantData, Scope};
+pub use self::grant::{Conditions, Grant, GrantBuilder, GrantData, Scope, ScopeType};
 use crate::protocols::Definition;
 use crate::provider::MessageStore;
 use crate::service::Message;
@@ -16,15 +16,6 @@ use crate::{Interface, Method};
 pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
-    // WHERE descriptor.interface = '{interface}'
-    // AND descriptor.method = '{method}'
-    // AND descriptor.parentId = '{parent_id}'
-    // AND descriptor.protocolPath = 'grant/revocation'
-    // ORDER BY descriptor.messageTimestamp DESC
-    // ",
-    // interface = Interface::Records,
-    // method = Method::Write,
-
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
@@ -36,9 +27,8 @@ pub(crate) async fn fetch_grant(
     ); // AND isLatestBaseState = true
 
     // execute query
-    let (messages, _) = store.query(owner, &sql).await?;
-    let message = &messages[0];
-    let Message::RecordsWrite(write) = message.clone() else {
+    let (records, _) = store.query(owner, &sql).await?;
+    let Message::RecordsWrite(write) = records[0].clone() else {
         return Err(anyhow!("no grant matching {grant_id}"));
     };
     let desc = write.descriptor;
@@ -52,7 +42,7 @@ pub(crate) async fn fetch_grant(
 
     Ok(Grant {
         id: write.record_id,
-        grantor: message.signer().unwrap_or_default(),
+        grantor: write.authorization.signer()?,
         grantee: desc.recipient.unwrap_or_default(),
         date_granted: desc.date_created,
         data: grant,
