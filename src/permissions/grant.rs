@@ -6,9 +6,10 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{self, Write, WriteBuilder, WriteData, WriteProtocol};
-use crate::{protocols, utils, Descriptor, Interface, Method};
+use crate::{utils, Descriptor, Interface, Method};
 
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -92,7 +93,7 @@ impl Grant {
             WHERE descriptor.interface = '{interface}'
             AND descriptor.method = '{method}'
             AND descriptor.parentId = '{parent_id}'
-            AND descriptor.protocolPath = 'grant/revocation'
+            AND descriptor.protocolPath = '{REVOCATION_PATH}'
             ORDER BY descriptor.messageTimestamp DESC
             ",
             interface = Interface::Records,
@@ -115,7 +116,7 @@ impl Grant {
     }
 
     /// Verify the grant allows the `records::Write` message to be written.
-    /// 
+    ///
     /// # Errors
     /// TODO: Add errors
     pub async fn permit_records_write(

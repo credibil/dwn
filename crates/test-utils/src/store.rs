@@ -30,6 +30,7 @@ use crate::keystore::{Keystore, OWNER_DID};
 
 const NAMESPACE: &str = "integration-test";
 const MESSAGE: &str = "message";
+const DATA: &str = "data";
 
 #[derive(Clone)]
 pub struct ProviderImpl {

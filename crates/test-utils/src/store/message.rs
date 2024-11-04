@@ -4,7 +4,6 @@ use vercre_dwn::service::Message;
 use vercre_dwn::Cursor;
 
 use super::ProviderImpl;
-// use crate::keystore::OWNER_DID;
 use crate::store::{MESSAGE, NAMESPACE};
 
 impl MessageStore for ProviderImpl {

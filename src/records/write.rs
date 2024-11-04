@@ -11,10 +11,13 @@ use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{Authorization, JwsPayload};
-use crate::provider::{Keyring, MessageStore, Provider};
+use crate::permissions::{self, ScopeType};
+use crate::provider::{DataStore, Keyring, MessageStore, Provider};
 use crate::records::protocol;
-use crate::service::Context;
-use crate::{cid, permissions, utils, Cursor, Descriptor, Interface, Method, Status};
+use crate::service::{Context, Message};
+use crate::{
+    cid, protocols, utils, Cursor, Descriptor, Interface, Method, Status, MAX_ENCODED_SIZE,
+};
 
 /// Process `Write` message.
 ///
@@ -41,85 +44,101 @@ pub(crate) async fn handle(
         method = Method::Write,
         record_id = write.record_id,
     );
-
     let (records, _) = MessageStore::query(&provider, &ctx.owner, &sql).await?;
-    if records.is_empty() {
-        return Err(anyhow!("unable to find records for {}", write.record_id));
+
+    // find initial write
+    let initial_write = if write.is_initial_write()? {
+        None
+    } else {
+        let mut initial_write = None;
+        for record in &records {
+            let Message::RecordsWrite(rw) = record else {
+                return Err(anyhow!("unexpected message type"));
+            };
+            if rw.is_initial_write()? {
+                if rw.compare_immutable(&write) {
+                    return Err(anyhow!("immutable properties do not match"));
+                }
+                initial_write = Some(rw);
+                break;
+            }
+        }
+        initial_write
+    };
+
+    if initial_write.is_none() {
+        return Err(anyhow!("initial write not found"));
     }
-    // let Message::RecordsWrite(record) = &records[0] else {
-    //     return Err(anyhow!("unexpected message type"));
-    // };
 
-    //     // if the incoming write is not the initial write, then it must not modify any
-    //     // immutable properties defined by the initial write
-    //     const is_initial_write = await recordsWrite.isInitialWrite();
-    //     let initialWrite: RecordsWriteMessage | undefined;
-    //     if (!newMessageIsInitialWrite) {
-    //       try {
-    //         initialWrite = await RecordsWrite.getInitialWrite(records);
-    //         RecordsWrite.verifyEqualityOfImmutableProperties(initialWrite, message);
-    //       } catch (e) {
-    //         return messageReplyFromError(e, 400);
-    //       }
-    //     }
+    // get newest existing message
+    let mut sorted = records.clone();
+    sorted.sort_by(|a, b| a.descriptor().message_timestamp.cmp(&b.descriptor().message_timestamp));
+    let most_recent = if let Some(existing) = sorted.last() {
+        let order =
+            write.descriptor.base.message_timestamp.cmp(&existing.descriptor().message_timestamp);
+        if order == std::cmp::Ordering::Less {
+            return Ok(WriteReply {
+                status: Status {
+                    code: 409,
+                    detail: Some("Conflict".to_string()),
+                },
+                ..WriteReply::default()
+            });
+        }
 
-    //     const newestExistingMessage = await Message.getNewestMessage(records);
+        if existing.descriptor().method == Method::Delete {
+            return Err(anyhow!("RecordsWrite is not allowed after a RecordsDelete"));
+        }
 
-    //     let incomingMessageIsNewest = false;
-    //     let newestMessage; // keep reference of newest message for pruning later
-    //     if (newestExistingMessage === undefined || await Message.isNewer(message, newestExistingMessage)) {
-    //       incomingMessageIsNewest = true;
-    //       newestMessage = message;
-    //     } else { // existing message is the same age or newer than the incoming message
-    //       newestMessage = newestExistingMessage;
-    //     }
+        Some(existing)
+    } else {
+        None
+    };
 
-    //     if (!incomingMessageIsNewest) {
-    //       return {
-    //         status: { code: 409, detail: 'Conflict' }
-    //       };
-    //     }
+    // NOTE: We want to perform additional validation before storing the RecordsWrite.
+    // This is necessary for core RecordsWrite that needs additional processing and
+    // allows us to fail before the storing and post processing.
+    write.preprocess(&ctx.owner, &provider).await?;
 
-    //     try {
-    //       if (newestExistingMessage?.descriptor.method === DwnMethodName.Delete) {
-    //         throw new DwnError(
-    //           DwnErrorCode.RecordsWriteNotAllowedAfterDelete,
-    //           'RecordsWrite is not allowed after a RecordsDelete.'
-    //         );
-    //       }
+    // NOTE: We allow `isLatestBaseState` to be true ONLY if the incoming message
+    // comes with data, or if the incoming message is NOT an initial write. This
+    // would allow an initial write to be written to the DB without data, but
+    // having it not queryable, because query implementation filters on
+    // `isLatestBaseState` being `true` thus preventing a user's attempt to gain
+    // authorized access to data by referencing the dataCid of a private data in
+    // their initial writes,
+    //
+    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
-    //       // NOTE: We want to perform additional validation before storing the RecordsWrite.
-    //       // This is necessary for core DWN RecordsWrite that needs additional processing and allows us to fail before the storing and post processing.
-    //       //
-    //       // Example: Ensures that the protocol tag of a permission revocation RecordsWrite and the parent grant's scoped protocol match.
-    //       await this.preProcessingForCoreRecordsWrite(tenant, message);
+    // has data stream been provided?
+    // if data_stream.is_some() {
+    //    (process_with_data_stream(owner, message, data_stream).await?,
+    //     true)
+    // } else
 
-    //       // NOTE: We allow isLatestBaseState to be true ONLY if the incoming message comes with data, or if the incoming message is NOT an initial write
-    //       // This would allow an initial write to be written to the DB without data, but having it not queryable,
-    //       // because query implementation filters on `isLatestBaseState` being `true`
-    //       // thus preventing a user's attempt to gain authorized access to data by referencing the dataCid of a private data in their initial writes,
-    //       // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
-    //       let isLatestBaseState = false;
-    //       let messageWithOptionalEncodedData = message as RecordsQueryReplyEntry;
+    // if the incoming message is not an initial write, and no data_stream is
+    // provided, we would allow it provided it passes validation
+    let (reply_entry, is_latest_base_state) = if initial_write.is_some() {
+        let Some(latest) = most_recent else {
+            return Err(anyhow!("newest existing message not found"));
+        };
+        let Message::RecordsWrite(latest) = latest else {
+            return Err(anyhow!("unexpected message type"));
+        };
 
-    //       if (dataStream !== undefined) {
-    //         messageWithOptionalEncodedData = await this.processMessageWithDataStream(tenant, message, dataStream);
-    //         isLatestBaseState = true;
-    //       } else {
-    //         // else data stream is NOT provided
+        (process_data(&ctx.owner, &write, latest, &provider).await?, true)
+    } else {
+        (
+            ReplyEntry {
+                message: write.clone(),
+                ..ReplyEntry::default()
+            },
+            false,
+        )
+    };
 
-    //         // if the incoming message is not an initial write, and no dataStream is provided, we would allow it provided it passes validation
-    //         // processMessageWithoutDataStream() abstracts that logic
-    //         if (!newMessageIsInitialWrite) {
-    //           const newestExistingWrite = newestExistingMessage as RecordsQueryReplyEntry;
-    //           messageWithOptionalEncodedData = await this.processMessageWithoutDataStream(tenant, message, newestExistingWrite );
-    //           isLatestBaseState = true;
-    //         }
-    //       }
-
-    //       const indexes = await recordsWrite.constructIndexes(isLatestBaseState);
-    //       await this.messageStore.put(tenant, messageWithOptionalEncodedData, indexes);
-    //       await this.eventLog.append(tenant, await Message.getCid(message), indexes);
+    //       MessageStore::put(&provider, owner, reply_entry).await?;
+    //       EventLog.append(&provider,owner, await Message.getCid(message), indexes);
 
     //       // NOTE: We only emit a `RecordsWrite` when the message is the latest base state.
     //       // Because we allow a `RecordsWrite` which is not the latest state to be written, but not queried, we shouldn't emit it either.
@@ -127,7 +146,7 @@ pub(crate) async fn handle(
     //       if (this.eventStream !== undefined && isLatestBaseState) {
     //         this.eventStream.emit(tenant, { message, initialWrite }, indexes);
     //       }
-    //     } catch (error) {
+
     //       const e = error as any;
     //       if (e.code !== undefined) {
     //         if (e.code === DwnErrorCode.RecordsWriteMissingEncodedDataInPrevious ||
@@ -140,28 +159,23 @@ pub(crate) async fn handle(
     //           return messageReplyFromError(error, 400);
     //         }
     //       }
-
-    //       // else throw
-    //       throw error;
     //     }
 
-    //     const messageReply = {
-    //       // In order to discern between something that was accepted as a queryable write and something that was accepted
-    //       // as an initial state we use separate response codes. See https://github.com/TBD54566975/dwn-sdk-js/issues/695
-    //       // for more details.
-    //       status: (newMessageIsInitialWrite && dataStream === undefined) ?
-    //         { code: 204, detail: 'No Content' } :
-    //         { code: 202, detail: 'Accepted' }
-    //     };
+    // In order to discern between something that was accepted as a queryable write and something that was accepted
+    // as an initial state we use separate response codes. See https://github.com/TBD54566975/dwn-sdk-js/issues/695
+    // for more details.
+    // let reply= Reply  {
+    //     status: (newMessageIsInitialWrite && dataStream === undefined) ?
+    //     { code: 204, detail: 'No Content' } :
+    //     { code: 202, detail: 'Accepted' }
+    // };
 
-    //     // delete all existing messages of the same record that are not newest, except for the initial write
-    //     await StorageController.deleteAllOlderMessagesButKeepInitialWrite(
-    //       tenant, records, newestMessage, this.messageStore, this.dataStore, this.eventLog
-    //     );
+    // delete all existing messages of the same record that are not newest, except for the initial write
+    // StorageController.deleteAllOlderMessagesButKeepInitialWrite(
+    //     tenant, records, newestMessage, this.messageStore, this.dataStore, this.eventLog
+    // );
 
-    //     await this.postProcessingForCoreRecordsWrite(tenant, recordsWrite);
-
-    //     return messageReply;
+    // this.postProcessingForCoreRecordsWrite(tenant, recordsWrite);
 
     Ok(WriteReply {
         status: Status {
@@ -473,6 +487,60 @@ impl Write {
 
     pub(crate) fn is_initial_write(&self) -> Result<bool> {
         Ok(self.entry_id()? == self.record_id)
+    }
+
+    // Verify immutable properties of two records are identical.
+
+    fn compare_immutable(&self, other: &Self) -> bool {
+        let self_desc = &self.descriptor;
+        let other_desc = &other.descriptor;
+
+        if self_desc.base.interface != other_desc.base.interface
+            || self_desc.base.method != other_desc.base.method
+            || self_desc.protocol != other_desc.protocol
+            || self_desc.protocol_path != other_desc.protocol_path
+            || self_desc.recipient != other_desc.recipient
+            || self_desc.schema != other_desc.schema
+            || self_desc.parent_id != other_desc.parent_id
+            || self_desc.date_created != other_desc.date_created
+        {
+            return false;
+        }
+
+        true
+    }
+
+    //
+
+    // Performs additional validation before storing the RecordsWrite if it is
+    // a core RecordsWrite that needs additional processing.
+    async fn preprocess(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        // Ensure the protocol tag of a permission revocation RecordsWrite and
+        // the parent grant's scoped protocol match.
+        if self.descriptor.protocol == Some(protocols::PROTOCOL_URI.to_owned())
+            && self.descriptor.protocol_path == Some(protocols::REVOCATION_PATH.to_owned())
+        {
+            // get grant from revocation message `parent_id`
+            let Some(grant_id) = &self.descriptor.parent_id else {
+                return Err(anyhow!("missing `parent_id`"));
+            };
+            let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+
+            // compare revocation message protocol and grant scope protocol
+            if let Some(tags) = &self.descriptor.tags {
+                let revoke_protocol =
+                    tags.get("protocol").map_or("", |p| p.as_str().unwrap_or_default());
+
+                let ScopeType::Records { protocol, .. } = grant.data.scope.scope_type else {
+                    return Err(anyhow!("missing protocol in grant scope"));
+                };
+
+                if protocol != revoke_protocol {
+                    return Err(anyhow!("revocation protocol {revoke_protocol} does not match grant protocol {protocol}"));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -989,4 +1057,97 @@ pub struct WriteReply {
     /// The message authorization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
+}
+
+/// Data structure returned in a `RecordsQuery` reply entry.
+///
+/// NOTE: the message structure is a modified version of the message received,
+/// the most notable differences are:
+///   1. May include an initial `RecordsWrite` message
+///   2. May include encoded data
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplyEntry {
+    /// The write record
+    message: Write,
+
+    /// The initial write of the record if the returned `RecordsWrite` message
+    /// is not the initial write.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    initial_write: Option<Write>,
+
+    /// The encoded data of the record if the data associated with the record
+    /// is equal or smaller than `MAX_ENCODING_SIZE`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    encoded_data: Option<String>,
+}
+
+// Fetches the initial records::Write message associated with the given (owner + recordId).
+pub(crate) async fn initial_write(
+    owner: &str, record_id: &str, store: &impl MessageStore,
+) -> Result<Option<Write>> {
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
+        AND recordId = '{record_id}'
+        ",
+        interface = Interface::Records,
+        method = Method::Write,
+    );
+
+    let (records, _) = store.query(owner, &sql).await?;
+    if records.is_empty() {
+        return Err(anyhow!("unable to find records for {}", record_id));
+    }
+
+    for record in records {
+        // find initial write for `record_id`
+        if let Message::RecordsWrite(matched) = record {
+            if matched.is_initial_write()? {
+                return Ok(Some(matched));
+            }
+        }
+    }
+
+    Err(anyhow!("unable to find initial write for {}", record_id))
+}
+
+// Write message is not an 'initial write' with no data_stream.
+// Check integrity against the most recent existing write.
+async fn process_data(
+    owner: &str, write: &Write, existing: &Write, store: &impl DataStore,
+) -> Result<ReplyEntry> {
+    // Perform `data_cid` check in case a user attempts to gain access to data
+    // by referencing a different known `data_cid`. This  ensures the data is
+    // already associated with the most_recent existing message.
+    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
+    if existing.descriptor.data_cid != write.descriptor.data_cid {
+        return Err(anyhow!("data CID does not match data_cid in descriptor"));
+    }
+    if existing.descriptor.data_size != write.descriptor.data_size {
+        return Err(anyhow!("data size does not match dta_size in descriptor"));
+    }
+
+    let mut reply_entry = ReplyEntry {
+        message: write.clone(),
+        ..ReplyEntry::default()
+    };
+
+    // encode the data from the original write if it is smaller than the
+    // data-store threshold
+    if write.descriptor.data_size <= MAX_ENCODED_SIZE {
+        let Some(encoded) = &existing.encoded_data else {
+            return Err(anyhow!("no `encoded_data` in most recent existing message"));
+        };
+        reply_entry.encoded_data = Some(encoded.clone());
+    };
+
+    // otherwise, make sure the data is in the data store
+    let result = store.get(owner, &existing.record_id, &write.descriptor.data_cid).await?;
+    if result.is_none() {
+        return Err(anyhow!("`data_stream` not set and unable to get data from previous message"));
+    };
+
+    Ok(reply_entry)
 }

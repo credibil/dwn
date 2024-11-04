@@ -19,6 +19,9 @@ use serde::{Deserialize, Serialize};
 
 pub use crate::service::handle_message;
 
+/// The maximum size of a message.
+pub const MAX_ENCODED_SIZE: u64 = 30000;
+
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

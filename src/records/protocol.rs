@@ -5,7 +5,7 @@ use serde_json::{json, Map, Value};
 
 use crate::protocols::{self, Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
 use crate::provider::MessageStore;
-use crate::records::Write;
+use crate::records::{self, Write};
 use crate::service::Message;
 use crate::{utils, Interface, Method};
 
@@ -341,7 +341,7 @@ async fn verify_actions(
 pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let record_id = &write.record_id;
 
-    let record_chain = if initial_write(owner, record_id, store).await?.is_some() {
+    let record_chain = if records::initial_write(owner, record_id, store).await?.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
         // NOTE: we can assume this message is an initial write because an existing
@@ -415,37 +415,6 @@ fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Optio
     rule_set(protocol_path, &structure.get(type_name)?.structure)
 }
 
-// Fetches the initial records::Write message associated with the given (owner + recordId).
-async fn initial_write(
-    owner: &str, record_id: &str, store: &impl MessageStore,
-) -> Result<Option<Write>> {
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND recordId = '{record_id}'
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-
-    let (records, _) = store.query(owner, &sql).await?;
-    if records.is_empty() {
-        return Err(anyhow!("unable to find records for {}", record_id));
-    }
-
-    for record in records {
-        // find initial write for `record_id`
-        if let Message::RecordsWrite(matched) = record {
-            if matched.is_initial_write()? {
-                return Ok(Some(matched));
-            }
-        }
-    }
-
-    Err(anyhow!("unable to find initial write for {}", record_id))
-}
-
 // Constructs the chain of EXISTING records in the datastore where the first record is the root initial `RecordsWrite` of the record chain
 // and last record is the initial `RecordsWrite` of the descendant record specified.
 async fn record_chain(
@@ -458,7 +427,7 @@ async fn record_chain(
     let mut current_id = Some(record_id.to_owned());
 
     while let Some(record_id) = &current_id {
-        let Some(initial_write) = initial_write(owner, record_id, store).await? else {
+        let Some(initial_write) = records::initial_write(owner, record_id, store).await? else {
             // RecordsWrite needed should be available since we perform necessary
             // checks at the time of writes, eg. check the immediate parent in
             // `verifyProtocolPathAndContextId` at the time of writing, so if this
@@ -491,7 +460,7 @@ async fn allowed_actions(
             if write.is_initial_write()? {
                 return Ok(vec![Action::Create]);
             }
-            let Some(initial_write) = initial_write(owner, &write.record_id, store).await? else {
+            let Some(initial_write) = records::initial_write(owner, &write.record_id, store).await? else {
                 return Ok(Vec::new());
             };
             if write.authorization.author()? == initial_write.authorization.author()? {
@@ -507,7 +476,7 @@ async fn allowed_actions(
             //   let Message::RecordsDelete(delete) = message else {
             //     return Err(anyhow!("unexpected message type"));
             //   };
-            //   let Some(initial_write) = initial_write(owner, &delete.record_id, store).await? else {
+            //   let Some(initial_write) = records::initial_write(owner, &delete.record_id, store).await? else {
             //     return Ok(vec![]);
             //   };
 

@@ -118,7 +118,7 @@ pub trait DataStore: Send + Sync {
 
     /// Store data in the underlying store.
     fn put(
-        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read,
+        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read+Send,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Fetches a single message by CID from the underlying store, returning
