@@ -2,6 +2,8 @@
 //!
 //! `Write` is a message type used to create a new record in the DWN.
 
+use std::cmp::Ordering;
+
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
@@ -33,12 +35,13 @@ pub(crate) async fn handle(
 
     authorize(&ctx.owner, &write, &provider).await?;
 
-    // get `record_id` matches
+    // get `record_id` matches sorted by timestamp
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
         AND descriptor.method = '{method}'
         AND recordId = '{record_id}'
+        ORDER BY descriptor.messageTimestamp ASC
         ",
         interface = Interface::Records,
         method = Method::Write,
@@ -46,51 +49,40 @@ pub(crate) async fn handle(
     );
     let (records, _) = MessageStore::query(&provider, &ctx.owner, &sql).await?;
 
-    // find initial write
-    let initial_write = if write.is_initial_write()? {
+    // get initial entry
+    let initial_entry = if write.is_initial()? {
         None
     } else {
-        let mut initial_write = None;
-        for record in &records {
-            let Message::RecordsWrite(rw) = record else {
-                return Err(anyhow!("unexpected message type"));
-            };
-            if rw.is_initial_write()? {
-                if rw.compare_immutable(&write) {
-                    return Err(anyhow!("immutable properties do not match"));
-                }
-                initial_write = Some(rw);
-                break;
-            }
+        let Some(Message::RecordsWrite(entry)) = records.first() else {
+            return Err(anyhow!("unexpected message type"));
+        };
+        // check initial write is found
+        if !entry.is_initial()? {
+            return Err(anyhow!("initial write is not earliest message"));
         }
-        initial_write
+        // check immutable properties match
+        if write.compare_immutable(entry) {
+            return Err(anyhow!("immutable properties do not match"));
+        }
+        Some(entry)
     };
 
-    if initial_write.is_none() {
-        return Err(anyhow!("initial write not found"));
-    }
-
-    // get newest existing message
-    let mut sorted = records.clone();
-    sorted.sort_by(|a, b| a.descriptor().message_timestamp.cmp(&b.descriptor().message_timestamp));
-    let most_recent = if let Some(existing) = sorted.last() {
+    // get latest entry
+    let latest_entry = if let Some(latest) = records.last() {
+        let Message::RecordsWrite(latest) = latest else {
+            return Err(anyhow!("unexpected message type"));
+        };
+        // is our message older than the latest?
         let order =
-            write.descriptor.base.message_timestamp.cmp(&existing.descriptor().message_timestamp);
-        if order == std::cmp::Ordering::Less {
-            return Ok(WriteReply {
-                status: Status {
-                    code: 409,
-                    detail: Some("Conflict".to_string()),
-                },
-                ..WriteReply::default()
-            });
+            write.descriptor.base.message_timestamp.cmp(&latest.descriptor.base.message_timestamp);
+        if order == Ordering::Less {
+            return Err(anyhow!("newer message already exists"));
         }
-
-        if existing.descriptor().method == Method::Delete {
-            return Err(anyhow!("RecordsWrite is not allowed after a RecordsDelete"));
+        // is the latest message a delete?
+        if latest.descriptor.base.method == Method::Delete {
+            return Err(anyhow!("RecordsWrite not allowed after RecordsDelete"));
         }
-
-        Some(existing)
+        Some(latest)
     } else {
         None
     };
@@ -118,14 +110,10 @@ pub(crate) async fn handle(
 
     // if the incoming message is not an initial write, and no data_stream is
     // provided, we would allow it provided it passes validation
-    let (reply_entry, is_latest_base_state) = if initial_write.is_some() {
-        let Some(latest) = most_recent else {
+    let (reply_entry, is_latest_base_state) = if initial_entry.is_some() {
+        let Some(latest) = latest_entry else {
             return Err(anyhow!("newest existing message not found"));
         };
-        let Message::RecordsWrite(latest) = latest else {
-            return Err(anyhow!("unexpected message type"));
-        };
-
         (process_data(&ctx.owner, &write, latest, &provider).await?, true)
     } else {
         (
@@ -485,12 +473,11 @@ impl Write {
         cid::compute(&descriptor)
     }
 
-    pub(crate) fn is_initial_write(&self) -> Result<bool> {
+    pub(crate) fn is_initial(&self) -> Result<bool> {
         Ok(self.entry_id()? == self.record_id)
     }
 
     // Verify immutable properties of two records are identical.
-
     fn compare_immutable(&self, other: &Self) -> bool {
         let self_desc = &self.descriptor;
         let other_desc = &other.descriptor;
@@ -1074,7 +1061,7 @@ pub struct ReplyEntry {
     /// The initial write of the record if the returned `RecordsWrite` message
     /// is not the initial write.
     #[serde(skip_serializing_if = "Option::is_none")]
-    initial_write: Option<Write>,
+    initial_entry: Option<Write>,
 
     /// The encoded data of the record if the data associated with the record
     /// is equal or smaller than `MAX_ENCODING_SIZE`.
@@ -1083,7 +1070,7 @@ pub struct ReplyEntry {
 }
 
 // Fetches the initial records::Write message associated with the given (owner + recordId).
-pub(crate) async fn initial_write(
+pub(crate) async fn initial_entry(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Option<Write>> {
     let sql = format!(
@@ -1091,6 +1078,7 @@ pub(crate) async fn initial_write(
         WHERE descriptor.interface = '{interface}'
         AND descriptor.method = '{method}'
         AND recordId = '{record_id}'
+        ORDER BY descriptor.messageTimestamp ASC
         ",
         interface = Interface::Records,
         method = Method::Write,
@@ -1098,19 +1086,18 @@ pub(crate) async fn initial_write(
 
     let (records, _) = store.query(owner, &sql).await?;
     if records.is_empty() {
-        return Err(anyhow!("unable to find records for {}", record_id));
+        return Err(anyhow!("cannot find initial write"));
     }
 
-    for record in records {
-        // find initial write for `record_id`
-        if let Message::RecordsWrite(matched) = record {
-            if matched.is_initial_write()? {
-                return Ok(Some(matched));
-            }
-        }
+    let Some(Message::RecordsWrite(entry)) = records.first() else {
+        return Err(anyhow!("unexpected message type"));
+    };
+    // check first is initial write
+    if !entry.is_initial()? {
+        return Err(anyhow!("initial write is not earliest message"));
     }
 
-    Err(anyhow!("unable to find initial write for {}", record_id))
+    Ok(Some(entry.clone()))
 }
 
 // Write message is not an 'initial write' with no data_stream.
@@ -1120,7 +1107,7 @@ async fn process_data(
 ) -> Result<ReplyEntry> {
     // Perform `data_cid` check in case a user attempts to gain access to data
     // by referencing a different known `data_cid`. This  ensures the data is
-    // already associated with the most_recent existing message.
+    // already associated with the latest_entry existing message.
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
     if existing.descriptor.data_cid != write.descriptor.data_cid {
         return Err(anyhow!("data CID does not match data_cid in descriptor"));

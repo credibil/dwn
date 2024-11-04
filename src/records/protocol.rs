@@ -341,7 +341,7 @@ async fn verify_actions(
 pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let record_id = &write.record_id;
 
-    let record_chain = if records::initial_write(owner, record_id, store).await?.is_some() {
+    let record_chain = if records::initial_entry(owner, record_id, store).await?.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
         // NOTE: we can assume this message is an initial write because an existing
@@ -415,8 +415,9 @@ fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Optio
     rule_set(protocol_path, &structure.get(type_name)?.structure)
 }
 
-// Constructs the chain of EXISTING records in the datastore where the first record is the root initial `RecordsWrite` of the record chain
-// and last record is the initial `RecordsWrite` of the descendant record specified.
+// Constructs the chain of EXISTING records in the datastore where the first
+// record is the root initial `records::Write` of the record chain and last
+// record is the initial `records::Write` of the descendant record specified.
 async fn record_chain(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Write>> {
@@ -427,21 +428,14 @@ async fn record_chain(
     let mut current_id = Some(record_id.to_owned());
 
     while let Some(record_id) = &current_id {
-        let Some(initial_write) = records::initial_write(owner, record_id, store).await? else {
-            // RecordsWrite needed should be available since we perform necessary
-            // checks at the time of writes, eg. check the immediate parent in
-            // `verifyProtocolPathAndContextId` at the time of writing, so if this
-            // condition is triggered, it means there is an unexpected bug that
-            // caused an incomplete chain. We add additional defensive check here
-            // because returning an unexpected/incorrect record chain could lead
-            // to security vulnerabilities.
+        let Some(initial_entry) = records::initial_entry(owner, record_id, store).await? else {
             return Err(anyhow!(
                 "no parent found with ID {record_id} when constructing record chain."
             ));
         };
 
-        chain.push(initial_write.clone());
-        current_id.clone_from(&initial_write.descriptor.parent_id);
+        chain.push(initial_entry.clone());
+        current_id.clone_from(&initial_entry.descriptor.parent_id);
     }
 
     // root record first
@@ -457,13 +451,15 @@ async fn allowed_actions(
 ) -> Result<Vec<Action>> {
     match write.descriptor.base.method {
         Method::Write => {
-            if write.is_initial_write()? {
+            if write.is_initial()? {
                 return Ok(vec![Action::Create]);
             }
-            let Some(initial_write) = records::initial_write(owner, &write.record_id, store).await? else {
+            let Some(initial_entry) =
+                records::initial_entry(owner, &write.record_id, store).await?
+            else {
                 return Ok(Vec::new());
             };
-            if write.authorization.author()? == initial_write.authorization.author()? {
+            if write.authorization.author()? == initial_entry.authorization.author()? {
                 return Ok(vec![Action::CoUpdate, Action::Update]);
             }
 
@@ -476,13 +472,13 @@ async fn allowed_actions(
             //   let Message::RecordsDelete(delete) = message else {
             //     return Err(anyhow!("unexpected message type"));
             //   };
-            //   let Some(initial_write) = records::initial_write(owner, &delete.record_id, store).await? else {
+            //   let Some(initial_entry) = records::initial_entry(owner, &delete.record_id, store).await? else {
             //     return Ok(vec![]);
             //   };
 
             let actions = vec![];
             // let author= delete.authorization.author()?;
-            // let initial_author = initial_write.authorization.author()?;
+            // let initial_author = initial_entry.authorization.author()?;
 
             //   if delete.descriptor.prune {
             //     actions.push(Action::CoPrune);

@@ -70,7 +70,7 @@ pub(crate) async fn handle(
 
         let event = MessageEvent {
             message: msg,
-            initial_write: None,
+            initial_entry: None,
         };
         EventStream::emit(&provider, &ctx.owner, event, BTreeMap::new()).await?;
 
