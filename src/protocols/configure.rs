@@ -13,10 +13,10 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
-use crate::provider::{EventLog, EventStream, MessageEvent, MessageStore, Provider, Signer};
+use crate::provider::{Event, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Message};
-use crate::{cid, utils, Cursor, Descriptor, Interface, Method, Status};
+use crate::{cid, utils, Descriptor, Interface, Method};
 
 /// Process query message.
 ///
@@ -63,32 +63,20 @@ pub(crate) async fn handle(
     // save the incoming message when latest
     let reply = if is_latest {
         let cid = cid::compute(&configure)?;
-        let msg = Message::ProtocolsConfigure(configure);
+        let message = Message::ProtocolsConfigure(configure.clone());
 
-        MessageStore::put(&provider, &ctx.owner, msg.clone()).await?;
-        EventLog::append(&provider, &ctx.owner, &cid, BTreeMap::new()).await?;
+        MessageStore::put(&provider, &ctx.owner, &message).await?;
+        EventLog::append(&provider, &ctx.owner, &cid, &message).await?;
 
-        let event = MessageEvent {
-            message: msg,
+        let event = Event {
+            message,
             initial_entry: None,
         };
-        EventStream::emit(&provider, &ctx.owner, event, BTreeMap::new()).await?;
+        EventStream::emit(&provider, &ctx.owner, &event).await?;
 
-        ConfigureReply {
-            status: Status {
-                code: 202,
-                detail: Some("Accepted".to_string()),
-            },
-            ..ConfigureReply::default()
-        }
+        ConfigureReply { message: configure }
     } else {
-        ConfigureReply {
-            status: Status {
-                code: 409,
-                detail: Some("Conflict".to_string()),
-            },
-            ..ConfigureReply::default()
-        }
+        return Err(anyhow!("message is not the latest"));
     };
 
     Ok(reply)
@@ -145,19 +133,11 @@ impl Configure {
     }
 }
 
-/// Messages Query reply
+/// Configure reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigureReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
-    /// The Query descriptor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<Configure>>,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
+    #[serde(flatten)]
+    message: Configure,
 }
 
 /// Configure descriptor.

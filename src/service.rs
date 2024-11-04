@@ -27,12 +27,13 @@ pub async fn handle_message(
     // }
 
     if let Err(e) = message.validate_schema() {
-        return Ok(Reply::GenericReply(GenericReply {
+        return Ok(Reply {
             status: Status {
                 code: 400,
                 detail: Some(e.to_string()),
             },
-        }));
+            ..Reply::default()
+        });
     }
 
     let mut ctx = Context {
@@ -50,24 +51,51 @@ pub async fn handle_message(
     message.authorize(&mut ctx, &provider).await?;
 
     // route to appropriate handler
-    match message {
-        // Message::MessagesQuery(query) => {
-        //     let reply = messages::query::handle(&ctx.owner, query, provider).await?;
-        //     Ok(Reply::MessagesQuery(reply))
-        // }
-        Message::ProtocolsQuery(query) => {
-            let reply = protocols::query::handle(&ctx, query, provider).await?;
-            Ok(Reply::ProtocolsQuery(reply))
-        }
-        Message::ProtocolsConfigure(configure) => {
-            let reply = protocols::configure::handle(&ctx, configure, provider).await?;
-            Ok(Reply::ProtocolsConfigure(reply))
-        }
+    let (code, response) = match message {
+        Message::ProtocolsQuery(query) => (
+            200,
+            protocols::query::handle(&ctx, query, provider).await.map(ReplyEntry::ProtocolsQuery),
+        ),
+        Message::ProtocolsConfigure(configure) => (
+            202,
+            protocols::configure::handle(&ctx, configure, provider)
+                .await
+                .map(ReplyEntry::ProtocolsConfigure),
+        ),
         Message::RecordsWrite(write) => {
-            let reply = records::write::handle(&ctx, write, provider).await?;
-            Ok(Reply::RecordsWrite(reply))
+            let mut reply = records::write::handle(&ctx, write, provider).await?;
+            let code = reply.code.unwrap_or_default();
+            reply.code = None;
+            (code, Ok(ReplyEntry::RecordsWrite(reply)))
         }
-        _ => Err(anyhow!("Unsupported message")),
+
+        _ => (0, Err(anyhow!("Unsupported message"))),
+    };
+
+    // map response to reply
+    match response {
+        Ok(entry) => {
+            let detail = match code {
+                202 => "Accepted",
+                204 => "No Content",
+                _ => "OK",
+            };
+
+            Ok(Reply {
+                status: Status {
+                    code,
+                    detail: Some(detail.to_string()),
+                },
+                entry: Some(entry),
+            })
+        }
+        Err(e) => Ok(Reply {
+            status: Status {
+                code: 400,
+                detail: Some(e.to_string()),
+            },
+            ..Reply::default()
+        }),
     }
 }
 
@@ -188,26 +216,42 @@ impl Message {
     }
 }
 
+/// Reply to a web node message.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct Reply {
+    /// Status message to accompany the reply.
+    pub status: Status,
+
+    /// Reply specific to the endpoint.
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<ReplyEntry>,
+}
+
+/// Reply entry specific to the endpoint.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 #[serde(untagged)]
-#[allow(missing_docs)]
-pub enum Reply {
-    GenericReply(GenericReply),
+pub enum ReplyEntry {
+    /// Reply entry for messages query.
     MessagesQuery(messages::QueryReply),
-    // MessagesRead(messages::ReadReply),
-    // MessagesSubscribe(messages::SubscribeReply),
+    // MessagesRead(messages::ReadReplyEntry),
+    // MessagesSubscribe(messages::SubscribeReplyEntry),
+    /// Reply entry for records write.
     RecordsWrite(records::WriteReply),
-    // RecordsQuery(records::QueryReply),
-    // RecordsRead(records::ReadReply),
-    // RecordsSubscribe(records::SubscribeReply),
-    // RecordsDelete(records::DeleteReply),
+    // RecordsQuery(records::QueryReplyEntry),
+    // RecordsRead(records::ReadReplyEntry),
+    // RecordsSubscribe(records::SubscribeReplyEntry),
+    // RecordsDelete(records::DeleteReplyEntry),
+    /// Reply entry for protocols configure.
     ProtocolsConfigure(protocols::ConfigureReply),
+
+    /// Reply entry for protocols query.
     ProtocolsQuery(protocols::QueryReply),
 }
 
-/// Generic reply.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GenericReply {
-    status: Status,
+impl Default for ReplyEntry {
+    fn default() -> Self {
+        Self::MessagesQuery(messages::QueryReply::default())
+    }
 }

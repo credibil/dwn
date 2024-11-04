@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::Filter;
 use crate::auth::Authorization;
 use crate::provider::Provider;
-use crate::{Cursor, Status};
+use crate::Cursor;
 
 /// Handle a query message.
 ///
@@ -33,9 +33,6 @@ pub struct Query {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct QueryReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
     /// The Query descriptor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<String>>,

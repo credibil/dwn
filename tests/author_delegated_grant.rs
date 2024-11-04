@@ -8,7 +8,7 @@ use test_utils::store::ProviderImpl;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::service::{Message, Reply};
+use vercre_dwn::service::{Message, ReplyEntry};
 use vercre_dwn::{Interface, Method};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -52,11 +52,11 @@ async fn configure_any() {
         .await
         .expect("should configure protocol");
 
-    let Reply::ProtocolsConfigure(reply) = reply else {
+    assert_eq!(reply.status.code, 202);
+
+    let Some(ReplyEntry::ProtocolsConfigure(entry)) = reply.entry else {
         panic!("unexpected reply: {:?}", reply);
     };
-
-    assert_eq!(reply.status.code, 202);
 
     // ------------------------------
     // Alice fetches the email protocol configured by Bob
@@ -72,11 +72,11 @@ async fn configure_any() {
         .await
         .expect("should find protocol");
 
-    let Reply::ProtocolsQuery(reply) = reply else {
+    assert_eq!(reply.status.code, 200);
+
+    let Some(ReplyEntry::ProtocolsQuery(entry)) = reply.entry else {
         panic!("unexpected reply: {:?}", reply);
     };
-
-    assert_eq!(reply.status.code, 200);
 }
 
 // Allow author-delegated grant to configure a specific protocol.

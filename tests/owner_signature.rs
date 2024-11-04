@@ -10,7 +10,7 @@ use test_utils::store::ProviderImpl;
 // use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::service::{Message, Reply};
+use vercre_dwn::service::{Message, ReplyEntry};
 // use vercre_dwn::{Interface, Method};
 
 // const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -41,10 +41,11 @@ async fn flat_space() {
     let message = Message::RecordsWrite(write);
     let reply =
         vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
-    let Reply::RecordsWrite(reply) = reply else {
+    assert_eq!(reply.status.code, 204);
+
+    let Some(ReplyEntry::RecordsWrite(entry)) = reply.entry else {
         panic!("unexpected reply: {:?}", reply);
     };
-    assert_eq!(reply.status.code, 202);
 
     // ------------------------------
     // Alice fetches the message from Bob's web node

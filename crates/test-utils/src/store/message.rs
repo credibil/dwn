@@ -7,7 +7,7 @@ use super::ProviderImpl;
 use crate::store::{MESSAGE, NAMESPACE};
 
 impl MessageStore for ProviderImpl {
-    async fn put(&self, owner: &str, message: Message) -> Result<()> {
+    async fn put(&self, owner: &str, message: &Message) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<Message> = self.db.create((MESSAGE, message.cid()?)).content(message).await?;
         Ok(())

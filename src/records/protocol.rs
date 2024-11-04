@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
 
+use crate::permissions::{self, ScopeType};
 use crate::protocols::{self, Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
 use crate::provider::MessageStore;
 use crate::records::{self, Write};
@@ -29,6 +30,7 @@ pub async fn verify_integrity(owner: &str, write: &Write, store: &impl MessageSt
     }
     verify_size_limit(write.descriptor.data_size, &rule_set)?;
     verify_tags(write.descriptor.tags.as_ref(), &rule_set)?;
+    verify_revoke(owner, write, store).await?;
 
     Ok(())
 }
@@ -337,11 +339,42 @@ async fn verify_actions(
     Err(anyhow!("RecordsWrite by {author} not allowed"))
 }
 
+// Performs additional validation before storing the RecordsWrite if it is
+// a core RecordsWrite that needs additional processing.
+async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+    // Ensure the protocol tag of a permission revocation RecordsWrite and
+    // the parent grant's scoped protocol match.
+    if write.descriptor.protocol == Some(protocols::PROTOCOL_URI.to_owned())
+        && write.descriptor.protocol_path == Some(protocols::REVOCATION_PATH.to_owned())
+    {
+        // get grant from revocation message `parent_id`
+        let Some(parent_id) = &write.descriptor.parent_id else {
+            return Err(anyhow!("missing `parent_id`"));
+        };
+        let grant = permissions::fetch_grant(owner, parent_id, store).await?;
+
+        // compare revocation message protocol and grant scope protocol
+        if let Some(tags) = &write.descriptor.tags {
+            let revoke_protocol =
+                tags.get("protocol").map_or("", |p| p.as_str().unwrap_or_default());
+
+            let ScopeType::Records { protocol, .. } = grant.data.scope.scope_type else {
+                return Err(anyhow!("missing protocol in grant scope"));
+            };
+
+            if protocol != revoke_protocol {
+                return Err(anyhow!("revocation protocol {revoke_protocol} does not match grant protocol {protocol}"));
+            }
+        }
+    }
+    Ok(())
+}
+
 // Protocol-based authorization for records::Write messages.
 pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
-    let record_id = &write.record_id;
+    let (initial_entry, _) = records::first_last_entries(owner, &write.record_id, store).await?;
 
-    let record_chain = if records::initial_entry(owner, record_id, store).await?.is_some() {
+    let record_chain = if initial_entry.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
         // NOTE: we can assume this message is an initial write because an existing
@@ -428,7 +461,8 @@ async fn record_chain(
     let mut current_id = Some(record_id.to_owned());
 
     while let Some(record_id) = &current_id {
-        let Some(initial_entry) = records::initial_entry(owner, record_id, store).await? else {
+        let (initial_entry, _) = records::first_last_entries(owner, record_id, store).await?;
+        let Some(initial_entry) = initial_entry else {
             return Err(anyhow!(
                 "no parent found with ID {record_id} when constructing record chain."
             ));
@@ -454,9 +488,10 @@ async fn allowed_actions(
             if write.is_initial()? {
                 return Ok(vec![Action::Create]);
             }
-            let Some(initial_entry) =
-                records::initial_entry(owner, &write.record_id, store).await?
-            else {
+
+            let (initial_entry, _) =
+                records::first_last_entries(owner, &write.record_id, store).await?;
+            let Some(initial_entry) = initial_entry else {
                 return Ok(Vec::new());
             };
             if write.authorization.author()? == initial_entry.authorization.author()? {

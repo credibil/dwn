@@ -10,20 +10,13 @@ pub mod event;
 pub mod message;
 pub mod task;
 
-use std::collections::BTreeMap;
-use std::future::Future;
-
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
-use serde_json::Value;
 use surrealdb::engine::local::{Db, Mem};
 use surrealdb::opt::RecordId;
 use surrealdb::Surreal;
 use vercre_dwn::protocols::Configure;
-use vercre_dwn::provider::{
-    DidResolver, Document, EventStream, EventSubscription, KeyStore, Keyring, MessageEvent,
-    Provider,
-};
+use vercre_dwn::provider::{DidResolver, Document, KeyStore, Keyring, Provider};
 use vercre_infosec::{Algorithm, Cipher, Signer};
 
 use crate::keystore::{Keystore, OWNER_DID};
@@ -62,32 +55,6 @@ impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {
         serde_json::from_slice(include_bytes!("./store/did.json"))
             .map_err(|e| anyhow!("issue deserializing document: {e}"))
-    }
-}
-
-struct EventSubscriptionImpl;
-
-impl EventSubscription for EventSubscriptionImpl {
-    async fn close(&self) -> Result<()> {
-        todo!()
-    }
-}
-
-impl EventStream for ProviderImpl {
-    /// Subscribes to a owner's event stream.
-    fn subscribe(
-        &self, owner: &str, id: &str,
-        listener: impl Fn(&str, MessageEvent, BTreeMap<String, Value>),
-    ) -> impl Future<Output = Result<(String, impl EventSubscription)>> + Send {
-        async { Ok((String::new(), EventSubscriptionImpl {})) }
-    }
-
-    /// Emits an event to a owner's event stream.
-    async fn emit(
-        &self, owner: &str, event: MessageEvent, indexes: BTreeMap<String, Value>,
-    ) -> Result<()> {
-        // todo!()
-        Ok(())
     }
 }
 
