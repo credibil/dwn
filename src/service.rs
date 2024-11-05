@@ -63,13 +63,12 @@ pub async fn handle_message(
                 .map(ReplyEntry::ProtocolsConfigure),
         ),
         Message::RecordsWrite(write) => {
-            let mut reply = records::write::handle(&ctx, write, provider).await?;
-            let code = reply.code.unwrap_or_default();
-            reply.code = None;
+            let reply = records::write::handle(&ctx, write, provider).await?;
+            let code = reply.code;
             (code, Ok(ReplyEntry::RecordsWrite(reply)))
         }
 
-        _ => (0, Err(anyhow!("Unsupported message"))),
+        _ => (400, Err(anyhow!("Unsupported message"))),
     };
 
     // map response to reply

@@ -52,7 +52,7 @@ pub(crate) async fn fetch_grant(
 /// Protocol for managing web node permission grants.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Protocol {
-    /// The URI of the DWN Permissions protocol.
+    /// The URI of the web node Permissions protocol.
     pub uri: String,
 
     /// The protocol path of the `request` record.

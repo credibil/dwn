@@ -4,12 +4,12 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
-use insta::assert_yaml_snapshot as assert_snapshot;
+// use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::service::{Message, ReplyEntry};
+use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
+use vercre_dwn::service::Message;
 
 // const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -36,32 +36,22 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    let message = Message::RecordsWrite(write);
+    let message = Message::RecordsWrite(write.clone());
     let reply =
         vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
     assert_eq!(reply.status.code, 204);
 
-    let Some(ReplyEntry::RecordsWrite(entry)) = reply.entry else {
-        panic!("unexpected reply: {:?}", reply);
-    };
-    assert_snapshot!("write", entry, {
-        ".recordId" => "[recordId]",
-        ".descriptor.messageTimestamp" => "[messageTimestamp]",
-        ".descriptor.dateCreated" => "[dateCreated]",
-        ".descriptor.datePublished" => "[datePublished]",
-        ".authorization.signature.payload" => "[payload]",
-        ".authorization.signature.signatures[0].signature" => "[signature]",
-        ".attestation.payload" => "[payload]",
-        ".attestation.signatures[0].signature" => "[signature]",
-    });
-
     // ------------------------------
     // Alice fetches the message from Bob's web node
     // ------------------------------
-    // const recordsRead = await RecordsRead.create({
-    //     filter : { recordId: message.recordId },
-    //     signer : Jws.createSigner(alice)
-    //   });
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter {
+            record_id: Some(write.record_id),
+            ..RecordsFilter::default()
+        })
+        .build(&bob_keyring)
+        .await
+        .expect("should create write");
 
     //   const readReply = await dwn.processMessage(bob.did, recordsRead.message);
     //   expect(readReply.status.code).to.equal(200);

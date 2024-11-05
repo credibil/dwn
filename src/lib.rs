@@ -1,4 +1,4 @@
-//! # Decentralized Web Node (DWN)
+//! # Decentralized Web Node (web node)
 
 pub mod auth;
 pub mod cid;
@@ -27,7 +27,7 @@ pub const MAX_ENCODED_SIZE: u64 = 30000;
 #[serde(rename_all = "camelCase")]
 #[serde(default)]
 pub struct Descriptor {
-    /// The associated DWN interface.
+    /// The associated web node interface.
     pub interface: Interface,
 
     /// The interface method.
@@ -38,7 +38,7 @@ pub struct Descriptor {
     pub message_timestamp: Option<DateTime<Utc>>,
 }
 
-/// DWN interfaces.
+/// web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
 // #[serde(rename_all = "camelCase")]
 pub enum Interface {
@@ -130,7 +130,7 @@ pub struct DateRange {
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     /// Status code.
-    pub code: u64,
+    pub code: u16,
 
     /// Status detail.
     pub detail: Option<String>,

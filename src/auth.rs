@@ -73,7 +73,7 @@ pub struct JwsPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permission_grant_id: Option<String>,
 
-    /// Record ID of a permission grant DWN `RecordsWrite` with `delegated` set to `true`.
+    /// Record ID of a permission grant web node `RecordsWrite` with `delegated` set to `true`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_grant_id: Option<String>,
 
@@ -95,7 +95,7 @@ pub struct Attestation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author_delegated_grant: Option<DelegatedGrant>,
 
-    /// An "overriding" signature for a DWN owner or owner-delegate to store a
+    /// An "overriding" signature for a web node owner or owner-delegate to store a
     /// message authored by another entity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner_signature: Option<Jws>,

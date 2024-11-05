@@ -1,6 +1,6 @@
 //! # Write
 //!
-//! `Write` is a message type used to create a new record in the DWN.
+//! `Write` is a message type used to create a new record in the web node.
 
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -79,6 +79,7 @@ pub(crate) async fn handle(
     // something accepted as an initial state we use separate response codes:
     //   - 202 for queryable writes
     //   - 204 for non-queryable writes.
+    //   - 409 if the incoming message is not the latest (TODO: used typed errors)
     //
     // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
 
@@ -88,36 +89,27 @@ pub(crate) async fn handle(
     //     true)
     // } else
 
-    // If the incoming message is not an initial write, and no `data_stream` is
-    // set, we can process.
-    // but not queried, we shouldn't emit it either.
-    let (reply, is_latest) = if initial.is_some() {
+    // if the incoming message is not the initial write, and no `data_stream` is
+    // set, we can process
+    let (write, code) = if initial.is_some() {
         let Some(latest) = &latest else {
             return Err(anyhow!("newest existing message not found"));
         };
-
-        let mut reply = process_data(&ctx.owner, &write, latest, &provider).await?;
-        reply.code = Some(202);
-
-        (reply, true)
+        let write = process_data(&ctx.owner, &write, latest, &provider).await?;
+        (write, 202)
     } else {
-        let reply = WriteReply {
-            message: write.clone(),
-            code: Some(204),
-            ..WriteReply::default()
-        };
-        (reply, false)
+        (write, 204)
     };
 
     // save the message and log
-    let cid = cid::compute(&reply.message)?;
-    let message = Message::RecordsWrite(reply.message.clone());
+    let cid = cid::compute(&write)?;
+    let message = Message::RecordsWrite(write.clone());
 
     MessageStore::put(&provider, &ctx.owner, &message).await?;
     EventLog::append(&provider, &ctx.owner, &cid, &message).await?;
 
     // only emit an event when the message is the latest base state
-    if is_latest {
+    if initial.is_some() {
         let initial_entry = initial.map(Message::RecordsWrite);
         let event = Event {
             message,
@@ -126,27 +118,24 @@ pub(crate) async fn handle(
         EventStream::emit(&provider, &ctx.owner, &event).await?;
     }
 
-    // delete any messages with the same `record_id` except the initial write
+    // delete messages with the same `record_id` EXCEPT the initial write
     let mut deletable = VecDeque::from(messages);
     let _ = deletable.pop_front(); // initial write is first entry
-
     for msg in deletable {
         let cid = cid::compute(&msg)?;
         MessageStore::delete(&provider, &ctx.owner, &cid).await?;
         EventLog::delete(&provider, &ctx.owner, &cid).await?;
     }
 
-    // If this message is a Permission revocation, we need to delete all
-    // grant-authorized messages with timestamp after revocation
-    //
-    // TODO: https://github.com/TBD54566975/dwn-sdk-js/issues/716
+    // when message is a grant revocation, delete all grant-authorized
+    // messages with timestamp after revocation
     if write.descriptor.protocol == Some(PROTOCOL_URI.to_owned())
         && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_owned())
     {
         revoke_grants(&ctx.owner, &write, &provider).await?;
     }
 
-    Ok(reply)
+    Ok(WriteReply { code })
 }
 
 async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
@@ -205,16 +194,7 @@ async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Res
     Err(anyhow!("message failed authorization"))
 }
 
-// TODO:figure out what isLatestBaseState is
-// We allow `isLatestBaseState` to be true ONLY if the incoming message comes
-// with data, or if the incoming message is NOT an initial write. This would allow
-// an initial write to be written to the DB without data, but having it not queryable,
-// because query implementation filters on `isLatestBaseState` being `true`
-// thus preventing a user's attempt to gain authorized access to data by referencing
-// the dataCid of a private data in their initial writes,
-// See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
-
-/// Records write payload
+/// Records write message payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Write {
@@ -322,9 +302,9 @@ impl Write {
         Ok(())
     }
 
-    /// Signs the `RecordsWrite` as the DWN owner.
+    /// Signs the `RecordsWrite` as the web node owner.
     ///
-    /// This is used when the DWN owner wants to retain a copy of a message that
+    /// This is used when the web node owner wants to retain a copy of a message that
     /// the owner did not author.
     /// N.B.: requires the `RecordsWrite` to already have the author's signature.
     ///
@@ -608,6 +588,13 @@ pub struct WriteDescriptor {
     /// used to calculate CID during test for intial write.
     #[serde(skip_serializing_if = "Option::is_none")]
     author: Option<String>,
+}
+
+/// Write reply.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct WriteReply {
+    #[serde(skip)]
+    pub(crate) code: u16,
 }
 
 /// Options to use when creating a permission grant.
@@ -975,24 +962,6 @@ pub enum DerivationScheme {
     Schemas,
 }
 
-/// Write reply.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WriteReply {
-    /// The write record
-    #[serde(flatten)]
-    message: Write,
-
-    /// The initial write of the record if the returned `RecordsWrite` message
-    /// is not the initial write.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    initial: Option<Write>,
-
-    /// The response code to use
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) code: Option<u64>,
-}
-
 // Fetch previous entries for this record, ordered from earliest to latest.
 pub(crate) async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
@@ -1045,7 +1014,7 @@ pub(crate) async fn first_and_last(messages: &[Message]) -> Result<(Option<Write
 // Check integrity against the most recent existing write.
 async fn process_data(
     owner: &str, write: &Write, existing: &Write, store: &impl DataStore,
-) -> Result<WriteReply> {
+) -> Result<Write> {
     // Perform `data_cid` check in case a user attempts to gain access to data
     // by referencing a different known `data_cid`. This  ensures the data is
     // already associated with the latest existing message.
@@ -1073,10 +1042,7 @@ async fn process_data(
         return Err(anyhow!("`data_stream` not set and unable to get data from previous message"));
     };
 
-    Ok(WriteReply {
-        message,
-        ..WriteReply::default()
-    })
+    Ok(message)
 }
 
 // Revoke grants if records::Write is a permission revocation .

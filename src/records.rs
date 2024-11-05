@@ -3,36 +3,28 @@
 //! Decentralized Web Node messaging framework.
 
 pub(crate) mod protocol;
+pub mod read;
 pub mod write;
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
+pub use read::{Read, ReadBuilder, ReadReply};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-pub(crate) use write::{first_and_last,existing_entries};
+pub(crate) use write::{existing_entries, first_and_last};
 pub use write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol, WriteReply,
 };
 
 use crate::auth::Authorization;
-use crate::{DateRange, Descriptor, Pagination, Quota};
+use crate::{utils, DateRange, Descriptor, Pagination, Quota};
 
 /// Records Query payload
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
     pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
-}
-
-/// Records Read payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Read {
-    /// The Read descriptor.
-    pub descriptor: ReadDescriptor,
 
     /// The message authorization.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +61,7 @@ pub struct QueryDescriptor {
     pub base: Descriptor,
 
     /// Filter Records for query.
-    pub filter: Filter,
+    pub filter: RecordsFilter,
 
     /// The pagination cursor.
     pub pagination: Option<Pagination>,
@@ -84,7 +76,7 @@ pub struct ReadDescriptor {
     pub base: Descriptor,
 
     /// Record CID.
-    pub filter: Filter,
+    pub filter: RecordsFilter,
 }
 
 /// Suscribe descriptor.
@@ -96,7 +88,7 @@ pub struct SubscribeDescriptor {
     pub base: Descriptor,
 
     /// Filter Records to subscribe to.
-    pub filter: Filter,
+    pub filter: RecordsFilter,
 }
 
 /// Read descriptor.
@@ -117,7 +109,7 @@ pub struct DeleteDescriptor {
 /// Records filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Filter {
+pub struct RecordsFilter {
     /// Records matching the specified author.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<Quota<String>>,
@@ -184,6 +176,22 @@ pub struct Filter {
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_updated: Option<DateRange>,
+}
+
+impl RecordsFilter {
+    /// Normalizes `RecordsFilter` protocol and schema URLs within a provided.
+    pub(crate) fn normalize(&self) -> Result<Self> {
+        let mut filter = self.clone();
+        filter.protocol = if let Some(protocol) = &self.protocol {
+            Some(utils::clean_url(protocol)?)
+        } else {
+            None
+        };
+        filter.schema =
+            if let Some(schema) = &self.schema { Some(utils::clean_url(schema)?) } else { None };
+
+        Ok(filter)
+    }
 }
 
 /// Tag filter.
