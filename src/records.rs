@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-pub(crate) use write::first_last_entries;
+pub(crate) use write::{first_and_last,existing_entries};
 pub use write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol, WriteReply,
 };

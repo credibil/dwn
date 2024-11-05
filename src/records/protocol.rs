@@ -372,9 +372,10 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
 
 // Protocol-based authorization for records::Write messages.
 pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
-    let (initial_entry, _) = records::first_last_entries(owner, &write.record_id, store).await?;
+    let messages = records::existing_entries(owner, &write.record_id, store).await?;
+    let (initial, _) = records::first_and_last(&messages).await?;
 
-    let record_chain = if initial_entry.is_some() {
+    let record_chain = if initial.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
         // NOTE: we can assume this message is an initial write because an existing
@@ -461,15 +462,17 @@ async fn record_chain(
     let mut current_id = Some(record_id.to_owned());
 
     while let Some(record_id) = &current_id {
-        let (initial_entry, _) = records::first_last_entries(owner, record_id, store).await?;
-        let Some(initial_entry) = initial_entry else {
+        let messages = records::existing_entries(owner, record_id, store).await?;
+        let (initial, _) = records::first_and_last(&messages).await?;
+
+        let Some(initial) = initial else {
             return Err(anyhow!(
                 "no parent found with ID {record_id} when constructing record chain."
             ));
         };
 
-        chain.push(initial_entry.clone());
-        current_id.clone_from(&initial_entry.descriptor.parent_id);
+        chain.push(initial.clone());
+        current_id.clone_from(&initial.descriptor.parent_id);
     }
 
     // root record first
@@ -489,12 +492,13 @@ async fn allowed_actions(
                 return Ok(vec![Action::Create]);
             }
 
-            let (initial_entry, _) =
-                records::first_last_entries(owner, &write.record_id, store).await?;
-            let Some(initial_entry) = initial_entry else {
+            let messages = records::existing_entries(owner, &write.record_id, store).await?;
+            let (initial, _) = records::first_and_last(&messages).await?;
+
+            let Some(initial) = initial else {
                 return Ok(Vec::new());
             };
-            if write.authorization.author()? == initial_entry.authorization.author()? {
+            if write.authorization.author()? == initial.authorization.author()? {
                 return Ok(vec![Action::CoUpdate, Action::Update]);
             }
 

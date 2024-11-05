@@ -2,6 +2,7 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
@@ -37,7 +38,7 @@ pub(crate) async fn handle(
     let is_latest = if let Some(existing) = &results {
         // find latest matching protocol entry
         let timestamp = &configure.descriptor.base.message_timestamp;
-        let (is_latest, latest_entry) = existing.iter().fold((true, &configure), |(_, _), e| {
+        let (is_latest, latest) = existing.iter().fold((true, &configure), |(_, _), e| {
             if &e.descriptor.base.message_timestamp > timestamp {
                 (false, e)
             } else {
@@ -46,15 +47,15 @@ pub(crate) async fn handle(
         });
 
         // delete all entries except the most recent
-        let timestamp = &latest_entry.descriptor.base.message_timestamp;
+        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
         for e in existing {
-            if &e.descriptor.base.message_timestamp < timestamp {
+            let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
+            if current_ts.cmp(&latest_ts) == Ordering::Less {
                 let cid = cid::compute(&e)?;
                 MessageStore::delete(&provider, &ctx.owner, &cid).await?;
                 EventLog::delete(&provider, &ctx.owner, &cid).await?;
             }
         }
-
         is_latest
     } else {
         true
