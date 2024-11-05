@@ -1,0 +1,51 @@
+---
+source: tests/author_delegated_grant.rs
+assertion_line: 60
+expression: entry
+snapshot_kind: text
+---
+descriptor:
+  interface: Protocols
+  method: Configure
+  messageTimestamp: "[messageTimestamp]"
+  definition:
+    protocol: "http://email-protocol.xyz"
+    published: true
+    types:
+      email:
+        schema: "http://email"
+        dataFormats:
+          - text/plain
+    structure:
+      email:
+        $actions:
+          - who: anyone
+            can:
+              - create
+          - who: author
+            of: email
+            can:
+              - read
+          - who: recipient
+            of: email
+            can:
+              - read
+        email:
+          $actions:
+            - who: anyone
+              can:
+                - create
+            - who: author
+              of: email/email
+              can:
+                - read
+            - who: recipient
+              of: email/email
+              can:
+                - read
+authorization:
+  signature:
+    payload: "[payload]"
+    signatures:
+      - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+        signature: "[signature]"

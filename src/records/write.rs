@@ -58,12 +58,12 @@ pub(crate) async fn handle(
     // ----------------------------------------------------------------
     // Latest Base State
     // ----------------------------------------------------------------
-    // `is_latest_base` is used to prevent querying of initial writes that do
+    // `is_latest` is used to prevent querying of initial writes that do
     // not have data. This prevents a malicious user from gaining access to
     // data by referencing the `data_cid` of private data in their initial
     // writes.
     //
-    // `is_latest_base` is set to true when either the incoming message comes
+    // `is_latest` is set to true when either the incoming message comes
     //  with data OR is not an initial write.
     //
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
@@ -87,7 +87,7 @@ pub(crate) async fn handle(
     // If the incoming message is not an initial write, and no `data_stream` is
     // set, we can process.
     // but not queried, we shouldn't emit it either.
-    let (reply, is_latest_base) = if initial.is_some() {
+    let (reply, is_latest) = if initial.is_some() {
         let Some(latest) = latest else {
             return Err(anyhow!("newest existing message not found"));
         };
@@ -107,7 +107,7 @@ pub(crate) async fn handle(
         )
     };
 
-    // save the message
+    // save the message and log
     let cid = cid::compute(&reply.message)?;
     let message = Message::RecordsWrite(reply.message.clone());
 
@@ -115,7 +115,7 @@ pub(crate) async fn handle(
     EventLog::append(&provider, &ctx.owner, &cid, &message).await?;
 
     // only emit an event when the message is the latest base state
-    if is_latest_base {
+    if is_latest {
         let initial_entry = initial.map(|initial| Message::RecordsWrite(initial));
         let event = Event {
             message,
@@ -124,12 +124,12 @@ pub(crate) async fn handle(
         EventStream::emit(&provider, &ctx.owner, &event).await?;
     }
 
-    // delete all existing messages of the same record that are not newest, except for the initial write
+    // delete any messages with the same `record_id` except the initial write
     // StorageController.deleteAllOlderMessagesButKeepInitialWrite(
     //     tenant, records, newestMessage, this.messageStore, this.dataStore, this.eventLog
     // );
 
-    // this.postProcessingForCoreRecordsWrite(tenant, recordsWrite);
+    // postProcessingForCoreRecordsWrite(tenant, recordsWrite);
 
     Ok(reply)
 }

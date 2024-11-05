@@ -4,14 +4,12 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
+use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
-// use vercre_dwn::permissions::GrantBuilder;
-// use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
 use vercre_dwn::service::{Message, ReplyEntry};
-// use vercre_dwn::{Interface, Method};
 
 // const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -46,6 +44,16 @@ async fn flat_space() {
     let Some(ReplyEntry::RecordsWrite(entry)) = reply.entry else {
         panic!("unexpected reply: {:?}", reply);
     };
+    assert_snapshot!("write", entry, {
+        ".recordId" => "[recordId]",
+        ".descriptor.messageTimestamp" => "[messageTimestamp]",
+        ".descriptor.dateCreated" => "[dateCreated]",
+        ".descriptor.datePublished" => "[datePublished]",
+        ".authorization.signature.payload" => "[payload]",
+        ".authorization.signature.signatures[0].signature" => "[signature]",
+        ".attestation.payload" => "[payload]",
+        ".attestation.signatures[0].signature" => "[signature]",
+    });
 
     // ------------------------------
     // Alice fetches the message from Bob's web node

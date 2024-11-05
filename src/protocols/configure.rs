@@ -60,26 +60,24 @@ pub(crate) async fn handle(
         true
     };
 
-    // save the incoming message when latest
-    let reply = if is_latest {
-        let cid = cid::compute(&configure)?;
-        let message = Message::ProtocolsConfigure(configure.clone());
-
-        MessageStore::put(&provider, &ctx.owner, &message).await?;
-        EventLog::append(&provider, &ctx.owner, &cid, &message).await?;
-
-        let event = Event {
-            message,
-            initial_entry: None,
-        };
-        EventStream::emit(&provider, &ctx.owner, &event).await?;
-
-        ConfigureReply { message: configure }
-    } else {
+    if !is_latest {
         return Err(anyhow!("message is not the latest"));
-    };
+    }
 
-    Ok(reply)
+    // save the incoming message
+    let cid = cid::compute(&configure)?;
+    let message = Message::ProtocolsConfigure(configure.clone());
+
+    MessageStore::put(&provider, &ctx.owner, &message).await?;
+    EventLog::append(&provider, &ctx.owner, &cid, &message).await?;
+
+    let event = Event {
+        message,
+        initial_entry: None,
+    };
+    EventStream::emit(&provider, &ctx.owner, &event).await?;
+
+    Ok(ConfigureReply { message: configure })
 }
 
 /// Protocols Configure payload

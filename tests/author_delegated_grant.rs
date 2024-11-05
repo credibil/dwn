@@ -4,6 +4,7 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
+use insta::assert_yaml_snapshot as assert_snapshot;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
@@ -51,12 +52,16 @@ async fn configure_any() {
     let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
         .await
         .expect("should configure protocol");
-
     assert_eq!(reply.status.code, 202);
 
     let Some(ReplyEntry::ProtocolsConfigure(entry)) = reply.entry else {
         panic!("unexpected reply: {:?}", reply);
     };
+    assert_snapshot!("configure", entry, {
+        ".descriptor.messageTimestamp" => "[messageTimestamp]",
+        ".authorization.signature.payload" => "[payload]",
+        ".authorization.signature.signatures[0].signature" => "[signature]",
+    });
 
     // ------------------------------
     // Alice fetches the email protocol configured by Bob
@@ -71,12 +76,17 @@ async fn configure_any() {
     let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
         .await
         .expect("should find protocol");
-
     assert_eq!(reply.status.code, 200);
 
     let Some(ReplyEntry::ProtocolsQuery(entry)) = reply.entry else {
         panic!("unexpected reply: {:?}", reply);
     };
+    assert_snapshot!("query", entry, {
+        ".entries[].descriptor.messageTimestamp" => "[messageTimestamp]",
+        ".entries[].authorization.signature.payload" => "[payload]",
+        ".entries[].authorization.signature.signatures[0].signature" => "[signature]",
+    });
+
 }
 
 // Allow author-delegated grant to configure a specific protocol.

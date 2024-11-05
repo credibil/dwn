@@ -1,10 +1,8 @@
 [package]
 name = "test-utils"
-description = "Test utilities"
 edition.workspace = true
 publish = false
 rust-version.workspace = true
-version.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -14,6 +12,7 @@ anyhow.workspace = true
 async-trait = "0.1.83"
 base64ct.workspace = true
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+insta.workspace = true
 multibase = "0.9"
 prqlc.workspace = true
 serde.workspace = true
