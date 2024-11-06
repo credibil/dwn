@@ -34,6 +34,10 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/records-write.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "records-read" => {
+            let schema = include_bytes!("../schemas/interface-methods/records-read.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
         "protocols-configure" => {
             let schema = include_bytes!("../schemas/interface-methods/protocols-configure.json");
             Ok(serde_json::from_slice(schema)?)
@@ -78,12 +82,24 @@ impl Retrieve for Retriever {
                     include_bytes!("../schemas/interface-methods/records-write-unidentified.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-
+            "records-filter.json" => {
+                let schema = include_bytes!("../schemas/interface-methods/records-filter.json");
+                Ok(serde_json::from_slice(schema)?)
+            }
+            "number-range-filter.json" => {
+                let schema =
+                    include_bytes!("../schemas/interface-methods/number-range-filter.json");
+                Ok(serde_json::from_slice(schema)?)
+            }
+            "string-range-filter.json" => {
+                let schema =
+                    include_bytes!("../schemas/interface-methods/string-range-filter.json");
+                Ok(serde_json::from_slice(schema)?)
+            }
             "defs.json" => {
                 let schema = include_bytes!("../schemas/definitions.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-
             "authorization.json" => {
                 let schema = include_bytes!("../schemas/authorization.json");
                 Ok(serde_json::from_slice(schema)?)

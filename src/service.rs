@@ -67,6 +67,9 @@ pub async fn handle_message(
             let code = reply.code;
             (code, Ok(ReplyEntry::RecordsWrite(reply)))
         }
+        Message::RecordsRead(read) => {
+            (202, records::read::handle(&ctx, read, provider).await.map(ReplyEntry::RecordsRead))
+        }
 
         _ => (400, Err(anyhow!("Unsupported message"))),
     };
@@ -192,11 +195,11 @@ impl Message {
 
         let payload = authzn.jws_payload()?;
         let Some(grant_id) = &payload.permission_grant_id else {
-            return Err(anyhow!("`grant_id` not found in signature payload"));
+            return Err(anyhow!("`permission_grant_id` not found in signature payload"));
         };
 
         let grant = permissions::fetch_grant(&ctx.owner, grant_id, store).await?;
-        grant.verify(&ctx.author, &ctx.owner, self.descriptor(), store).await?;
+        grant.verify(&ctx.author, &authzn.signer()?, self.descriptor(), store).await?;
 
         // save for later use
         ctx.grant = Some(grant);
@@ -234,14 +237,14 @@ pub struct Reply {
 pub enum ReplyEntry {
     /// Reply entry for messages query.
     MessagesQuery(messages::QueryReply),
-    // MessagesRead(messages::ReadReplyEntry),
-    // MessagesSubscribe(messages::SubscribeReplyEntry),
+    // MessagesRead(messages::ReadReply),
+    // MessagesSubscribe(messages::SubscribeReply),
     /// Reply entry for records write.
     RecordsWrite(records::WriteReply),
-    // RecordsQuery(records::QueryReplyEntry),
-    // RecordsRead(records::ReadReplyEntry),
-    // RecordsSubscribe(records::SubscribeReplyEntry),
-    // RecordsDelete(records::DeleteReplyEntry),
+    RecordsRead(records::ReadReply),
+    // RecordsQuery(records::QueryReply),
+    // RecordsSubscribe(records::SubscribeReply),
+    // RecordsDelete(records::DeleteReply),
     /// Reply entry for protocols configure.
     ProtocolsConfigure(protocols::ConfigureReply),
 

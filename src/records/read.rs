@@ -2,15 +2,16 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::provider::{Provider, Signer};
-// use crate::query::Criterion;
+use crate::permissions::GrantData;
+use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::service::Context;
+use crate::service::{Context, Message};
 use crate::{cid, Descriptor, Interface, Method};
 
 /// Process `Read` message.
@@ -20,7 +21,137 @@ use crate::{cid, Descriptor, Interface, Method};
 pub(crate) async fn handle(
     ctx: &Context, read: Read, provider: impl Provider,
 ) -> Result<ReadReply> {
-    todo!()
+    // get the latest active messages
+    // N.B. only use `interface` to get `RecordsWrite` and `RecordsDelete` messages
+    let filter_sql = read.descriptor.filter.to_sql();
+
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}'
+        {filter_sql}
+        ORDER BY descriptor.messageTimestamp ASC
+        ",
+        interface = Interface::Records,
+    );
+
+    let (messages, _) = MessageStore::query(&provider, &ctx.owner, &sql).await?;
+    if messages.is_empty() {
+        // status: { code: 404, detail: 'Not Found' }
+        return Ok(ReadReply::default());
+    }
+    if messages.len() > 1 {
+        return Err(anyhow!("multiple messages exist for the RecordsRead filter"));
+    }
+    let message = &messages[0];
+
+    // if the matched message is a RecordsDelete, mark as not-found and return
+    // both the RecordsDelete and the initial RecordsWrite
+    if message.descriptor().method == Method::Delete {
+        //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
+        //   if initial_write.is_none() {
+        //     return Err(anyhow!("Initial write for deleted record not found"));
+        //   }
+
+        //   // perform authorization before returning the delete and initial write messages
+        //   const parsedInitialWrite = await RecordsWrite.parse(initial_write);
+        //
+        // if let Err(e)= RecordsReadHandler.authorizeRecordsRead(tenant, recordsRead, parsedInitialWrite, this.messageStore){
+        //     // return messageReplyFromError(error, 401);
+        //     return Err(e);
+        // }
+        //
+        // return {
+        //     status : { code: 404, detail: 'Not Found' },
+        //     entry  : {
+        //       recordsDelete: recordsDeleteMessage,
+        //       initialWrite
+        //     }
+        // }
+    }
+
+    let Message::RecordsWrite(mut write) = message.clone() else {
+        return Err(anyhow!("unexpected message type"));
+    };
+
+    authorize(&ctx.owner, &read, &write)?;
+
+    let data = if let Some(encoded) = write.encoded_data {
+        write.encoded_data = None;
+        let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
+        serde_json::from_slice::<GrantData>(&bytes)?
+    } else {
+        todo!()
+        //   const result = await this.dataStore.get(tenant, write.recordId, write.descriptor.dataCid);
+        //   if (result?.dataStream === undefined) {
+        //     return {
+        //       status: { code: 404, detail: 'Not Found' }
+        //     };
+        //   }
+        //   data = result.dataStream;
+    };
+
+    // attach initial write if latest RecordsWrite is not initial write
+    let initial_write = if write.is_initial()? {
+        None
+    } else {
+        let sql = format!(
+            "
+            WHERE descriptor.interface = '{interface}'
+            AND descriptor.method = '{method}'
+            AND recordId = '{record_id}'
+            ",
+            interface = Interface::Records,
+            method = Method::Write,
+            record_id = write.record_id,
+        ); // isLatestBaseState: false
+
+        let (messages, _) = MessageStore::query(&provider, &ctx.owner, &sql).await?;
+        if messages.is_empty() {
+            return Err(anyhow!("initial write not found"));
+        }
+        let Message::RecordsWrite(initial_write) = messages[0].clone() else {
+            return Err(anyhow!("unexpected message type"));
+        };
+        Some(initial_write)
+    };
+
+    Ok(ReadReply {
+        records_write: Some(write),
+        initial_write,
+        ..ReadReply::default()
+    })
+}
+
+fn authorize(owner: &str, read: &Read, write: &Write) -> Result<()> {
+    let Some(authzn) = &read.authorization else {
+        return Ok(());
+    };
+    let author = authzn.author()?;
+
+    // authorize delegate
+    if let Some(delegated_grant) = &authzn.author_delegated_grant {
+        let grant = delegated_grant.to_grant()?;
+        grant.verify_scope(write)?;
+    }
+    // if author is owner, directly grant access
+    if author == owner {
+        return Ok(());
+    }
+    // authorization not required for published data
+    if write.descriptor.published.unwrap_or_default() {
+        return Ok(());
+    }
+
+    if let Some(recipient) = &write.descriptor.recipient {
+        if &author == recipient {
+            return Ok(());
+        }
+    }
+    if author == write.authorization.author()? {
+        return Ok(());
+    }
+
+    Err(anyhow!("unauthorized"))
 }
 
 /// Records read message payload
@@ -51,19 +182,19 @@ pub struct ReadDescriptor {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadReply {
-    /// The latest RecordsWrite message of the record if record exists (not deleted).
+    /// The latest `RecordsWrite` message of the record if record exists
+    /// (not deleted).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub records_write: Option<Write>,
 
-    /// The RecordsDelete if the record is deleted.
+    /// The `RecordsDelete` if the record is deleted.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub records_delete: Option<Delete>,
 
-    /// The initial write of the record if the returned RecordsWrite message itself is not the initial write or if a RecordsDelete is returned.
+    /// The initial write of the record if the returned `RecordsWrite` message
+    /// itself is not the initial write or if a `RecordsDelete` is returned.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_write: Option<Write>,
-    // /// The data stream associated with the record if the records exists (not deleted).
-    //   pub data: Readable;
 }
 
 /// Options to use when creating a permission grant.

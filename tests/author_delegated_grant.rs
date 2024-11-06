@@ -86,7 +86,6 @@ async fn configure_any() {
         ".entries[].authorization.signature.payload" => "[payload]",
         ".entries[].authorization.signature.signatures[0].signature" => "[signature]",
     });
-
 }
 
 // Allow author-delegated grant to configure a specific protocol.

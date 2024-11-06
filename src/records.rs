@@ -151,6 +151,7 @@ pub struct RecordsFilter {
     pub parent_id: Option<String>,
 
     /// Match records with the specified tags.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<BTreeMap<String, TagFilter>>,
 
     /// The MIME type of the requested data. For example, `application/json`.
@@ -192,6 +193,117 @@ impl RecordsFilter {
 
         Ok(filter)
     }
+
+    pub(crate) fn to_sql(&self) -> String {
+        let mut sql = String::new();
+
+        if let Some(author) = &self.author {
+            sql.push_str(&one_or_many("author", author));
+        }
+
+        if let Some(attester) = &self.attester {
+            sql.push_str(&format!("AND attester = '{attester}'\n"));
+        }
+
+        if let Some(recipient) = &self.recipient {
+            sql.push_str(&one_or_many("descriptor.recipient", recipient));
+        }
+
+        if let Some(protocol) = &self.protocol {
+            sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
+        }
+
+        if let Some(protocol_path) = &self.protocol_path {
+            sql.push_str(&format!("AND descriptor.protocolPath = '{protocol_path}'\n"));
+        }
+
+        if let Some(published) = &self.published {
+            sql.push_str(&format!("AND descriptor.published = {published}\n"));
+        }
+
+        if let Some(context_id) = &self.context_id {
+            sql.push_str(&format!("AND contextId = '{context_id}'\n"));
+        }
+
+        if let Some(schema) = &self.schema {
+            sql.push_str(&format!("AND descriptor.schema = '{schema}'\n"));
+        }
+
+        if let Some(record_id) = &self.record_id {
+            sql.push_str(&format!("AND recordId = '{record_id}'\n"));
+        }
+
+        if let Some(parent_id) = &self.parent_id {
+            sql.push_str(&format!("AND descriptor.parentId = '{parent_id}'\n"));
+        }
+
+        if let Some(tags) = &self.tags {
+            for (property, filter) in tags {
+                sql.push_str(&format!("AND descriptor.tags.{property} {}\n", filter.to_sql()));
+            }
+        }
+
+        if let Some(data_format) = &self.data_format {
+            sql.push_str(&format!("AND descriptor.dataFormat = '{data_format}'\n"));
+        }
+
+        if let Some(data_size) = &self.data_size {
+            sql.push_str(&format!(
+                "descriptor.dataSize BETWEEN {min} AND {max}\n",
+                min = data_size.min.unwrap_or(0),
+                max = data_size.max.unwrap_or(u64::MAX)
+            ));
+        }
+
+        if let Some(data_cid) = &self.data_cid {
+            sql.push_str(&format!("AND descriptor.dataCid = '{data_cid}'\n"));
+        }
+
+        if let Some(date_created) = &self.date_created {
+            sql.push_str(&format!(
+                "AND descriptor.dateCreated BETWEEN {from} AND {to}'\n",
+                from = date_created.from,
+                to = date_created.to
+            ));
+        }
+
+        if let Some(date_published) = &self.date_published {
+            sql.push_str(&format!(
+                "AND descriptor.datePublished BETWEEN {from} AND {to}'\n",
+                from = date_published.from,
+                to = date_published.to
+            ));
+        }
+
+        if let Some(date_updated) = &self.date_updated {
+            sql.push_str(&format!(
+                "AND descriptor.dateUpdated BETWEEN {from} AND {to}'\n",
+                from = date_updated.from,
+                to = date_updated.to
+            ));
+        }
+
+        sql
+    }
+}
+
+fn one_or_many(field: &str, clause: &Quota<String>) -> String {
+    match clause {
+        Quota::One(value) => {
+            format!("AND {field} = '{value}'\n")
+        }
+        Quota::Many(values) => {
+            let mut sql = String::new();
+            sql.push_str(&format!("{field}  IN ("));
+            for value in values {
+                sql.push_str(&format!("'{value}',"));
+            }
+            sql.pop(); // remove trailing comma
+            sql.push_str(")\n");
+
+            sql
+        }
+    }
 }
 
 /// Tag filter.
@@ -206,6 +318,20 @@ pub enum TagFilter {
 
     /// Filter by a specific value.
     Equal(Value),
+}
+
+impl TagFilter {
+    pub(crate) fn to_sql(&self) -> String {
+        match self {
+            Self::StartsWith(value) => format!("LIKE '{value}%'"),
+            Self::Range(range) => {
+                let min = range.min.unwrap_or(0);
+                let max = range.max.unwrap_or(u64::MAX);
+                format!("BETWEEN {min} AND {max}")
+            }
+            Self::Equal(value) => format!("= '{value}'"),
+        }
+    }
 }
 
 impl Default for TagFilter {

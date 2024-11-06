@@ -35,8 +35,8 @@ async fn flat_space() {
         .build(&bob_keyring)
         .await
         .expect("should create write");
-
     let message = Message::RecordsWrite(write.clone());
+
     let reply =
         vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
     assert_eq!(reply.status.code, 204);
@@ -57,6 +57,12 @@ async fn flat_space() {
     //   expect(readReply.status.code).to.equal(200);
     //   expect(readReply.entry!.recordsWrite).to.exist;
     //   expect(readReply.entry!.recordsWrite?.descriptor).to.exist;
+
+    let message = Message::RecordsRead(read);
+    let reply =
+        vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
+    println!("{:?}", reply);
+    assert_eq!(reply.status.code, 200);
 
     // let builder = GrantBuilder::new()
     //     .granted_to(BOB_DID)

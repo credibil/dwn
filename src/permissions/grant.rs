@@ -56,12 +56,12 @@ impl Grant {
 
         // verify grant scope for interface
         if descriptor.interface != self.data.scope.interface {
-            return Err(anyhow!("message interface not within the scope of grant {}", self.id));
+            return Err(anyhow!("interface not within the scope of grant {}", self.id));
         }
 
         // verify grant scope method
         if descriptor.method != self.data.scope.method {
-            return Err(anyhow!("message method not within the scope of grant {}", self.id));
+            return Err(anyhow!("method not within the scope of grant {}", self.id));
         }
 
         // verify the message is within the grant's time frame
@@ -128,7 +128,7 @@ impl Grant {
         Ok(())
     }
 
-    fn verify_scope(&self, write: &Write) -> Result<()> {
+    pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
         let ScopeType::Records { protocol, option } = &self.data.scope.scope_type else {
             return Err(anyhow!("invalid scope type"));
         };

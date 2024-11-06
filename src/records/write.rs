@@ -13,7 +13,7 @@ use serde_json::{Map, Value};
 use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
-use crate::auth::{Authorization, JwsPayload};
+use crate::auth::{self, Authorization, JwsPayload};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, Event, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
@@ -232,30 +232,15 @@ impl Write {
         protocol_role: Option<String>, signer: &impl Signer,
     ) -> Result<()> {
         let (author_did, delegated_grant_id) = if let Some(grant) = &delegated_grant {
-            let signature = &grant.authorization.signature.signatures[0];
-            let Some(kid) = signature.protected.kid() else {
-                return Err(anyhow!("missing key ID"));
-            };
-            (kid.split('#').next().map(ToString::to_string), Some(cid::compute(&grant)?))
+            (Some(auth::signer_did(&grant.authorization.signature)?), Some(cid::compute(&grant)?))
         } else {
             (signer.verification_method().split('#').next().map(ToString::to_string), None)
         };
 
-        let descriptor_cid = cid::compute(&self.descriptor)?;
-
         // compute `record_id` if not given at construction time
         if self.record_id.is_empty() {
-            #[derive(Serialize)]
-            struct EntryIdInput {
-                #[serde(flatten)]
-                descriptor: WriteDescriptor,
-                author: String,
-            }
-            let id_input = EntryIdInput {
-                descriptor: self.descriptor.clone(),
-                author: author_did.unwrap_or_default(),
-            };
-            self.record_id = cid::compute(&id_input)?;
+            self.record_id =
+                entry_id(self.descriptor.clone(), author_did.clone().unwrap_or_default())?;
         }
 
         // compute `context_id` if this is a protocol-space record
@@ -267,7 +252,12 @@ impl Write {
             };
         }
 
+        // HACK: save author for querying
+        self.descriptor.author = author_did;
+
         let attestation_cid = if let Some(attestation) = &self.attestation {
+            // HACK: save attester for querying
+            self.descriptor.attester = Some(auth::signer_did(attestation)?);
             Some(cid::compute(attestation)?)
         } else {
             None
@@ -280,7 +270,7 @@ impl Write {
 
         let payload = WriteSignaturePayload {
             base: JwsPayload {
-                descriptor_cid,
+                descriptor_cid: cid::compute(&self.descriptor)?,
                 permission_grant_id,
                 delegated_grant_id,
                 protocol_role,
@@ -421,16 +411,9 @@ impl Write {
         todo!()
     }
 
-    // Computes the deterministic Entry ID of the message.
-    pub(crate) fn entry_id(&self) -> Result<String> {
-        let author = self.authorization.author()?;
-        let mut descriptor = self.descriptor.clone();
-        descriptor.author = Some(author);
-        cid::compute(&descriptor)
-    }
-
     pub(crate) fn is_initial(&self) -> Result<bool> {
-        Ok(self.entry_id()? == self.record_id)
+        let entry_id = entry_id(self.descriptor.clone(), self.authorization.author()?)?;
+        Ok(entry_id == self.record_id)
     }
 
     // Verify immutable properties of two records are identical.
@@ -452,8 +435,17 @@ impl Write {
 
         true
     }
+}
 
-    //
+// Computes the deterministic Entry ID of the message.
+pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
+    #[derive(Serialize)]
+    struct EntryId {
+        #[serde(flatten)]
+        descriptor: WriteDescriptor,
+        author: String,
+    }
+    cid::compute(&EntryId { descriptor, author })
 }
 
 /// Signature payload.
@@ -584,10 +576,12 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<DateTime<Utc>>,
 
-    // TODO: fix this
-    /// used to calculate CID during test for intial write.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // HACK: used for querying and CID calculation
+    #[serde(skip)]
     author: Option<String>,
+
+    #[serde(skip)]
+    attester: Option<String>,
 }
 
 /// Write reply.
@@ -893,14 +887,14 @@ impl WriteBuilder {
         let payload = Payload {
             descriptor_cid: cid::compute(&descriptor)?,
         };
-        let jws = Jws::new(Type::Jwt, &payload, keyring).await?;
+        let attestation = Some(Jws::new(Type::Jwt, &payload, keyring).await?);
 
         // encryption
 
         let mut write = Write {
             record_id: self.record_id.unwrap_or_default(),
             descriptor,
-            attestation: Some(jws),
+            attestation,
             ..Write::default()
         };
 
@@ -966,15 +960,14 @@ pub enum DerivationScheme {
 pub(crate) async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Message>> {
+    // N.B. only use `interface` to get `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
         AND recordId = '{record_id}'
         ORDER BY descriptor.messageTimestamp ASC
         ",
         interface = Interface::Records,
-        method = Method::Write,
     );
     let (records, _) = store.query(owner, &sql).await?;
     Ok(records)
