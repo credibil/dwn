@@ -198,13 +198,13 @@ impl RecordsFilter {
         let mut sql = String::new();
 
         // TODO! filter by these after query
-        // if let Some(author) = &self.author {
-        //     sql.push_str(&one_or_many("author", author));
-        // }
+        if let Some(author) = &self.author {
+            sql.push_str(&one_or_many("author", author));
+        }
 
-        // if let Some(attester) = &self.attester {
-        //     sql.push_str(&format!("AND attester = '{attester}'\n"));
-        // }
+        if let Some(attester) = &self.attester {
+            sql.push_str(&format!("AND attester = '{attester}'\n"));
+        }
 
         if let Some(recipient) = &self.recipient {
             sql.push_str(&one_or_many("descriptor.recipient", recipient));

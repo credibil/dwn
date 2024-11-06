@@ -3,7 +3,7 @@
 //! `Write` is a message type used to create a new record in the web node.
 
 use std::cmp::Ordering;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
 use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
@@ -570,12 +570,83 @@ pub struct WriteDescriptor {
     /// The datetime of publishing, if published.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<DateTime<Utc>>,
-    // // HACK: used for querying and CID calculation
-    // #[serde(skip)]
-    // author: Option<String>,
+}
 
-    // #[serde(skip)]
-    // attester: Option<String>,
+/// Index (flatten) the `Write` message for SQL-based queries.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WriteIndex {
+    /// The associated web node interface.
+    pub interface: Interface,
+
+    /// The interface method.
+    pub method: Method,
+
+    /// The timestamp of the message.
+    pub message_timestamp: DateTime<Utc>,
+
+    /// Records matching the specified author.
+    pub author: String,
+
+    /// Records matching the specified creator.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attester: Option<String>,
+
+    /// Records matching the specified recipient(s).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipient: Option<String>,
+
+    /// Record matching the specified protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+
+    /// Record protocol path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol_path: Option<String>,
+
+    /// Whether the record is published.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub published: Option<bool>,
+
+    /// Records with the specified context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+
+    /// Records with the specified schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+
+    /// Get a single object by its ID.
+    pub record_id: String,
+
+    /// The CID of the parent object .
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+
+    /// Match records with the specified tags.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
+    pub tags: Option<BTreeMap<String, Value>>,
+
+    /// The MIME type of the requested data. For example, `application/json`.
+    pub data_format: String,
+
+    /// Records with a size within the range.
+    pub data_size: u64,
+
+    /// CID of the data.
+    pub data_cid: String,
+
+    /// Filter messages created within the specified range.
+    pub date_created: DateTime<Utc>,
+
+    /// Filter messages published within the specified range.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_published: Option<DateTime<Utc>>,
+
+    /// Match messages updated within the specified range.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_updated: Option<DateTime<Utc>>,
 }
 
 /// Write reply.
