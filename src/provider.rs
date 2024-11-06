@@ -83,20 +83,10 @@ pub trait MessageStore: Send + Sync {
         &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = Result<Option<Message>>> + Send;
 
-    /// Queries the underlying store for messages that matches the provided
-    /// filters. Supplying multiple filters establishes an OR condition between
-    /// the filters.
+    /// Queries the underlying store for matches to the provided SQL WHERE clause.
     fn query(
         &self, owner: &str, sql: &str,
     ) -> impl Future<Output = Result<(Vec<Message>, Cursor)>> + Send;
-
-    // /// Queries the underlying store for messages that matches the provided
-    // /// filters. Supplying multiple filters establishes an OR condition between
-    // /// the filters.
-    // fn query(
-    //     &self, owner: &str, filters: Vec<Filter>, sort: Option<Sort>,
-    //     pagination: Option<Pagination>,
-    // ) -> impl Future<Output = Result<(Vec<Message>, Cursor)>> + Send;
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send;
