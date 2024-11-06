@@ -22,9 +22,9 @@ async fn configure_any() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Alice's keyring");
 
-    // ------------------------------
+    // --------------------------------------------------
     // Alice grants Bob the ability to configure any protocol
-    // ------------------------------
+    // --------------------------------------------------
 
     let builder = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -35,9 +35,9 @@ async fn configure_any() {
 
     let grant_to_bob = builder.build(&alice_keyring).await.expect("should create grant");
 
-    // ------------------------------
+    // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
-    // ------------------------------
+    // --------------------------------------------------
     let email_json = include_bytes!("protocols/email.json");
     let email_proto: Definition = serde_json::from_slice(email_json).expect("should deserialize");
 
@@ -60,9 +60,9 @@ async fn configure_any() {
         ".authorization.signature.signatures[0].signature" => "[signature]",
     });
 
-    // ------------------------------
+    // --------------------------------------------------
     // Alice fetches the email protocol configured by Bob
-    // ------------------------------
+    // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(email_proto.protocol)
         .build(&alice_keyring)
@@ -75,10 +75,7 @@ async fn configure_any() {
         .expect("should find protocol");
     assert_eq!(reply.status.code, 200);
 
-    let Some(ReplyEntry::ProtocolsQuery(entry)) = reply.entry else {
-        panic!("unexpected reply: {:?}", reply);
-    };
-    assert_snapshot!("query", entry, {
+    assert_snapshot!("query", reply.entry, {
         ".entries[].descriptor.messageTimestamp" => "[messageTimestamp]",
         ".entries[].authorization.signature.payload" => "[payload]",
         ".entries[].authorization.signature.signatures[0].signature" => "[signature]",

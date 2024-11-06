@@ -11,19 +11,19 @@ use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
 use vercre_dwn::service::Message;
 
-// const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
+const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
 async fn flat_space() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    // let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Alice's keyring");
 
-    // ------------------------------
+    // --------------------------------------------------
     // Bob writes a message to his web node
-    // ------------------------------
+    // --------------------------------------------------
     let data = serde_json::to_vec(&json!({
         "message": "test record write",
     }))
@@ -41,15 +41,15 @@ async fn flat_space() {
         vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
     assert_eq!(reply.status.code, 204);
 
-    // ------------------------------
+    // --------------------------------------------------
     // Alice fetches the message from Bob's web node
-    // ------------------------------
+    // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter {
             record_id: Some(write.record_id),
             ..RecordsFilter::default()
         })
-        .build(&bob_keyring)
+        .build(&alice_keyring)
         .await
         .expect("should create write");
 
@@ -69,6 +69,9 @@ async fn flat_space() {
         ".recordsWrite.attestation.signatures[0].signature" => "[signature]",
     });
 
+    // --------------------------------------------------
+    // Bob configures the email protocol on Alice's behalf
+    // --------------------------------------------------
     // let builder = GrantBuilder::new()
     //     .granted_to(BOB_DID)
     //     .request_id("grant_id_1")
@@ -78,9 +81,6 @@ async fn flat_space() {
 
     // let grant_to_bob = builder.build(&alice_keyring).await.expect("should create grant");
 
-    // // ------------------------------
-    // // Bob configures the email protocol on Alice's behalf
-    // // ------------------------------
     // let email_json = include_bytes!("protocols/email.json");
     // let email_proto: Definition =
     //     serde_json::from_slice(email_json).expect("should deserialize");
@@ -103,9 +103,9 @@ async fn flat_space() {
 
     // assert_eq!(reply.status.code, 202);
 
-    // // ------------------------------
-    // // Alice fetches the email protocol configured by Bob
-    // // ------------------------------
+    // --------------------------------------------------
+    // Alice fetches the email protocol configured by Bob
+    // --------------------------------------------------
     // let query = QueryBuilder::new()
     //     .filter(email_proto.protocol)
     //     .build(&alice_keyring)

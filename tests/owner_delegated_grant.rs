@@ -22,9 +22,9 @@ async fn configure() {
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bobs's keyring");
     let appx_keyring = provider.keyring(APPX_DID).expect("should get AppX's keyring");
 
-    // ------------------------------
+    // --------------------------------------------------
     // Alice grants App X to write as her for the `chat` protocol
-    // ------------------------------
+    // --------------------------------------------------
     let builder = GrantBuilder::new()
         .granted_to(APPX_DID)
         .request_id("grant_id_1")
@@ -41,9 +41,9 @@ async fn configure() {
 
     let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
 
-    // ------------------------------
+    // --------------------------------------------------
     // Bob creates a RecordsWrite message
-    // ------------------------------
+    // --------------------------------------------------
     let mut data = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut data);
     let write_data = WriteData::Bytes { data: data.to_vec() };
@@ -55,10 +55,10 @@ async fn configure() {
         .await
         .expect("should create write");
 
-    // ------------------------------
+    // --------------------------------------------------
     // App X signs over Bob's RecordsWrite as owner but does
     // not include the delegated grant (removed below)
-    // ------------------------------
+    // --------------------------------------------------
     // TODO: look at merging the `DelegatedGrant` into `Write`
     let delegated_grant = DelegatedGrant {
         authorization: Box::new(grant_to_appx.authorization),
