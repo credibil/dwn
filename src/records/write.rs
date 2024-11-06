@@ -252,12 +252,7 @@ impl Write {
             };
         }
 
-        // HACK: save author for querying
-        self.descriptor.author = author_did;
-
         let attestation_cid = if let Some(attestation) = &self.attestation {
-            // HACK: save attester for querying
-            self.descriptor.attester = Some(auth::signer_did(attestation)?);
             Some(cid::compute(attestation)?)
         } else {
             None
@@ -575,13 +570,12 @@ pub struct WriteDescriptor {
     /// The datetime of publishing, if published.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<DateTime<Utc>>,
+    // // HACK: used for querying and CID calculation
+    // #[serde(skip)]
+    // author: Option<String>,
 
-    // HACK: used for querying and CID calculation
-    #[serde(skip)]
-    author: Option<String>,
-
-    #[serde(skip)]
-    attester: Option<String>,
+    // #[serde(skip)]
+    // attester: Option<String>,
 }
 
 /// Write reply.
@@ -889,7 +883,7 @@ impl WriteBuilder {
         };
         let attestation = Some(Jws::new(Type::Jwt, &payload, keyring).await?);
 
-        // encryption
+        // TODO: encryption
 
         let mut write = Write {
             record_id: self.record_id.unwrap_or_default(),

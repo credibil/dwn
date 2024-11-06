@@ -39,6 +39,10 @@ pub(crate) async fn handle(
         // status: { code: 404, detail: 'Not Found' }
         return Ok(ReadReply::default());
     }
+
+    // TODO: filter by author and attester
+    // self.descriptor.author = author_did;
+
     if messages.len() > 1 {
         return Err(anyhow!("multiple messages exist for the RecordsRead filter"));
     }
@@ -80,7 +84,8 @@ pub(crate) async fn handle(
         let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
         serde_json::from_slice::<GrantData>(&bytes)?
     } else {
-        todo!()
+        // TODO: implement data retrieval
+        GrantData::default()
         //   const result = await this.dataStore.get(tenant, write.recordId, write.descriptor.dataCid);
         //   if (result?.dataStream === undefined) {
         //     return {
@@ -109,9 +114,10 @@ pub(crate) async fn handle(
         if messages.is_empty() {
             return Err(anyhow!("initial write not found"));
         }
-        let Message::RecordsWrite(initial_write) = messages[0].clone() else {
+        let Message::RecordsWrite(mut initial_write) = messages[0].clone() else {
             return Err(anyhow!("unexpected message type"));
         };
+        initial_write.encoded_data = None;
         Some(initial_write)
     };
 
@@ -195,6 +201,10 @@ pub struct ReadReply {
     /// itself is not the initial write or if a `RecordsDelete` is returned.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_write: Option<Write>,
+
+    /// The data for the record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<GrantData>,
 }
 
 /// Options to use when creating a permission grant.

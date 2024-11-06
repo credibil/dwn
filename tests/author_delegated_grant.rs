@@ -54,10 +54,7 @@ async fn configure_any() {
         .expect("should configure protocol");
     assert_eq!(reply.status.code, 202);
 
-    let Some(ReplyEntry::ProtocolsConfigure(entry)) = reply.entry else {
-        panic!("unexpected reply: {:?}", reply);
-    };
-    assert_snapshot!("configure", entry, {
+    assert_snapshot!("configure", reply.entry, {
         ".descriptor.messageTimestamp" => "[messageTimestamp]",
         ".authorization.signature.payload" => "[payload]",
         ".authorization.signature.signatures[0].signature" => "[signature]",

@@ -68,7 +68,7 @@ pub async fn handle_message(
             (code, Ok(ReplyEntry::RecordsWrite(reply)))
         }
         Message::RecordsRead(read) => {
-            (202, records::read::handle(&ctx, read, provider).await.map(ReplyEntry::RecordsRead))
+            (200, records::read::handle(&ctx, read, provider).await.map(ReplyEntry::RecordsRead))
         }
 
         _ => (400, Err(anyhow!("Unsupported message"))),

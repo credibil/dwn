@@ -4,7 +4,7 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
-// use insta::assert_yaml_snapshot as assert_snapshot;
+use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::provider::KeyStore;
@@ -53,16 +53,21 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    //   const readReply = await dwn.processMessage(bob.did, recordsRead.message);
-    //   expect(readReply.status.code).to.equal(200);
-    //   expect(readReply.entry!.recordsWrite).to.exist;
-    //   expect(readReply.entry!.recordsWrite?.descriptor).to.exist;
-
     let message = Message::RecordsRead(read);
     let reply =
         vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
-    println!("{:?}", reply);
     assert_eq!(reply.status.code, 200);
+
+    assert_snapshot!("read", reply.entry, {
+        ".recordsWrite.recordId" => "[recordId]",
+        ".recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
+        ".recordsWrite.descriptor.dateCreated" => "[dateCreated]",
+        ".recordsWrite.descriptor.datePublished" => "[datePublished]",
+        ".recordsWrite.authorization.signature.payload" => "[payload]",
+        ".recordsWrite.authorization.signature.signatures[0].signature" => "[signature]",
+        ".recordsWrite.attestation.payload" => "[payload]",
+        ".recordsWrite.attestation.signatures[0].signature" => "[signature]",
+    });
 
     // let builder = GrantBuilder::new()
     //     .granted_to(BOB_DID)
