@@ -9,6 +9,7 @@ use serde_json::Value;
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{self, Write, WriteBuilder, WriteData, WriteProtocol};
+use crate::service::Message;
 use crate::{utils, Descriptor, Interface, Method};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -101,7 +102,7 @@ impl Grant {
             parent_id = self.id // AND isLatestBaseState = true
         );
 
-        let (messages, _) = store.query(grantor, &sql).await?;
+        let (messages, _) = store.query::<Write>(grantor, &sql).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(anyhow!("grant has been revoked"));
         };

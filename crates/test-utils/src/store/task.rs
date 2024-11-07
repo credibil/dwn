@@ -1,9 +1,11 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use serde_json::Value;
 use vercre_dwn::provider::{ResumableTask, TaskStore};
 
 use super::ProviderImpl;
 
+#[async_trait]
 impl TaskStore for ProviderImpl {
     async fn register(&self, task: &Value, timeout_secs: u64) -> Result<ResumableTask> {
         todo!()

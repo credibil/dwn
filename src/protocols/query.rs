@@ -10,30 +10,78 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::service::{Context, Message};
-use crate::{cid, utils, Cursor, Descriptor, Interface, Method, Status};
+use crate::service::{Context, Handler, Message, Reply};
+use crate::{cid, schema, utils, Cursor, Descriptor, Interface, Method, Status};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
-    ctx: &Context, query: Query, provider: impl Provider,
-) -> Result<QueryReply> {
-    query.authorize(ctx)?;
-    let entries = fetch_config(&ctx.owner, query.descriptor.filter, &provider).await?;
+impl Handler for Query {
+    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
+        self.authorize(&ctx)?;
+        let entries = fetch_config(&ctx.owner, self.descriptor.filter, &provider).await?;
 
-    // TODO: pagination & sorting
-    // TODO: return errors in Reply
+        // TODO: pagination & sorting
+        // TODO: return errors in Reply
 
-    Ok(QueryReply {
-        status: Status {
-            code: 200,
-            detail: Some("OK".to_string()),
-        },
-        entries,
-        cursor: None,
-    })
+        Ok(QueryReply {
+            status: Status {
+                code: 200,
+                detail: Some("OK".to_string()),
+            },
+            entries,
+            cursor: None,
+        })
+    }
+}
+
+/// Protocols Query payload
+///
+/// # Errors
+/// TODO: Add errors
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Query {
+    /// The Query descriptor.
+    pub descriptor: QueryDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+impl Message for Query {
+    fn cid(&self) -> anyhow::Result<String> {
+        cid::compute(self)
+    }
+
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
+    }
+}
+
+/// Messages Query reply
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct QueryReply {
+    /// Status message to accompany the reply.
+    pub status: Status,
+
+    /// The Query descriptor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Vec<Configure>>,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
+}
+
+impl Reply for QueryReply {
+    fn status(&self) -> Status {
+        self.status.clone()
+    }
 }
 
 /// Fetch published `protocols::Configure` matching the query
@@ -58,33 +106,11 @@ pub(crate) async fn fetch_config(
     );
 
     // execute query
-    let (messages, _cursor) = store.query(owner, &sql).await?;
+    let (messages, _) = store.query::<Configure>(owner, &sql).await?;
     if messages.is_empty() {
         return Ok(None);
     }
-
-    let mut entries = Vec::new();
-    for msg in messages {
-        let Message::ProtocolsConfigure(cfg) = msg else {
-            return Err(anyhow!("Unexpected message type"));
-        };
-        entries.push(cfg);
-    }
-
-    Ok(Some(entries))
-}
-
-/// Protocols Query payload
-///
-/// # Errors
-/// TODO: Add errors
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Query {
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
+    Ok(Some(messages))
 }
 
 impl Query {
@@ -113,21 +139,6 @@ impl Query {
 
         Ok(())
     }
-}
-
-/// Messages Query reply
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct QueryReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
-    /// The Query descriptor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<Configure>>,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
 }
 
 /// Query descriptor.
@@ -213,8 +224,7 @@ impl QueryBuilder {
             authorization,
         };
 
-        let message = Message::ProtocolsQuery(query.clone());
-        message.validate_schema()?;
+        schema::validate(&query)?;
 
         Ok(query)
     }

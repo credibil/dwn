@@ -17,125 +17,187 @@ use crate::auth::{self, Authorization, JwsPayload};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, Event, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
-use crate::service::{Context, Message};
-use crate::{cid, permissions, utils, Descriptor, Interface, Method, MAX_ENCODED_SIZE};
+use crate::service::{Context, Handler, Message, Reply};
+use crate::{cid, permissions, utils, Descriptor, Interface, Method, Status, MAX_ENCODED_SIZE};
 
 /// Process `Write` message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
-    ctx: &Context, write: Write, provider: impl Provider,
-) -> Result<WriteReply> {
-    // verify integrity of messages with protocol
-    if write.descriptor.protocol.is_some() {
-        protocol::verify_integrity(&ctx.owner, &write, &provider).await?;
-    }
-
-    // authorize the message
-    authorize(&ctx.owner, &write, &provider).await?;
-
-    let messages = existing_entries(&ctx.owner, &write.record_id, &provider).await?;
-    let (initial, latest) = first_and_last(&messages).await?;
-
-    // if current message is not the initial write, check 'immutable' properties
-    // haven't been altered
-    if let Some(initial) = &initial {
-        if !write.compare_immutable(initial) {
-            return Err(anyhow!("immutable properties do not match"));
+impl Handler for Write {
+    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
+        // verify integrity of messages with protocol
+        if self.descriptor.protocol.is_some() {
+            protocol::verify_integrity(&ctx.owner, &self, &provider).await?;
         }
-    }
 
-    // confirm current message is the latest AND not a delete
-    if let Some(latest) = &latest {
-        let current_ts = write.descriptor.base.message_timestamp.unwrap_or_default();
-        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+        // authorize the message
+        authorize(&ctx.owner, &self, &provider).await?;
 
-        if current_ts.cmp(&latest_ts) == Ordering::Less {
-            return Err(anyhow!("newer write record already exists"));
+        let messages = existing_entries(&ctx.owner, &self.record_id, &provider).await?;
+        let (initial, latest) = first_and_last(&messages).await?;
+
+        // if current message is not the initial write, check 'immutable' properties
+        // haven't been altered
+        if let Some(initial) = &initial {
+            if !self.compare_immutable(initial) {
+                return Err(anyhow!("immutable properties do not match"));
+            }
         }
-        if latest.descriptor.base.method == Method::Delete {
-            return Err(anyhow!("RecordsWrite not allowed after RecordsDelete"));
+
+        // confirm current message is the latest AND not a delete
+        if let Some(latest) = &latest {
+            let current_ts = self.descriptor.base.message_timestamp.unwrap_or_default();
+            let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+
+            if current_ts.cmp(&latest_ts) == Ordering::Less {
+                return Err(anyhow!("newer write record already exists"));
+            }
+            if latest.descriptor.base.method == Method::Delete {
+                return Err(anyhow!("RecordsWrite not allowed after RecordsDelete"));
+            }
         }
-    }
 
-    // ----------------------------------------------------------------
-    // Latest Base State
-    // ----------------------------------------------------------------
-    // `is_latest` is used to prevent querying of initial writes that do
-    // not have data. This prevents a malicious user from gaining access to
-    // data by referencing the `data_cid` of private data in their initial
-    // writes.
-    //
-    // `is_latest` is set to true when either the incoming message comes
-    //  with data OR is not an initial write.
-    //
-    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
+        // ----------------------------------------------------------------
+        // Latest Base State
+        // ----------------------------------------------------------------
+        // `is_latest` is used to prevent querying of initial writes that do
+        // not have data. This prevents a malicious user from gaining access to
+        // data by referencing the `data_cid` of private data in their initial
+        // writes.
+        //
+        // `is_latest` is set to true when either the incoming message comes
+        //  with data OR is not an initial write.
+        //
+        // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
-    // ----------------------------------------------------------------
-    // Response Codes
-    // ----------------------------------------------------------------
-    // In order to discern between a message accepted as a queryable write and
-    // something accepted as an initial state we use separate response codes:
-    //   - 202 for queryable writes
-    //   - 204 for non-queryable writes.
-    //   - 409 if the incoming message is not the latest (TODO: used typed errors)
-    //
-    // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
+        // ----------------------------------------------------------------
+        // Response Codes
+        // ----------------------------------------------------------------
+        // In order to discern between a message accepted as a queryable write and
+        // something accepted as an initial state we use separate response codes:
+        //   - 202 for queryable writes
+        //   - 204 for non-queryable writes.
+        //   - 409 if the incoming message is not the latest (TODO: used typed errors)
+        //
+        // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
 
-    // has data stream been provided?
-    // if data_stream.is_some() {
-    //    (process_with_data_stream(owner, message, data_stream).await?,
-    //     true)
-    // } else
+        // has data stream been provided?
+        // if data_stream.is_some() {
+        //    (process_with_data_stream(owner, message, data_stream).await?,
+        //     true)
+        // } else
 
-    // if the incoming message is not the initial write, and no `data_stream` is
-    // set, we can process
-    let (write, code) = if initial.is_some() {
-        let Some(latest) = &latest else {
-            return Err(anyhow!("newest existing message not found"));
+        // if the incoming message is not the initial write, and no `data_stream` is
+        // set, we can process
+        let (write, code) = if initial.is_some() {
+            let Some(latest) = &latest else {
+                return Err(anyhow!("newest existing message not found"));
+            };
+            let write = process_data(&ctx.owner, &self, latest, &provider).await?;
+            (write, 202)
+        } else {
+            (self.clone(), 204)
         };
-        let write = process_data(&ctx.owner, &write, latest, &provider).await?;
-        (write, 202)
-    } else {
-        (write, 204)
-    };
 
-    // save the message and log
-    let cid = cid::compute(&write)?;
-    let message = Message::RecordsWrite(write.clone());
+        // save the message and log
+        let cid = cid::compute(&write)?;
 
-    MessageStore::put(&provider, &ctx.owner, &message).await?;
-    EventLog::append(&provider, &ctx.owner, &cid, &message).await?;
+        MessageStore::put(&provider, &ctx.owner, &write).await?;
+        EventLog::append(&provider, &ctx.owner, &cid, &write).await?;
 
-    // only emit an event when the message is the latest base state
-    if initial.is_some() {
-        let initial_entry = initial.map(Message::RecordsWrite);
-        let event = Event {
-            message,
-            initial_entry,
-        };
-        EventStream::emit(&provider, &ctx.owner, &event).await?;
+        // only emit an event when the message is the latest base state
+        if initial.is_some() {
+            let initial_entry = initial;
+            let event = Event {};
+            //     message,
+            //     initial_entry,
+            // };
+            EventStream::emit(&provider, &ctx.owner, &event).await?;
+        }
+
+        // delete messages with the same `record_id` EXCEPT the initial write
+        let mut deletable = VecDeque::from(messages);
+        let _ = deletable.pop_front(); // initial write is first entry
+        for msg in deletable {
+            let cid = cid::compute(&msg)?;
+            MessageStore::delete::<Self>(&provider, &ctx.owner, &cid).await?;
+            EventLog::delete(&provider, &ctx.owner, &cid).await?;
+        }
+
+        // when message is a grant revocation, delete all grant-authorized
+        // messages with timestamp after revocation
+        if write.descriptor.protocol == Some(PROTOCOL_URI.to_owned())
+            && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_owned())
+        {
+            revoke_grants(&ctx.owner, &write, &provider).await?;
+        }
+
+        Ok(WriteReply {
+            status: Status {
+                code,
+                detail: Some("OK".to_string()),
+            },
+        })
+    }
+}
+
+/// Records write message payload
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Write {
+    /// The Write descriptor.
+    pub descriptor: WriteDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+
+    /// Record CID
+    pub record_id: String,
+
+    /// Record context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+
+    /// Record data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attestation: Option<Jws>,
+
+    /// Record encryption.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encryption: Option<EncryptionProperty>,
+
+    /// The base64url encoded data of the record if the data associated with
+    /// the recordnis equal or smaller than `MAX_ENCODING_SIZE`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoded_data: Option<String>,
+}
+
+impl Message for Write {
+    fn cid(&self) -> anyhow::Result<String> {
+        cid::compute(self)
     }
 
-    // delete messages with the same `record_id` EXCEPT the initial write
-    let mut deletable = VecDeque::from(messages);
-    let _ = deletable.pop_front(); // initial write is first entry
-    for msg in deletable {
-        let cid = cid::compute(&msg)?;
-        MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-        EventLog::delete(&provider, &ctx.owner, &cid).await?;
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
     }
 
-    // when message is a grant revocation, delete all grant-authorized
-    // messages with timestamp after revocation
-    if write.descriptor.protocol == Some(PROTOCOL_URI.to_owned())
-        && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_owned())
-    {
-        revoke_grants(&ctx.owner, &write, &provider).await?;
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
     }
+}
 
-    Ok(WriteReply { code })
+/// Write reply.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct WriteReply {
+    /// Status message to accompany the reply.
+    pub status: Status,
+}
+
+impl Reply for WriteReply {
+    fn status(&self) -> Status {
+        self.status.clone()
+    }
 }
 
 async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
@@ -192,37 +254,6 @@ async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Res
     }
 
     Err(anyhow!("message failed authorization"))
-}
-
-/// Records write message payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Write {
-    /// The Write descriptor.
-    pub descriptor: WriteDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-
-    /// Record CID
-    pub record_id: String,
-
-    /// Record context.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
-
-    /// Record data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attestation: Option<Jws>,
-
-    /// Record encryption.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption: Option<EncryptionProperty>,
-
-    /// The base64url encoded data of the record if the data associated with
-    /// the recordnis equal or smaller than `MAX_ENCODING_SIZE`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encoded_data: Option<String>,
 }
 
 impl Write {
@@ -649,13 +680,6 @@ pub(crate) struct WriteIndex {
     pub date_updated: Option<DateTime<Utc>>,
 }
 
-/// Write reply.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct WriteReply {
-    #[serde(skip)]
-    pub(crate) code: u16,
-}
-
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct WriteBuilder {
@@ -1024,7 +1048,7 @@ pub enum DerivationScheme {
 // Fetch previous entries for this record, ordered from earliest to latest.
 pub(crate) async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
-) -> Result<Vec<Message>> {
+) -> Result<Vec<Write>> {
     // N.B. only use `interface` to get `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
         "
@@ -1034,38 +1058,31 @@ pub(crate) async fn existing_entries(
         ",
         interface = Interface::Records,
     );
-    let (records, _) = store.query(owner, &sql).await?;
-    Ok(records)
+    let (messages, _) = store.query::<Write>(owner, &sql).await.unwrap();
+
+    let mut writes = Vec::new();
+    for message in messages {
+        writes.push(message);
+    }
+
+    Ok(writes)
 }
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-pub(crate) async fn first_and_last(messages: &[Message]) -> Result<(Option<Write>, Option<Write>)> {
+pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>, Option<Write>)> {
     // get initial entry
-    let initial = if let Some(initial) = messages.first() {
-        let Message::RecordsWrite(entry) = initial else {
-            return Err(anyhow!("unexpected message type"));
-        };
+    let initial = if let Some(first) = messages.first() {
         // check initial write is found
-        if !entry.is_initial()? {
+        if !first.is_initial()? {
             return Err(anyhow!("initial write is not earliest message"));
         }
-        Some(entry)
+        Some(first)
     } else {
         None
     };
 
-    // get latest entry
-    let latest = if let Some(latest) = messages.last() {
-        let Message::RecordsWrite(entry) = latest else {
-            return Err(anyhow!("unexpected message type"));
-        };
-        Some(entry)
-    } else {
-        None
-    };
-
-    Ok((initial.cloned(), latest.cloned()))
+    Ok((initial.cloned(), messages.last().cloned()))
 }
 
 // Write message is not an 'initial write' with no data_stream.
@@ -1122,7 +1139,7 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         method = Method::Write,
     ); // AND isLatestBaseState = true
 
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
+    let (messages, _) = MessageStore::query::<Write>(provider, owner, &sql).await?;
 
     // delete any messages with the same `record_id` except the initial write
     for msg in messages {

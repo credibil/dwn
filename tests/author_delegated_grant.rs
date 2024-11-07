@@ -9,7 +9,7 @@ use test_utils::store::ProviderImpl;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::service::{Message, ReplyEntry};
+use vercre_dwn::service::Reply;
 use vercre_dwn::{Interface, Method};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -47,14 +47,13 @@ async fn configure_any() {
         .build(&bob_keyring)
         .await
         .expect("should build");
-    let message = Message::ProtocolsConfigure(configure);
 
-    let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
+    let reply = vercre_dwn::handle_message(ALICE_DID, configure, provider.clone())
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, 202);
+    assert_eq!(reply.status().code, 202);
 
-    assert_snapshot!("configure", reply.entry, {
+    assert_snapshot!("configure", reply, {
         ".descriptor.messageTimestamp" => "[messageTimestamp]",
         ".authorization.signature.payload" => "[payload]",
         ".authorization.signature.signatures[0].signature" => "[signature]",
@@ -68,14 +67,13 @@ async fn configure_any() {
         .build(&alice_keyring)
         .await
         .expect("should build");
-    let message = Message::ProtocolsQuery(query);
 
-    let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
+    let reply = vercre_dwn::handle_message(ALICE_DID, query, provider.clone())
         .await
         .expect("should find protocol");
-    assert_eq!(reply.status.code, 200);
+    assert_eq!(reply.status().code, 200);
 
-    assert_snapshot!("query", reply.entry, {
+    assert_snapshot!("query", reply, {
         ".entries[].descriptor.messageTimestamp" => "[messageTimestamp]",
         ".entries[].authorization.signature.payload" => "[payload]",
         ".entries[].authorization.signature.signatures[0].signature" => "[signature]",

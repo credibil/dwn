@@ -1,11 +1,13 @@
 use std::io::{Cursor, Read};
 
 use anyhow::Result;
+// use async_trait::async_trait;
 use vercre_dwn::provider::DataStore;
 
 use super::ProviderImpl;
 use crate::store::{DATA, NAMESPACE};
 
+// #[async_trait]
 impl DataStore for ProviderImpl {
     async fn put(
         &self, owner: &str, record_id: &str, data_cid: &str, mut data: impl Read + Send,

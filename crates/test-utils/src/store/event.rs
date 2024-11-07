@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
-use std::future::Future;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use serde_json::Value;
 use vercre_dwn::provider::{Event, EventLog, EventStream, EventSubscription};
 use vercre_dwn::query::Filter;
@@ -12,8 +12,9 @@ use crate::store::NAMESPACE;
 
 const DATABASE: &str = "event_log";
 
+#[async_trait]
 impl EventLog for ProviderImpl {
-    async fn append(&self, owner: &str, message_cid: &str, message: &Message) -> Result<()> {
+    async fn append<T: Message>(&self, owner: &str, message_cid: &str, message: &T) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<BTreeMap<String, Value>> =
             self.db.create((DATABASE, message_cid)).content(message).await?;
@@ -41,20 +42,24 @@ impl EventLog for ProviderImpl {
     }
 }
 
-struct EventSubscriptionImpl;
+pub struct EventSubscriptionImpl;
 
+#[async_trait]
 impl EventSubscription for EventSubscriptionImpl {
     async fn close(&self) -> Result<()> {
         todo!()
     }
 }
 
+#[async_trait]
 impl EventStream for ProviderImpl {
+    type Subscriber = EventSubscriptionImpl;
+
     /// Subscribes to a owner's event stream.
-    fn subscribe(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, Event),
-    ) -> impl Future<Output = Result<(String, impl EventSubscription)>> + Send {
-        async { Ok((String::new(), EventSubscriptionImpl {})) }
+    async fn subscribe(
+        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) + Send,
+    ) -> Result<(String, Self::Subscriber)> {
+        Ok((String::new(), EventSubscriptionImpl {}))
     }
 
     /// Emits an event to a owner's event stream.

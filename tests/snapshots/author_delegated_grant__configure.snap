@@ -1,9 +1,12 @@
 ---
 source: tests/author_delegated_grant.rs
-assertion_line: 60
-expression: entry
+assertion_line: 56
+expression: reply
 snapshot_kind: text
 ---
+status:
+  code: 202
+  detail: OK
 descriptor:
   interface: Protocols
   method: Configure

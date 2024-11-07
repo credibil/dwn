@@ -4,11 +4,11 @@ use std::future::Future;
 use std::io::Read;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
-// use serde::{Deserialize, Serialize};
 use crate::query::Filter;
 use crate::service::Message;
 use crate::Cursor;
@@ -25,6 +25,8 @@ pub trait Provider:
 /// Implementers of this trait are expected to provide the necessary
 /// cryptographic functionality to support Verifiable Credential issuance and
 /// Verifiable Presentation submissions.
+
+#[async_trait]
 pub trait KeyStore: Send + Sync {
     /// Signer provides digital signing function.
     ///
@@ -63,46 +65,44 @@ pub trait KeyStore: Send + Sync {
 /// Implementers of this trait are expected to provide the necessary
 /// cryptographic functionality to support Verifiable Credential issuance and
 /// Verifiable Presentation submissions.
+#[async_trait]
 pub trait Keyring: Signer + Cipher + Send + Sync {}
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.
+#[async_trait]
 pub trait MessageStore: Send + Sync {
     // /// Open a connection to the underlying store.
-    // fn open(&self) -> impl Future<Output = Result<()>> + Send;
+    // fn open(&self) -> Result<()>;
 
     // /// Close the connection to the underlying store.
-    // fn close(&self) -> impl Future<Output = Result<()>> + Send;
+    // fn close(&self) -> Result<()>;
 
     /// Store a message in the underlying store.
-    fn put(&self, owner: &str, message: &Message) -> impl Future<Output = Result<()>> + Send;
+    async fn put<T: Message>(&self, owner: &str, message: &T) -> Result<()>;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.
-    fn get(
-        &self, owner: &str, message_cid: &str,
-    ) -> impl Future<Output = Result<Option<Message>>> + Send;
+    async fn get<T: Message>(&self, owner: &str, message_cid: &str) -> Result<Option<T>>;
 
     /// Queries the underlying store for matches to the provided SQL WHERE clause.
-    fn query(
-        &self, owner: &str, sql: &str,
-    ) -> impl Future<Output = Result<(Vec<Message>, Cursor)>> + Send;
+    async fn query<T: Message>(&self, owner: &str, sql: &str) -> Result<(Vec<T>, Cursor)>;
 
     /// Delete message associated with the specified id.
-    fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send;
+    async fn delete<T: Message>(&self, owner: &str, message_cid: &str) -> Result<()>;
 
     /// Purge all records from the store.
-    fn purge(&self) -> impl Future<Output = Result<()>> + Send;
+    async fn purge(&self) -> Result<()>;
 }
 
 /// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
 pub trait DataStore: Send + Sync {
     // /// Open a connection to the underlying store.
-    // fn open(&self) -> impl Future<Output = Result<()>> + Send;
+    // fn open(&self) -> Result<()>;
 
     // /// Close the connection to the underlying store.
-    // fn close(&self) -> impl Future<Output = Result<()>> + Send;
+    // fn close(&self) -> Result<()>;
 
     /// Store data in the underlying store.
     fn put(
@@ -126,21 +126,20 @@ pub trait DataStore: Send + Sync {
 
 /// The `TaskStore` trait is used by implementers to provide data storage
 /// capability.
+#[async_trait]
 pub trait TaskStore: Send + Sync {
     // /// Open a connection to the underlying store.
-    // fn open(&self) -> impl Future<Output = Result<()>> + Send;
+    // async fn open(&self) -> Result<()>;
 
     // /// Close the connection to the underlying store.
-    // fn close(&self) -> impl Future<Output = Result<()>> + Send;
+    // async fn close(&self) -> Result<()>;
 
     /// Registers a new resumable task that is currently in-flight/under
     /// processing to the store.
     ///
     /// If the task has timed out, a client will be able to grab it through the
     /// `grab()` method and resume the task.
-    fn register(
-        &self, task: &Value, timeout_secs: u64,
-    ) -> impl Future<Output = Result<ResumableTask>> + Send;
+    async fn register(&self, task: &Value, timeout_secs: u64) -> Result<ResumableTask>;
 
     /// Grabs `count` unhandled tasks from the store.
     ///
@@ -150,27 +149,27 @@ pub trait TaskStore: Send + Sync {
     /// N.B.: The implementation must make sure that once a task is grabbed by a client,
     /// tis timeout must be updated so that it is considered in-flight/under processing
     /// and cannot be grabbed by another client until it is timed-out.
-    fn grab(count: u64) -> impl Future<Output = Result<Vec<ResumableTask>>> + Send;
+    async fn grab(count: u64) -> Result<Vec<ResumableTask>>;
 
     /// Reads the task associated with the task ID provided regardless of whether
     /// it is in-flight/under processing or not.
     ///
     /// This is mainly introduced for testing purposes: ie. to check the status of
     /// a task for easy test verification.
-    fn read(task_id: &str) -> impl Future<Output = Result<Option<ResumableTask>>> + Send;
+    async fn read(task_id: &str) -> Result<Option<ResumableTask>>;
 
     /// Extends the timeout of the task associated with the task ID provided.
     ///
     /// No-op if the task is not found, as this implies that the task has already
     /// been completed. This allows the client that is executing the task to
     /// continue working on it before the task is considered timed out.
-    fn extend(task_id: &str, timeout_secs: u64) -> impl Future<Output = Result<()>> + Send;
+    async fn extend(task_id: &str, timeout_secs: u64) -> Result<()>;
 
     /// Delete data associated with the specified id.
-    fn delete(&self, task_id: &str) -> impl Future<Output = Result<()>> + Send;
+    async fn delete(&self, task_id: &str) -> Result<()>;
 
     /// Purge all data from the store.
-    fn purge(&self) -> impl Future<Output = Result<()>> + Send;
+    async fn purge(&self) -> Result<()>;
 }
 
 /// An managed resumable task model.
@@ -191,25 +190,22 @@ pub struct ResumableTask {
 
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,
 /// and `Server` metadata to the library.
+#[async_trait]
 pub trait EventLog: Send + Sync {
     // /// Open a connection to the underlying store.
-    // fn open(&self) -> impl Future<Output = Result<()>> + Send;
+    // async fn open(&self) -> Result<()>;
 
     // /// Close the connection to the underlying store.
-    // fn close(&self) -> impl Future<Output = Result<()>> + Send;
+    // async fn close(&self) -> Result<()>;
 
     /// Adds a message event to a owner's event log.
-    fn append(
-        &self, owner: &str, message_cid: &str, message: &Message,
-    ) -> impl Future<Output = Result<()>> + Send;
+    async fn append<T: Message>(&self, owner: &str, message_cid: &str, message: &T) -> Result<()>;
 
     /// Retrieves all of a owner's events that occurred after the cursor provided.
     /// If no cursor is provided, all events for a given owner will be returned.
     ///
     /// The cursor is a `message_cid`.
-    fn events(
-        &self, owner: &str, cursor: Option<Cursor>,
-    ) -> impl Future<Output = Result<(Vec<String>, Cursor)>> + Send;
+    async fn events(&self, owner: &str, cursor: Option<Cursor>) -> Result<(Vec<String>, Cursor)>;
 
     /// Retrieves a filtered set of events that occurred after a the cursor
     /// provided, accepts multiple filters. If no cursor is provided, all
@@ -217,48 +213,53 @@ pub trait EventLog: Send + Sync {
     /// is a `message_cid`.
     ///
     /// Returns an array of `message_cid`s that represent the events.
-    fn query(
+    async fn query(
         &self, owner: &str, filters: Vec<Filter>, cursor: Cursor,
-    ) -> impl Future<Output = Result<(Vec<String>, Cursor)>> + Send;
+    ) -> Result<(Vec<String>, Cursor)>;
 
     /// Deletes event for the specified `message_cid`.
-    fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send;
+    async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;
 
     /// Purge all data from the store.
-    fn purge(&self) -> impl Future<Output = Result<()>> + Send;
+    async fn purge(&self) -> Result<()>;
 }
 
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,
 /// and `Server` metadata to the library.
+#[async_trait]
 pub trait EventStream: Send + Sync {
+    /// Specifies the type of the event stream subscriber.
+    type Subscriber: EventSubscription;
+
     // /// Open a connection to the underlying store.
-    // fn open(&self) -> impl Future<Output = Result<()>> + Send;
+    // fn open(&self) -> Result<()>;
 
     // /// Close the connection to the underlying store.
-    // fn close(&self) -> impl Future<Output = Result<()>> + Send;
+    // fn close(&self) -> Result<()>;
 
     /// Subscribes to a owner's event stream.
-    fn subscribe(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, Event),
-    ) -> impl Future<Output = Result<(String, impl EventSubscription)>> + Send;
+    async fn subscribe(
+        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) + Send,
+    ) -> Result<(String, Self::Subscriber)>;
 
     /// Emits an event to a owner's event stream.
-    fn emit(&self, owner: &str, event: &Event) -> impl Future<Output = Result<()>> + Send;
+    async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
 }
 
 /// `EventSubscription` is a subscription to an event stream.
-pub trait EventSubscription {
+#[async_trait]
+pub trait EventSubscription: Send + Sync {
     /// Close the subscription to the event stream.
-    fn close(&self) -> impl Future<Output = Result<()>> + Send;
+    async fn close(&self) -> Result<()>;
 }
 
 /// `Event` contains the message being emitted and an optional initial
 /// write message.
 pub struct Event {
-    /// The message being emitted.
-    pub message: Message,
+    // /// The message being emitted.
+    // pub message: Box<dyn Message>,
 
-    /// The initial write of the `RecordsWrite` or `RecordsDelete` message.
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial_entry: Option<Message>,
+    // /// The initial write of the `RecordsWrite` or `RecordsDelete` message.
+    // // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub initial_entry: Box<dyn Message>,
 }

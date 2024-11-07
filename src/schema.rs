@@ -7,10 +7,13 @@ use crate::service::Message;
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
-pub fn validate_schema(schema_name: &str, message: &Message) -> Result<()> {
+pub fn validate(message: &impl Message) -> Result<()> {
     let retriever = Retriever {};
 
-    let schema = precompiled(schema_name)?;
+    let descriptor = message.descriptor();
+    let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
+
+    let schema = precompiled(&schema_name)?;
     let validator = jsonschema::options().with_retriever(retriever).build(&schema)?;
     let instance = serde_json::to_value(message)?;
 

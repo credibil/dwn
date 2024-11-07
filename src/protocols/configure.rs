@@ -16,69 +16,74 @@ use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{Event, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
-use crate::service::{Context, Message};
-use crate::{cid, utils, Descriptor, Interface, Method};
+use crate::service::{Context, Handler, Message, Reply};
+use crate::{cid, schema, utils, Descriptor, Interface, Method, Status};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
-    ctx: &Context, configure: Configure, provider: impl Provider,
-) -> Result<ConfigureReply> {
-    configure.authorize(ctx, &provider).await?;
+impl Handler for Configure {
+    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
+        self.authorize(&ctx, &provider).await?;
 
-    // find any matching protocol entries
-    let filter = Filter {
-        protocol: configure.descriptor.definition.protocol.clone(),
-    };
-    let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
+        // find any matching protocol entries
+        let filter = Filter {
+            protocol: self.descriptor.definition.protocol.clone(),
+        };
+        let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
 
-    // determine if incoming message is the latest
-    let is_latest = if let Some(existing) = &results {
-        // find latest matching protocol entry
-        let timestamp = &configure.descriptor.base.message_timestamp;
-        let (is_latest, latest) = existing.iter().fold((true, &configure), |(_, _), e| {
-            if &e.descriptor.base.message_timestamp > timestamp {
-                (false, e)
-            } else {
-                (true, &configure)
+        // determine if incoming message is the latest
+        let is_latest = if let Some(existing) = &results {
+            // find latest matching protocol entry
+            let timestamp = &self.descriptor.base.message_timestamp;
+            let (is_latest, latest) = existing.iter().fold((true, &self), |(_, _), e| {
+                if &e.descriptor.base.message_timestamp > timestamp {
+                    (false, e)
+                } else {
+                    (true, &self)
+                }
+            });
+
+            // delete all entries except the most recent
+            let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+            for e in existing {
+                let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
+                if current_ts.cmp(&latest_ts) == Ordering::Less {
+                    let cid = cid::compute(&e)?;
+                    MessageStore::delete::<Self>(&provider, &ctx.owner, &cid).await?;
+                    EventLog::delete(&provider, &ctx.owner, &cid).await?;
+                }
             }
-        });
+            is_latest
+        } else {
+            true
+        };
 
-        // delete all entries except the most recent
-        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
-        for e in existing {
-            let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
-            if current_ts.cmp(&latest_ts) == Ordering::Less {
-                let cid = cid::compute(&e)?;
-                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-                EventLog::delete(&provider, &ctx.owner, &cid).await?;
-            }
+        if !is_latest {
+            return Err(anyhow!("message is not the latest"));
         }
-        is_latest
-    } else {
-        true
-    };
 
-    if !is_latest {
-        return Err(anyhow!("message is not the latest"));
+        // save the incoming message
+        let cid = cid::compute(&self)?;
+
+        MessageStore::put(&provider, &ctx.owner, &self).await?;
+        EventLog::append(&provider, &ctx.owner, &cid, &self).await?;
+
+        let event = Event {};
+        //     message: self,
+        //     initial_entry: None,
+        // };
+        EventStream::emit(&provider, &ctx.owner, &event).await?;
+
+        Ok(ConfigureReply {
+            status: Status {
+                code: 202,
+                detail: Some("OK".to_string()),
+            },
+            message: self,
+        })
     }
-
-    // save the incoming message
-    let cid = cid::compute(&configure)?;
-    let message = Message::ProtocolsConfigure(configure.clone());
-
-    MessageStore::put(&provider, &ctx.owner, &message).await?;
-    EventLog::append(&provider, &ctx.owner, &cid, &message).await?;
-
-    let event = Event {
-        message,
-        initial_entry: None,
-    };
-    EventStream::emit(&provider, &ctx.owner, &event).await?;
-
-    Ok(ConfigureReply { message: configure })
 }
 
 /// Protocols Configure payload
@@ -89,6 +94,36 @@ pub struct Configure {
 
     /// The message authorization.
     pub authorization: Authorization,
+}
+
+impl Message for Configure {
+    fn cid(&self) -> anyhow::Result<String> {
+        cid::compute(self)
+    }
+
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
+    }
+}
+
+/// Configure reply.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ConfigureReply {
+    /// Status message to accompany the reply.
+    pub status: Status,
+
+    #[serde(flatten)]
+    message: Configure,
+}
+
+impl Reply for ConfigureReply {
+    fn status(&self) -> Status {
+        self.status.clone()
+    }
 }
 
 impl Configure {
@@ -130,13 +165,6 @@ impl Configure {
 
         Ok(())
     }
-}
-
-/// Configure reply.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ConfigureReply {
-    #[serde(flatten)]
-    message: Configure,
 }
 
 /// Configure descriptor.
@@ -431,8 +459,7 @@ impl ConfigureBuilder {
         };
 
         // TODO: move validation out of message
-        let message = Message::ProtocolsConfigure(configure.clone());
-        message.validate_schema()?;
+        schema::validate(&configure)?;
 
         Ok(configure)
     }

@@ -4,10 +4,11 @@ use anyhow::{anyhow, Result};
 use serde_json::{json, Map, Value};
 
 use crate::permissions::{self, ScopeType};
-use crate::protocols::{self, Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
+use crate::protocols::{
+    self, Action, ActionRule, Actor, Configure, Definition, ProtocolType, RuleSet,
+};
 use crate::provider::MessageStore;
 use crate::records::{self, Write};
-use crate::service::Message;
 use crate::{utils, Interface, Method};
 
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
@@ -92,13 +93,12 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
         // AND isLatestBaseState = true
     );
 
-    let (records, _) = store.query(owner, &sql).await?;
+    let (records, _) = store.query::<Write>(owner, &sql).await?;
     if records.is_empty() {
         return Err(anyhow!("unable to find Write Record for parent_id {parent_id}"));
     }
-    let Message::RecordsWrite(parent) = &records[0] else {
-        return Err(anyhow!("unexpected message type"));
-    };
+
+    let parent = &records[0];
 
     // verify protocol_path is a child of the parent message's protocol_path
     let Some(parent_path) = &parent.descriptor.protocol_path else {
@@ -157,16 +157,14 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
         // AND isLatestBaseState = true
     );
 
-    let (records, _) = store.query(owner, &sql).await?;
+    let (messages, _) = store.query::<Write>(owner, &sql).await?;
     // if records.is_empty() {
     //     return Err(anyhow!("unable to find Write Record for parent_id {parent_id}"));
     // }
 
-    for record in records {
-        if let Message::RecordsWrite(matched) = record {
-            if matched.record_id != write.record_id {
-                return Err(anyhow!("DID '{recipient}' is already recipient of a role record"));
-            }
+    for message in messages {
+        if message.record_id != write.record_id {
+            return Err(anyhow!("DID '{recipient}' is already recipient of a role record"));
         }
     }
 
@@ -223,7 +221,7 @@ async fn verify_invoked_role(
         method = Method::Write,
         // isLatestBaseState : true,
     );
-    let (records, _) = store.query(owner, &sql).await?;
+    let (records, _) = store.query::<Write>(owner, &sql).await?;
     if records.is_empty() {
         return Err(anyhow!("unable to find records for {protocol_role}"));
     }
@@ -431,15 +429,13 @@ async fn protocol_definition(
         method = Method::Configure,
     );
 
-    let (protocols, _) = store.query(owner, &sql).await?;
-    if protocols.is_empty() {
+    let (messages, _) = store.query::<Configure>(owner, &sql).await?;
+    if messages.is_empty() {
         return Err(anyhow!("unable to find protocol definition for {protocol_uri}"));
     }
-    let Message::ProtocolsConfigure(protocol_message) = &protocols[0] else {
-        return Err(anyhow!("unexpected message type"));
-    };
 
-    Ok(protocol_message.descriptor.definition.clone())
+    let protocol = &messages[0];
+    Ok(protocol.descriptor.definition.clone())
 }
 
 fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {

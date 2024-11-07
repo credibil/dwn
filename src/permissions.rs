@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub use self::grant::{Conditions, Grant, GrantBuilder, GrantData, Scope, ScopeType};
 use crate::protocols::Definition;
 use crate::provider::MessageStore;
-use crate::service::Message;
+use crate::records::Write;
 use crate::{Interface, Method};
 
 /// Fetch the grant specified by `grant_id`.
@@ -25,13 +25,10 @@ pub(crate) async fn fetch_grant(
         interface = Interface::Records,
         method = Method::Write,
     ); // AND isLatestBaseState = true
+    let (messages, _) = store.query::<Write>(owner, &sql).await?;
 
-    // execute query
-    let (records, _) = store.query(owner, &sql).await?;
-    let Message::RecordsWrite(write) = records[0].clone() else {
-        return Err(anyhow!("no grant matching {grant_id}"));
-    };
-    let desc = write.descriptor;
+    let write = &messages[0];
+    let desc = &write.descriptor;
 
     // unpack message payload
     let Some(grant_enc) = &write.encoded_data else {
@@ -41,9 +38,9 @@ pub(crate) async fn fetch_grant(
     let grant: GrantData = serde_json::from_slice(&grant_bytes)?;
 
     Ok(Grant {
-        id: write.record_id,
+        id: write.record_id.clone(),
         grantor: write.authorization.signer()?,
-        grantee: desc.recipient.unwrap_or_default(),
+        grantee: desc.recipient.clone().unwrap_or_default(),
         date_granted: desc.date_created,
         data: grant,
     })

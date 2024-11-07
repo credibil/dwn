@@ -9,7 +9,7 @@ use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
-use vercre_dwn::service::Message;
+use vercre_dwn::service::Reply;
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -35,11 +35,11 @@ async fn flat_space() {
         .build(&bob_keyring)
         .await
         .expect("should create write");
-    let message = Message::RecordsWrite(write.clone());
 
-    let reply =
-        vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
-    assert_eq!(reply.status.code, 204);
+    let reply = vercre_dwn::handle_message(BOB_DID, write.clone(), provider.clone())
+        .await
+        .expect("should write");
+    assert_eq!(reply.status().code, 204);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
@@ -53,12 +53,11 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    let message = Message::RecordsRead(read);
     let reply =
-        vercre_dwn::handle_message(BOB_DID, message, provider.clone()).await.expect("should write");
-    assert_eq!(reply.status.code, 200);
+        vercre_dwn::handle_message(BOB_DID, read, provider.clone()).await.expect("should write");
+    assert_eq!(reply.status().code, 200);
 
-    assert_snapshot!("read", reply.entry, {
+    assert_snapshot!("read", reply, {
         ".recordsWrite.recordId" => "[recordId]",
         ".recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
         ".recordsWrite.descriptor.dateCreated" => "[dateCreated]",

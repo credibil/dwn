@@ -20,6 +20,7 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+async-trait.workspace = true
 anyhow.workspace = true
 base64ct.workspace = true
 chrono.workspace = true
