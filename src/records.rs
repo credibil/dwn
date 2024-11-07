@@ -240,7 +240,7 @@ impl RecordsFilter {
 
         if let Some(tags) = &self.tags {
             for (property, filter) in tags {
-                sql.push_str(&format!("AND descriptor.tags.{property} {}\n", filter.to_sql()));
+                sql.push_str(&format!("AND tags.{property} {}\n", filter.to_sql()));
             }
         }
 

@@ -15,7 +15,7 @@ use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
-use crate::provider::{DataStore, Event, EventLog, EventStream, Keyring, MessageStore, Provider};
+use crate::provider::{DataStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
 use crate::service::{Context, Handler, Message, Reply};
 use crate::{cid, permissions, utils, Descriptor, Interface, Method, Status, MAX_ENCODED_SIZE};
@@ -34,8 +34,8 @@ impl Handler for Write {
         // authorize the message
         authorize(&ctx.owner, &self, &provider).await?;
 
-        let messages = existing_entries(&ctx.owner, &self.record_id, &provider).await?;
-        let (initial, latest) = first_and_last(&messages).await?;
+        let existing = existing_entries(&ctx.owner, &self.record_id, &provider).await?;
+        let (initial, latest) = first_and_last(&existing).await?;
 
         // if current message is not the initial write, check 'immutable' properties
         // haven't been altered
@@ -100,28 +100,26 @@ impl Handler for Write {
             (self.clone(), 204)
         };
 
-        // save the message and log
-        let cid = cid::compute(&write)?;
-
-        MessageStore::put(&provider, &ctx.owner, &write).await?;
-        EventLog::append(&provider, &ctx.owner, &cid, &write).await?;
+        // save the message and log the event
+        MessageStore::put(&provider, &ctx.owner, &WriteIndex::from(&write)).await?;
+        EventLog::append(&provider, &ctx.owner, &write).await?;
 
         // only emit an event when the message is the latest base state
         if initial.is_some() {
-            let initial_entry = initial;
-            let event = Event {};
+            // let initial_entry = initial;
+            //let event = Event {
             //     message,
             //     initial_entry,
             // };
-            EventStream::emit(&provider, &ctx.owner, &event).await?;
+            EventStream::emit(&provider, &ctx.owner, &write).await?;
         }
 
         // delete messages with the same `record_id` EXCEPT the initial write
-        let mut deletable = VecDeque::from(messages);
+        let mut deletable = VecDeque::from(existing);
         let _ = deletable.pop_front(); // initial write is first entry
         for msg in deletable {
             let cid = cid::compute(&msg)?;
-            MessageStore::delete::<Self>(&provider, &ctx.owner, &cid).await?;
+            MessageStore::delete(&provider, &ctx.owner, &cid).await?;
             EventLog::delete(&provider, &ctx.owner, &cid).await?;
         }
 
@@ -198,62 +196,6 @@ impl Reply for WriteReply {
     fn status(&self) -> Status {
         self.status.clone()
     }
-}
-
-async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
-    let authzn = &write.authorization;
-    let record_owner = authzn.owner()?;
-
-    // if owner signature is set, it must be the same as the tenant DID
-    if record_owner.as_ref().is_some_and(|ro| ro != owner) {
-        return Err(anyhow!("record owner is not web node owner"));
-    };
-
-    let author = authzn.author()?;
-
-    // authorize author delegate
-    if let Some(delegated_grant) = &authzn.author_delegated_grant {
-        let signer = authzn.signer()?;
-        let grant = delegated_grant.to_grant()?;
-        grant.permit_records_write(&author, &signer, write, store).await?;
-    }
-
-    // authorize owner delegate
-    if let Some(delegated_grant) = &authzn.owner_delegated_grant {
-        let Some(owner) = &record_owner else {
-            return Err(anyhow!("owner is required to authorize owner delegate"));
-        };
-        let signer = authzn.owner_signer()?;
-        let grant = delegated_grant.to_grant()?;
-        grant.permit_records_write(owner, &signer, write, store).await?;
-    }
-
-    // when record owner is set, we can directly grant access
-    // (we established `record_owner`== web node owner above)
-    if record_owner.is_some() {
-        return Ok(());
-    };
-
-    // when author is the owner, we can directly grant access
-    if author == owner {
-        return Ok(());
-    }
-
-    // permission grant
-    let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-    let payload: WriteSignaturePayload = serde_json::from_slice(&decoded)?;
-
-    if let Some(permission_grant_id) = &payload.base.permission_grant_id {
-        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
-        return grant.permit_records_write(owner, &author, write, store).await;
-    };
-
-    // protocol-specific authorization
-    if write.descriptor.protocol.is_some() {
-        return protocol::permit_write(owner, write, store).await;
-    }
-
-    Err(anyhow!("message failed authorization"))
 }
 
 impl Write {
@@ -463,17 +405,6 @@ impl Write {
     }
 }
 
-// Computes the deterministic Entry ID of the message.
-pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
-    #[derive(Serialize)]
-    struct EntryId {
-        #[serde(flatten)]
-        descriptor: WriteDescriptor,
-        author: String,
-    }
-    cid::compute(&EntryId { descriptor, author })
-}
-
 /// Signature payload.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -606,78 +537,69 @@ pub struct WriteDescriptor {
 /// Index (flatten) the `Write` message for SQL-based queries.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct WriteIndex {
-    /// The associated web node interface.
-    pub interface: Interface,
-
-    /// The interface method.
-    pub method: Method,
-
+struct WriteIndex {
     /// The timestamp of the message.
-    pub message_timestamp: DateTime<Utc>,
+    #[serde(flatten)]
+    pub write: Write,
 
     /// Records matching the specified author.
-    pub author: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
 
     /// Records matching the specified creator.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attester: Option<String>,
-
-    /// Records matching the specified recipient(s).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub recipient: Option<String>,
-
-    /// Record matching the specified protocol.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol: Option<String>,
-
-    /// Record protocol path.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol_path: Option<String>,
-
-    /// Whether the record is published.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
-
-    /// Records with the specified context.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
-
-    /// Records with the specified schema.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub schema: Option<String>,
-
-    /// Get a single object by its ID.
-    pub record_id: String,
-
-    /// The CID of the parent object .
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_id: Option<String>,
 
     /// Match records with the specified tags.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
     pub tags: Option<BTreeMap<String, Value>>,
 
-    /// The MIME type of the requested data. For example, `application/json`.
-    pub data_format: String,
-
-    /// Records with a size within the range.
-    pub data_size: u64,
-
-    /// CID of the data.
-    pub data_cid: String,
-
-    /// Filter messages created within the specified range.
-    pub date_created: DateTime<Utc>,
-
-    /// Filter messages published within the specified range.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<DateTime<Utc>>,
-
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_updated: Option<DateTime<Utc>>,
+}
+
+impl From<&Write> for WriteIndex {
+    fn from(write: &Write) -> Self {
+        let mut index = Self {
+            write: write.clone(),
+            author: Some(write.authorization.author().unwrap_or_default()),
+            attester: None, // TODO: add attester
+            tags: None,
+            date_updated: None, // TODO: add date_updated
+        };
+
+        if let Some(tags) = &write.descriptor.tags {
+            let mut tag_map = BTreeMap::new();
+            for (k, v) in tags {
+                tag_map.insert(format!("tag.{k}"), v.clone());
+            }
+            index.tags = Some(tag_map);
+        }
+
+        index
+    }
+}
+
+impl Message for WriteIndex {
+    fn cid(&self) -> anyhow::Result<String> {
+        self.write.cid()
+    }
+
+    fn descriptor(&self) -> &Descriptor {
+        &self.write.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.write.authorization)
+    }
+}
+
+impl Handler for WriteIndex {
+    async fn handle(self, _: Context, _: impl Provider) -> Result<impl Reply> {
+        Ok(WriteReply::default())
+    }
 }
 
 /// Options to use when creating a permission grant.
@@ -1066,6 +988,73 @@ pub(crate) async fn existing_entries(
     }
 
     Ok(writes)
+}
+
+async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+    let authzn = &write.authorization;
+    let record_owner = authzn.owner()?;
+
+    // if owner signature is set, it must be the same as the tenant DID
+    if record_owner.as_ref().is_some_and(|ro| ro != owner) {
+        return Err(anyhow!("record owner is not web node owner"));
+    };
+
+    let author = authzn.author()?;
+
+    // authorize author delegate
+    if let Some(delegated_grant) = &authzn.author_delegated_grant {
+        let signer = authzn.signer()?;
+        let grant = delegated_grant.to_grant()?;
+        grant.permit_records_write(&author, &signer, write, store).await?;
+    }
+
+    // authorize owner delegate
+    if let Some(delegated_grant) = &authzn.owner_delegated_grant {
+        let Some(owner) = &record_owner else {
+            return Err(anyhow!("owner is required to authorize owner delegate"));
+        };
+        let signer = authzn.owner_signer()?;
+        let grant = delegated_grant.to_grant()?;
+        grant.permit_records_write(owner, &signer, write, store).await?;
+    }
+
+    // when record owner is set, we can directly grant access
+    // (we established `record_owner`== web node owner above)
+    if record_owner.is_some() {
+        return Ok(());
+    };
+
+    // when author is the owner, we can directly grant access
+    if author == owner {
+        return Ok(());
+    }
+
+    // permission grant
+    let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
+    let payload: WriteSignaturePayload = serde_json::from_slice(&decoded)?;
+
+    if let Some(permission_grant_id) = &payload.base.permission_grant_id {
+        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+        return grant.permit_records_write(owner, &author, write, store).await;
+    };
+
+    // protocol-specific authorization
+    if write.descriptor.protocol.is_some() {
+        return protocol::permit_write(owner, write, store).await;
+    }
+
+    Err(anyhow!("message failed authorization"))
+}
+
+// Computes the deterministic Entry ID of the message.
+pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
+    #[derive(Serialize)]
+    struct EntryId {
+        #[serde(flatten)]
+        descriptor: WriteDescriptor,
+        author: String,
+    }
+    cid::compute(&EntryId { descriptor, author })
 }
 
 // Fetches the first and last `records::Write` messages associated for the

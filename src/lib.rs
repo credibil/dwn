@@ -17,7 +17,7 @@ use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-pub use crate::service::{handle_message, Message};
+pub use crate::service::{handle_message, Message, Reply};
 
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: u64 = 30000;

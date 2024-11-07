@@ -15,7 +15,7 @@ use crate::provider::{MessageStore, Provider};
 use crate::{permissions, schema, Descriptor, Status};
 
 /// Methods common to all messages.
-pub trait Message: Handler + DeserializeOwned + Serialize + Clone + Debug + Send + Sync {
+pub trait Message: Handler + Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
     /// Compute the CID of the message.
     ///
     /// # Errors
@@ -58,24 +58,16 @@ pub async fn handle_message(
     //         },
     //     }));
     // }
-
-    // validate message against schema
-    schema::validate(&message)?;
-
     let mut ctx = Context {
         owner: owner.to_string(),
         ..Context::default()
     };
 
-    // authenticate author
+    schema::validate(&message)?;
     if let Some(authzn) = message.authorization() {
         authzn.authenticate(&provider).await?;
     };
-
-    // base authorization
     authorize(&message, &mut ctx, &provider).await?;
-
-    // forward to message-specific handler
     message.handle(ctx, provider).await
 }
 

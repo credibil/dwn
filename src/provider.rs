@@ -19,7 +19,7 @@ pub trait Provider:
 {
 }
 
-/// The `SecOps` trait is used to provide methods needed for signing,
+/// The `KeyStore` trait is used to provide methods needed for signing,
 /// encrypting, verifying, and decrypting data.
 ///
 /// Implementers of this trait are expected to provide the necessary
@@ -59,8 +59,8 @@ pub trait KeyStore: Send + Sync {
     // fn cipher(&self, controller: &str) -> Result<impl Cipher>;
 }
 
-/// The `SecOps` trait is used to provide methods needed for signing,
-/// encrypting, verifying, and decrypting data.
+/// The `Keyring` trait provides the methods needed for signing, encrypting,
+/// verifying, and decrypting data.
 ///
 /// Implementers of this trait are expected to provide the necessary
 /// cryptographic functionality to support Verifiable Credential issuance and
@@ -72,12 +72,6 @@ pub trait Keyring: Signer + Cipher + Send + Sync {}
 /// storage capability.
 #[async_trait]
 pub trait MessageStore: Send + Sync {
-    // /// Open a connection to the underlying store.
-    // fn open(&self) -> Result<()>;
-
-    // /// Close the connection to the underlying store.
-    // fn close(&self) -> Result<()>;
-
     /// Store a message in the underlying store.
     async fn put<T: Message>(&self, owner: &str, message: &T) -> Result<()>;
 
@@ -89,7 +83,7 @@ pub trait MessageStore: Send + Sync {
     async fn query<T: Message>(&self, owner: &str, sql: &str) -> Result<(Vec<T>, Cursor)>;
 
     /// Delete message associated with the specified id.
-    async fn delete<T: Message>(&self, owner: &str, message_cid: &str) -> Result<()>;
+    async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;
 
     /// Purge all records from the store.
     async fn purge(&self) -> Result<()>;
@@ -98,12 +92,6 @@ pub trait MessageStore: Send + Sync {
 /// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
 pub trait DataStore: Send + Sync {
-    // /// Open a connection to the underlying store.
-    // fn open(&self) -> Result<()>;
-
-    // /// Close the connection to the underlying store.
-    // fn close(&self) -> Result<()>;
-
     /// Store data in the underlying store.
     fn put(
         &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read + Send,
@@ -128,12 +116,6 @@ pub trait DataStore: Send + Sync {
 /// capability.
 #[async_trait]
 pub trait TaskStore: Send + Sync {
-    // /// Open a connection to the underlying store.
-    // async fn open(&self) -> Result<()>;
-
-    // /// Close the connection to the underlying store.
-    // async fn close(&self) -> Result<()>;
-
     /// Registers a new resumable task that is currently in-flight/under
     /// processing to the store.
     ///
@@ -192,14 +174,8 @@ pub struct ResumableTask {
 /// and `Server` metadata to the library.
 #[async_trait]
 pub trait EventLog: Send + Sync {
-    // /// Open a connection to the underlying store.
-    // async fn open(&self) -> Result<()>;
-
-    // /// Close the connection to the underlying store.
-    // async fn close(&self) -> Result<()>;
-
     /// Adds a message event to a owner's event log.
-    async fn append<T: Message>(&self, owner: &str, message_cid: &str, message: &T) -> Result<()>;
+    async fn append<T: Message>(&self, owner: &str, message: &T) -> Result<()>;
 
     /// Retrieves all of a owner's events that occurred after the cursor provided.
     /// If no cursor is provided, all events for a given owner will be returned.
@@ -231,19 +207,13 @@ pub trait EventStream: Send + Sync {
     /// Specifies the type of the event stream subscriber.
     type Subscriber: EventSubscription;
 
-    // /// Open a connection to the underlying store.
-    // fn open(&self) -> Result<()>;
-
-    // /// Close the connection to the underlying store.
-    // fn close(&self) -> Result<()>;
-
     /// Subscribes to a owner's event stream.
-    async fn subscribe(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) + Send,
+    async fn subscribe<T: Message>(
+        &self, owner: &str, id: &str, listener: impl Fn(&str, T) + Send,
     ) -> Result<(String, Self::Subscriber)>;
 
     /// Emits an event to a owner's event stream.
-    async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
+    async fn emit<T: Message>(&self, owner: &str, event: &T) -> Result<()>;
 }
 
 /// `EventSubscription` is a subscription to an event stream.
@@ -253,13 +223,11 @@ pub trait EventSubscription: Send + Sync {
     async fn close(&self) -> Result<()>;
 }
 
-/// `Event` contains the message being emitted and an optional initial
-/// write message.
-pub struct Event {
-    // /// The message being emitted.
-    // pub message: Box<dyn Message>,
+// pub struct Event {
+//     /// The message being emitted.
+//     pub message: Box<dyn Message>,
 
-    // /// The initial write of the `RecordsWrite` or `RecordsDelete` message.
-    // // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub initial_entry: Box<dyn Message>,
-}
+//     /// The initial write of the `RecordsWrite` or `RecordsDelete` message.
+//     // #[serde(skip_serializing_if = "Option::is_none")]
+//     pub initial_entry: Box<dyn Message>,
+// }

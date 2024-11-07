@@ -16,13 +16,12 @@ use surrealdb::engine::local::{Db, Mem};
 use surrealdb::opt::RecordId;
 use surrealdb::Surreal;
 use vercre_dwn::protocols::Configure;
-use vercre_dwn::provider::{DidResolver, Document, KeyStore, Keyring, Provider};
+use vercre_dwn::provider::{DidResolver, Document, KeyStore, Keyring, MessageStore, Provider};
 use vercre_infosec::{Algorithm, Cipher, Signer};
 
 use crate::keystore::{Keystore, OWNER_DID};
 
 const NAMESPACE: &str = "integration-test";
-const MESSAGE: &str = "message";
 const DATA: &str = "data";
 
 #[derive(Clone)]
@@ -36,12 +35,13 @@ impl ProviderImpl {
     pub async fn new() -> Result<Self> {
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns(NAMESPACE).use_db(OWNER_DID).await?;
+        let provider = Self { db };
 
         let bytes = include_bytes!("./store/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
-        let _: Vec<Record> = db.create(MESSAGE).content(config).await.expect("should create");
 
-        Ok(Self { db })
+        MessageStore::put(&provider, OWNER_DID, &config).await?;
+        Ok(provider)
     }
 }
 

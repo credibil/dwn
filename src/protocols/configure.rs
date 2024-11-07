@@ -14,7 +14,7 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
-use crate::provider::{Event, EventLog, EventStream, MessageStore, Provider, Signer};
+use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Handler, Message, Reply};
 use crate::{cid, schema, utils, Descriptor, Interface, Method, Status};
@@ -51,7 +51,7 @@ impl Handler for Configure {
                 let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
                 if current_ts.cmp(&latest_ts) == Ordering::Less {
                     let cid = cid::compute(&e)?;
-                    MessageStore::delete::<Self>(&provider, &ctx.owner, &cid).await?;
+                    MessageStore::delete(&provider, &ctx.owner, &cid).await?;
                     EventLog::delete(&provider, &ctx.owner, &cid).await?;
                 }
             }
@@ -65,16 +65,9 @@ impl Handler for Configure {
         }
 
         // save the incoming message
-        let cid = cid::compute(&self)?;
-
         MessageStore::put(&provider, &ctx.owner, &self).await?;
-        EventLog::append(&provider, &ctx.owner, &cid, &self).await?;
-
-        let event = Event {};
-        //     message: self,
-        //     initial_entry: None,
-        // };
-        EventStream::emit(&provider, &ctx.owner, &event).await?;
+        EventLog::append(&provider, &ctx.owner,  &self).await?;
+        EventStream::emit(&provider, &ctx.owner, &self).await?;
 
         Ok(ConfigureReply {
             status: Status {
@@ -183,7 +176,7 @@ pub struct ConfigureDescriptor {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Definition {
-    /// Protocol name.
+    /// Protocol URI.
     pub protocol: String,
 
     /// Specifies whether the `Definition` can be returned by unauthorized
