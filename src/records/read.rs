@@ -2,7 +2,8 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
-use anyhow::{anyhow, Result};
+use std::any::Any;
+
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ use crate::permissions::GrantData;
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::service::{Context, Handler, Message, Reply};
-use crate::{cid, Descriptor, Interface, Method, Status};
+use crate::{cid, unexpected, Descriptor, Interface, Method, Result, Status};
 
 /// Process `Read` message.
 ///
@@ -40,7 +41,7 @@ impl Handler for Read {
         }
 
         if messages.len() > 1 {
-            return Err(anyhow!("multiple messages exist for the RecordsRead filter"));
+            return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
         }
         let write = &messages[0];
 
@@ -49,7 +50,7 @@ impl Handler for Read {
         if write.descriptor().method == Method::Delete {
             //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
             //   if initial_write.is_none() {
-            //     return Err(anyhow!("Initial write for deleted record not found"));
+            //     return Err(unexpected!("Initial write for deleted record not found"));
             //   }
 
             //   // perform authorization before returning the delete and initial write messages
@@ -105,7 +106,7 @@ impl Handler for Read {
 
             let (messages, _) = MessageStore::query::<Write>(&provider, &ctx.owner, &sql).await?;
             if messages.is_empty() {
-                return Err(anyhow!("initial write not found"));
+                return Err(unexpected!("initial write not found"));
             }
             let mut initial_write = messages[0].clone();
             initial_write.encoded_data = None;
@@ -117,10 +118,12 @@ impl Handler for Read {
                 code: 200,
                 detail: Some("OK".to_string()),
             },
-            records_write: Some(write.clone()),
-            records_delete: None,
-            initial_write,
-            data: Some(data),
+            entry: ReadReplyEntry {
+                records_write: Some(write.clone()),
+                records_delete: None,
+                initial_write,
+                data: Some(data),
+            },
         })
     }
 }
@@ -138,7 +141,7 @@ pub struct Read {
 }
 
 impl Message for Read {
-    fn cid(&self) -> anyhow::Result<String> {
+    fn cid(&self) -> Result<String> {
         cid::compute(self)
     }
 
@@ -158,6 +161,14 @@ pub struct ReadReply {
     /// Status message to accompany the reply.
     pub status: Status,
 
+    /// The read reply entry.
+    pub entry: ReadReplyEntry,
+}
+
+/// Read reply.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadReplyEntry {
     /// The latest `RecordsWrite` message of the record if record exists
     /// (not deleted).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -176,10 +187,13 @@ pub struct ReadReply {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<GrantData>,
 }
-
 impl Reply for ReadReply {
     fn status(&self) -> Status {
         self.status.clone()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -212,7 +226,7 @@ fn authorize(owner: &str, read: &Read, write: &Write) -> Result<()> {
         return Ok(());
     }
 
-    Err(anyhow!("unauthorized"))
+    Err(unexpected!("unauthorized"))
 }
 
 /// Reads read descriptor.

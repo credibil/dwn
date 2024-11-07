@@ -1,6 +1,6 @@
 //! # Authorization
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
@@ -8,8 +8,8 @@ pub use vercre_did::{dereference, Resource};
 use vercre_infosec::jose::Type;
 use vercre_infosec::{Jws, Signer};
 
-use crate::cid;
 use crate::records::DelegatedGrant;
+use crate::{cid, unexpected, Result};
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///
@@ -29,7 +29,9 @@ macro_rules! verify_key {
         let resolver = $resolver;
 
         move |kid: String| async move {
-            let resp = dereference(&kid, None, resolver).await?;
+            let resp = dereference(&kid, None, resolver)
+                .await
+                .map_err(|e| anyhow!("JWK not found: {e}"))?;
             let Some(Resource::VerificationMethod(vm)) = resp.content_stream else {
                 return Err(anyhow!("Verification method not found"));
             };
@@ -153,7 +155,7 @@ impl Authorization {
 
     pub(crate) fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
-            return Err(anyhow!("owner delegated grant not found"));
+            return Err(unexpected!("owner delegated grant not found"));
         };
         signer_did(&grant.authorization.signature)
     }
@@ -161,8 +163,9 @@ impl Authorization {
     pub(crate) fn jws_payload(&self) -> Result<JwsPayload> {
         let base64 = &self.signature.payload;
         let decoded = Base64UrlUnpadded::decode_vec(base64)
-            .map_err(|e| anyhow!("issue decoding header: {e}"))?;
-        serde_json::from_slice(&decoded).map_err(|e| anyhow!("issue deserializing header: {e}"))
+            .map_err(|e| unexpected!(format!("issue decoding header: {e}")))?;
+        serde_json::from_slice(&decoded)
+            .map_err(|e| unexpected!(format!("issue deserializing header: {e}")))
     }
 }
 
@@ -170,10 +173,10 @@ impl Authorization {
 /// message is not signed.
 pub(crate) fn signer_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
-        return Err(anyhow!("Invalid `kid`"));
+        return Err(unexpected!("Invalid `kid`"));
     };
     let Some(did) = kid.split('#').next() else {
-        return Err(anyhow!("Invalid DID"));
+        return Err(unexpected!("Invalid DID"));
     };
     Ok(did.to_owned())
 }
@@ -221,7 +224,8 @@ impl AuthorizationBuilder {
     /// # Errors
     /// TODO: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
-        let descriptor_cid = self.descriptor_cid.ok_or_else(|| anyhow!("descriptor not found"))?;
+        let descriptor_cid =
+            self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;
         let delegated_grant_id =
             if let Some(grant) = &self.delegated_grant { Some(cid::compute(grant)?) } else { None };
 

@@ -2,10 +2,10 @@
 //!
 //! `Write` is a message type used to create a new record in the web node.
 
+use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
 
-use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,10 @@ use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
 use crate::service::{Context, Handler, Message, Reply};
-use crate::{cid, permissions, utils, Descriptor, Interface, Method, Status, MAX_ENCODED_SIZE};
+use crate::{
+    cid, permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, Status,
+    MAX_ENCODED_SIZE,
+};
 
 /// Process `Write` message.
 ///
@@ -41,7 +44,7 @@ impl Handler for Write {
         // haven't been altered
         if let Some(initial) = &initial {
             if !self.compare_immutable(initial) {
-                return Err(anyhow!("immutable properties do not match"));
+                return Err(unexpected!("immutable properties do not match"));
             }
         }
 
@@ -51,10 +54,10 @@ impl Handler for Write {
             let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
 
             if current_ts.cmp(&latest_ts) == Ordering::Less {
-                return Err(anyhow!("newer write record already exists"));
+                return Err(Error::Conflict("newer write record already exists".to_string()));
             }
             if latest.descriptor.base.method == Method::Delete {
-                return Err(anyhow!("RecordsWrite not allowed after RecordsDelete"));
+                return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
             }
         }
 
@@ -92,7 +95,7 @@ impl Handler for Write {
         // set, we can process
         let (write, code) = if initial.is_some() {
             let Some(latest) = &latest else {
-                return Err(anyhow!("newest existing message not found"));
+                return Err(unexpected!("newest existing message not found"));
             };
             let write = process_data(&ctx.owner, &self, latest, &provider).await?;
             (write, 202)
@@ -172,7 +175,7 @@ pub struct Write {
 }
 
 impl Message for Write {
-    fn cid(&self) -> anyhow::Result<String> {
+    fn cid(&self) -> Result<String> {
         cid::compute(self)
     }
 
@@ -196,11 +199,18 @@ impl Reply for WriteReply {
     fn status(&self) -> Status {
         self.status.clone()
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Write {
     /// Signs the Write message body. The signer is either the author or a delegate.
-    async fn sign(
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn sign(
         &mut self, delegated_grant: Option<DelegatedGrant>, permission_grant_id: Option<String>,
         protocol_role: Option<String>, signer: &impl Signer,
     ) -> Result<()> {
@@ -270,7 +280,7 @@ impl Write {
     /// TODO: add errors
     pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
         if self.authorization.author().is_err() {
-            return Err(anyhow!("message signature is required in order to sign as owner"));
+            return Err(unexpected!("message signature is required in order to sign as owner"));
         }
 
         let payload = JwsPayload {
@@ -295,7 +305,7 @@ impl Write {
         &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
     ) -> Result<()> {
         if self.authorization.author().is_err() {
-            return Err(anyhow!("signature is required in order to sign as owner delegate"));
+            return Err(unexpected!("signature is required in order to sign as owner delegate"));
         }
 
         //  descriptorCid, delegatedGrantId, permissionGrantId, protocolRole
@@ -326,14 +336,14 @@ impl Write {
             if key.derivation_scheme == Some(DerivationScheme::ProtocolPath)
                 && self.descriptor.protocol.is_none()
             {
-                return Err(anyhow!(
+                return Err(unexpected!(
                     "`protocol` must be specified to use `protocols` encryption scheme"
                 ));
             }
             if key.derivation_scheme == Some(DerivationScheme::Schemas)
                 && self.descriptor.schema.is_none()
             {
-                return Err(anyhow!(
+                return Err(unexpected!(
                     "`schema` must be specified to use `schema` encryption scheme"
                 ));
             }
@@ -465,12 +475,12 @@ impl DelegatedGrant {
 }
 
 impl TryFrom<DelegatedGrant> for permissions::Grant {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
 
     fn try_from(value: DelegatedGrant) -> Result<Self> {
         let bytes = Base64UrlUnpadded::decode_vec(&value.encoded_data)?;
         let mut grant: Self = serde_json::from_slice(&bytes)
-            .map_err(|e| anyhow!("issue deserializing grant: {e}"))?;
+            .map_err(|e| unexpected!(format!("issue deserializing grant: {e}")))?;
 
         grant.id.clone_from(&value.record_id);
         grant.grantor = value.authorization.signer()?;
@@ -583,7 +593,7 @@ impl From<&Write> for WriteIndex {
 }
 
 impl Message for WriteIndex {
-    fn cid(&self) -> anyhow::Result<String> {
+    fn cid(&self) -> Result<String> {
         self.write.cid()
     }
 
@@ -996,7 +1006,7 @@ async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Res
 
     // if owner signature is set, it must be the same as the tenant DID
     if record_owner.as_ref().is_some_and(|ro| ro != owner) {
-        return Err(anyhow!("record owner is not web node owner"));
+        return Err(unexpected!("record owner is not web node owner"));
     };
 
     let author = authzn.author()?;
@@ -1011,7 +1021,7 @@ async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Res
     // authorize owner delegate
     if let Some(delegated_grant) = &authzn.owner_delegated_grant {
         let Some(owner) = &record_owner else {
-            return Err(anyhow!("owner is required to authorize owner delegate"));
+            return Err(unexpected!("owner is required to authorize owner delegate"));
         };
         let signer = authzn.owner_signer()?;
         let grant = delegated_grant.to_grant()?;
@@ -1043,7 +1053,7 @@ async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Res
         return protocol::permit_write(owner, write, store).await;
     }
 
-    Err(anyhow!("message failed authorization"))
+    Err(unexpected!("message failed authorization"))
 }
 
 // Computes the deterministic Entry ID of the message.
@@ -1064,7 +1074,7 @@ pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>,
     let initial = if let Some(first) = messages.first() {
         // check initial write is found
         if !first.is_initial()? {
-            return Err(anyhow!("initial write is not earliest message"));
+            return Err(unexpected!("initial write is not earliest message"));
         }
         Some(first)
     } else {
@@ -1084,10 +1094,10 @@ async fn process_data(
     // already associated with the latest existing message.
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
     if existing.descriptor.data_cid != write.descriptor.data_cid {
-        return Err(anyhow!("data CID does not match data_cid in descriptor"));
+        return Err(unexpected!(format!("data CID does not match data_cid in descriptor")));
     }
     if existing.descriptor.data_size != write.descriptor.data_size {
-        return Err(anyhow!("data size does not match dta_size in descriptor"));
+        return Err(unexpected!(format!("data size does not match dta_size in descriptor")));
     }
 
     // encode the data from the original write if it is smaller than the
@@ -1095,7 +1105,7 @@ async fn process_data(
     let mut message = write.clone();
     if write.descriptor.data_size <= MAX_ENCODED_SIZE {
         let Some(encoded) = &existing.encoded_data else {
-            return Err(anyhow!("no `encoded_data` in most recent existing message"));
+            return Err(unexpected!("no `encoded_data` in most recent existing message"));
         };
         message.encoded_data = Some(encoded.clone());
     };
@@ -1103,7 +1113,9 @@ async fn process_data(
     // otherwise, make sure the data is in the data store
     let result = store.get(owner, &existing.record_id, &write.descriptor.data_cid).await?;
     if result.is_none() {
-        return Err(anyhow!("`data_stream` not set and unable to get data from previous message"));
+        return Err(unexpected!(
+            "`data_stream` not set and unable to get data from previous message"
+        ));
     };
 
     Ok(message)
@@ -1113,7 +1125,7 @@ async fn process_data(
 async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> Result<()> {
     // get grant from revocation message `parent_id`
     let Some(grant_id) = &write.descriptor.parent_id else {
-        return Err(anyhow!("missing `parent_id`"));
+        return Err(unexpected!(format!("missing `parent_id`")));
     };
     let message_timestamp = write.descriptor.base.message_timestamp.unwrap_or_default();
 

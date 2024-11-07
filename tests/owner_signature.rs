@@ -8,7 +8,7 @@ use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
+use vercre_dwn::records::{ReadBuilder, ReadReply, RecordsFilter, WriteBuilder, WriteData};
 use vercre_dwn::service::Reply;
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -69,56 +69,32 @@ async fn flat_space() {
     });
 
     // --------------------------------------------------
-    // Bob configures the email protocol on Alice's behalf
+    // Alice augments Bob's message as an external owner
     // --------------------------------------------------
-    // let builder = GrantBuilder::new()
-    //     .granted_to(BOB_DID)
-    //     .request_id("grant_id_1")
-    //     .description("Allow Bob to configure any protocol")
-    //     .delegated(true)
-    //     .scope(Interface::Protocols, Method::Configure, None);
 
-    // let grant_to_bob = builder.build(&alice_keyring).await.expect("should create grant");
+    //   const { entry } = readReply; // remove data from message
+    let Some(read_reply) = reply.as_any().downcast_ref::<ReadReply>() else {
+        panic!("should downcast to ReadReply");
+    };
 
-    // let email_json = include_bytes!("protocols/email.json");
-    // let email_proto: Definition =
-    //     serde_json::from_slice(email_json).expect("should deserialize");
-
-    // let configure = ConfigureBuilder::new()
-    //     .definition(email_proto.clone())
-    //     .delegated_grant(grant_to_bob)
-    //     .build(&bob_keyring)
-    //     .await
-    //     .expect("should build");
-
-    // let message = Message::ProtocolsConfigure(configure);
-    // let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
-    //     .await
-    //     .expect("should configure protocol");
-
-    // let Reply::ProtocolsConfigure(reply) = reply else {
-    //     panic!("unexpected reply: {:?}", reply);
+    // let Some(owner_signed) = read_reply.entry.records_write else {
+    //     panic!("should have records write");
     // };
+    // owner_signed.sign(Jws.createSigner(alice"));
 
-    // assert_eq!(reply.status.code, 202);
+    // test Alice can successfully retain/write Bob's message to her DWN
 
-    // --------------------------------------------------
-    // Alice fetches the email protocol configured by Bob
-    // --------------------------------------------------
-    // let query = QueryBuilder::new()
-    //     .filter(email_proto.protocol)
-    //     .build(&alice_keyring)
-    //     .await
-    //     .expect("should build");
+    //   const aliceDataStream = readReply.entry!.data!;
+    //   const aliceWriteReply = await dwn.processMessage(alice.did, ownerSignedMessage.message, { dataStream: aliceDataStream });
+    //   expect(aliceWriteReply.status.code).to.equal(202);
 
-    // let message = Message::ProtocolsQuery(query);
-    // let reply = vercre_dwn::handle_message(ALICE_DID, message, provider.clone())
-    //     .await
-    //     .expect("should find protocol");
+    // test Bob's message can be read from Alice's DWN
 
-    // let Reply::ProtocolsQuery(reply) = reply else {
-    //     panic!("unexpected reply: {:?}", reply);
-    // };
+    //   const readReply2 = await dwn.processMessage(alice.did, recordsRead.message);
+    //   expect(readReply2.status.code).to.equal(200);
+    //   expect(readReply2.entry!.recordsWrite).to.exist;
+    //   expect(readReply2.entry!.recordsWrite?.descriptor).to.exist;
 
-    // assert_eq!(reply.status.code, 200);
+    //   const dataFetched = await DataStream.toBytes(readReply2.entry!.data!);
+    //   expect(ArrayUtility.byteArraysEqual(dataFetched, dataBytes!)).to.be.true;
 }

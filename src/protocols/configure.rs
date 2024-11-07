@@ -2,10 +2,10 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,7 +17,7 @@ use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Handler, Message, Reply};
-use crate::{cid, schema, utils, Descriptor, Interface, Method, Status};
+use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
 
 /// Process query message.
 ///
@@ -61,12 +61,13 @@ impl Handler for Configure {
         };
 
         if !is_latest {
-            return Err(anyhow!("message is not the latest"));
+            return Err(unexpected!("message is not the latest"));
         }
 
         // save the incoming message
+
         MessageStore::put(&provider, &ctx.owner, &self).await?;
-        EventLog::append(&provider, &ctx.owner,  &self).await?;
+        EventLog::append(&provider, &ctx.owner, &self).await?;
         EventStream::emit(&provider, &ctx.owner, &self).await?;
 
         Ok(ConfigureReply {
@@ -90,7 +91,7 @@ pub struct Configure {
 }
 
 impl Message for Configure {
-    fn cid(&self) -> anyhow::Result<String> {
+    fn cid(&self) -> Result<String> {
         cid::compute(self)
     }
 
@@ -117,6 +118,10 @@ impl Reply for ConfigureReply {
     fn status(&self) -> Status {
         self.status.clone()
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Configure {
@@ -142,18 +147,18 @@ impl Configure {
             return Ok(());
         }
 
-        let grant = ctx.grant.as_ref().ok_or_else(|| anyhow!("missing grant"))?;
+        let grant = ctx.grant.as_ref().ok_or_else(|| unexpected!("missing grant"))?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(anyhow!("missing protocol in grant scope"));
+            return Err(unexpected!("missing protocol in grant scope"));
         };
         let Some(protocol) = &protocol else {
             return Ok(());
         };
 
         if protocol != &self.descriptor.definition.protocol {
-            return Err(anyhow!(" message protocol does not match grant protocol"));
+            return Err(unexpected!(" message protocol does not match grant protocol"));
         }
 
         Ok(())
@@ -419,7 +424,7 @@ impl ConfigureBuilder {
     /// TODO: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Configure> {
         // check definition has been set
-        let mut definition = self.definition.ok_or_else(|| anyhow!("definition not found"))?;
+        let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;
 
         // normalize definition urls
         definition.protocol = utils::clean_url(&definition.protocol)?;
@@ -477,7 +482,7 @@ fn verify_rule_set(
     // validate $size
     if let Some(size) = &rule_set.size {
         if size.min > size.max {
-            return Err(anyhow!("invalid size range at '{protocol_path}'"));
+            return Err(unexpected!(format!("invalid size range at '{protocol_path}'")));
         }
     }
 
@@ -486,7 +491,7 @@ fn verify_rule_set(
         for tag in tags.undefined_tags.keys() {
             let schema = serde_json::from_str(tag)?;
             jsonschema::validator_for(&schema)
-                .map_err(|e| anyhow!("tag schema validation error: {e}"))?;
+                .map_err(|e| unexpected!(format!("tag schema validation error: {e}")))?;
         }
     }
 
@@ -500,19 +505,21 @@ fn verify_rule_set(
         if let Some(role) = &action.role {
             // role must contain valid protocol paths to a role record
             if !roles.contains(role) {
-                return Err(anyhow!("missing role {role} in action for {protocol_path}"));
+                return Err(unexpected!("missing role {role} in action for {protocol_path}"));
             }
 
             // all read-like ('read', 'query', 'subscribe') `can` actions must be present
             let allowed = [Action::Read, Action::Query, Action::Subscribe];
             if !allowed.iter().all(|ra| action.can.contains(ra)) {
-                return Err(anyhow!("role {role} missing read-like action(s) for {protocol_path}"));
+                return Err(unexpected!(
+                    "role {role} missing read-like action(s) for {protocol_path}"
+                ));
             }
         }
 
         // when `who` is `anyone`, `of` cannot be set
         if action.who.as_ref().is_some_and(|w| w == &Actor::Anyone) && action.of.is_some() {
-            return Err(anyhow!(
+            return Err(unexpected!(
                 "`of` must not be set when `who` is \"anyone\" for {protocol_path}"
             ));
         }
@@ -528,23 +535,24 @@ fn verify_rule_set(
         if action.who.as_ref().is_some_and(|w| w == &Actor::Recipient) && action.of.is_none() {
             let allowed = [Action::CoUpdate, Action::CoDelete, Action::CoPrune];
             if !allowed.iter().any(|ra| action.can.contains(ra)) {
-                return Err(anyhow!(
+                return Err(unexpected!(
                     "recipient action must contain only co-update, co-delete, and co-prune"
+                        .to_string(),
                 ));
             }
         }
 
         // when `who` is set to "author" then `of` must be set
         if action.who.as_ref().is_some_and(|w| w == &Actor::Author) && action.of.is_none() {
-            return Err(anyhow!("`of` must be set when `who` is set to 'author'"));
+            return Err(unexpected!("`of` must be set when `who` is set to 'author'"));
         }
 
         // when `can` contains `update` or `delete`, it must also contain `create`
         if action.can.contains(&Action::Update) && !action.can.contains(&Action::Create) {
-            return Err(anyhow!("action rule {action:?} contains 'update' but no 'create'"));
+            return Err(unexpected!("action rule {action:?} contains 'update' but no 'create'"));
         }
         if action.can.contains(&Action::Delete) && !action.can.contains(&Action::Create) {
-            return Err(anyhow!("action rule {action:?} contains 'delete' but no 'create'"));
+            return Err(unexpected!("action rule {action:?} contains 'delete' but no 'create'"));
         }
 
         // ensure no duplicate actors or roles in the remaining action rules
@@ -554,12 +562,12 @@ fn verify_rule_set(
         for other in action_iter.clone() {
             if action.who.is_some() {
                 if action.who == other.who && action.of == other.of {
-                    return Err(anyhow!(
+                    return Err(unexpected!(
                         "more than one action rule per actor {:?} of {:?} not allowed within a rule set: {action:?}", action.who, action.of
                     ));
                 }
             } else if action.role == other.role {
-                return Err(anyhow!(
+                return Err(unexpected!(
                     "more than one action rule per role {:?} not allowed within a rule set: {action:?}",action.role
                 ));
             }
@@ -569,7 +577,7 @@ fn verify_rule_set(
     // verify nested rule sets
     for (set_name, rule_set) in &rule_set.structure {
         if !types.contains(&set_name) {
-            return Err(anyhow!("rule set {set_name} is not declared as an allowed type"));
+            return Err(unexpected!("rule set {set_name} is not declared as an allowed type"));
         }
         let protocol_path = if protocol_path.is_empty() {
             set_name
@@ -586,7 +594,7 @@ fn verify_rule_set(
 fn role_paths(protocol_path: &str, rule_set: &RuleSet, roles: Vec<String>) -> Result<Vec<String>> {
     // restrict to max depth of 10 levels
     if protocol_path.split('/').count() > 10 {
-        return Err(anyhow!("Record nesting depth exceeded 10 levels."));
+        return Err(unexpected!("Record nesting depth exceeded 10 levels."));
     }
 
     for (rule_name, rule_set) in &rule_set.structure {

@@ -2,7 +2,8 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use anyhow::{anyhow, Result};
+use std::any::Any;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -11,8 +12,9 @@ use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::service::{Context, Handler, Message, Reply};
-use crate::{cid, schema, utils, Cursor, Descriptor, Interface, Method, Status};
-
+use crate::{
+    cid, schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Result, Status,
+};
 /// Process query message.
 ///
 /// # Errors
@@ -50,7 +52,7 @@ pub struct Query {
 }
 
 impl Message for Query {
-    fn cid(&self) -> anyhow::Result<String> {
+    fn cid(&self) -> Result<String> {
         cid::compute(self)
     }
 
@@ -81,6 +83,10 @@ pub struct QueryReply {
 impl Reply for QueryReply {
     fn status(&self) -> Status {
         self.status.clone()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -126,14 +132,14 @@ impl Query {
 
         // if set, query and grant protocols need to match
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(anyhow!("missing protocol in grant scope"));
+            return Err(unexpected!("missing protocol in grant scope"));
         };
         if let Some(protocol) = &protocol {
             let Some(filter) = &self.descriptor.filter else {
-                return Err(anyhow!("missing filter"));
+                return Err(unexpected!("missing filter"));
             };
             if protocol != &filter.protocol {
-                return Err(anyhow!("unauthorized protocol"));
+                return Err(unexpected!("unauthorized protocol"));
             }
         }
 

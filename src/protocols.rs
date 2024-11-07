@@ -4,8 +4,8 @@ pub mod configure;
 pub mod query;
 
 pub use crate::protocols::configure::{
-    Action, ActionRule, Actor, Configure, ConfigureBuilder, ConfigureReply,
-    Definition, ProtocolType, RuleSet,
+    Action, ActionRule, Actor, Configure, ConfigureBuilder, ConfigureReply, Definition,
+    ProtocolType, RuleSet,
 };
 pub use crate::protocols::query::{Query, QueryBuilder, QueryReply};
 

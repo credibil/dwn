@@ -2,17 +2,17 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use std::any::Any;
 use std::fmt::Debug;
 use std::future::Future;
 
-use anyhow::{anyhow, Result};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Authorization;
 use crate::permissions::Grant;
 use crate::provider::{MessageStore, Provider};
-use crate::{permissions, schema, Descriptor, Status};
+use crate::{permissions, schema, unexpected, Descriptor, Result, Status};
 
 /// Methods common to all messages.
 pub trait Message: Handler + Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
@@ -20,7 +20,7 @@ pub trait Message: Handler + Serialize + DeserializeOwned + Clone + Debug + Send
     ///
     /// # Errors
     /// TODO: Add errors
-    fn cid(&self) -> anyhow::Result<String>;
+    fn cid(&self) -> Result<String>;
 
     /// Returns the component of the message descriptor common to all messages
     fn descriptor(&self) -> &Descriptor;
@@ -41,6 +41,9 @@ pub trait Handler {
 pub trait Reply: Serialize + Debug {
     /// Status message to accompany the reply.
     fn status(&self) -> Status;
+
+    /// Return the reply as an `Any` trait object.
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// Process web node messages.
@@ -54,7 +57,7 @@ pub async fn handle_message(
     //     return Ok(Reply::GenericReply(GenericReply {
     //         status: Status {
     //             code: 401,
-    //             detail: Some("{tenant} is not active".to_string()),
+    //             detail: Some("{tenant} is not active),
     //         },
     //     }));
     // }
@@ -91,7 +94,7 @@ async fn authorize(
 
     let payload = authzn.jws_payload()?;
     let Some(grant_id) = &payload.permission_grant_id else {
-        return Err(anyhow!("`permission_grant_id` not found in signature payload"));
+        return Err(unexpected!("`permission_grant_id` not found in signature payload",));
     };
 
     let grant = permissions::fetch_grant(&ctx.owner, grant_id, store).await?;
@@ -127,5 +130,9 @@ pub struct ErrorReply {
 impl Reply for ErrorReply {
     fn status(&self) -> Status {
         self.status.clone()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

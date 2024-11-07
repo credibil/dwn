@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::Filter;
 use crate::auth::Authorization;
 use crate::provider::Provider;
-use crate::Cursor;
+use crate::{Cursor, Result};
 
 /// Handle a query message.
 ///
@@ -15,7 +15,7 @@ use crate::Cursor;
 /// TODO: Add errors
 pub(crate) fn handle(
     _tenant: &str, _message: Query, _provider: impl Provider,
-) -> anyhow::Result<QueryReply> {
+) -> Result<QueryReply> {
     todo!()
 }
 

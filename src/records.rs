@@ -8,7 +8,6 @@ pub mod write;
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
 pub use read::{Read, ReadBuilder, ReadReply};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,7 +17,7 @@ pub use write::{
 };
 
 use crate::auth::Authorization;
-use crate::{utils, DateRange, Descriptor, Pagination, Quota};
+use crate::{utils, DateRange, Descriptor, Pagination, Quota, Result};
 
 /// Records Query payload
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod cid;
+mod error;
 pub mod messages;
 pub mod permissions;
 pub mod protocols;
@@ -15,12 +16,16 @@ mod utils;
 
 use chrono::{DateTime, Utc};
 use derive_more::Display;
+pub use error::Error;
 use serde::{Deserialize, Serialize};
 
 pub use crate::service::{handle_message, Message, Reply};
 
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: u64 = 30000;
+
+/// Result type for `DWN` handlers.
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

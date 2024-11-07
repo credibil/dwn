@@ -54,22 +54,22 @@ struct Record {
 impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {
         serde_json::from_slice(include_bytes!("./store/did.json"))
-            .map_err(|e| anyhow!("issue deserializing document: {e}"))
+            .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
     }
 }
 
 struct KeyStoreImpl(Keystore);
 
 impl KeyStore for ProviderImpl {
-    fn keyring(&self, _identifier: &str) -> anyhow::Result<impl Keyring> {
+    fn keyring(&self, _identifier: &str) -> Result<impl Keyring> {
         Ok(KeyStoreImpl(Keystore {}))
     }
 
-    // fn signer(&self, _identifier: &str) -> anyhow::Result<impl Signer> {
+    // fn signer(&self, _identifier: &str) -> Result<impl Signer> {
     //     Ok(KeyStoreImpl(Keystore {}))
     // }
 
-    // fn cipher(&self, _identifier: &str) -> anyhow::Result<impl Cipher> {
+    // fn cipher(&self, _identifier: &str) -> Result<impl Cipher> {
     //     Ok(KeyStoreImpl(Keystore {}))
     // }
 }

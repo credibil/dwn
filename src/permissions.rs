@@ -2,7 +2,6 @@
 
 pub mod grant;
 
-use anyhow::{anyhow, Result};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +9,7 @@ pub use self::grant::{Conditions, Grant, GrantBuilder, GrantData, Scope, ScopeTy
 use crate::protocols::Definition;
 use crate::provider::MessageStore;
 use crate::records::Write;
-use crate::{Interface, Method};
+use crate::{unexpected, Interface, Method, Result};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
@@ -32,7 +31,7 @@ pub(crate) async fn fetch_grant(
 
     // unpack message payload
     let Some(grant_enc) = &write.encoded_data else {
-        return Err(anyhow!("missing grant data"));
+        return Err(unexpected!("missing grant data"));
     };
     let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc)?;
     let grant: GrantData = serde_json::from_slice(&grant_bytes)?;
