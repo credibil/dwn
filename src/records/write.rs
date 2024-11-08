@@ -100,7 +100,7 @@ impl Handler for Write {
             let write = process_data(&ctx.owner, &self, latest, &provider).await?;
             (write, 202)
         } else {
-            (self.clone(), 204)
+            (self, 204)
         };
 
         // save the message and log the event
@@ -147,7 +147,7 @@ impl Handler for Write {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Write {
-    /// The Write descriptor.
+    /// Write descriptor.
     pub descriptor: WriteDescriptor,
 
     /// The message authorization.
@@ -160,7 +160,7 @@ pub struct Write {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_id: Option<String>,
 
-    /// Record data.
+    /// Record attestation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attestation: Option<Jws>,
 
@@ -173,6 +173,7 @@ pub struct Write {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoded_data: Option<String>,
 }
+
 
 impl Message for Write {
     fn cid(&self) -> Result<String> {

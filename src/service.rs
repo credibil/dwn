@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::future::Future;
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::auth::Authorization;
 use crate::permissions::Grant;
@@ -38,13 +38,17 @@ pub trait Handler {
 }
 
 /// Reply to a web node message.
-pub trait Reply: Serialize + Debug {
+pub trait Reply: Serialize + Clone + Debug {
     /// Status message to accompany the reply.
     fn status(&self) -> Status;
 
     /// Return the reply as an `Any` trait object.
     fn as_any(&self) -> &dyn Any;
 }
+
+use std::io::Read;
+
+// type DateStream=FnOnce() -> Box<dyn Read + Send>;
 
 /// Process web node messages.
 ///
@@ -117,22 +121,4 @@ pub struct Context {
 
     /// The permission grant used to authorize the message
     pub grant: Option<Grant>,
-}
-
-/// Reply to a web node message.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[allow(clippy::module_name_repetitions)]
-pub struct ErrorReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-}
-
-impl Reply for ErrorReply {
-    fn status(&self) -> Status {
-        self.status.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }

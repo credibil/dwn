@@ -26,6 +26,7 @@ base64ct.workspace = true
 chrono.workspace = true
 ciborium = "0.2.2"
 cid = "0.11.1"
+data-stream = "0.2.1"
 derive_more = { workspace = true, features = ["display"] }
 insta.workspace = true
 jsonschema = { version = "0.26.1", default-features = false, features = ["resolve-file"] }

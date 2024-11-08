@@ -1208,6 +1208,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-stream"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baab45094de14adb8c6c74c95b0f3b329d00d2a856f556d5a2d66acbd6494b10"
+
+[[package]]
 name = "der"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5459,6 +5465,7 @@ dependencies = [
  "chrono",
  "ciborium",
  "cid",
+ "data-stream",
  "derive_more",
  "insta",
  "jsonschema",

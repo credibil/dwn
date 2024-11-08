@@ -7,31 +7,32 @@ snapshot_kind: text
 status:
   code: 200
   detail: OK
-recordsWrite:
-  descriptor:
-    interface: Records
-    method: Write
-    messageTimestamp: "[messageTimestamp]"
-    dataCid: bafkreiehsisfijhvfjahl45vxul7wym4r4kgakkos6obtdvik544gbunlu
-    dataSize: 31
-    dataFormat: application/json
-    dateCreated: "[dateCreated]"
-    published: true
-    datePublished: "[datePublished]"
-  authorization:
-    signature:
+entry:
+  recordsWrite:
+    descriptor:
+      interface: Records
+      method: Write
+      messageTimestamp: "[messageTimestamp]"
+      dataCid: bafkreiehsisfijhvfjahl45vxul7wym4r4kgakkos6obtdvik544gbunlu
+      dataSize: 31
+      dataFormat: application/json
+      dateCreated: "[dateCreated]"
+      published: true
+      datePublished: "[datePublished]"
+    authorization:
+      signature:
+        payload: "[payload]"
+        signatures:
+          - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+            signature: "[signature]"
+    recordId: "[recordId]"
+    attestation:
       payload: "[payload]"
       signatures:
         - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
           signature: "[signature]"
-  recordId: "[recordId]"
-  attestation:
-    payload: "[payload]"
-    signatures:
-      - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
-        signature: "[signature]"
-data:
-  dateExpires: "1970-01-01T00:00:00Z"
-  scope:
-    interface: Records
-    method: Read
+  data:
+    dateExpires: "1970-01-01T00:00:00Z"
+    scope:
+      interface: Records
+      method: Read

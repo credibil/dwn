@@ -58,34 +58,44 @@ async fn flat_space() {
     assert_eq!(reply.status().code, 200);
 
     assert_snapshot!("read", reply, {
-        ".recordsWrite.recordId" => "[recordId]",
-        ".recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
-        ".recordsWrite.descriptor.dateCreated" => "[dateCreated]",
-        ".recordsWrite.descriptor.datePublished" => "[datePublished]",
-        ".recordsWrite.authorization.signature.payload" => "[payload]",
-        ".recordsWrite.authorization.signature.signatures[0].signature" => "[signature]",
-        ".recordsWrite.attestation.payload" => "[payload]",
-        ".recordsWrite.attestation.signatures[0].signature" => "[signature]",
+        ".entry.recordsWrite.recordId" => "[recordId]",
+        ".entry.recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
+        ".entry.recordsWrite.descriptor.dateCreated" => "[dateCreated]",
+        ".entry.recordsWrite.descriptor.datePublished" => "[datePublished]",
+        ".entry.recordsWrite.authorization.signature.payload" => "[payload]",
+        ".entry.recordsWrite.authorization.signature.signatures[0].signature" => "[signature]",
+        ".entry.recordsWrite.attestation.payload" => "[payload]",
+        ".entry.recordsWrite.attestation.signatures[0].signature" => "[signature]",
     });
 
     // --------------------------------------------------
     // Alice augments Bob's message as an external owner
     // --------------------------------------------------
 
+    // test Alice can successfully retain/write Bob's message to her DWN
+
     //   const { entry } = readReply; // remove data from message
     let Some(read_reply) = reply.as_any().downcast_ref::<ReadReply>() else {
         panic!("should downcast to ReadReply");
     };
+    let Some(mut owner_signed) = read_reply.entry.clone().records_write else {
+        panic!("should have records write");
+    };
 
-    // let Some(owner_signed) = read_reply.entry.records_write else {
-    //     panic!("should have records write");
-    // };
-    // owner_signed.sign(Jws.createSigner(alice"));
+    // let data = read_reply.entry.data.as_ref().unwrap();
+    // let bytes = serde_json::to_vec(&data).expect("should serialize");
+    // let encoded = Base64UrlUnpadded::encode_string(&bytes);
 
-    // test Alice can successfully retain/write Bob's message to her DWN
+    // owner_signed.encoded_data = Some(encoded);
+    // owner_signed.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
+
+    // let reply = vercre_dwn::handle_message(ALICE_DID, owner_signed, provider.clone())
+    //     .await
+    //     .expect("should write");
+    // assert_eq!(reply.status().code, 202);
 
     //   const aliceDataStream = readReply.entry!.data!;
-    //   const aliceWriteReply = await dwn.processMessage(alice.did, ownerSignedMessage.message, { dataStream: aliceDataStream });
+    //   const aliceWriteReply = await dwn.processMessage(alice.did, owner_signed, { dataStream: aliceDataStream });
     //   expect(aliceWriteReply.status.code).to.equal(202);
 
     // test Bob's message can be read from Alice's DWN
