@@ -16,9 +16,10 @@ mod utils;
 
 use chrono::{DateTime, Utc};
 use derive_more::Display;
-pub use error::Error;
 use serde::{Deserialize, Serialize};
 
+pub use crate::error::Error;
+pub use crate::provider::Provider;
 pub use crate::service::{handle_message, Message, Reply};
 
 /// The maximum size of a message.

@@ -36,6 +36,7 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
+    // dataStream
     let reply = vercre_dwn::handle_message(BOB_DID, write.clone(), provider.clone())
         .await
         .expect("should write");
@@ -71,23 +72,23 @@ async fn flat_space() {
     // --------------------------------------------------
     // Alice augments Bob's message as an external owner
     // --------------------------------------------------
-
-    // test Alice can successfully retain/write Bob's message to her DWN
-
     //   const { entry } = readReply; // remove data from message
     let Some(read_reply) = reply.as_any().downcast_ref::<ReadReply>() else {
         panic!("should downcast to ReadReply");
     };
     let Some(mut owner_signed) = read_reply.entry.clone().records_write else {
-        panic!("should have records write");
+        panic!("should have records write entry");
     };
+    owner_signed.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
 
+    // --------------------------------------------------
+    // Alice saves Bob's message to her DWN
+    // --------------------------------------------------
     // let data = read_reply.entry.data.as_ref().unwrap();
     // let bytes = serde_json::to_vec(&data).expect("should serialize");
     // let encoded = Base64UrlUnpadded::encode_string(&bytes);
 
     // owner_signed.encoded_data = Some(encoded);
-    // owner_signed.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
 
     // let reply = vercre_dwn::handle_message(ALICE_DID, owner_signed, provider.clone())
     //     .await
@@ -98,8 +99,9 @@ async fn flat_space() {
     //   const aliceWriteReply = await dwn.processMessage(alice.did, owner_signed, { dataStream: aliceDataStream });
     //   expect(aliceWriteReply.status.code).to.equal(202);
 
-    // test Bob's message can be read from Alice's DWN
-
+    // --------------------------------------------------
+    // Bob's message can be read from Alice's DWN
+    // --------------------------------------------------
     //   const readReply2 = await dwn.processMessage(alice.did, recordsRead.message);
     //   expect(readReply2.status.code).to.equal(200);
     //   expect(readReply2.entry!.recordsWrite).to.exist;

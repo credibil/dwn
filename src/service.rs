@@ -51,9 +51,9 @@ pub trait Reply: Serialize + Clone + Debug {
     fn status(&self) -> Status;
 
     /// `Any` supports downcasting the trait object to it's underlying type.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```rust,ignore
     /// let reply = handle_message(owner, message, provider).await?;
     /// let reply = reply.as_any().downcast_ref::<RecordsReadReply>().unwrap();
