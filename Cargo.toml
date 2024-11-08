@@ -33,7 +33,7 @@ jsonschema = { version = "0.26.1", default-features = false, features = ["resolv
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 serde.workspace = true
 serde_json.workspace = true
-thiserror = "2.0.0"
+thiserror = "2.0.1"
 url = "2.5.3"
 vercre-did.workspace = true
 vercre-infosec.workspace = true
