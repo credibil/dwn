@@ -174,7 +174,6 @@ pub struct Write {
     pub encoded_data: Option<String>,
 }
 
-
 impl Message for Write {
     fn cid(&self) -> Result<String> {
         cid::compute(self)
@@ -212,10 +211,12 @@ impl Write {
     /// # Errors
     /// TODO: Add errors
     pub async fn sign(
-        &mut self, delegated_grant: Option<DelegatedGrant>, permission_grant_id: Option<String>,
-        protocol_role: Option<String>, signer: &impl Signer,
+        &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
+        signer: &impl Signer,
     ) -> Result<()> {
-        let (author_did, delegated_grant_id) = if let Some(grant) = &delegated_grant {
+        let (author_did, delegated_grant_id) = if let Some(grant) =
+            &self.authorization.author_delegated_grant
+        {
             (Some(auth::signer_did(&grant.authorization.signature)?), Some(cid::compute(&grant)?))
         } else {
             (signer.verification_method().split('#').next().map(ToString::to_string), None)
@@ -236,11 +237,13 @@ impl Write {
             };
         }
 
-        let attestation_cid = if let Some(attestation) = &self.attestation {
-            Some(cid::compute(attestation)?)
-        } else {
-            None
+        // attestation
+        let payload = Payload {
+            descriptor_cid: cid::compute(&self.descriptor)?,
         };
+        self.attestation = Some(Jws::new(Type::Jwt, &payload, signer).await?);
+        let attestation_cid = Some(cid::compute(&self.attestation)?);
+
         let encryption_cid = if let Some(encryption) = &self.encryption {
             Some(cid::compute(encryption)?)
         } else {
@@ -260,13 +263,7 @@ impl Write {
             encryption_cid,
         };
 
-        let jws = Jws::new(Type::Jwt, &payload, signer).await?;
-
-        self.authorization = Authorization {
-            signature: jws,
-            author_delegated_grant: delegated_grant,
-            ..Authorization::default()
-        };
+        self.authorization.signature = Jws::new(Type::Jwt, &payload, signer).await?;
 
         Ok(())
     }
@@ -862,8 +859,8 @@ impl WriteBuilder {
             }
         };
 
-        // timestamp
-        let timestamp = self.message_timestamp.unwrap_or_else(Utc::now);
+        let now = Utc::now();
+        let timestamp = self.message_timestamp.unwrap_or(now);
 
         let mut descriptor = WriteDescriptor {
             base: Descriptor {
@@ -875,14 +872,14 @@ impl WriteBuilder {
             tags: self.tags,
             data_cid,
             data_size,
-            date_created: self.date_created.unwrap_or(timestamp),
+            date_created: self.date_created.unwrap_or(now),
             published: self.published,
             data_format: self.data_format,
             parent_id: self.parent_context_id.clone(),
             ..WriteDescriptor::default()
         };
 
-        // protocol, protoco_ path
+        // protocol, protocol_ path
         if let Some(p) = self.protocol {
             let normalized = utils::clean_url(&p.protocol)?;
             descriptor.protocol = Some(normalized);
@@ -900,23 +897,20 @@ impl WriteBuilder {
             descriptor.parent_id = parent_id;
         }
 
-        // set `date_published`
+        // when published true and date_published not set
         if self.published.unwrap_or_default() && self.date_published.is_none() {
-            descriptor.date_published = Some(timestamp);
+            descriptor.date_published = Some(now);
         }
-
-        // attestation
-        let payload = Payload {
-            descriptor_cid: cid::compute(&descriptor)?,
-        };
-        let attestation = Some(Jws::new(Type::Jwt, &payload, keyring).await?);
 
         // TODO: encryption
 
         let mut write = Write {
             record_id: self.record_id.unwrap_or_default(),
+            authorization: Authorization {
+                author_delegated_grant: self.delegated_grant,
+                ..Authorization::default()
+            },
             descriptor,
-            attestation,
             ..Write::default()
         };
 
@@ -925,9 +919,7 @@ impl WriteBuilder {
         }
 
         // sign message
-        write
-            .sign(self.delegated_grant, self.permission_grant_id, self.protocol_role, keyring)
-            .await?;
+        write.sign(self.permission_grant_id, self.protocol_role, keyring).await?;
 
         Ok(write)
     }

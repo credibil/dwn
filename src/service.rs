@@ -37,18 +37,29 @@ pub trait Handler {
     ) -> impl Future<Output = Result<impl Reply>> + Send;
 }
 
+// pub enum Options {
+//     /// The message is a write message.
+//     Write(Write),
+
+//     /// The message is a read message.
+//     Read(Read),
+// }
+
 /// Reply to a web node message.
 pub trait Reply: Serialize + Clone + Debug {
     /// Status message to accompany the reply.
     fn status(&self) -> Status;
 
-    /// Return the reply as an `Any` trait object.
+    /// `Any` supports downcasting the trait object to it's underlying type.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let reply = handle_message(owner, message, provider).await?;
+    /// let reply = reply.as_any().downcast_ref::<RecordsReadReply>().unwrap();
+    /// ```
     fn as_any(&self) -> &dyn Any;
 }
-
-use std::io::Read;
-
-// type DateStream=FnOnce() -> Box<dyn Read + Send>;
 
 /// Process web node messages.
 ///

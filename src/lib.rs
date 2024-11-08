@@ -162,77 +162,63 @@ pub struct Cursor {
 #[cfg(test)]
 mod stream {
     use std::fmt::Debug;
-    use std::io::{Read, Write};
-    use std::marker::PhantomData;
+    use std::io::{self, BufRead, Read, Write};
 
-    // use data_stream::{Readable, Writable};
     use super::*;
 
-    /// A trait for types, which can be written to streams.
-    /// Most argument types might need some settings.
-    pub trait Writable<S> {
-        /// Writes a value of this type to a stream. Return an error on failure.
-        fn write<W: Write>(&self, stream: &mut W) -> anyhow::Result<()>;
-    }
-
-    /// A trait for types, which can be read from streams.
-    pub trait Readable<S>: Sized {
-        /// Reads a value of this type from a stream and returns it. Returns an error on failure instead.
-        fn read<R: Read>(stream: &mut R) -> anyhow::Result<Self>;
-    }
-
     /// Methods common to all messages.
-    pub trait SomeTrait: Serialize + Clone + Debug + Send + Sync {
-        fn save_data(&self) -> Result<String>;
-        fn load_data(&self) -> Result<String>;
+    pub trait Stream: Send + Sync {
+        fn save_data(&self) -> Result<()>;
+        fn load_data(&self) -> Result<()>;
     }
 
     /// Records write message payload
     #[derive(Clone, Debug, Default, Deserialize, Serialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct Message2<S, T>
+    pub struct Message2<T>
     where
-        T: Readable<S> + Writable<S>,
+        T: BufRead + Write,
     {
-        streamer: T,
-        unused: PhantomData<S>,
+        data: T,
     }
 
-    impl<S, T> Message2<S, T>
+    impl<T> Message2<T>
     where
-        T: Readable<S> + Writable<S>,
+        T: BufRead + Write,
     {
-        pub fn new(streamer: T) -> Self {
-            Self {
-                streamer,
-                unused: PhantomData,
-            }
+        pub fn new(data: T) -> Self {
+            Self { data }
         }
     }
 
-    impl<S, T> SomeTrait for Message2<S, T>
+    impl<T> Stream for Message2<T>
     where
-        S: Clone + Debug + Send + Sync,
-        T: Readable<S> + Writable<S> + Serialize + Clone + Debug + Send + Sync,
+        T: BufRead + Write + Serialize + Clone + Debug + Send + Sync,
     {
         // push data out of the app
-        fn save_data(&self) -> Result<String> {
+        fn save_data(&self) -> Result<()> {
             let internal = vec![5, 6, 7, 8, 9];
             let mut stream = internal.as_slice();
-            let data_stream = T::read(&mut stream).unwrap();
 
-            Ok("data pushed out".to_string())
+            let mut data_stream = DataStream::new();
+            data_stream.write(&mut stream).unwrap();
+            println!("data pushed out: {:?}", internal);
+
+            Ok(())
         }
 
         // pull data into the app
-        fn load_data(&self) -> Result<String> {
-            let mut writable = Vec::new();
+        fn load_data(&self) -> Result<()> {
+            let mut data_stream = DataStream::new();
 
-            let data_stream = DataStream::new();
-            data_stream.write(&mut writable).unwrap();
-            println!("data pulled in: {:?}", writable);
+            let mut buffer = Vec::new();
+            buffer.resize(5, 0);
+            data_stream.read(&mut buffer).unwrap();
 
-            Ok("data pulled in".to_string())
+            // let buffer = data_stream.fill_buf().unwrap();
+            println!("data pulled in: {:?}", buffer);
+
+            Ok(())
         }
     }
 
@@ -243,31 +229,45 @@ mod stream {
 
     impl DataStream {
         fn new() -> Self {
-            Self { data: vec![] }
+            Self {
+                data: vec![1, 2, 3, 4, 5],
+            }
         }
     }
 
-    impl Readable<Vec<u8>> for DataStream {
-        fn read<R: Read>(stream: &mut R) -> anyhow::Result<Self> {
-            // read the stream into a buffer
-            let mut buffer = DataStream::new();
-            stream.read_to_end(&mut buffer.data)?;
-            println!("data pushed out: {:?}", buffer);
+    impl BufRead for DataStream {
+        fn fill_buf(&mut self) -> io::Result<&[u8]> {
+            Ok(&self.data)
+        }
 
-            Ok(buffer)
+        fn consume(&mut self, amt: usize) {
+            self.data = self.data[amt..].to_vec();
         }
     }
 
-    impl Writable<Vec<u8>> for DataStream {
-        fn write<W: Write>(&self, stream: &mut W) -> anyhow::Result<()> {
-            Ok(stream.write_all(&[1, 2, 3, 4, 5])?)
+    impl Read for DataStream {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let n = std::cmp::min(buf.len(), self.data.len());
+            buf[..n].copy_from_slice(&self.data[..n]);
+            self.data = self.data[n..].to_vec();
+            Ok(n)
+        }
+    }
+
+    impl Write for DataStream {
+        fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
+            self.data.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> Result<(), std::io::Error> {
+            Ok(())
         }
     }
 
     #[test]
     fn test_streaming() {
         let message = Message2::new(DataStream::new());
-
         message.load_data().unwrap();
         message.save_data().unwrap();
     }
