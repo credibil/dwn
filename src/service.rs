@@ -2,9 +2,9 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::any::Any;
 use std::fmt::Debug;
 
+use async_trait::async_trait;
 // use std::future::Future;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -12,9 +12,10 @@ use serde::Serialize;
 use crate::auth::Authorization;
 use crate::permissions::Grant;
 use crate::provider::Provider;
-use crate::{permissions, schema, unexpected, Descriptor, Result, Status};
+use crate::{permissions, schema, unexpected, Descriptor, Result};
 
 /// Methods common to all messages.
+#[async_trait]
 pub trait Message: Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
     /// Compute the CID of the message.
     ///
@@ -28,7 +29,8 @@ pub trait Message: Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
     /// Returns the messages's authorization, if set.
     fn authorization(&self) -> Option<&Authorization>;
 
-    /// Authorize the message.
+    /// Validate the message. This is a generic validation common to all messages.
+    /// Message-specific validation is done in the message handler.
     async fn validate(&self, ctx: &mut Context, provider: &impl Provider) -> Result<()> {
         schema::validate(self)?;
 
@@ -57,22 +59,6 @@ pub trait Message: Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
 
         Ok(())
     }
-}
-
-/// Reply to a web node message.
-pub trait Reply: Serialize + Clone + Debug {
-    /// Status message to accompany the reply.
-    fn status(&self) -> Status;
-
-    /// `Any` supports downcasting the trait object to it's underlying type.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let reply = handle_message(owner, message, provider).await?;
-    /// let reply = reply.as_any().downcast_ref::<RecordsReadReply>().unwrap();
-    /// ```
-    fn as_any(&self) -> &dyn Any;
 }
 
 /// Message context for attaching information used during processing.

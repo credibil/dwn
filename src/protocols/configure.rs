@@ -2,7 +2,6 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
@@ -16,7 +15,7 @@ use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
-use crate::service::{Context, Message, Reply};
+use crate::service::{Context, Message};
 use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
 
 /// Process query message.
@@ -25,7 +24,7 @@ use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Resul
 /// TODO: Add errors
 pub async fn handle(
     owner: &str, configure: Configure, provider: impl Provider,
-) -> Result<impl Reply> {
+) -> Result<ConfigureReply> {
     let mut ctx = Context::new(owner);
     Message::validate(&configure, &mut ctx, &provider).await?;
     configure.authorize(&ctx, &provider).await?;
@@ -114,16 +113,6 @@ pub struct ConfigureReply {
 
     #[serde(flatten)]
     message: Configure,
-}
-
-impl Reply for ConfigureReply {
-    fn status(&self) -> Status {
-        self.status.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Configure {

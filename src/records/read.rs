@@ -2,8 +2,6 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
-use std::any::Any;
-
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -12,14 +10,14 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::GrantData;
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::service::{Context, Message, Reply};
+use crate::service::{Context, Message};
 use crate::{cid, unexpected, Descriptor, Error, Interface, Method, Result, Status};
 
 /// Process `Read` message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<impl Reply> {
+pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<ReadReply> {
     let mut ctx = Context::new(owner);
     Message::validate(&read, &mut ctx, &provider).await?;
 
@@ -184,15 +182,6 @@ pub struct ReadReplyEntry {
     /// The data for the record.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<GrantData>,
-}
-impl Reply for ReadReply {
-    fn status(&self) -> Status {
-        self.status.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Read {

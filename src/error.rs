@@ -137,7 +137,7 @@ mod test {
     fn err_json() {
         let err = Error::Unexpected("bad request".into());
         let ser: Value = serde_json::from_str(&err.to_string()).unwrap();
-        assert_eq!(ser, json!({"error":"invalid_request", "error_description": "bad request"}));
+        assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
     }
 
     // Test that the error details are returned as an http query string.

@@ -73,5 +73,5 @@ pub struct Event<M: Message> {
 }
 
 pub fn handle_request<R: Request2>(_request: R) -> Result<()> {
-    todo!()
+    Ok(())
 }

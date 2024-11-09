@@ -2,9 +2,9 @@
 //!
 //! `Write` is a message type used to create a new record in the web node.
 
-use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
+use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
@@ -17,7 +17,7 @@ use crate::auth::{self, Authorization, JwsPayload};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
-use crate::service::{Context, Message, Reply};
+use crate::service::{Context, Message};
 use crate::{
     cid, permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, Status,
     MAX_ENCODED_SIZE,
@@ -27,7 +27,9 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, write: Write, provider: impl Provider) -> Result<impl Reply> {
+pub async fn handle(
+    owner: &str, write: Write, provider: impl Provider, data: Option<impl Read>,
+) -> Result<WriteReply> {
     let mut ctx = Context::new(owner);
     Message::validate(&write, &mut ctx, &provider).await?;
     write.authorize(owner, &provider).await?;
@@ -192,16 +194,6 @@ impl Message for Write {
 pub struct WriteReply {
     /// Status message to accompany the reply.
     pub status: Status,
-}
-
-impl Reply for WriteReply {
-    fn status(&self) -> Status {
-        self.status.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Write {

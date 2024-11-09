@@ -25,7 +25,7 @@ pub mod handlers {
 }
 pub use crate::error::Error;
 pub use crate::provider::Provider;
-pub use crate::service::{Message, Reply};
+pub use crate::service::Message;
 
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: u64 = 30000;

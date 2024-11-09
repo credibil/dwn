@@ -9,8 +9,7 @@ use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::handlers::{read, write};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{ReadBuilder, ReadReply, RecordsFilter, WriteBuilder, WriteData};
-use vercre_dwn::service::Reply;
+use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -42,8 +41,8 @@ async fn flat_space() {
     //     .await
     //     .expect("should write");
     let reply =
-        write::handle(BOB_DID, write.clone(), provider.clone()).await.expect("should write");
-    assert_eq!(reply.status().code, 204);
+        write::handle(BOB_DID, write.clone(), provider.clone(), None).await.expect("should write");
+    assert_eq!(reply.status.code, 204);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
@@ -58,7 +57,7 @@ async fn flat_space() {
         .expect("should create write");
 
     let reply = read::handle(BOB_DID, read, provider.clone()).await.expect("should write");
-    assert_eq!(reply.status().code, 200);
+    assert_eq!(reply.status.code, 200);
 
     assert_snapshot!("read", reply, {
         ".entry.recordsWrite.recordId" => "[recordId]",
@@ -75,10 +74,8 @@ async fn flat_space() {
     // Alice augments Bob's message as an external owner
     // --------------------------------------------------
     //   const { entry } = readReply; // remove data from message
-    let Some(read_reply) = reply.as_any().downcast_ref::<ReadReply>() else {
-        panic!("should downcast to ReadReply");
-    };
-    let Some(mut owner_signed) = read_reply.entry.clone().records_write else {
+
+    let Some(mut owner_signed) = reply.entry.clone().records_write else {
         panic!("should have records write entry");
     };
     owner_signed.sign_as_owner(&alice_keyring).await.expect("should sign as owner");

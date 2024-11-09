@@ -2,8 +2,6 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::any::Any;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +9,7 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::service::{Context, Message, Reply};
+use crate::service::{Context, Message};
 use crate::{
     cid, schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Result, Status,
 };
@@ -19,7 +17,7 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, query: Query, provider: impl Provider) -> Result<impl Reply> {
+pub async fn handle(owner: &str, query: Query, provider: impl Provider) -> Result<QueryReply> {
     let mut ctx = Context::new(owner);
     Message::validate(&query, &mut ctx, &provider).await?;
     query.authorize(&ctx)?;
@@ -79,16 +77,6 @@ pub struct QueryReply {
     /// The message authorization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
-}
-
-impl Reply for QueryReply {
-    fn status(&self) -> Status {
-        self.status.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 /// Fetch published `protocols::Configure` matching the query
