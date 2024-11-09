@@ -52,7 +52,7 @@ pub struct Query {
 
 impl Message for Query {
     fn cid(&self) -> Result<String> {
-        cid::from_type(self)
+        cid::from_value(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -208,7 +208,7 @@ impl QueryBuilder {
         };
 
         // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_type(&descriptor)?);
+        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
         if let Some(id) = self.permission_grant_id {
             builder = builder.permission_grant_id(id);
         }

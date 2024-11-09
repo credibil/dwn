@@ -4,6 +4,7 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
+use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
@@ -30,18 +31,18 @@ async fn flat_space() {
     .expect("should serialize");
 
     let write = WriteBuilder::new()
-        .data(WriteData::Bytes { data })
+        .data(WriteData::Bytes { data: data.clone() })
         .published(true)
         .build(&bob_keyring)
         .await
         .expect("should create write");
 
     // TODO: file with random bytes
-    let data: Vec<u8> = vec![1, 2, 3, 4, 5];
+    // let data: Vec<u8> = vec![1, 2, 3, 4, 5];
     let reply = write::handle(BOB_DID, write.clone(), provider.clone(), Some(&mut data.as_slice()))
         .await
         .expect("should write");
-    assert_eq!(reply.status.code, 204);
+    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
@@ -56,7 +57,7 @@ async fn flat_space() {
         .expect("should create write");
 
     let reply = read::handle(BOB_DID, read, provider.clone()).await.expect("should write");
-    assert_eq!(reply.status.code, 200);
+    assert_eq!(reply.status.code, StatusCode::OK);
 
     assert_snapshot!("read", reply, {
         ".entry.recordsWrite.recordId" => "[recordId]",
@@ -101,7 +102,7 @@ async fn flat_space() {
     // Bob's message can be read from Alice's DWN
     // --------------------------------------------------
     //   const readReply2 = await dwn.processMessage(alice.did, recordsRead.message);
-    //   expect(readReply2.status.code).to.equal(200);
+    //   expect(readReply2.status.code).to.equal(StatusCode::OK);
     //   expect(readReply2.entry!.recordsWrite).to.exist;
     //   expect(readReply2.entry!.recordsWrite?.descriptor).to.exist;
 

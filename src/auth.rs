@@ -226,7 +226,7 @@ impl AuthorizationBuilder {
         let descriptor_cid =
             self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;
         let delegated_grant_id = if let Some(grant) = &self.delegated_grant {
-            Some(cid::from_type(grant)?)
+            Some(cid::from_value(grant)?)
         } else {
             None
         };

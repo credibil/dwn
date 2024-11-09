@@ -52,7 +52,7 @@ pub async fn handle(
         for e in existing {
             let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
             if current_ts.cmp(&latest_ts) == Ordering::Less {
-                let cid = cid::from_type(&e)?;
+                let cid = cid::from_value(&e)?;
                 MessageStore::delete(&provider, &ctx.owner, &cid).await?;
                 EventLog::delete(&provider, &ctx.owner, &cid).await?;
             }
@@ -93,7 +93,7 @@ pub struct Configure {
 
 impl Message for Configure {
     fn cid(&self) -> Result<String> {
-        cid::from_type(self)
+        cid::from_value(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -436,7 +436,7 @@ impl ConfigureBuilder {
         };
 
         // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_type(&descriptor)?);
+        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
         if let Some(id) = self.permission_grant_id {
             builder = builder.permission_grant_id(id);
         }

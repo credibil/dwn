@@ -4,10 +4,11 @@
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
-use std::io::Read;
+use std::io::{BufReader, BufWriter, Read, Write as _};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
@@ -27,7 +28,7 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle<R: Read>(
+pub async fn handle<R: Read + Send>(
     owner: &str, write: Write, provider: impl Provider, data: Option<&mut R>,
 ) -> Result<WriteReply> {
     let mut ctx = Context::new(owner);
@@ -64,32 +65,22 @@ pub async fn handle<R: Read>(
     }
 
     // ----------------------------------------------------------------
-    // Latest Base State
+    // TODO: Latest Base State
     // ----------------------------------------------------------------
-    // `is_latest` is used to prevent querying of initial writes that do
+    // `latest` is used to prevent querying of initial writes that do
     // not have data. This prevents a malicious user from gaining access to
     // data by referencing the `data_cid` of private data in their initial
     // writes.
     //
-    // `is_latest` is set to true when either the incoming message comes
-    //  with data OR is not an initial write.
+    // `latest` is set when the incoming `Write` message is:
+    //   - an intial write with data
+    //   - not an initial write
     //
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
-    // ----------------------------------------------------------------
-    // Response Codes
-    // ----------------------------------------------------------------
-    // In order to discern between a message accepted as a queryable write and
-    // something accepted as an initial state we use separate response codes:
-    //   - 202 for queryable writes
-    //   - 204 for non-queryable writes.
-    //   - 409 if the incoming message is not the latest (TODO: used typed errors)
-    //
-    // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
-
     let (write, code) = if let Some(data) = data {
         process_stream(owner, &write, data)?;
-        (write, 202)
+        (write, StatusCode::ACCEPTED)
     } else {
         // if the incoming message is not the initial write, and no `data_stream` is
         // set, we can process
@@ -98,9 +89,9 @@ pub async fn handle<R: Read>(
                 return Err(unexpected!("newest existing message not found"));
             };
             let write = process_data(owner, &write, latest, &provider).await?;
-            (write, 202)
+            (write, StatusCode::ACCEPTED)
         } else {
-            (write, 204)
+            (write, StatusCode::NO_CONTENT)
         };
 
         (write, code)
@@ -124,7 +115,7 @@ pub async fn handle<R: Read>(
     let mut deletable = VecDeque::from(existing);
     let _ = deletable.pop_front(); // initial write is first entry
     for msg in deletable {
-        let cid = cid::from_type(&msg)?;
+        let cid = cid::from_value(&msg)?;
         MessageStore::delete(&provider, owner, &cid).await?;
         EventLog::delete(&provider, owner, &cid).await?;
     }
@@ -137,9 +128,19 @@ pub async fn handle<R: Read>(
         revoke_grants(owner, &write, &provider).await?;
     }
 
+    // ----------------------------------------------------------------
+    // Response Codes
+    // ----------------------------------------------------------------
+    // In order to discern between a message accepted as a queryable write and
+    // something accepted as an initial state we use separate response codes:
+    //   - 202 for queryable writes
+    //   - 204 for non-queryable writes
+    //
+    // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
+
     Ok(WriteReply {
         status: Status {
-            code,
+            code: code.as_u16(),
             detail: Some("OK".to_string()),
         },
     })
@@ -178,7 +179,7 @@ pub struct Write {
 
 impl Message for Write {
     fn cid(&self) -> Result<String> {
-        cid::from_type(self)
+        cid::from_value(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -262,13 +263,15 @@ impl Write {
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
         signer: &impl Signer,
     ) -> Result<()> {
-        let (author_did, delegated_grant_id) = if let Some(grant) =
-            &self.authorization.author_delegated_grant
-        {
-            (Some(auth::signer_did(&grant.authorization.signature)?), Some(cid::from_type(&grant)?))
-        } else {
-            (signer.verification_method().split('#').next().map(ToString::to_string), None)
-        };
+        let (author_did, delegated_grant_id) =
+            if let Some(grant) = &self.authorization.author_delegated_grant {
+                (
+                    Some(auth::signer_did(&grant.authorization.signature)?),
+                    Some(cid::from_value(&grant)?),
+                )
+            } else {
+                (signer.verification_method().split('#').next().map(ToString::to_string), None)
+            };
 
         // compute `record_id` if not given at construction time
         if self.record_id.is_empty() {
@@ -287,20 +290,20 @@ impl Write {
 
         // attestation
         let payload = Payload {
-            descriptor_cid: cid::from_type(&self.descriptor)?,
+            descriptor_cid: cid::from_value(&self.descriptor)?,
         };
         self.attestation = Some(Jws::new(Type::Jwt, &payload, signer).await?);
-        let attestation_cid = Some(cid::from_type(&self.attestation)?);
+        let attestation_cid = Some(cid::from_value(&self.attestation)?);
 
         let encryption_cid = if let Some(encryption) = &self.encryption {
-            Some(cid::from_type(encryption)?)
+            Some(cid::from_value(encryption)?)
         } else {
             None
         };
 
         let payload = WriteSignaturePayload {
             base: JwsPayload {
-                descriptor_cid: cid::from_type(&self.descriptor)?,
+                descriptor_cid: cid::from_value(&self.descriptor)?,
                 permission_grant_id,
                 delegated_grant_id,
                 protocol_role,
@@ -330,7 +333,7 @@ impl Write {
         }
 
         let payload = JwsPayload {
-            descriptor_cid: cid::from_type(&self.descriptor)?,
+            descriptor_cid: cid::from_value(&self.descriptor)?,
             ..JwsPayload::default()
         };
         let owner_jws = Jws::new(Type::Jwt, &payload, signer).await?;
@@ -356,8 +359,8 @@ impl Write {
 
         //  descriptorCid, delegatedGrantId, permissionGrantId, protocolRole
 
-        let delegated_grant_id = cid::from_type(&delegated_grant)?;
-        let descriptor_cid = cid::from_type(&self.descriptor)?;
+        let delegated_grant_id = cid::from_value(&delegated_grant)?;
+        let descriptor_cid = cid::from_value(&self.descriptor)?;
 
         let payload = JwsPayload {
             descriptor_cid,
@@ -895,7 +898,7 @@ impl WriteBuilder {
         let (data_cid, data_size) = match self.data {
             WriteData::Cid { data_cid, data_size } => (data_cid, data_size),
             WriteData::Bytes { data } => {
-                let data_cid = cid::from_type(&data)?;
+                let data_cid = cid::from_value(&data)?;
                 let data_size = data.len();
                 (data_cid, data_size)
             }
@@ -1043,7 +1046,7 @@ pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<St
         descriptor: WriteDescriptor,
         author: String,
     }
-    cid::from_type(&EntryId { descriptor, author })
+    cid::from_value(&EntryId { descriptor, author })
 }
 
 // Fetches the first and last `records::Write` messages associated for the
@@ -1064,13 +1067,13 @@ pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>,
 }
 
 fn process_stream<R: Read>(owner: &str, write: &Write, data: &mut R) -> Result<Write> {
-    // if data is below the threshold, store it within MessageStore
+    // when data is below the threshold, store it within MessageStore
     if write.descriptor.data_size <= MAX_ENCODED_SIZE {
-        // validate integrity
+        // read data from stream
         let mut data_bytes = Vec::new();
         data.read_to_end(&mut data_bytes).unwrap();
-        let data_cid = cid::from_bytes(&data_bytes)?;
 
+        let data_cid = cid::from_value(&data_bytes)?;
         if write.descriptor.data_cid != data_cid {
             return Err(unexpected!("computed data CID does not match descriptor cid"));
         }
@@ -1081,29 +1084,48 @@ fn process_stream<R: Read>(owner: &str, write: &Write, data: &mut R) -> Result<W
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
             protocol::verify_schema(write, &data_bytes)?;
         }
-    //       messageWithOptionalEncodedData = cloneAndAddEncodedData(message, data_bytes);
-    } else {
-        // split the dataStream into two: one for CID computation and one for storage
-        //       const [dataStreamCopy1, dataStreamCopy2] = DataStream.duplicateDataStream(dataStream, 2);
 
-        //         // perform storage and CID computation in parallel
-        //         const [dataCid, DataStorePutResult] = await Promise.all([
-        //           Cid.computeDagPbCidFromStream(dataStreamCopy1),
-        //           this.dataStore.put(tenant, message.recordId, message.descriptor.dataCid, dataStreamCopy2)
-        //         ]);
-
-        //         RecordsWriteHandler.validateDataIntegrity(message.descriptor.dataCid, message.descriptor.dataSize, dataCid, DataStorePutResult.dataSize);
-        //       } catch (error) {
-        //         // unwind/delete data if we have issue with storage or the data failed integrity validation
-        //         await this.dataStore.delete(tenant, message.recordId, message.descriptor.dataCid);
-        //         throw error;
-        //       }
-        //     }
-
-        //     return messageWithOptionalEncodedData;
+        let mut write = write.clone();
+        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
+        return Ok(write);
     }
 
-    todo!()
+    // split stream to do storage and CID computation in parallel
+    let mut reader = BufReader::new(data);
+
+    let write_buffer_1 = Vec::new();
+    let write_buffer_2 = Vec::new();
+    let mut stream_1 = BufWriter::new(write_buffer_1);
+    let mut stream_2 = BufWriter::new(write_buffer_2);
+
+    loop {
+        let mut buffer = [0u8; 10];
+        if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
+            if bytes_read > 0 {
+                let _ = stream_1.write(&buffer[..bytes_read]).unwrap();
+                let _ = stream_2.write(&buffer[..bytes_read]).unwrap();
+            } else {
+                stream_1.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
+                stream_2.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
+                break;
+            }
+        }
+    }
+
+    // let (data_cid, data_size) = await Promise.all([
+    //     Cid.computeDagPbCidFromStream(dataStreamCopy1),
+    //     store.put(tenant, write.record_id, write.descriptor.data_cid, stream_2)
+    // ]);
+
+    // verify result
+    //     if write.descriptor.data_cid != data_cid {
+    //         return Err(unexpected!("computed data CID does not match descriptor cid"));
+    //     }
+    //     if write.descriptor.data_size != data_size {
+    //         return Err(unexpected!("actual data size does not match descriptor `data_size`"));
+    //     }
+
+    Ok(write.clone())
 }
 
 // Write message is not an 'initial write' with no data_stream.
@@ -1166,7 +1188,7 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
 
     // delete any messages with the same `record_id` except the initial write
     for msg in messages {
-        let cid = cid::from_type(&msg)?;
+        let cid = cid::from_value(&msg)?;
         EventLog::delete(provider, owner, &cid).await?;
     }
 

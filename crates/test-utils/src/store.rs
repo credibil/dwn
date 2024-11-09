@@ -33,14 +33,15 @@ impl Provider for ProviderImpl {}
 
 impl ProviderImpl {
     pub async fn new() -> Result<Self> {
+        // surreal db
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns(NAMESPACE).use_db(OWNER_DID).await?;
         let provider = Self { db };
 
         let bytes = include_bytes!("./store/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
-
         MessageStore::put(&provider, OWNER_DID, &config).await?;
+
         Ok(provider)
     }
 }

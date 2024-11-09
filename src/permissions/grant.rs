@@ -5,6 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::{Conditions, GrantData, RecordsOptions, Scope, ScopeType,ConditionPublication};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{self, Write, WriteBuilder, WriteData, WriteProtocol};
@@ -179,123 +180,6 @@ impl Grant {
 
         Ok(())
     }
-}
-
-/// Permission grant message payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GrantData {
-    /// Describes intended grant use.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-
-    /// CID of permission request. Optional as grants may be given without
-    /// being requested.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub request_id: Option<String>,
-
-    /// Datetime when grant expires.
-    pub date_expires: DateTime<Utc>,
-
-    /// Whether grant is delegated or not. When `true`, the `granted_to` acts
-    /// as the `granted_to` within the scope of the grant.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delegated: Option<bool>,
-
-    /// The scope of the allowed access.
-    pub scope: Scope,
-
-    /// Optional conditions that must be met when the grant is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Conditions>,
-}
-
-/// Scope of the permission grant.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Scope {
-    /// The interface the permission is applied to.
-    pub interface: Interface,
-
-    /// The method the permission is applied to.
-    pub method: Method,
-
-    /// Variant scope fields.
-    #[serde(flatten)]
-    pub scope_type: ScopeType,
-}
-
-/// Scope type variants.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum ScopeType {
-    /// Protocols scope fields.
-    Protocols {
-        /// The protocol the permission is applied to.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        protocol: Option<String>,
-    },
-
-    /// Messages scope fields.
-    Messages {
-        /// The protocol the permission is applied to.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        protocol: Option<String>,
-    },
-
-    /// Records scope fields.
-    Records {
-        /// The protocol the permission is applied to.
-        protocol: String,
-
-        /// Context ID or protocol path.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(flatten)]
-        option: Option<RecordsOptions>,
-    },
-}
-
-impl Default for ScopeType {
-    fn default() -> Self {
-        Self::Protocols { protocol: None }
-    }
-}
-
-/// Fields specific to the `records` scope.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum RecordsOptions {
-    /// The context ID of the record.
-    ContextId(String),
-
-    /// The protocol path of the record.
-    ProtocolPath(String),
-}
-
-impl Default for RecordsOptions {
-    fn default() -> Self {
-        Self::ContextId(String::new())
-    }
-}
-
-/// Conditions that must be met when the grant is used.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Conditions {
-    /// indicates whether a message written with the invocation of a permission must, may, or must not
-    /// be marked as public.
-    /// If `undefined`, it is optional to make the message public.
-    pub publication: Option<ConditionPublication>,
-}
-
-/// Condition for publication of a message.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub enum ConditionPublication {
-    /// The message must be marked as public.
-    #[default]
-    Required,
-
-    /// The message may be marked as public.
-    Prohibited,
 }
 
 /// Options to use when creating a permission grant.

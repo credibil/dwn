@@ -4,11 +4,12 @@ use serde_json::{json, Map, Value};
 
 use crate::permissions::{self, ScopeType};
 use crate::protocols::{
-    self, Action, ActionRule, Actor, Configure, Definition, ProtocolType, RuleSet,
+    self, Action, ActionRule, Actor, Configure, Definition, ProtocolType, RuleSet, GRANT_PATH,
+    REQUEST_PATH, REVOCATION_PATH,
 };
 use crate::provider::MessageStore;
 use crate::records::{self, Write};
-use crate::{unexpected, utils, Interface, Method, Result};
+use crate::{schema, unexpected, utils, Interface, Method, Result};
 
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
 pub async fn verify_integrity(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
@@ -61,32 +62,54 @@ fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<
 }
 
 // Verifies the given `RecordsWrite` protocol.
-pub(crate) fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
-    //     const dataString = Encoder.bytesToString(dataBytes);
-    //     const dataObject = JSON.parse(dataString);
-    //     if (recordsWriteMessage.descriptor.protocolPath === PermissionsProtocol.requestPath) {
-    //       const permissionRequestData = dataObject as PermissionRequestData;
-    //       validateJsonSchema('PermissionRequestData', permissionRequestData);
+pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(unexpected!("missing protocol path"));
+    };
 
-    //       // more nuanced validation that are annoying/difficult to do using JSON schema
-    //       PermissionsProtocol.validateScopeAndTags(permissionRequestData.scope, recordsWriteMessage);
-    //     } else if (recordsWriteMessage.descriptor.protocolPath === PermissionsProtocol.grantPath) {
-    //       validateJsonSchema('PermissionGrantData', dataObject);
+    match protocol_path.as_str() {
+        REQUEST_PATH => {
+            let request_data: permissions::RequestData = serde_json::from_slice(data)?;
+            schema::validate_value("PermissionRequestData", &request_data)?;
+            verify_scope(write, &request_data.scope.scope_type)
+        }
+        GRANT_PATH => {
+            let grant_data: permissions::RequestData = serde_json::from_slice(data)?;
+            schema::validate_value("PermissionGrantData", &grant_data)?;
+            verify_scope(write, &grant_data.scope.scope_type)
+        }
+        REVOCATION_PATH => {
+            let revocation_data: permissions::RevocationData = serde_json::from_slice(data)?;
+            schema::validate_value("PermissionGrantData", &revocation_data)
+        }
+        _ => {
+            Err(unexpected!("unexpected permission record: ${protocol_path}"))
+        }
+    }
+}
 
-    //       // more nuanced validation that are annoying/difficult to do using JSON schema
-    //       const permissionGrantData = dataObject as PermissionGrantData;
-    //       PermissionsProtocol.validateScopeAndTags(permissionGrantData.scope, recordsWriteMessage);
-    //       Time.validateTimestamp(permissionGrantData.dateExpires);
-    //     } else if (recordsWriteMessage.descriptor.protocolPath === PermissionsProtocol.revocationPath) {
-    //       validateJsonSchema('PermissionRevocationData', dataObject);
-    //     } else {
-    //       // defensive programming, should not be unreachable externally
-    //       throw new DwnError(
-    //         DwnErrorCode.PermissionsProtocolValidateSchemaUnexpectedRecord,
-    //         `Unexpected permission record: ${recordsWriteMessage.descriptor.protocolPath}`
-    //       );
-    //     }
-    //   }
+/// Validate tags include a protocol tag matching the scoped protocol.
+pub fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
+    // validation difficult to do using JSON schema
+    let scope_protocol = match scope {
+        ScopeType::Records { protocol, .. } => {
+            if Some(protocol) != write.descriptor.protocol.as_ref() {
+                return Err(unexpected!("scope protocol does not match record protocol"));
+            }
+            protocol
+        }
+        _ => return Err(unexpected!("invalid scope type")),
+    };
+
+    let Some(tags) = &write.descriptor.tags else {
+        return Err(unexpected!("grants require a `tags` property"));
+    };
+    let Some(tag_protocol) = tags.get("protocol") else {
+        return Err(unexpected!("grants must have a `tags` property containing a protocol tag"));
+    };
+    if tag_protocol != scope_protocol {
+        return Err(unexpected!("grants must have a scope with a protocol matching the tagged protocol: ${tag_protocol}"));
+    }
 
     Ok(())
 }
@@ -555,7 +578,7 @@ async fn allowed_actions(
             //   }
 
             //   actions.push(Action::CoDelete);
-            //   if author === initial_author {
+            //   if author == initial_author {
             //       actions.push(Action::Delete);
             //   }
 

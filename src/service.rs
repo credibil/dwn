@@ -5,14 +5,13 @@
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-// use std::future::Future;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::auth::Authorization;
 use crate::permissions::Grant;
 use crate::provider::Provider;
-use crate::{permissions, schema, unexpected, Descriptor, Result};
+use crate::{permissions, schema, unexpected, Descriptor, Error, Result};
 
 /// Methods common to all messages.
 #[async_trait]
@@ -32,6 +31,10 @@ pub trait Message: Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
     /// Validate the message. This is a generic validation common to all messages.
     /// Message-specific validation is done in the message handler.
     async fn validate(&self, ctx: &mut Context, provider: &impl Provider) -> Result<()> {
+        // if !tenant_gate.active(owner)? {
+        //     return Err(Error::Unauthorized("tenant not active"));
+        // }
+
         schema::validate(self)?;
 
         // message has no authorization
@@ -40,7 +43,9 @@ pub trait Message: Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
         };
 
         // authenticate the message
-        authzn.authenticate(provider).await?;
+        if let Err(e) = authzn.authenticate(provider).await {
+            return Err(Error::Unauthorized(format!("failed to authenticate message: {e}")));
+        }
 
         // no checks needed when message author is web node owner
         let author = authzn.author()?;

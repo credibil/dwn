@@ -1,5 +1,6 @@
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::service::Message;
@@ -8,14 +9,18 @@ use crate::{unexpected, Result};
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
 pub fn validate(message: &impl Message) -> Result<()> {
-    let retriever = Retriever {};
-
     let descriptor = message.descriptor();
     let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
+    validate_value(&schema_name, message)
+}
 
-    let schema = precompiled(&schema_name)?;
+/// Validates the given payload using JSON schema keyed by the given schema name.
+/// Throws if the given payload fails validation.
+pub fn validate_value<T: Serialize+ ?Sized>(schema: &str, value: &T) -> Result<()> {
+    let retriever = Retriever {};
+    let schema = precompiled(schema)?;
     let validator = jsonschema::options().with_retriever(retriever).build(&schema)?;
-    let instance = serde_json::to_value(message)?;
+    let instance = serde_json::to_value(value)?;
 
     // check for validation errors
     let errors: Vec<ValidationError> = validator.iter_errors(&instance).collect();
@@ -24,7 +29,7 @@ pub fn validate(message: &impl Message) -> Result<()> {
         for e in errors {
             error.push_str(&format!("\n - {e} at {}", e.instance_path));
         }
-        return Err(unexpected!("validation failed for {schema_name}: {error}"));
+        return Err(unexpected!("validation failed for {schema}: {error}"));
     }
 
     Ok(())

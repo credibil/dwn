@@ -4,6 +4,7 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
@@ -112,7 +113,7 @@ pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<
 
     Ok(ReadReply {
         status: Status {
-            code: 200,
+            code: StatusCode::OK.as_u16(),
             detail: Some("OK".to_string()),
         },
         entry: ReadReplyEntry {
@@ -138,7 +139,7 @@ pub struct Read {
 
 impl Message for Read {
     fn cid(&self) -> Result<String> {
-        cid::from_type(self)
+        cid::from_value(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -305,7 +306,7 @@ impl ReadBuilder {
 
         let authorization = if self.authorize.unwrap_or(true) {
             let mut builder =
-                AuthorizationBuilder::new().descriptor_cid(cid::from_type(&descriptor)?);
+                AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
             if let Some(id) = self.permission_grant_id {
                 builder = builder.permission_grant_id(id);
             }

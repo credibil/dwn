@@ -1,6 +1,7 @@
-use url::Url;
+// use url::Url;
+use http::uri::Uri;
 
-use crate::Result;
+use crate::{unexpected, Result};
 
 pub fn clean_url(url: &str) -> Result<String> {
     let url = if url.starts_with("http://") || url.starts_with("https://") {
@@ -9,9 +10,12 @@ pub fn clean_url(url: &str) -> Result<String> {
         &format!("http://{url}")
     };
 
-    let parsed = Url::parse(url)?;
-    let cleaned = parsed.origin().ascii_serialization() + parsed.path();
+    let parsed: Uri = url.parse()?;
+    let Some(authority) = parsed.authority() else {
+        return Err(unexpected!("protocol URI ${url} must have an authority"));
+    };
 
+    let cleaned = format!("{authority}{path}", path = parsed.path());
     Ok(cleaned.trim_end_matches('/').to_owned())
 }
 

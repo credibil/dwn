@@ -12,6 +12,14 @@ pub enum Error {
     Unexpected(String),
 
     /// A required resource was not found.
+    #[error(r#"{{"code": 401, "detail": "{0}"}}"#)]
+    Unauthorized(String),
+
+    /// A required resource was not found.
+    #[error(r#"{{"code": 403, "detail": "{0}"}}"#)]
+    Forbidden(String),
+
+    /// A required resource was not found.
     #[error(r#"{{"code": 404, "detail": "{0}"}}"#)]
     NotFound(String),
 
@@ -59,8 +67,8 @@ impl From<ciborium::ser::Error<std::io::Error>> for Error {
     }
 }
 
-impl From<url::ParseError> for Error {
-    fn from(error: url::ParseError) -> Self {
+impl From<http::uri::InvalidUri> for Error {
+    fn from(error: http::uri::InvalidUri) -> Self {
         Self::Server(error.to_string())
     }
 }
