@@ -11,7 +11,7 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::service::{Context, Handler, Message, Reply};
+use crate::service::{Context, Message, Reply};
 use crate::{
     cid, schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Result, Status,
 };
@@ -19,23 +19,24 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-impl Handler for Query {
-    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
-        self.authorize(&ctx)?;
-        let entries = fetch_config(&ctx.owner, self.descriptor.filter, &provider).await?;
+pub async fn handle(owner: &str, query: Query, provider: impl Provider) -> Result<impl Reply> {
+    let mut ctx = Context::new(owner);
+    Message::validate(&query, &mut ctx, &provider).await?;
+    query.authorize(&ctx)?;
 
-        // TODO: pagination & sorting
-        // TODO: return errors in Reply
+    let entries = fetch_config(&ctx.owner, query.descriptor.filter, &provider).await?;
 
-        Ok(QueryReply {
-            status: Status {
-                code: 200,
-                detail: Some("OK".to_string()),
-            },
-            entries,
-            cursor: None,
-        })
-    }
+    // TODO: pagination & sorting
+    // TODO: return errors in Reply
+
+    Ok(QueryReply {
+        status: Status {
+            code: 200,
+            detail: Some("OK".to_string()),
+        },
+        entries,
+        cursor: None,
+    })
 }
 
 /// Protocols Query payload

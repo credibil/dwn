@@ -11,6 +11,10 @@ pub enum Error {
     #[error(r#"{{"code": 400, "detail": "{0}"}}"#)]
     Unexpected(String),
 
+    /// A required resource was not found.
+    #[error(r#"{{"code": 404, "detail": "{0}"}}"#)]
+    NotFound(String),
+
     /// A database write conflict occurred.
     #[error(r#"{{"code": 409, "detail": "{0}"}}"#)]
     Conflict(String),
@@ -33,37 +37,37 @@ impl Serialize for Error {
 
 impl From<anyhow::Error> for Error {
     fn from(error: anyhow::Error) -> Self {
-        Error::Server(error.to_string())
+        Self::Server(error.to_string())
     }
 }
 
 impl From<base64ct::Error> for Error {
     fn from(error: Base64Error) -> Self {
-        Error::Server(error.to_string())
+        Self::Server(error.to_string())
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(error: serde_json::Error) -> Self {
-        Error::Server(error.to_string())
+        Self::Server(error.to_string())
     }
 }
 
 impl From<ciborium::ser::Error<std::io::Error>> for Error {
     fn from(error: ciborium::ser::Error<std::io::Error>) -> Self {
-        Error::Server(error.to_string())
+        Self::Server(error.to_string())
     }
 }
 
 impl From<url::ParseError> for Error {
     fn from(error: url::ParseError) -> Self {
-        Error::Server(error.to_string())
+        Self::Server(error.to_string())
     }
 }
 
 impl From<jsonschema::error::ValidationError<'_>> for Error {
     fn from(error: jsonschema::error::ValidationError<'_>) -> Self {
-        Error::Server(error.to_string())
+        Self::Server(error.to_string())
     }
 }
 
@@ -93,36 +97,24 @@ impl From<jsonschema::error::ValidationError<'_>> for Error {
 #[macro_export]
 macro_rules! unexpected {
     ($msg:literal $(,)?) => {
-        // $crate::__private::must_use({
-        //     let error = $crate::__private::format_err($crate::__private::format_args!($msg"));
-        //     error
-        // })
         $crate::Error::Unexpected($msg.into())
     };
      ($err:expr $(,)?) => {
-        // ({
-        //     use $crate::__private::kind::*;
-        //     let error = match $err {
-        //         error => (&error).anyhow_kind().new(error),
-        //     };
-        //     error
-        // })
-        $crate::Error::Unexpected($err.into())
+        $crate::Error::Unexpected($err.to_string())
     };
     ($fmt:expr, $($arg:tt)*) => {
         $crate::Error::Unexpected(format!($fmt, $($arg)*))
     };
 }
 
-/// Error response for `OpenID` for Verifiable Credentials.
-#[allow(clippy::module_name_repetitions)]
+// Error response for serializing internal errors to JSON.
 #[derive(Deserialize, Serialize)]
-pub struct DwnError {
+struct DwnError {
     /// Error code.
-    pub code: u16,
+    code: u16,
 
     /// Error description.
-    pub detail: String,
+    detail: String,
 }
 
 impl Error {
@@ -133,55 +125,41 @@ impl Error {
     }
 }
 
-// #[cfg(test)]
-// mod test {
-//     use serde_json::{json, Value};
+#[cfg(test)]
+mod test {
+    use anyhow::anyhow;
+    use serde_json::{json, Value};
 
-//     use super::*;
+    use super::*;
 
-//     // Test that error details are retuned as json.
-//     #[test]
-//     fn err_json() {
-//         let err = Error::InvalidRequest("bad request".into());
-//         let ser: Value = serde_json::from_str(&err.to_string()).unwrap();
-//         assert_eq!(ser, json!({"error":"invalid_request", "error_description": "bad request"}));
-//     }
+    // Test that error details are retuned as json.
+    #[test]
+    fn err_json() {
+        let err = Error::Unexpected("bad request".into());
+        let ser: Value = serde_json::from_str(&err.to_string()).unwrap();
+        assert_eq!(ser, json!({"error":"invalid_request", "error_description": "bad request"}));
+    }
 
-//     // Test that the error details are returned as an http query string.
-//     #[test]
-//     fn err_querystring() {
-//         let err = Error::InvalidRequest("Invalid request description".into());
-//         let ser = urlencode::to_string(&err).unwrap();
-//         assert_eq!(ser, "error=invalid_request&error_description=Invalid%20request%20description");
-//     }
+    // Test that the error details are returned as an http query string.
+    #[test]
+    fn macro_literal() {
+        let err = unexpected!("bad request");
+        let ser = serde_json::to_value(&err).unwrap();
+        assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
+    }
 
-//     // Test that the error details are returned as an http query string.
-//     #[test]
-//     fn err_serialize() {
-//         let err = Error::InvalidRequest("bad request".into());
-//         let ser = serde_json::to_value(&err).unwrap();
-//         assert_eq!(ser, json!({"error":"invalid_request", "error_description": "bad request"}));
-//     }
+    #[test]
+    fn macro_expr() {
+        let expr = anyhow!("bad request");
+        let err = unexpected!(expr);
+        let ser = serde_json::to_value(&err).unwrap();
+        assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
+    }
 
-//     // Test an InvalidProof error returns c_nonce and c_nonce_expires_in values
-//     // in the external response.
-//     #[test]
-//     fn proof_err() {
-//         let err = Error::InvalidProof {
-//             hint: "".into(),
-//             c_nonce: "c_nonce".into(),
-//             c_nonce_expires_in: 10,
-//         };
-//         let ser: Value = serde_json::from_str(&err.to_string()).unwrap();
-
-//         assert_eq!(
-//             ser,
-//             json!({
-//                 "error": "invalid_proof",
-//                 "error_description": "",
-//                 "c_nonce": "c_nonce",
-//                 "c_nonce_expires_in": 10,
-//             })
-//         );
-//     }
-// }
+    #[test]
+    fn macro_tt() {
+        let err = unexpected!("bad request: {}", "a token");
+        let ser = serde_json::to_value(&err).unwrap();
+        assert_eq!(ser, json!({"code": 400, "detail": "bad request: a token"}));
+    }
+}

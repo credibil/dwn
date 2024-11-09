@@ -6,18 +6,18 @@ use serde::{Deserialize, Serialize};
 
 use super::Filter;
 use crate::auth::Authorization;
-use crate::provider::Provider;
-use crate::{Cursor, Result};
+// use crate::provider::Provider;
+use crate::Cursor;
 
-/// Handle a query message.
-///
-/// # Errors
-/// TODO: Add errors
-pub(crate) fn handle(
-    _tenant: &str, _message: Query, _provider: impl Provider,
-) -> Result<QueryReply> {
-    todo!()
-}
+// /// Handle a query message.
+// ///
+// /// # Errors
+// /// TODO: Add errors
+// pub(crate) fn handle(
+//     _tenant: &str, _message: Query, _provider: impl Provider,
+// ) -> Result<QueryReply> {
+//     todo!()
+// }
 
 /// Messages Query payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

@@ -7,6 +7,7 @@
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
+use vercre_dwn::handlers::{read, write};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{ReadBuilder, ReadReply, RecordsFilter, WriteBuilder, WriteData};
 use vercre_dwn::service::Reply;
@@ -37,9 +38,11 @@ async fn flat_space() {
         .expect("should create write");
 
     // dataStream
-    let reply = vercre_dwn::handle_message(BOB_DID, write.clone(), provider.clone())
-        .await
-        .expect("should write");
+    // let reply = vercre_dwn::handle_message(BOB_DID, write.clone(), provider.clone())
+    //     .await
+    //     .expect("should write");
+    let reply =
+        write::handle(BOB_DID, write.clone(), provider.clone()).await.expect("should write");
     assert_eq!(reply.status().code, 204);
 
     // --------------------------------------------------
@@ -54,8 +57,7 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    let reply =
-        vercre_dwn::handle_message(BOB_DID, read, provider.clone()).await.expect("should write");
+    let reply = read::handle(BOB_DID, read, provider.clone()).await.expect("should write");
     assert_eq!(reply.status().code, 200);
 
     assert_snapshot!("read", reply, {

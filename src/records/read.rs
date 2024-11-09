@@ -12,120 +12,118 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::GrantData;
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::service::{Context, Handler, Message, Reply};
-use crate::{cid, unexpected, Descriptor, Interface, Method, Result, Status};
+use crate::service::{Context, Message, Reply};
+use crate::{cid, unexpected, Descriptor, Error, Interface, Method, Result, Status};
 
 /// Process `Read` message.
 ///
 /// # Errors
 /// TODO: Add errors
-impl Handler for Read {
-    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
-        // get the latest active messages
-        // N.B. only use `interface` to get `RecordsWrite` and `RecordsDelete` messages
-        let filter_sql = self.descriptor.filter.to_sql();
+pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<impl Reply> {
+    let mut ctx = Context::new(owner);
+    Message::validate(&read, &mut ctx, &provider).await?;
 
-        let sql = format!(
-            "
+    // get the latest active `RecordsWrite` and `RecordsDelete` messages
+    let sql = format!(
+        "
         WHERE descriptor.interface = '{interface}'
         {filter_sql}
         ORDER BY descriptor.messageTimestamp ASC
         ",
-            interface = Interface::Records,
-        );
+        interface = Interface::Records,
+        filter_sql = read.descriptor.filter.to_sql(),
+    );
 
-        let (messages, _) = MessageStore::query::<Write>(&provider, &ctx.owner, &sql).await?;
-        if messages.is_empty() {
-            // status: { code: 404, detail: 'Not Found' }
-            return Ok(ReadReply::default());
-        }
+    let (messages, _) = MessageStore::query::<Write>(&provider, &ctx.owner, &sql).await?;
+    if messages.is_empty() {
+        return Err(Error::NotFound("No matching records found".to_string()));
+    }
 
-        if messages.len() > 1 {
-            return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
-        }
-        let write = &messages[0];
+    if messages.len() > 1 {
+        return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
+    }
+    let write = &messages[0];
 
-        // if the matched message is a RecordsDelete, mark as not-found and return
-        // both the RecordsDelete and the initial RecordsWrite
-        if write.descriptor().method == Method::Delete {
-            //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
-            //   if initial_write.is_none() {
-            //     return Err(unexpected!("Initial write for deleted record not found"));
-            //   }
+    // if the matched message is a RecordsDelete, mark as not-found and return
+    // both the RecordsDelete and the initial RecordsWrite
+    if write.descriptor().method == Method::Delete {
+        //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
+        //   if initial_write.is_none() {
+        //     return Err(unexpected!("Initial write for deleted record not found"));
+        //   }
 
-            //   // perform authorization before returning the delete and initial write messages
-            //   const parsedInitialWrite = await RecordsWrite.parse(initial_write);
-            //
-            // if let Err(e)= RecordsReadHandler.authorizeRecordsRead(tenant, recordsRead, parsedInitialWrite, this.messageStore){
-            //     // return messageReplyFromError(error, 401);
-            //     return Err(e);
-            // }
-            //
-            // return {
-            //     status : { code: 404, detail: 'Not Found' },
-            //     entry  : {
-            //       recordsDelete: recordsDeleteMessage,
-            //       initialWrite
-            //     }
-            // }
-        }
+        //   // perform authorization before returning the delete and initial write messages
+        //   const parsedInitialWrite = await RecordsWrite.parse(initial_write);
+        //
+        // if let Err(e)= RecordsReadHandler.authorizeRecordsRead(tenant, recordsRead, parsedInitialWrite, this.messageStore){
+        //     // return messageReplyFromError(error, 401);
+        //     return Err(e);
+        // }
+        //
+        // return {
+        //     status : { code: 404, detail: 'Not Found' },
+        //     entry  : {
+        //       recordsDelete: recordsDeleteMessage,
+        //       initialWrite
+        //     }
+        // }
+    }
 
-        authorize(&ctx.owner, &self, write)?;
+    read.authorize(&ctx.owner, write)?;
 
-        let data = if let Some(encoded) = &write.encoded_data {
-            let mut write = write.clone();
-            write.encoded_data = None;
-            let bytes = Base64UrlUnpadded::decode_vec(encoded)?;
-            serde_json::from_slice::<GrantData>(&bytes)?
-        } else {
-            // TODO: implement data retrieval
-            GrantData::default()
-            //   const result = await this.dataStore.get(tenant, write.recordId, write.descriptor.dataCid);
-            //   if (result?.dataStream === undefined) {
-            //     return {
-            //       status: { code: 404, detail: 'Not Found' }
-            //     };
-            //   }
-            //   data = result.dataStream;
-        };
+    let data = if let Some(encoded) = &write.encoded_data {
+        let mut write = write.clone();
+        write.encoded_data = None;
+        let bytes = Base64UrlUnpadded::decode_vec(encoded)?;
+        serde_json::from_slice::<GrantData>(&bytes)?
+    } else {
+        // TODO: implement data retrieval
+        GrantData::default()
+        //   const result = await this.dataStore.get(tenant, write.recordId, write.descriptor.dataCid);
+        //   if (result?.dataStream === undefined) {
+        //     return {
+        //       status: { code: 404, detail: 'Not Found' }
+        //     };
+        //   }
+        //   data = result.dataStream;
+    };
 
-        // attach initial write if latest RecordsWrite is not initial write
-        let initial_write = if write.is_initial()? {
-            None
-        } else {
-            let sql = format!(
-                "
+    // attach initial write if latest RecordsWrite is not initial write
+    let initial_write = if write.is_initial()? {
+        None
+    } else {
+        let sql = format!(
+            "
             WHERE descriptor.interface = '{interface}'
             AND descriptor.method = '{method}'
             AND recordId = '{record_id}'
             ",
-                interface = Interface::Records,
-                method = Method::Write,
-                record_id = write.record_id,
-            ); // isLatestBaseState: false
+            interface = Interface::Records,
+            method = Method::Write,
+            record_id = write.record_id,
+        ); // isLatestBaseState: false
 
-            let (messages, _) = MessageStore::query::<Write>(&provider, &ctx.owner, &sql).await?;
-            if messages.is_empty() {
-                return Err(unexpected!("initial write not found"));
-            }
-            let mut initial_write = messages[0].clone();
-            initial_write.encoded_data = None;
-            Some(initial_write)
-        };
+        let (messages, _) = MessageStore::query::<Write>(&provider, &ctx.owner, &sql).await?;
+        if messages.is_empty() {
+            return Err(unexpected!("initial write not found"));
+        }
+        let mut initial_write = messages[0].clone();
+        initial_write.encoded_data = None;
+        Some(initial_write)
+    };
 
-        Ok(ReadReply {
-            status: Status {
-                code: 200,
-                detail: Some("OK".to_string()),
-            },
-            entry: ReadReplyEntry {
-                records_write: Some(write.clone()),
-                records_delete: None,
-                initial_write,
-                data: Some(data),
-            },
-        })
-    }
+    Ok(ReadReply {
+        status: Status {
+            code: 200,
+            detail: Some("OK".to_string()),
+        },
+        entry: ReadReplyEntry {
+            records_write: Some(write.clone()),
+            records_delete: None,
+            initial_write,
+            data: Some(data),
+        },
+    })
 }
 
 /// Records read message payload
@@ -197,36 +195,38 @@ impl Reply for ReadReply {
     }
 }
 
-fn authorize(owner: &str, read: &Read, write: &Write) -> Result<()> {
-    let Some(authzn) = &read.authorization else {
-        return Ok(());
-    };
-    let author = authzn.author()?;
+impl Read {
+    fn authorize(&self, owner: &str, write: &Write) -> Result<()> {
+        let Some(authzn) = &self.authorization else {
+            return Ok(());
+        };
+        let author = authzn.author()?;
 
-    // authorize delegate
-    if let Some(delegated_grant) = &authzn.author_delegated_grant {
-        let grant = delegated_grant.to_grant()?;
-        grant.verify_scope(write)?;
-    }
-    // if author is owner, directly grant access
-    if author == owner {
-        return Ok(());
-    }
-    // authorization not required for published data
-    if write.descriptor.published.unwrap_or_default() {
-        return Ok(());
-    }
-
-    if let Some(recipient) = &write.descriptor.recipient {
-        if &author == recipient {
+        // authorize delegate
+        if let Some(delegated_grant) = &authzn.author_delegated_grant {
+            let grant = delegated_grant.to_grant()?;
+            grant.verify_scope(write)?;
+        }
+        // if author is owner, directly grant access
+        if author == owner {
             return Ok(());
         }
-    }
-    if author == write.authorization.author()? {
-        return Ok(());
-    }
+        // authorization not required for published data
+        if write.descriptor.published.unwrap_or_default() {
+            return Ok(());
+        }
 
-    Err(unexpected!("unauthorized"))
+        if let Some(recipient) = &write.descriptor.recipient {
+            if &author == recipient {
+                return Ok(());
+            }
+        }
+        if author == write.authorization.author()? {
+            return Ok(());
+        }
+
+        Err(unexpected!("unauthorized"))
+    }
 }
 
 /// Reads read descriptor.

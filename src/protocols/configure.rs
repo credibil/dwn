@@ -16,68 +16,70 @@ use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
-use crate::service::{Context, Handler, Message, Reply};
+use crate::service::{Context, Message, Reply};
 use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-impl Handler for Configure {
-    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
-        self.authorize(&ctx, &provider).await?;
+pub async fn handle(
+    owner: &str, configure: Configure, provider: impl Provider,
+) -> Result<impl Reply> {
+    let mut ctx = Context::new(owner);
+    Message::validate(&configure, &mut ctx, &provider).await?;
+    configure.authorize(&ctx, &provider).await?;
 
-        // find any matching protocol entries
-        let filter = Filter {
-            protocol: self.descriptor.definition.protocol.clone(),
-        };
-        let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
+    // find any matching protocol entries
+    let filter = Filter {
+        protocol: configure.descriptor.definition.protocol.clone(),
+    };
+    let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
 
-        // determine if incoming message is the latest
-        let is_latest = if let Some(existing) = &results {
-            // find latest matching protocol entry
-            let timestamp = &self.descriptor.base.message_timestamp;
-            let (is_latest, latest) = existing.iter().fold((true, &self), |(_, _), e| {
-                if &e.descriptor.base.message_timestamp > timestamp {
-                    (false, e)
-                } else {
-                    (true, &self)
-                }
-            });
-
-            // delete all entries except the most recent
-            let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
-            for e in existing {
-                let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
-                if current_ts.cmp(&latest_ts) == Ordering::Less {
-                    let cid = cid::compute(&e)?;
-                    MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-                    EventLog::delete(&provider, &ctx.owner, &cid).await?;
-                }
+    // determine if incoming message is the latest
+    let is_latest = if let Some(existing) = &results {
+        // find latest matching protocol entry
+        let timestamp = &configure.descriptor.base.message_timestamp;
+        let (is_latest, latest) = existing.iter().fold((true, &configure), |(_, _), e| {
+            if &e.descriptor.base.message_timestamp > timestamp {
+                (false, e)
+            } else {
+                (true, &configure)
             }
-            is_latest
-        } else {
-            true
-        };
+        });
 
-        if !is_latest {
-            return Err(unexpected!("message is not the latest"));
+        // delete all entries except the most recent
+        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+        for e in existing {
+            let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
+            if current_ts.cmp(&latest_ts) == Ordering::Less {
+                let cid = cid::compute(&e)?;
+                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
+                EventLog::delete(&provider, &ctx.owner, &cid).await?;
+            }
         }
+        is_latest
+    } else {
+        true
+    };
 
-        // save the incoming message
-
-        MessageStore::put(&provider, &ctx.owner, &self).await?;
-        EventLog::append(&provider, &ctx.owner, &self).await?;
-        EventStream::emit(&provider, &ctx.owner, &self).await?;
-
-        Ok(ConfigureReply {
-            status: Status {
-                code: 202,
-                detail: Some("OK".to_string()),
-            },
-            message: self,
-        })
+    if !is_latest {
+        return Err(unexpected!("message is not the latest"));
     }
+
+    // save the incoming message
+
+    MessageStore::put(&provider, &ctx.owner, &configure).await?;
+    EventLog::append(&provider, &ctx.owner, &configure).await?;
+    EventStream::emit(&provider, &ctx.owner, &configure).await?;
+
+    Ok(ConfigureReply {
+        status: Status {
+            code: 202,
+            detail: Some("OK".to_string()),
+        },
+        message: configure,
+    })
 }
 
 /// Protocols Configure payload
@@ -143,7 +145,7 @@ impl Configure {
                 .await?;
         }
 
-        if ctx.author == ctx.owner {
+        if self.authorization.author()? == ctx.owner {
             return Ok(());
         }
 
