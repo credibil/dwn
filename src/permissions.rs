@@ -46,8 +46,6 @@ pub(crate) async fn fetch_grant(
     })
 }
 
-
-
 /// Protocol for managing web node permission grants.
 pub struct Protocol {
     /// The URI of the web node Permissions protocol.
@@ -208,4 +206,3 @@ pub enum ConditionPublication {
     /// The message may be marked as public.
     Prohibited,
 }
-

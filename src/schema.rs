@@ -16,7 +16,7 @@ pub fn validate(message: &impl Message) -> Result<()> {
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
-pub fn validate_value<T: Serialize+ ?Sized>(schema: &str, value: &T) -> Result<()> {
+pub fn validate_value<T: Serialize + ?Sized>(schema: &str, value: &T) -> Result<()> {
     let retriever = Retriever {};
     let schema = precompiled(schema)?;
     let validator = jsonschema::options().with_retriever(retriever).build(&schema)?;

@@ -82,9 +82,7 @@ pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
             let revocation_data: permissions::RevocationData = serde_json::from_slice(data)?;
             schema::validate_value("PermissionGrantData", &revocation_data)
         }
-        _ => {
-            Err(unexpected!("unexpected permission record: ${protocol_path}"))
-        }
+        _ => Err(unexpected!("unexpected permission record: ${protocol_path}")),
     }
 }
 
