@@ -36,12 +36,11 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    // dataStream
-    // let reply = vercre_dwn::handle_message(BOB_DID, write.clone(), provider.clone())
-    //     .await
-    //     .expect("should write");
-    let reply =
-        write::handle(BOB_DID, write.clone(), provider.clone(), None).await.expect("should write");
+    // TODO: file with random bytes
+    let data: Vec<u8> = vec![1, 2, 3, 4, 5];
+    let reply = write::handle(BOB_DID, write.clone(), provider.clone(), Some(&mut data.as_slice()))
+        .await
+        .expect("should write");
     assert_eq!(reply.status.code, 204);
 
     // --------------------------------------------------

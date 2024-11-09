@@ -24,7 +24,7 @@ pub fn validate(message: &impl Message) -> Result<()> {
         for e in errors {
             error.push_str(&format!("\n - {e} at {}", e.instance_path));
         }
-        return Err(unexpected!(format!("validation failed for {schema_name}: {error}")));
+        return Err(unexpected!("validation failed for {schema_name}: {error}"));
     }
 
     Ok(())
@@ -49,7 +49,7 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/protocols-query.json");
             Ok(serde_json::from_slice(schema)?)
         }
-        _ => Err(unexpected!(format!("Schema not found: {schema_name}"))),
+        _ => Err(unexpected!("Schema not found: {schema_name}")),
     }
 }
 
@@ -62,7 +62,7 @@ impl Retrieve for Retriever {
         &self, uri: &Uri<&str>,
     ) -> Result<Value, Box<(dyn std::error::Error + Send + Sync + 'static)>> {
         let Some(file) = uri.path().split('/').last() else {
-            return Err(unexpected!(format!("Schema not found: {uri}")).into());
+            return Err(unexpected!("Schema not found: {uri}").into());
         };
 
         match file.as_str() {
@@ -129,7 +129,7 @@ impl Retrieve for Retriever {
                 Ok(serde_json::from_slice(schema)?)
             }
 
-            _ => Err(unexpected!(format!("Schema not found: {uri}")).into()),
+            _ => Err(unexpected!("Schema not found: {uri}").into()),
         }
     }
 }

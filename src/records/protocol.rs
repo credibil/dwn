@@ -48,14 +48,45 @@ fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<
     };
 
     if protocol_type.schema.is_some() && protocol_type.schema != write.descriptor.schema {
-        return Err(unexpected!(format!("invalid schema for type {type_name}")));
+        return Err(unexpected!("invalid schema for type {type_name}"));
     }
 
     if let Some(data_formats) = &protocol_type.data_formats {
         if !data_formats.contains(&write.descriptor.data_format) {
-            return Err(unexpected!(format!("invalid data_format for type {type_name}")));
+            return Err(unexpected!("invalid data_format for type {type_name}"));
         }
     }
+
+    Ok(())
+}
+
+// Verifies the given `RecordsWrite` protocol.
+pub(crate) fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
+    //     const dataString = Encoder.bytesToString(dataBytes);
+    //     const dataObject = JSON.parse(dataString);
+    //     if (recordsWriteMessage.descriptor.protocolPath === PermissionsProtocol.requestPath) {
+    //       const permissionRequestData = dataObject as PermissionRequestData;
+    //       validateJsonSchema('PermissionRequestData', permissionRequestData);
+
+    //       // more nuanced validation that are annoying/difficult to do using JSON schema
+    //       PermissionsProtocol.validateScopeAndTags(permissionRequestData.scope, recordsWriteMessage);
+    //     } else if (recordsWriteMessage.descriptor.protocolPath === PermissionsProtocol.grantPath) {
+    //       validateJsonSchema('PermissionGrantData', dataObject);
+
+    //       // more nuanced validation that are annoying/difficult to do using JSON schema
+    //       const permissionGrantData = dataObject as PermissionGrantData;
+    //       PermissionsProtocol.validateScopeAndTags(permissionGrantData.scope, recordsWriteMessage);
+    //       Time.validateTimestamp(permissionGrantData.dateExpires);
+    //     } else if (recordsWriteMessage.descriptor.protocolPath === PermissionsProtocol.revocationPath) {
+    //       validateJsonSchema('PermissionRevocationData', dataObject);
+    //     } else {
+    //       // defensive programming, should not be unreachable externally
+    //       throw new DwnError(
+    //         DwnErrorCode.PermissionsProtocolValidateSchemaUnexpectedRecord,
+    //         `Unexpected permission record: ${recordsWriteMessage.descriptor.protocolPath}`
+    //       );
+    //     }
+    //   }
 
     Ok(())
 }
@@ -104,18 +135,18 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
         return Err(unexpected!("missing protocol path"));
     };
     if &format!("{parent_path}/${type_name}") != protocol_path {
-        return Err(unexpected!(format!("invalid `protocol_path`")));
+        return Err(unexpected!("invalid `protocol_path`"));
     }
 
     // verifying context_id is a child of the parent's context_id
     let Some(context_id) = &write.context_id else {
-        return Err(unexpected!(format!("missing context_id")));
+        return Err(unexpected!("missing context_id"));
     };
     let Some(parent_context_id) = &parent.context_id else {
-        return Err(unexpected!(format!("missing parent context_id")));
+        return Err(unexpected!("missing parent context_id"));
     };
     if context_id != &format!("{parent_context_id}/{}", write.record_id) {
-        return Err(unexpected!(format!("invalid `context_id`")));
+        return Err(unexpected!("invalid `context_id`"));
     }
 
     Ok(())
@@ -130,7 +161,7 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
         return Err(unexpected!("missing protocol"));
     };
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!(format!("missing protocol_path")));
+        return Err(unexpected!("missing protocol_path"));
     };
 
     // if this is not the root record, add a prefix filter to the query
@@ -158,7 +189,7 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
 
     let (messages, _) = store.query::<Write>(owner, &sql).await?;
     // if records.is_empty() {
-    //     return Err(unexpected!(format!("unable to find Write Record for parent_id {parent_id}")));
+    //     return Err(unexpected!("unable to find Write Record for parent_id {parent_id}"));
     // }
 
     for message in messages {
@@ -192,7 +223,7 @@ async fn verify_invoked_role(
 
     let segment_count = protocol_role.split('/').count();
     if write.context_id.is_none() && segment_count > 1 {
-        return Err(unexpected!(format!("unable verify role without `context_id`")));
+        return Err(unexpected!("unable verify role without `context_id`"));
     }
 
     // `context_id` prefix filter
@@ -222,14 +253,14 @@ async fn verify_invoked_role(
     );
     let (records, _) = store.query::<Write>(owner, &sql).await?;
     if records.is_empty() {
-        return Err(unexpected!(format!("unable to find records for {protocol_role}")));
+        return Err(unexpected!("unable to find records for {protocol_role}"));
     }
 
     Ok(())
 }
 
 // Verify write record adheres to the $size constraints.
-fn verify_size_limit(data_size: u64, rule_set: &RuleSet) -> Result<()> {
+fn verify_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
     let Some(range) = &rule_set.size else {
         return Ok(());
     };
@@ -335,7 +366,7 @@ async fn verify_actions(
         }
     }
 
-    Err(unexpected!(format!("RecordsWrite by {author} not allowed")))
+    Err(unexpected!("RecordsWrite by {author} not allowed"))
 }
 
 // Performs additional validation before storing the RecordsWrite if it is
@@ -348,7 +379,7 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
     {
         // get grant from revocation message `parent_id`
         let Some(parent_id) = &write.descriptor.parent_id else {
-            return Err(unexpected!(format!("missing `parent_id`")));
+            return Err(unexpected!("missing `parent_id`"));
         };
         let grant = permissions::fetch_grant(owner, parent_id, store).await?;
 
@@ -362,7 +393,7 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
             };
 
             if protocol != revoke_protocol {
-                return Err(unexpected!(format!("revocation protocol {revoke_protocol} does not match grant protocol {protocol}")));
+                return Err(unexpected!("revocation protocol {revoke_protocol} does not match grant protocol {protocol}"));
             }
         }
     }

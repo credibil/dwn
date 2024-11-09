@@ -138,7 +138,7 @@ pub struct Read {
 
 impl Message for Read {
     fn cid(&self) -> Result<String> {
-        cid::compute(self)
+        cid::from_type(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -305,7 +305,7 @@ impl ReadBuilder {
 
         let authorization = if self.authorize.unwrap_or(true) {
             let mut builder =
-                AuthorizationBuilder::new().descriptor_cid(cid::compute(&descriptor)?);
+                AuthorizationBuilder::new().descriptor_cid(cid::from_type(&descriptor)?);
             if let Some(id) = self.permission_grant_id {
                 builder = builder.permission_grant_id(id);
             }

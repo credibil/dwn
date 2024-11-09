@@ -46,12 +46,12 @@ impl Grant {
     ) -> Result<()> {
         // verify the `grantee` against intended recipient
         if grantee != self.grantee {
-            return Err(unexpected!(format!("grant not granted to {grantee}")));
+            return Err(unexpected!("grant not granted to {grantee}"));
         }
 
         // verifies `grantor` against actual signer
         if grantor != self.grantor {
-            return Err(unexpected!(format!("grant not granted by {grantor}")));
+            return Err(unexpected!("grant not granted by {grantor}"));
         }
 
         // verify grant scope for interface
@@ -109,7 +109,7 @@ impl Grant {
             return Err(unexpected!("missing message timestamp"));
         };
         if message_timestamp.lt(timestamp) {
-            return Err(unexpected!(format!("grant with CID {} has been revoked", self.id)));
+            return Err(unexpected!("grant with CID {} has been revoked", self.id));
         }
 
         Ok(())
@@ -142,12 +142,12 @@ impl Grant {
         match option {
             RecordsOptions::ContextId(context_id) => {
                 if Some(context_id) != write.context_id.as_ref() {
-                    return Err(unexpected!(format!("incorrect scope `context_id`")));
+                    return Err(unexpected!("incorrect scope `context_id`"));
                 }
             }
             RecordsOptions::ProtocolPath(protocol_path) => {
                 if Some(protocol_path) != write.descriptor.protocol_path.as_ref() {
-                    return Err(unexpected!(format!("incorrect scope `protocol_path`")));
+                    return Err(unexpected!("incorrect scope `protocol_path`"));
                 }
             }
         }
@@ -385,7 +385,7 @@ impl GrantBuilder {
     /// TODO: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
         if self.granted_to.is_empty() {
-            return Err(unexpected!(format!("missing `granted_to`")));
+            return Err(unexpected!("missing `granted_to`"));
         }
         let Some(scope) = self.scope else {
             return Err(unexpected!("missing `scope`"));

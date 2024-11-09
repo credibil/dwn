@@ -251,7 +251,7 @@ impl RecordsFilter {
             sql.push_str(&format!(
                 "descriptor.dataSize BETWEEN {min} AND {max}\n",
                 min = data_size.min.unwrap_or(0),
-                max = data_size.max.unwrap_or(u64::MAX)
+                max = data_size.max.unwrap_or(usize::MAX)
             ));
         }
 
@@ -326,7 +326,7 @@ impl TagFilter {
             Self::StartsWith(value) => format!("LIKE '{value}%'"),
             Self::Range(range) => {
                 let min = range.min.unwrap_or(0);
-                let max = range.max.unwrap_or(u64::MAX);
+                let max = range.max.unwrap_or(usize::MAX);
                 format!("BETWEEN {min} AND {max}")
             }
             Self::Equal(value) => format!("= '{value}'"),
@@ -346,9 +346,9 @@ impl Default for TagFilter {
 pub struct SizeRange {
     /// The minimum size.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub min: Option<u64>,
+    pub min: Option<usize>,
 
     /// The maximum size.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max: Option<u64>,
+    pub max: Option<usize>,
 }

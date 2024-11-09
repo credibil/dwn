@@ -96,15 +96,16 @@ impl From<jsonschema::error::ValidationError<'_>> for Error {
 /// ```
 #[macro_export]
 macro_rules! unexpected {
-    ($msg:literal $(,)?) => {
-        $crate::Error::Unexpected($msg.into())
-    };
-     ($err:expr $(,)?) => {
-        $crate::Error::Unexpected($err.to_string())
-    };
     ($fmt:expr, $($arg:tt)*) => {
         $crate::Error::Unexpected(format!($fmt, $($arg)*))
     };
+    // ($msg:literal $(,)?) => {
+    //     $crate::Error::Unexpected($msg.into())
+    // };
+     ($err:expr $(,)?) => {
+        $crate::Error::Unexpected(format!($err))
+    };
+
 }
 
 // Error response for serializing internal errors to JSON.
@@ -151,7 +152,7 @@ mod test {
     #[test]
     fn macro_expr() {
         let expr = anyhow!("bad request");
-        let err = unexpected!(expr);
+        let err = unexpected!("{expr}");
         let ser = serde_json::to_value(&err).unwrap();
         assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
     }

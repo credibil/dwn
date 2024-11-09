@@ -52,7 +52,7 @@ pub async fn handle(
         for e in existing {
             let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
             if current_ts.cmp(&latest_ts) == Ordering::Less {
-                let cid = cid::compute(&e)?;
+                let cid = cid::from_type(&e)?;
                 MessageStore::delete(&provider, &ctx.owner, &cid).await?;
                 EventLog::delete(&provider, &ctx.owner, &cid).await?;
             }
@@ -93,7 +93,7 @@ pub struct Configure {
 
 impl Message for Configure {
     fn cid(&self) -> Result<String> {
-        cid::compute(self)
+        cid::from_type(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -436,7 +436,7 @@ impl ConfigureBuilder {
         };
 
         // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::compute(&descriptor)?);
+        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_type(&descriptor)?);
         if let Some(id) = self.permission_grant_id {
             builder = builder.permission_grant_id(id);
         }
@@ -473,7 +473,7 @@ fn verify_rule_set(
     // validate $size
     if let Some(size) = &rule_set.size {
         if size.min > size.max {
-            return Err(unexpected!(format!("invalid size range at '{protocol_path}'")));
+            return Err(unexpected!("invalid size range at '{protocol_path}'"));
         }
     }
 
@@ -482,7 +482,7 @@ fn verify_rule_set(
         for tag in tags.undefined_tags.keys() {
             let schema = serde_json::from_str(tag)?;
             jsonschema::validator_for(&schema)
-                .map_err(|e| unexpected!(format!("tag schema validation error: {e}")))?;
+                .map_err(|e| unexpected!("tag schema validation error: {e}"))?;
         }
     }
 
@@ -527,8 +527,7 @@ fn verify_rule_set(
             let allowed = [Action::CoUpdate, Action::CoDelete, Action::CoPrune];
             if !allowed.iter().any(|ra| action.can.contains(ra)) {
                 return Err(unexpected!(
-                    "recipient action must contain only co-update, co-delete, and co-prune"
-                        .to_string(),
+                    "recipient action must contain only co-update, co-delete, and co-prune",
                 ));
             }
         }

@@ -28,7 +28,7 @@ pub use crate::provider::Provider;
 pub use crate::service::Message;
 
 /// The maximum size of a message.
-pub const MAX_ENCODED_SIZE: u64 = 30000;
+pub const MAX_ENCODED_SIZE: usize = 30000;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;

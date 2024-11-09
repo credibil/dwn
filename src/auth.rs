@@ -163,9 +163,8 @@ impl Authorization {
     pub(crate) fn jws_payload(&self) -> Result<JwsPayload> {
         let base64 = &self.signature.payload;
         let decoded = Base64UrlUnpadded::decode_vec(base64)
-            .map_err(|e| unexpected!(format!("issue decoding header: {e}")))?;
-        serde_json::from_slice(&decoded)
-            .map_err(|e| unexpected!(format!("issue deserializing header: {e}")))
+            .map_err(|e| unexpected!("issue decoding header: {e}"))?;
+        serde_json::from_slice(&decoded).map_err(|e| unexpected!("issue deserializing header: {e}"))
     }
 }
 
@@ -226,8 +225,11 @@ impl AuthorizationBuilder {
     pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
         let descriptor_cid =
             self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;
-        let delegated_grant_id =
-            if let Some(grant) = &self.delegated_grant { Some(cid::compute(grant)?) } else { None };
+        let delegated_grant_id = if let Some(grant) = &self.delegated_grant {
+            Some(cid::from_type(grant)?)
+        } else {
+            None
+        };
 
         let payload = JwsPayload {
             descriptor_cid,
