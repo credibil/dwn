@@ -513,6 +513,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockstore"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7679095248a6dc7555fae81154ed1baef264383c16621ef881a219576c72a9be"
+dependencies = [
+ "cid",
+ "dashmap 6.1.0",
+ "multihash",
+ "thiserror 1.0.68",
+]
+
+[[package]]
 name = "blowfish"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1181,6 +1193,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1205,12 +1231,6 @@ dependencies = [
  "data-encoding",
  "syn 1.0.109",
 ]
-
-[[package]]
-name = "data-stream"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baab45094de14adb8c6c74c95b0f3b329d00d2a856f556d5a2d66acbd6494b10"
 
 [[package]]
 name = "der"
@@ -4732,7 +4752,7 @@ dependencies = [
  "cedar-policy",
  "chrono",
  "ciborium",
- "dashmap",
+ "dashmap 5.5.3",
  "deunicode",
  "dmp",
  "echodb",
@@ -4927,9 +4947,12 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64ct",
+ "blockstore",
+ "cid",
  "ed25519-dalek",
  "insta",
  "multibase",
+ "multihash-codetable",
  "prqlc",
  "serde",
  "serde_json",
@@ -5463,7 +5486,6 @@ dependencies = [
  "chrono",
  "ciborium",
  "cid",
- "data-stream",
  "derive_more",
  "http 1.1.0",
  "insta",

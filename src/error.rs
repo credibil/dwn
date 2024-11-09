@@ -79,6 +79,12 @@ impl From<jsonschema::error::ValidationError<'_>> for Error {
     }
 }
 
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Self::Server(error.to_string())
+    }
+}
+
 /// Construct an `Error::Unexpected` error from a string or existing error
 /// value.
 ///

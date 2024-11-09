@@ -11,6 +11,7 @@ pub mod message;
 pub mod task;
 
 use anyhow::{anyhow, Result};
+use blockstore::{Blockstore, InMemoryBlockstore};
 use serde::Deserialize;
 use surrealdb::engine::local::{Db, Mem};
 use surrealdb::opt::RecordId;
@@ -27,6 +28,7 @@ const DATA: &str = "data";
 #[derive(Clone)]
 pub struct ProviderImpl {
     db: Surreal<Db>,
+    blockstore: InMemoryBlockstore<64>,
 }
 
 impl Provider for ProviderImpl {}
@@ -36,7 +38,11 @@ impl ProviderImpl {
         // surreal db
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns(NAMESPACE).use_db(OWNER_DID).await?;
-        let provider = Self { db };
+
+        // blockstore
+        let blockstore = InMemoryBlockstore::<64>::new();
+
+        let provider = Self { db, blockstore };
 
         let bytes = include_bytes!("./store/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");

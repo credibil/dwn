@@ -79,7 +79,7 @@ pub async fn handle<R: Read + Send>(
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
     let (write, code) = if let Some(data) = data {
-        process_stream(owner, &write, data)?;
+        process_stream(owner, &write, data, &provider).await?;
         (write, StatusCode::ACCEPTED)
     } else {
         // if the incoming message is not the initial write, and no `data_stream` is
@@ -1066,51 +1066,57 @@ pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>,
     Ok((initial.cloned(), messages.last().cloned()))
 }
 
-fn process_stream<R: Read>(owner: &str, write: &Write, data: &mut R) -> Result<Write> {
+async fn process_stream<R: Read>(
+    owner: &str, write: &Write, data: &mut R, store: &impl DataStore,
+) -> Result<Write> {
     // when data is below the threshold, store it within MessageStore
-    if write.descriptor.data_size <= MAX_ENCODED_SIZE {
-        // read data from stream
-        let mut data_bytes = Vec::new();
-        data.read_to_end(&mut data_bytes).unwrap();
+    // if write.descriptor.data_size <= MAX_ENCODED_SIZE {
+    //     // read data from stream
+    //     let mut data_bytes = Vec::new();
+    //     data.read_to_end(&mut data_bytes)?;
 
-        let data_cid = cid::from_value(&data_bytes)?;
-        if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("computed data CID does not match descriptor cid"));
-        }
-        if write.descriptor.data_size != data_bytes.len() {
-            return Err(unexpected!("actual data size does not match descriptor `data_size`"));
-        }
+    //     let data_cid = cid::from_value(&data_bytes)?;
+    //     if write.descriptor.data_cid != data_cid {
+    //         return Err(unexpected!("computed data CID does not match descriptor cid"));
+    //     }
+    //     if write.descriptor.data_size != data_bytes.len() {
+    //         return Err(unexpected!("actual data size does not match descriptor `data_size`"));
+    //     }
 
-        if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            protocol::verify_schema(write, &data_bytes)?;
-        }
+    //     if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+    //         protocol::verify_schema(write, &data_bytes)?;
+    //     }
 
-        let mut write = write.clone();
-        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
-        return Ok(write);
-    }
+    //     let mut write = write.clone();
+    //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
+    //     return Ok(write);
+    // }
 
-    // split stream to do storage and CID computation in parallel
-    let mut reader = BufReader::new(data);
+    // // split stream to do storage and CID computation in parallel
+    // let mut reader = BufReader::new(data);
 
-    let write_buffer_1 = Vec::new();
-    let write_buffer_2 = Vec::new();
-    let mut stream_1 = BufWriter::new(write_buffer_1);
-    let mut stream_2 = BufWriter::new(write_buffer_2);
+    // let write_buffer_1 = Vec::new();
+    // let write_buffer_2 = Vec::new();
+    // let mut stream_1 = BufWriter::new(write_buffer_1);
+    // let mut stream_2 = BufWriter::new(write_buffer_2);
 
-    loop {
-        let mut buffer = [0u8; 10];
-        if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
-            if bytes_read > 0 {
-                let _ = stream_1.write(&buffer[..bytes_read]).unwrap();
-                let _ = stream_2.write(&buffer[..bytes_read]).unwrap();
-            } else {
-                stream_1.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
-                stream_2.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
-                break;
-            }
-        }
-    }
+    // loop {
+    //     let mut buffer = [0u8; 10];
+    //     if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
+    //         if bytes_read > 0 {
+    //             let _ = stream_1.write(&buffer[..bytes_read]).unwrap();
+    //             let _ = stream_2.write(&buffer[..bytes_read]).unwrap();
+    //         } else {
+    //             stream_1.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
+    //             stream_2.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
+    //             break;
+    //         }
+    //     }
+    // }
+
+    let mut buffer = Vec::new();
+    data.read_to_end(&mut buffer)?;
+    store.put(owner, &write.record_id, &write.descriptor.data_cid, buffer.as_slice()).await?;
 
     // let (data_cid, data_size) = await Promise.all([
     //     Cid.computeDagPbCidFromStream(dataStreamCopy1),

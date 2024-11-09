@@ -37,9 +37,8 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    // TODO: file with random bytes
-    // let data: Vec<u8> = vec![1, 2, 3, 4, 5];
     let reply = write::handle(BOB_DID, write.clone(), provider.clone(), Some(&mut data.as_slice()))
+        // let reply = write::handle(BOB_DID, write.clone(), provider.clone(), None::<&mut &[u8]>)
         .await
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
