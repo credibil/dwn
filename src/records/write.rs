@@ -1129,7 +1129,6 @@ async fn process_stream<R: Read + Send>(
         return Err(unexpected!("computed data CID does not match descriptor cid"));
     }
     let data_size = store.put(owner, &write.record_id, &data_cid, buffer.as_slice()).await?;
-    let res = store.get(owner, &write.record_id, &write.descriptor.data_cid).await?;
 
     // verify result
     if write.descriptor.data_size != data_size {
@@ -1190,10 +1189,11 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         AND descriptor.method = '{method}'
         AND recordId = '{grant_id}'
         AND dateCreated >= '{message_timestamp}
+        AND latestBase = true
         ",
         interface = Interface::Records,
         method = Method::Write,
-    ); // AND isLatestBaseState = true
+    );
 
     let (messages, _) = MessageStore::query::<Write>(provider, owner, &sql).await?;
 

@@ -90,11 +90,13 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             WHERE descriptor.interface = '{interface}'
             AND descriptor.method = '{method}'
             AND recordId = '{record_id}'
+            AND latestBase = false
+            ORDER BY descriptor.messageTimestamp ASC
             ",
             interface = Interface::Records,
             method = Method::Write,
             record_id = write.record_id,
-        ); // isLatestBaseState: false
+        );
 
         let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
         if messages.is_empty() {
