@@ -95,7 +95,7 @@ pub trait DataStore: Send + Sync {
     /// Store data in the underlying store.
     async fn put(
         &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read + Send,
-    ) -> Result<()>;
+    ) -> Result<usize>;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no match was found.

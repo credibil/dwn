@@ -1117,23 +1117,20 @@ async fn process_stream<R: Read + Send>(
 
     let mut buffer = Vec::new();
     data.read_to_end(&mut buffer)?;
-    store.put(owner, &write.record_id, &write.descriptor.data_cid, buffer.as_slice()).await?;
 
-    let res = store.get(owner, &write.record_id, &write.descriptor.data_cid).await?;
-    println!("{res:?}");
+    let data_cid = cid::from_value(&buffer)?;
+    if write.descriptor.data_cid != data_cid {
+        return Err(unexpected!("computed data CID does not match descriptor cid"));
+    }
+    let data_size = store.put(owner, &write.record_id, &data_cid, buffer.as_slice()).await?;
 
-    // let (data_cid, data_size) = await Promise.all([
-    //     Cid.computeDagPbCidFromStream(dataStreamCopy1),
-    //     store.put(tenant, write.record_id, write.descriptor.data_cid, stream_2)
-    // ]);
+    // let res = store.get(owner, &write.record_id, &write.descriptor.data_cid).await?;
+    // println!("{res:?}");
 
     // verify result
-    //     if write.descriptor.data_cid != data_cid {
-    //         return Err(unexpected!("computed data CID does not match descriptor cid"));
-    //     }
-    //     if write.descriptor.data_size != data_size {
-    //         return Err(unexpected!("actual data size does not match descriptor `data_size`"));
-    //     }
+    if write.descriptor.data_size != data_size {
+        return Err(unexpected!("actual data size does not match descriptor `data_size`"));
+    }
 
     Ok(write.clone())
 }
