@@ -65,20 +65,6 @@ pub async fn handle<R: Read + Send>(
         }
     }
 
-    // ----------------------------------------------------------------
-    // TODO: Latest Base State
-    // ----------------------------------------------------------------
-    // `latest` is used to prevent querying of initial writes that do
-    // not have data. This prevents a malicious user from gaining access to
-    // data by referencing the `data_cid` of private data in their initial
-    // writes.
-    //
-    // `latest` is set when the incoming `Write` message is:
-    //   - an intial write with data
-    //   - not an initial write
-    //
-    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
-
     let (write, code) = if let Some(data) = data {
         process_stream(owner, &write, data, provider).await?;
         (write, StatusCode::ACCEPTED)
@@ -98,8 +84,25 @@ pub async fn handle<R: Read + Send>(
         (write, code)
     };
 
+    // ----------------------------------------------------------------
+    // TODO: Latest Base State
+    // ----------------------------------------------------------------
+    // `latest_base` is used to prevent querying of initial writes that do
+    // not have data. This prevents a malicious user from gaining access to
+    // data by referencing the `data_cid` of private data in their initial
+    // writes.
+    //
+    // `latest_base` is set when the incoming `Write` message is:
+    //   - an intial write with data
+    //   - not an initial write
+    //
+    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
+
+    let mut write_index = WriteIndex::from(&write);
+    write_index.latest_base = latest.is_none();
+
     // save the message and log the event
-    MessageStore::put(provider, owner, &WriteIndex::from(&write)).await?;
+    MessageStore::put(provider, owner, &write_index).await?;
     EventLog::append(provider, owner, &write).await?;
 
     // only emit an event when the message is the latest base state
@@ -618,6 +621,8 @@ struct WriteIndex {
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_updated: Option<DateTime<Utc>>,
+
+    pub latest_base: bool,
 }
 
 impl From<&Write> for WriteIndex {
@@ -628,6 +633,7 @@ impl From<&Write> for WriteIndex {
             attester: None, // TODO: add attester
             tags: None,
             date_updated: None, // TODO: add date_updated
+            latest_base: false,
         };
 
         if let Some(tags) = &write.descriptor.tags {

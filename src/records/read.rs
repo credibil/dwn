@@ -8,7 +8,6 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::permissions::GrantData;
 use crate::provider::{DataStore, MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::service::{Context, Message};
@@ -27,6 +26,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         "
         WHERE descriptor.interface = '{interface}'
         {filter_sql}
+        AND latestBase = true
         ORDER BY descriptor.messageTimestamp ASC
         ",
         interface = Interface::Records,

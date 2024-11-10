@@ -41,7 +41,6 @@ async fn flat_space() {
 
     let bob_reply =
         write::handle(BOB_DID, bob_write.clone(), &provider, Some(&mut bob_data.as_slice()))
-            // let reply = write::handle(BOB_DID, write.clone(), provider.clone(), None::<&mut &[u8]>)
             .await
             .expect("should write");
     assert_eq!(bob_reply.status.code, StatusCode::ACCEPTED);
