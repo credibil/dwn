@@ -25,40 +25,43 @@ async fn flat_space() {
     // --------------------------------------------------
     // Bob writes a message to his web node
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
+    let bob_data = serde_json::to_vec(&json!({
         "message": "test record write",
     }))
     .expect("should serialize");
 
-    let write = WriteBuilder::new()
-        .data(WriteData::Bytes { data: data.clone() })
+    let bob_write = WriteBuilder::new()
+        .data(WriteData::Bytes {
+            data: bob_data.clone(),
+        })
         .published(true)
         .build(&bob_keyring)
         .await
         .expect("should create write");
 
-    let reply = write::handle(BOB_DID, write.clone(), provider.clone(), Some(&mut data.as_slice()))
-        // let reply = write::handle(BOB_DID, write.clone(), provider.clone(), None::<&mut &[u8]>)
-        .await
-        .expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let bob_reply =
+        write::handle(BOB_DID, bob_write.clone(), &provider, Some(&mut bob_data.as_slice()))
+            // let reply = write::handle(BOB_DID, write.clone(), provider.clone(), None::<&mut &[u8]>)
+            .await
+            .expect("should write");
+    assert_eq!(bob_reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
     // --------------------------------------------------
-    let read = ReadBuilder::new()
+    let alice_read = ReadBuilder::new()
         .filter(RecordsFilter {
-            record_id: Some(write.record_id),
+            record_id: Some(bob_write.record_id),
             ..RecordsFilter::default()
         })
         .build(&alice_keyring)
         .await
         .expect("should create write");
 
-    let reply = read::handle(BOB_DID, read, provider.clone()).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-
-    assert_snapshot!("read", reply, {
+    let alice_reply =
+        read::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
+    assert_eq!(alice_reply.status.code, StatusCode::OK);
+    assert_snapshot!("read", alice_reply, {
         ".entry.recordsWrite.recordId" => "[recordId]",
         ".entry.recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
         ".entry.recordsWrite.descriptor.dateCreated" => "[dateCreated]",
@@ -67,44 +70,33 @@ async fn flat_space() {
         ".entry.recordsWrite.authorization.signature.signatures[0].signature" => "[signature]",
         ".entry.recordsWrite.attestation.payload" => "[payload]",
         ".entry.recordsWrite.attestation.signatures[0].signature" => "[signature]",
+        ".entry.data" => "[data]",
     });
 
     // --------------------------------------------------
     // Alice augments Bob's message as an external owner
     // --------------------------------------------------
-    //   const { entry } = readReply; // remove data from message
-
-    let Some(mut owner_signed) = reply.entry.clone().records_write else {
+    let Some(mut alice_signed) = alice_reply.entry.clone().records_write else {
         panic!("should have records write entry");
     };
-    owner_signed.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
+    alice_signed.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
 
     // --------------------------------------------------
     // Alice saves Bob's message to her DWN
     // --------------------------------------------------
-    // let data = read_reply.entry.data.as_ref().unwrap();
-    // let bytes = serde_json::to_vec(&data).expect("should serialize");
-    // let encoded = Base64UrlUnpadded::encode_string(&bytes);
-
-    // owner_signed.encoded_data = Some(encoded);
-
-    // let reply = vercre_dwn::handle_message(ALICE_DID, owner_signed, provider.clone())
-    //     .await
-    //     .expect("should write");
-    // assert_eq!(reply.status().code, 202);
-
-    //   const aliceDataStream = readReply.entry!.data!;
-    //   const aliceWriteReply = await dwn.processMessage(alice.did, owner_signed, { dataStream: aliceDataStream });
-    //   expect(aliceWriteReply.status.code).to.equal(202);
+    let alice_data = alice_reply.entry.data.as_ref().unwrap();
+    let alice_reply =
+        write::handle(ALICE_DID, alice_signed, &provider, Some(&mut alice_data.as_slice()))
+            .await
+            .expect("should write");
+    assert_eq!(alice_reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob's message can be read from Alice's DWN
     // --------------------------------------------------
-    //   const readReply2 = await dwn.processMessage(alice.did, recordsRead.message);
-    //   expect(readReply2.status.code).to.equal(StatusCode::OK);
-    //   expect(readReply2.entry!.recordsWrite).to.exist;
-    //   expect(readReply2.entry!.recordsWrite?.descriptor).to.exist;
+    let reply = read::handle(BOB_DID, alice_read, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
 
-    //   const dataFetched = await DataStream.toBytes(readReply2.entry!.data!);
+    let alice_data = reply.entry.data.expect("should have data");
     //   expect(ArrayUtility.byteArraysEqual(dataFetched, dataBytes!)).to.be.true;
 }

@@ -1,6 +1,6 @@
 ---
 source: tests/owner_signature.rs
-assertion_line: 60
+assertion_line: 64
 expression: reply
 snapshot_kind: text
 ---
@@ -31,8 +31,4 @@ entry:
       signatures:
         - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
           signature: "[signature]"
-  data:
-    dateExpires: "1970-01-01T00:00:00Z"
-    scope:
-      interface: Records
-      method: Read
+  data: "[data]"

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::GrantData;
-use crate::provider::{MessageStore, Provider, Signer};
+use crate::provider::{DataStore, MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::service::{Context, Message};
 use crate::{cid, unexpected, Descriptor, Error, Interface, Method, Result, Status};
@@ -18,9 +18,9 @@ use crate::{cid, unexpected, Descriptor, Error, Interface, Method, Result, Statu
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<ReadReply> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<ReadReply> {
     let mut ctx = Context::new(owner);
-    Message::validate(&read, &mut ctx, &provider).await?;
+    Message::validate(&read, &mut ctx, provider).await?;
 
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
@@ -33,7 +33,9 @@ pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<
         filter_sql = read.descriptor.filter.to_sql(),
     );
 
-    let (messages, _) = MessageStore::query::<Write>(&provider, &ctx.owner, &sql).await?;
+    // println!("SQL: {}", read.descriptor.filter.to_sql());
+
+    let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
     if messages.is_empty() {
         return Err(Error::NotFound("No matching records found".to_string()));
     }
@@ -68,23 +70,15 @@ pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<
         // }
     }
 
+    // TODO: review against the original code — it should take a store provider
     read.authorize(&ctx.owner, write)?;
 
     let data = if let Some(encoded) = &write.encoded_data {
         let mut write = write.clone();
         write.encoded_data = None;
-        let bytes = Base64UrlUnpadded::decode_vec(encoded)?;
-        serde_json::from_slice::<GrantData>(&bytes)?
+        Some(Base64UrlUnpadded::decode_vec(encoded)?)
     } else {
-        // TODO: implement data retrieval
-        GrantData::default()
-        //   const result = await this.dataStore.get(tenant, write.recordId, write.descriptor.dataCid);
-        //   if (result?.dataStream === undefined) {
-        //     return {
-        //       status: { code: 404, detail: 'Not Found' }
-        //     };
-        //   }
-        //   data = result.dataStream;
+        DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
     };
 
     // attach initial write if latest RecordsWrite is not initial write
@@ -102,7 +96,7 @@ pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<
             record_id = write.record_id,
         ); // isLatestBaseState: false
 
-        let (messages, _) = MessageStore::query::<Write>(&provider, &ctx.owner, &sql).await?;
+        let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
         if messages.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
@@ -120,7 +114,7 @@ pub async fn handle(owner: &str, read: Read, provider: impl Provider) -> Result<
             records_write: Some(write.clone()),
             records_delete: None,
             initial_write,
-            data: Some(data),
+            data,
         },
     })
 }
@@ -182,7 +176,7 @@ pub struct ReadReplyEntry {
 
     /// The data for the record.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<GrantData>,
+    pub data: Option<Vec<u8>>,
 }
 
 impl Read {

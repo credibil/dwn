@@ -30,18 +30,18 @@ use crate::{
 /// # Errors
 /// TODO: Add errors
 pub async fn handle<R: Read + Send>(
-    owner: &str, write: Write, provider: impl Provider, data: Option<&mut R>,
+    owner: &str, write: Write, provider: &impl Provider, data: Option<&mut R>,
 ) -> Result<WriteReply> {
     let mut ctx = Context::new(owner);
-    Message::validate(&write, &mut ctx, &provider).await?;
-    write.authorize(owner, &provider).await?;
+    Message::validate(&write, &mut ctx, provider).await?;
+    write.authorize(owner, provider).await?;
 
     // verify integrity of messages with protocol
     if write.descriptor.protocol.is_some() {
-        protocol::verify_integrity(owner, &write, &provider).await?;
+        protocol::verify_integrity(owner, &write, provider).await?;
     }
 
-    let existing = existing_entries(owner, &write.record_id, &provider).await?;
+    let existing = existing_entries(owner, &write.record_id, provider).await?;
     let (initial, latest) = first_and_last(&existing).await?;
 
     // if current message is not the initial write, check 'immutable' properties
@@ -80,7 +80,7 @@ pub async fn handle<R: Read + Send>(
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
     let (write, code) = if let Some(data) = data {
-        process_stream(owner, &write, data, &provider).await?;
+        process_stream(owner, &write, data, provider).await?;
         (write, StatusCode::ACCEPTED)
     } else {
         // if the incoming message is not the initial write, and no `data_stream` is
@@ -89,7 +89,7 @@ pub async fn handle<R: Read + Send>(
             let Some(latest) = &latest else {
                 return Err(unexpected!("newest existing message not found"));
             };
-            let write = process_data(owner, &write, latest, &provider).await?;
+            let write = process_data(owner, &write, latest, provider).await?;
             (write, StatusCode::ACCEPTED)
         } else {
             (write, StatusCode::NO_CONTENT)
@@ -99,8 +99,8 @@ pub async fn handle<R: Read + Send>(
     };
 
     // save the message and log the event
-    MessageStore::put(&provider, owner, &WriteIndex::from(&write)).await?;
-    EventLog::append(&provider, owner, &write).await?;
+    MessageStore::put(provider, owner, &WriteIndex::from(&write)).await?;
+    EventLog::append(provider, owner, &write).await?;
 
     // only emit an event when the message is the latest base state
     if initial.is_some() {
@@ -109,7 +109,7 @@ pub async fn handle<R: Read + Send>(
         //     message,
         //     initial_entry,
         // };
-        EventStream::emit(&provider, owner, &write).await?;
+        EventStream::emit(provider, owner, &write).await?;
     }
 
     // delete messages with the same `record_id` EXCEPT the initial write
@@ -117,8 +117,8 @@ pub async fn handle<R: Read + Send>(
     let _ = deletable.pop_front(); // initial write is first entry
     for msg in deletable {
         let cid = cid::from_value(&msg)?;
-        MessageStore::delete(&provider, owner, &cid).await?;
-        EventLog::delete(&provider, owner, &cid).await?;
+        MessageStore::delete(provider, owner, &cid).await?;
+        EventLog::delete(provider, owner, &cid).await?;
     }
 
     // when message is a grant revocation, delete all grant-authorized
@@ -126,7 +126,7 @@ pub async fn handle<R: Read + Send>(
     if write.descriptor.protocol == Some(PROTOCOL_URI.to_owned())
         && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_owned())
     {
-        revoke_grants(owner, &write, &provider).await?;
+        revoke_grants(owner, &write, provider).await?;
     }
 
     // ----------------------------------------------------------------
@@ -1123,9 +1123,7 @@ async fn process_stream<R: Read + Send>(
         return Err(unexpected!("computed data CID does not match descriptor cid"));
     }
     let data_size = store.put(owner, &write.record_id, &data_cid, buffer.as_slice()).await?;
-
-    // let res = store.get(owner, &write.record_id, &write.descriptor.data_cid).await?;
-    // println!("{res:?}");
+    let res = store.get(owner, &write.record_id, &write.descriptor.data_cid).await?;
 
     // verify result
     if write.descriptor.data_size != data_size {
