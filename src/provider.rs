@@ -1,6 +1,5 @@
 //! # Provider
 
-use std::future::Future;
 use std::io::Read;
 
 use anyhow::Result;
@@ -89,8 +88,6 @@ pub trait MessageStore: Send + Sync {
     async fn purge(&self) -> Result<()>;
 }
 
-
-
 /// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
 #[async_trait]
@@ -98,21 +95,17 @@ pub trait DataStore: Send + Sync {
     /// Store data in the underlying store.
     async fn put(
         &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read + Send,
-    ) ->  Result<()>;
+    ) -> Result<()>;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no match was found.
-    async fn get(
-        &self, owner: &str, record_id: &str, data_cid: &str,
-    ) ->  Result<Option<Vec<u8>>>;
+    async fn get(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<Option<Vec<u8>>>;
 
     /// Delete data associated with the specified id.
-    async fn delete(
-        &self, owner: &str, record_id: &str, data_cid: &str,
-    ) ->  Result<()>;
+    async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<()>;
 
     /// Purge all data from the store.
-    async fn purge(&self) ->  Result<()>;
+    async fn purge(&self) -> Result<()>;
 }
 
 /// The `TaskStore` trait is used by implementers to provide data storage

@@ -1,29 +1,30 @@
-use std::io::{Cursor, Read};
+use std::io::Read;
 use std::str::FromStr;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use blockstore::block::{Block, CidError};
-use blockstore::{Blockstore, InMemoryBlockstore};
+use blockstore::Blockstore;
 use cid::Cid;
-use multihash_codetable::{Code, MultihashDigest};
+// use multihash_codetable::{Code, MultihashDigest};
 use vercre_dwn::provider::DataStore;
 
 use super::ProviderImpl;
-use crate::store::{DATA, NAMESPACE};
 
-const RAW_CODEC: u64 = 0x55;
+// const RAW_CODEC: u64 = 0x55;
+// const DATA: &str = "data";
 
-struct RawBlock(Vec<u8>);
+struct RawBlock<'a>(&'a str, Vec<u8>);
 
-impl Block<64> for RawBlock {
+impl<'a> Block<64> for RawBlock<'a> {
     fn cid(&self) -> Result<Cid, CidError> {
-        let hash = Code::Sha2_256.digest(&self.0);
-        Ok(Cid::new_v1(RAW_CODEC, hash))
+        // let hash = Code::Sha2_256.digest(&self.1);
+        // Ok(Cid::new_v1(RAW_CODEC, hash))
+        Ok(Cid::from_str(self.0).unwrap())
     }
 
     fn data(&self) -> &[u8] {
-        self.0.as_ref()
+        self.1.as_ref()
     }
 }
 
@@ -34,7 +35,7 @@ impl DataStore for ProviderImpl {
     ) -> Result<()> {
         let mut buffer = Vec::new();
         data.read_to_end(&mut buffer)?;
-        let block = RawBlock(buffer);
+        let block = RawBlock(data_cid, buffer);
 
         self.blockstore.put(block).await?;
 
@@ -43,11 +44,7 @@ impl DataStore for ProviderImpl {
 
     async fn get(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<Option<Vec<u8>>> {
         let cid = Cid::from_str(data_cid)?;
-
-        let block = self.blockstore.get(&cid).await.unwrap();
-        let block = block.unwrap();
-
-        Ok(Some(block))
+        self.blockstore.get(&cid).await.map_err(|e| e.into())
     }
 
     async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<()> {

@@ -41,7 +41,7 @@ async fn flat_space() {
         // let reply = write::handle(BOB_DID, write.clone(), provider.clone(), None::<&mut &[u8]>)
         .await
         .expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node

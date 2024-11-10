@@ -4,8 +4,9 @@
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
-use std::io::{BufReader, BufWriter, Read, Write as _};
+use std::io::Read;
 
+// use std::io::{BufReader, BufWriter, Read, Write as _};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
@@ -1066,31 +1067,31 @@ pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>,
     Ok((initial.cloned(), messages.last().cloned()))
 }
 
-async fn process_stream<R: Read>(
+async fn process_stream<R: Read + Send>(
     owner: &str, write: &Write, data: &mut R, store: &impl DataStore,
 ) -> Result<Write> {
     // when data is below the threshold, store it within MessageStore
-    // if write.descriptor.data_size <= MAX_ENCODED_SIZE {
-    //     // read data from stream
-    //     let mut data_bytes = Vec::new();
-    //     data.read_to_end(&mut data_bytes)?;
+    if write.descriptor.data_size <= MAX_ENCODED_SIZE {
+        // read data from stream
+        let mut data_bytes = Vec::new();
+        data.read_to_end(&mut data_bytes)?;
 
-    //     let data_cid = cid::from_value(&data_bytes)?;
-    //     if write.descriptor.data_cid != data_cid {
-    //         return Err(unexpected!("computed data CID does not match descriptor cid"));
-    //     }
-    //     if write.descriptor.data_size != data_bytes.len() {
-    //         return Err(unexpected!("actual data size does not match descriptor `data_size`"));
-    //     }
+        let data_cid = cid::from_value(&data_bytes)?;
+        if write.descriptor.data_cid != data_cid {
+            return Err(unexpected!("computed data CID does not match descriptor cid"));
+        }
+        if write.descriptor.data_size != data_bytes.len() {
+            return Err(unexpected!("actual data size does not match descriptor `data_size`"));
+        }
 
-    //     if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-    //         protocol::verify_schema(write, &data_bytes)?;
-    //     }
+        if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+            protocol::verify_schema(write, &data_bytes)?;
+        }
 
-    //     let mut write = write.clone();
-    //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
-    //     return Ok(write);
-    // }
+        let mut write = write.clone();
+        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
+        return Ok(write);
+    }
 
     // // split stream to do storage and CID computation in parallel
     // let mut reader = BufReader::new(data);
@@ -1117,6 +1118,9 @@ async fn process_stream<R: Read>(
     let mut buffer = Vec::new();
     data.read_to_end(&mut buffer)?;
     store.put(owner, &write.record_id, &write.descriptor.data_cid, buffer.as_slice()).await?;
+
+    let res = store.get(owner, &write.record_id, &write.descriptor.data_cid).await?;
+    println!("{res:?}");
 
     // let (data_cid, data_size) = await Promise.all([
     //     Cid.computeDagPbCidFromStream(dataStreamCopy1),
