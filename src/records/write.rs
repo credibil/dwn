@@ -2,12 +2,14 @@
 //!
 //! `Write` is a message type used to create a new record in the web node.
 
-use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, VecDeque};
+use std::io::Read;
 
+// use std::io::{BufReader, BufWriter, Read, Write as _};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
@@ -17,130 +19,135 @@ use crate::auth::{self, Authorization, JwsPayload};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
-use crate::service::{Context, Handler, Message, Reply};
+use crate::service::{Context, Message};
 use crate::{
     cid, permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, Status,
     MAX_ENCODED_SIZE,
 };
 
-/// Process `Write` message.
+/// Handle `RecordsWrite` messages.
 ///
 /// # Errors
 /// TODO: Add errors
-impl Handler for Write {
-    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
-        // verify integrity of messages with protocol
-        if self.descriptor.protocol.is_some() {
-            protocol::verify_integrity(&ctx.owner, &self, &provider).await?;
+pub async fn handle<R: Read + Send>(
+    owner: &str, write: Write, provider: &impl Provider, data: Option<&mut R>,
+) -> Result<WriteReply> {
+    let mut ctx = Context::new(owner);
+    Message::validate(&write, &mut ctx, provider).await?;
+    write.authorize(owner, provider).await?;
+
+    // verify integrity of messages with protocol
+    if write.descriptor.protocol.is_some() {
+        protocol::verify_integrity(owner, &write, provider).await?;
+    }
+
+    let existing = existing_entries(owner, &write.record_id, provider).await?;
+    let (initial, latest) = first_and_last(&existing).await?;
+
+    // if current message is not the initial write, check 'immutable' properties
+    // haven't been altered
+    if let Some(initial) = &initial {
+        if !write.compare_immutable(initial) {
+            return Err(unexpected!("immutable properties do not match"));
         }
+    }
 
-        // authorize the message
-        authorize(&ctx.owner, &self, &provider).await?;
+    // confirm current message is the latest AND not a delete
+    if let Some(latest) = &latest {
+        let current_ts = write.descriptor.base.message_timestamp.unwrap_or_default();
+        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
 
-        let existing = existing_entries(&ctx.owner, &self.record_id, &provider).await?;
-        let (initial, latest) = first_and_last(&existing).await?;
-
-        // if current message is not the initial write, check 'immutable' properties
-        // haven't been altered
-        if let Some(initial) = &initial {
-            if !self.compare_immutable(initial) {
-                return Err(unexpected!("immutable properties do not match"));
-            }
+        if current_ts.cmp(&latest_ts) == Ordering::Less {
+            return Err(Error::Conflict("newer write record already exists".to_string()));
         }
-
-        // confirm current message is the latest AND not a delete
-        if let Some(latest) = &latest {
-            let current_ts = self.descriptor.base.message_timestamp.unwrap_or_default();
-            let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
-
-            if current_ts.cmp(&latest_ts) == Ordering::Less {
-                return Err(Error::Conflict("newer write record already exists".to_string()));
-            }
-            if latest.descriptor.base.method == Method::Delete {
-                return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
-            }
+        if latest.descriptor.base.method == Method::Delete {
+            return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
         }
+    }
 
-        // ----------------------------------------------------------------
-        // Latest Base State
-        // ----------------------------------------------------------------
-        // `is_latest` is used to prevent querying of initial writes that do
-        // not have data. This prevents a malicious user from gaining access to
-        // data by referencing the `data_cid` of private data in their initial
-        // writes.
-        //
-        // `is_latest` is set to true when either the incoming message comes
-        //  with data OR is not an initial write.
-        //
-        // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
-
-        // ----------------------------------------------------------------
-        // Response Codes
-        // ----------------------------------------------------------------
-        // In order to discern between a message accepted as a queryable write and
-        // something accepted as an initial state we use separate response codes:
-        //   - 202 for queryable writes
-        //   - 204 for non-queryable writes.
-        //   - 409 if the incoming message is not the latest (TODO: used typed errors)
-        //
-        // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
-
-        // has data stream been provided?
-        // if data_stream.is_some() {
-        //    (process_with_data_stream(owner, message, data_stream).await?,
-        //     true)
-        // } else
-
+    let (write, code) = if let Some(data) = data {
+        process_stream(owner, &write, data, provider).await?;
+        (write, StatusCode::ACCEPTED)
+    } else {
         // if the incoming message is not the initial write, and no `data_stream` is
         // set, we can process
         let (write, code) = if initial.is_some() {
             let Some(latest) = &latest else {
                 return Err(unexpected!("newest existing message not found"));
             };
-            let write = process_data(&ctx.owner, &self, latest, &provider).await?;
-            (write, 202)
+            let write = process_data(owner, &write, latest, provider).await?;
+            (write, StatusCode::ACCEPTED)
         } else {
-            (self, 204)
+            (write, StatusCode::NO_CONTENT)
         };
 
-        // save the message and log the event
-        MessageStore::put(&provider, &ctx.owner, &WriteIndex::from(&write)).await?;
-        EventLog::append(&provider, &ctx.owner, &write).await?;
+        (write, code)
+    };
 
-        // only emit an event when the message is the latest base state
-        if initial.is_some() {
-            // let initial_entry = initial;
-            //let event = Event {
-            //     message,
-            //     initial_entry,
-            // };
-            EventStream::emit(&provider, &ctx.owner, &write).await?;
-        }
+    // ----------------------------------------------------------------
+    // TODO: Latest Base State
+    // ----------------------------------------------------------------
+    // `latest_base` is used to prevent querying of initial writes that do
+    // not have data. This prevents a malicious user from gaining access to
+    // data by referencing the `data_cid` of private data in their initial
+    // writes.
+    //
+    // `latest_base` is set when the incoming `Write` message is:
+    //   - an intial write with data
+    //   - not an initial write
+    //
+    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
-        // delete messages with the same `record_id` EXCEPT the initial write
-        let mut deletable = VecDeque::from(existing);
-        let _ = deletable.pop_front(); // initial write is first entry
-        for msg in deletable {
-            let cid = cid::compute(&msg)?;
-            MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-            EventLog::delete(&provider, &ctx.owner, &cid).await?;
-        }
+    let mut write_index = WriteIndex::from(&write);
+    write_index.latest_base = latest.is_none();
 
-        // when message is a grant revocation, delete all grant-authorized
-        // messages with timestamp after revocation
-        if write.descriptor.protocol == Some(PROTOCOL_URI.to_owned())
-            && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_owned())
-        {
-            revoke_grants(&ctx.owner, &write, &provider).await?;
-        }
+    // save the message and log the event
+    MessageStore::put(provider, owner, &write_index).await?;
+    EventLog::append(provider, owner, &write).await?;
 
-        Ok(WriteReply {
-            status: Status {
-                code,
-                detail: Some("OK".to_string()),
-            },
-        })
+    // only emit an event when the message is the latest base state
+    if initial.is_some() {
+        // let initial_entry = initial;
+        //let event = Event {
+        //     message,
+        //     initial_entry,
+        // };
+        EventStream::emit(provider, owner, &write).await?;
     }
+
+    // delete messages with the same `record_id` EXCEPT the initial write
+    let mut deletable = VecDeque::from(existing);
+    let _ = deletable.pop_front(); // initial write is first entry
+    for msg in deletable {
+        let cid = cid::from_value(&msg)?;
+        MessageStore::delete(provider, owner, &cid).await?;
+        EventLog::delete(provider, owner, &cid).await?;
+    }
+
+    // when message is a grant revocation, delete all grant-authorized
+    // messages with timestamp after revocation
+    if write.descriptor.protocol == Some(PROTOCOL_URI.to_owned())
+        && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_owned())
+    {
+        revoke_grants(owner, &write, provider).await?;
+    }
+
+    // ----------------------------------------------------------------
+    // Response Codes
+    // ----------------------------------------------------------------
+    // In order to discern between a message accepted as a queryable write and
+    // something accepted as an initial state we use separate response codes:
+    //   - 202 for queryable writes
+    //   - 204 for non-queryable writes
+    //
+    // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
+
+    Ok(WriteReply {
+        status: Status {
+            code: code.as_u16(),
+            detail: Some("OK".to_string()),
+        },
+    })
 }
 
 /// Records write message payload
@@ -176,7 +183,7 @@ pub struct Write {
 
 impl Message for Write {
     fn cid(&self) -> Result<String> {
-        cid::compute(self)
+        cid::from_value(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -195,17 +202,63 @@ pub struct WriteReply {
     pub status: Status,
 }
 
-impl Reply for WriteReply {
-    fn status(&self) -> Status {
-        self.status.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 impl Write {
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let authzn = &self.authorization;
+        let record_owner = authzn.owner()?;
+
+        // if owner signature is set, it must be the same as the tenant DID
+        if record_owner.as_ref().is_some_and(|ro| ro != owner) {
+            return Err(unexpected!("record owner is not web node owner"));
+        };
+
+        let author = authzn.author()?;
+
+        // authorize author delegate
+        if let Some(delegated_grant) = &authzn.author_delegated_grant {
+            let signer = authzn.signer()?;
+            let grant = delegated_grant.to_grant()?;
+            grant.permit_records_write(&author, &signer, self, store).await?;
+        }
+
+        // authorize owner delegate
+        if let Some(delegated_grant) = &authzn.owner_delegated_grant {
+            let Some(owner) = &record_owner else {
+                return Err(unexpected!("owner is required to authorize owner delegate"));
+            };
+            let signer = authzn.owner_signer()?;
+            let grant = delegated_grant.to_grant()?;
+            grant.permit_records_write(owner, &signer, self, store).await?;
+        }
+
+        // when record owner is set, we can directly grant access
+        // (we established `record_owner`== web node owner above)
+        if record_owner.is_some() {
+            return Ok(());
+        };
+
+        // when author is the owner, we can directly grant access
+        if author == owner {
+            return Ok(());
+        }
+
+        // permission grant
+        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
+        let payload: WriteSignaturePayload = serde_json::from_slice(&decoded)?;
+
+        if let Some(permission_grant_id) = &payload.base.permission_grant_id {
+            let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+            return grant.permit_records_write(owner, &author, self, store).await;
+        };
+
+        // protocol-specific authorization
+        if self.descriptor.protocol.is_some() {
+            return protocol::permit_write(owner, self, store).await;
+        }
+
+        Err(unexpected!("message failed authorization"))
+    }
+
     /// Signs the Write message body. The signer is either the author or a delegate.
     ///
     /// # Errors
@@ -214,13 +267,15 @@ impl Write {
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
         signer: &impl Signer,
     ) -> Result<()> {
-        let (author_did, delegated_grant_id) = if let Some(grant) =
-            &self.authorization.author_delegated_grant
-        {
-            (Some(auth::signer_did(&grant.authorization.signature)?), Some(cid::compute(&grant)?))
-        } else {
-            (signer.verification_method().split('#').next().map(ToString::to_string), None)
-        };
+        let (author_did, delegated_grant_id) =
+            if let Some(grant) = &self.authorization.author_delegated_grant {
+                (
+                    Some(auth::signer_did(&grant.authorization.signature)?),
+                    Some(cid::from_value(&grant)?),
+                )
+            } else {
+                (signer.verification_method().split('#').next().map(ToString::to_string), None)
+            };
 
         // compute `record_id` if not given at construction time
         if self.record_id.is_empty() {
@@ -239,20 +294,20 @@ impl Write {
 
         // attestation
         let payload = Payload {
-            descriptor_cid: cid::compute(&self.descriptor)?,
+            descriptor_cid: cid::from_value(&self.descriptor)?,
         };
         self.attestation = Some(Jws::new(Type::Jwt, &payload, signer).await?);
-        let attestation_cid = Some(cid::compute(&self.attestation)?);
+        let attestation_cid = Some(cid::from_value(&self.attestation)?);
 
         let encryption_cid = if let Some(encryption) = &self.encryption {
-            Some(cid::compute(encryption)?)
+            Some(cid::from_value(encryption)?)
         } else {
             None
         };
 
         let payload = WriteSignaturePayload {
             base: JwsPayload {
-                descriptor_cid: cid::compute(&self.descriptor)?,
+                descriptor_cid: cid::from_value(&self.descriptor)?,
                 permission_grant_id,
                 delegated_grant_id,
                 protocol_role,
@@ -282,7 +337,7 @@ impl Write {
         }
 
         let payload = JwsPayload {
-            descriptor_cid: cid::compute(&self.descriptor)?,
+            descriptor_cid: cid::from_value(&self.descriptor)?,
             ..JwsPayload::default()
         };
         let owner_jws = Jws::new(Type::Jwt, &payload, signer).await?;
@@ -308,8 +363,8 @@ impl Write {
 
         //  descriptorCid, delegatedGrantId, permissionGrantId, protocolRole
 
-        let delegated_grant_id = cid::compute(&delegated_grant)?;
-        let descriptor_cid = cid::compute(&self.descriptor)?;
+        let delegated_grant_id = cid::from_value(&delegated_grant)?;
+        let descriptor_cid = cid::from_value(&self.descriptor)?;
 
         let payload = JwsPayload {
             descriptor_cid,
@@ -478,7 +533,7 @@ impl TryFrom<DelegatedGrant> for permissions::Grant {
     fn try_from(value: DelegatedGrant) -> Result<Self> {
         let bytes = Base64UrlUnpadded::decode_vec(&value.encoded_data)?;
         let mut grant: Self = serde_json::from_slice(&bytes)
-            .map_err(|e| unexpected!(format!("issue deserializing grant: {e}")))?;
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
 
         grant.id.clone_from(&value.record_id);
         grant.grantor = value.authorization.signer()?;
@@ -525,7 +580,7 @@ pub struct WriteDescriptor {
     pub data_cid: String,
 
     /// The record's size in bytes.
-    pub data_size: u64,
+    pub data_size: usize,
 
     /// The record's MIME type. For example, `application/json`.
     pub data_format: String,
@@ -566,6 +621,8 @@ struct WriteIndex {
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_updated: Option<DateTime<Utc>>,
+
+    pub latest_base: bool,
 }
 
 impl From<&Write> for WriteIndex {
@@ -576,6 +633,7 @@ impl From<&Write> for WriteIndex {
             attester: None, // TODO: add attester
             tags: None,
             date_updated: None, // TODO: add date_updated
+            latest_base: false,
         };
 
         if let Some(tags) = &write.descriptor.tags {
@@ -601,12 +659,6 @@ impl Message for WriteIndex {
 
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.write.authorization)
-    }
-}
-
-impl Handler for WriteIndex {
-    async fn handle(self, _: Context, _: impl Provider) -> Result<impl Reply> {
-        Ok(WriteReply::default())
     }
 }
 
@@ -664,7 +716,7 @@ pub enum WriteData {
 
         /// Size of the `data` attribute in bytes. Must be set when `data_cid` is set,
         /// otherwise should be left unset.
-        data_size: u64,
+        data_size: usize,
     },
 }
 
@@ -853,8 +905,8 @@ impl WriteBuilder {
         let (data_cid, data_size) = match self.data {
             WriteData::Cid { data_cid, data_size } => (data_cid, data_size),
             WriteData::Bytes { data } => {
-                let data_cid = cid::compute(&data)?;
-                let data_size = data.len() as u64;
+                let data_cid = cid::from_value(&data)?;
+                let data_size = data.len();
                 (data_cid, data_size)
             }
         };
@@ -993,62 +1045,6 @@ pub(crate) async fn existing_entries(
     Ok(writes)
 }
 
-async fn authorize(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
-    let authzn = &write.authorization;
-    let record_owner = authzn.owner()?;
-
-    // if owner signature is set, it must be the same as the tenant DID
-    if record_owner.as_ref().is_some_and(|ro| ro != owner) {
-        return Err(unexpected!("record owner is not web node owner"));
-    };
-
-    let author = authzn.author()?;
-
-    // authorize author delegate
-    if let Some(delegated_grant) = &authzn.author_delegated_grant {
-        let signer = authzn.signer()?;
-        let grant = delegated_grant.to_grant()?;
-        grant.permit_records_write(&author, &signer, write, store).await?;
-    }
-
-    // authorize owner delegate
-    if let Some(delegated_grant) = &authzn.owner_delegated_grant {
-        let Some(owner) = &record_owner else {
-            return Err(unexpected!("owner is required to authorize owner delegate"));
-        };
-        let signer = authzn.owner_signer()?;
-        let grant = delegated_grant.to_grant()?;
-        grant.permit_records_write(owner, &signer, write, store).await?;
-    }
-
-    // when record owner is set, we can directly grant access
-    // (we established `record_owner`== web node owner above)
-    if record_owner.is_some() {
-        return Ok(());
-    };
-
-    // when author is the owner, we can directly grant access
-    if author == owner {
-        return Ok(());
-    }
-
-    // permission grant
-    let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-    let payload: WriteSignaturePayload = serde_json::from_slice(&decoded)?;
-
-    if let Some(permission_grant_id) = &payload.base.permission_grant_id {
-        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
-        return grant.permit_records_write(owner, &author, write, store).await;
-    };
-
-    // protocol-specific authorization
-    if write.descriptor.protocol.is_some() {
-        return protocol::permit_write(owner, write, store).await;
-    }
-
-    Err(unexpected!("message failed authorization"))
-}
-
 // Computes the deterministic Entry ID of the message.
 pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
     #[derive(Serialize)]
@@ -1057,7 +1053,7 @@ pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<St
         descriptor: WriteDescriptor,
         author: String,
     }
-    cid::compute(&EntryId { descriptor, author })
+    cid::from_value(&EntryId { descriptor, author })
 }
 
 // Fetches the first and last `records::Write` messages associated for the
@@ -1077,6 +1073,74 @@ pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>,
     Ok((initial.cloned(), messages.last().cloned()))
 }
 
+async fn process_stream<R: Read + Send>(
+    owner: &str, write: &Write, data: &mut R, store: &impl DataStore,
+) -> Result<Write> {
+    // when data is below the threshold, store it within MessageStore
+    if write.descriptor.data_size <= MAX_ENCODED_SIZE {
+        // read data from stream
+        let mut data_bytes = Vec::new();
+        data.read_to_end(&mut data_bytes)?;
+
+        let data_cid = cid::from_value(&data_bytes)?;
+        if write.descriptor.data_cid != data_cid {
+            return Err(unexpected!("computed data CID does not match descriptor cid"));
+        }
+        if write.descriptor.data_size != data_bytes.len() {
+            return Err(unexpected!("actual data size does not match descriptor `data_size`"));
+        }
+
+        if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+            protocol::verify_schema(write, &data_bytes)?;
+        }
+
+        let mut write = write.clone();
+        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
+        return Ok(write);
+    }
+
+    // // split stream to do storage and CID computation in parallel
+    // let mut reader = BufReader::new(data);
+
+    // let write_buffer_1 = Vec::new();
+    // let write_buffer_2 = Vec::new();
+    // let mut stream_1 = BufWriter::new(write_buffer_1);
+    // let mut stream_2 = BufWriter::new(write_buffer_2);
+
+    // loop {
+    //     let mut buffer = [0u8; 10];
+    //     if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
+    //         if bytes_read > 0 {
+    //             let _ = stream_1.write(&buffer[..bytes_read]).unwrap();
+    //             let _ = stream_2.write(&buffer[..bytes_read]).unwrap();
+    //         } else {
+    //             stream_1.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
+    //             stream_2.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
+    //             break;
+    //         }
+    //     }
+    // }
+
+    // HACK: for now, read the entire stream into memory to calculate CID
+    let mut buffer = Vec::new();
+    data.read_to_end(&mut buffer)?;
+    let data_cid = cid::from_value(&buffer)?;
+
+    if write.descriptor.data_cid != data_cid {
+        return Err(unexpected!("computed data CID does not match descriptor cid"));
+    }
+
+    // save to data store
+    let data_size = store.put(owner, &write.record_id, &data_cid, buffer.as_slice()).await?;
+
+    // verify result
+    if write.descriptor.data_size != data_size {
+        return Err(unexpected!("stored data size does not match descriptor data_size"));
+    }
+
+    Ok(write.clone())
+}
+
 // Write message is not an 'initial write' with no data_stream.
 // Check integrity against the most recent existing write.
 async fn process_data(
@@ -1087,10 +1151,10 @@ async fn process_data(
     // already associated with the latest existing message.
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
     if existing.descriptor.data_cid != write.descriptor.data_cid {
-        return Err(unexpected!(format!("data CID does not match data_cid in descriptor")));
+        return Err(unexpected!("data CID does not match data_cid in descriptor"));
     }
     if existing.descriptor.data_size != write.descriptor.data_size {
-        return Err(unexpected!(format!("data size does not match dta_size in descriptor")));
+        return Err(unexpected!("data size does not match data_size in descriptor"));
     }
 
     // encode the data from the original write if it is smaller than the
@@ -1118,7 +1182,7 @@ async fn process_data(
 async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> Result<()> {
     // get grant from revocation message `parent_id`
     let Some(grant_id) = &write.descriptor.parent_id else {
-        return Err(unexpected!(format!("missing `parent_id`")));
+        return Err(unexpected!("missing `parent_id`"));
     };
     let message_timestamp = write.descriptor.base.message_timestamp.unwrap_or_default();
 
@@ -1128,16 +1192,17 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         AND descriptor.method = '{method}'
         AND recordId = '{grant_id}'
         AND dateCreated >= '{message_timestamp}
+        AND latestBase = true
         ",
         interface = Interface::Records,
         method = Method::Write,
-    ); // AND isLatestBaseState = true
+    );
 
     let (messages, _) = MessageStore::query::<Write>(provider, owner, &sql).await?;
 
     // delete any messages with the same `record_id` except the initial write
     for msg in messages {
-        let cid = cid::compute(&msg)?;
+        let cid = cid::from_value(&msg)?;
         EventLog::delete(provider, owner, &cid).await?;
     }
 

@@ -2,7 +2,6 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
@@ -16,68 +15,70 @@ use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
-use crate::service::{Context, Handler, Message, Reply};
+use crate::service::{Context, Message};
 use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-impl Handler for Configure {
-    async fn handle(self, ctx: Context, provider: impl Provider) -> Result<impl Reply> {
-        self.authorize(&ctx, &provider).await?;
+pub async fn handle(
+    owner: &str, configure: Configure, provider: impl Provider,
+) -> Result<ConfigureReply> {
+    let mut ctx = Context::new(owner);
+    Message::validate(&configure, &mut ctx, &provider).await?;
+    configure.authorize(&ctx, &provider).await?;
 
-        // find any matching protocol entries
-        let filter = Filter {
-            protocol: self.descriptor.definition.protocol.clone(),
-        };
-        let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
+    // find any matching protocol entries
+    let filter = Filter {
+        protocol: configure.descriptor.definition.protocol.clone(),
+    };
+    let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
 
-        // determine if incoming message is the latest
-        let is_latest = if let Some(existing) = &results {
-            // find latest matching protocol entry
-            let timestamp = &self.descriptor.base.message_timestamp;
-            let (is_latest, latest) = existing.iter().fold((true, &self), |(_, _), e| {
-                if &e.descriptor.base.message_timestamp > timestamp {
-                    (false, e)
-                } else {
-                    (true, &self)
-                }
-            });
-
-            // delete all entries except the most recent
-            let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
-            for e in existing {
-                let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
-                if current_ts.cmp(&latest_ts) == Ordering::Less {
-                    let cid = cid::compute(&e)?;
-                    MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-                    EventLog::delete(&provider, &ctx.owner, &cid).await?;
-                }
+    // determine if incoming message is the latest
+    let is_latest = if let Some(existing) = &results {
+        // find latest matching protocol entry
+        let timestamp = &configure.descriptor.base.message_timestamp;
+        let (is_latest, latest) = existing.iter().fold((true, &configure), |(_, _), e| {
+            if &e.descriptor.base.message_timestamp > timestamp {
+                (false, e)
+            } else {
+                (true, &configure)
             }
-            is_latest
-        } else {
-            true
-        };
+        });
 
-        if !is_latest {
-            return Err(unexpected!("message is not the latest"));
+        // delete all entries except the most recent
+        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+        for e in existing {
+            let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
+            if current_ts.cmp(&latest_ts) == Ordering::Less {
+                let cid = cid::from_value(&e)?;
+                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
+                EventLog::delete(&provider, &ctx.owner, &cid).await?;
+            }
         }
+        is_latest
+    } else {
+        true
+    };
 
-        // save the incoming message
-
-        MessageStore::put(&provider, &ctx.owner, &self).await?;
-        EventLog::append(&provider, &ctx.owner, &self).await?;
-        EventStream::emit(&provider, &ctx.owner, &self).await?;
-
-        Ok(ConfigureReply {
-            status: Status {
-                code: 202,
-                detail: Some("OK".to_string()),
-            },
-            message: self,
-        })
+    if !is_latest {
+        return Err(unexpected!("message is not the latest"));
     }
+
+    // save the incoming message
+
+    MessageStore::put(&provider, &ctx.owner, &configure).await?;
+    EventLog::append(&provider, &ctx.owner, &configure).await?;
+    EventStream::emit(&provider, &ctx.owner, &configure).await?;
+
+    Ok(ConfigureReply {
+        status: Status {
+            code: 202,
+            detail: Some("OK".to_string()),
+        },
+        message: configure,
+    })
 }
 
 /// Protocols Configure payload
@@ -92,7 +93,7 @@ pub struct Configure {
 
 impl Message for Configure {
     fn cid(&self) -> Result<String> {
-        cid::compute(self)
+        cid::from_value(self)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -114,16 +115,6 @@ pub struct ConfigureReply {
     message: Configure,
 }
 
-impl Reply for ConfigureReply {
-    fn status(&self) -> Status {
-        self.status.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 impl Configure {
     /// Check message has sufficient privileges.
     ///
@@ -143,7 +134,7 @@ impl Configure {
                 .await?;
         }
 
-        if ctx.author == ctx.owner {
+        if self.authorization.author()? == ctx.owner {
             return Ok(());
         }
 
@@ -445,7 +436,7 @@ impl ConfigureBuilder {
         };
 
         // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::compute(&descriptor)?);
+        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
         if let Some(id) = self.permission_grant_id {
             builder = builder.permission_grant_id(id);
         }
@@ -482,7 +473,7 @@ fn verify_rule_set(
     // validate $size
     if let Some(size) = &rule_set.size {
         if size.min > size.max {
-            return Err(unexpected!(format!("invalid size range at '{protocol_path}'")));
+            return Err(unexpected!("invalid size range at '{protocol_path}'"));
         }
     }
 
@@ -491,7 +482,7 @@ fn verify_rule_set(
         for tag in tags.undefined_tags.keys() {
             let schema = serde_json::from_str(tag)?;
             jsonschema::validator_for(&schema)
-                .map_err(|e| unexpected!(format!("tag schema validation error: {e}")))?;
+                .map_err(|e| unexpected!("tag schema validation error: {e}"))?;
         }
     }
 
@@ -536,8 +527,7 @@ fn verify_rule_set(
             let allowed = [Action::CoUpdate, Action::CoDelete, Action::CoPrune];
             if !allowed.iter().any(|ra| action.can.contains(ra)) {
                 return Err(unexpected!(
-                    "recipient action must contain only co-update, co-delete, and co-prune"
-                        .to_string(),
+                    "recipient action must contain only co-update, co-delete, and co-prune",
                 ));
             }
         }

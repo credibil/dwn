@@ -1,5 +1,6 @@
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::service::Message;
@@ -8,14 +9,18 @@ use crate::{unexpected, Result};
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
 pub fn validate(message: &impl Message) -> Result<()> {
-    let retriever = Retriever {};
-
     let descriptor = message.descriptor();
     let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
+    validate_value(&schema_name, message)
+}
 
-    let schema = precompiled(&schema_name)?;
+/// Validates the given payload using JSON schema keyed by the given schema name.
+/// Throws if the given payload fails validation.
+pub fn validate_value<T: Serialize + ?Sized>(schema: &str, value: &T) -> Result<()> {
+    let retriever = Retriever {};
+    let schema = precompiled(schema)?;
     let validator = jsonschema::options().with_retriever(retriever).build(&schema)?;
-    let instance = serde_json::to_value(message)?;
+    let instance = serde_json::to_value(value)?;
 
     // check for validation errors
     let errors: Vec<ValidationError> = validator.iter_errors(&instance).collect();
@@ -24,7 +29,7 @@ pub fn validate(message: &impl Message) -> Result<()> {
         for e in errors {
             error.push_str(&format!("\n - {e} at {}", e.instance_path));
         }
-        return Err(unexpected!(format!("validation failed for {schema_name}: {error}")));
+        return Err(unexpected!("validation failed for {schema}: {error}"));
     }
 
     Ok(())
@@ -49,7 +54,7 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/protocols-query.json");
             Ok(serde_json::from_slice(schema)?)
         }
-        _ => Err(unexpected!(format!("Schema not found: {schema_name}"))),
+        _ => Err(unexpected!("Schema not found: {schema_name}")),
     }
 }
 
@@ -62,7 +67,7 @@ impl Retrieve for Retriever {
         &self, uri: &Uri<&str>,
     ) -> Result<Value, Box<(dyn std::error::Error + Send + Sync + 'static)>> {
         let Some(file) = uri.path().split('/').last() else {
-            return Err(unexpected!(format!("Schema not found: {uri}")).into());
+            return Err(unexpected!("Schema not found: {uri}").into());
         };
 
         match file.as_str() {
@@ -129,7 +134,7 @@ impl Retrieve for Retriever {
                 Ok(serde_json::from_slice(schema)?)
             }
 
-            _ => Err(unexpected!(format!("Schema not found: {uri}")).into()),
+            _ => Err(unexpected!("Schema not found: {uri}").into()),
         }
     }
 }

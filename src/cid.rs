@@ -12,7 +12,7 @@ const RAW: u64 = 0x55;
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) fn compute<T: Serialize>(payload: &T) -> Result<String> {
+pub(crate) fn from_value<T: Serialize>(payload: &T) -> Result<String> {
     let mut buf = Vec::new();
     ciborium::into_writer(payload, &mut buf)?;
     let hash = Code::Sha2_256.digest(&buf);

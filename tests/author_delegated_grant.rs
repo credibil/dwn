@@ -6,10 +6,10 @@
 
 use insta::assert_yaml_snapshot as assert_snapshot;
 use test_utils::store::ProviderImpl;
+use vercre_dwn::handlers::{configure, query};
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::service::Reply;
 use vercre_dwn::{Interface, Method};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -48,10 +48,10 @@ async fn configure_any() {
         .await
         .expect("should build");
 
-    let reply = vercre_dwn::handle_message(ALICE_DID, configure, provider.clone())
+    let reply = configure::handle(ALICE_DID, configure, provider.clone())
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status().code, 202);
+    assert_eq!(reply.status.code, 202);
 
     assert_snapshot!("configure", reply, {
         ".descriptor.messageTimestamp" => "[messageTimestamp]",
@@ -68,10 +68,9 @@ async fn configure_any() {
         .await
         .expect("should build");
 
-    let reply = vercre_dwn::handle_message(ALICE_DID, query, provider.clone())
-        .await
-        .expect("should find protocol");
-    assert_eq!(reply.status().code, 200);
+    let reply =
+        query::handle(ALICE_DID, query, provider.clone()).await.expect("should find protocol");
+    assert_eq!(reply.status.code, 200);
 
     assert_snapshot!("query", reply, {
         ".entries[].descriptor.messageTimestamp" => "[messageTimestamp]",

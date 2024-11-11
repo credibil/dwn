@@ -1,6 +1,6 @@
 ---
 source: tests/owner_signature.rs
-assertion_line: 64
+assertion_line: 59
 expression: reply
 snapshot_kind: text
 ---

@@ -18,12 +18,17 @@ use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
+/// Rexport handlers as a module for simplicity and consistency.
+pub mod handlers {
+    pub use crate::protocols::{configure, query};
+    pub use crate::records::{read, write};
+}
 pub use crate::error::Error;
 pub use crate::provider::Provider;
-pub use crate::service::{handle_message, Message, Reply};
+pub use crate::service::Message;
 
 /// The maximum size of a message.
-pub const MAX_ENCODED_SIZE: u64 = 30000;
+pub const MAX_ENCODED_SIZE: usize = 5; //30000;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;

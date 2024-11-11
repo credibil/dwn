@@ -5,12 +5,14 @@
 //!
 //! Implementation of the `Provider` trait for testing and examples.
 
+mod block;
 pub mod data;
 pub mod event;
 pub mod message;
 pub mod task;
 
 use anyhow::{anyhow, Result};
+use blockstore::InMemoryBlockstore;
 use serde::Deserialize;
 use surrealdb::engine::local::{Db, Mem};
 use surrealdb::opt::RecordId;
@@ -22,25 +24,31 @@ use vercre_infosec::{Algorithm, Cipher, Signer};
 use crate::keystore::{Keystore, OWNER_DID};
 
 const NAMESPACE: &str = "integration-test";
-const DATA: &str = "data";
 
 #[derive(Clone)]
 pub struct ProviderImpl {
     db: Surreal<Db>,
+    blockstore: InMemoryBlockstore<64>,
 }
 
 impl Provider for ProviderImpl {}
 
 impl ProviderImpl {
     pub async fn new() -> Result<Self> {
+        // surreal db
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns(NAMESPACE).use_db(OWNER_DID).await?;
-        let provider = Self { db };
 
+        // blockstore
+        let blockstore = InMemoryBlockstore::<64>::new();
+
+        let provider = Self { db, blockstore };
+
+        // load a protocol configuration
         let bytes = include_bytes!("./store/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
-
         MessageStore::put(&provider, OWNER_DID, &config).await?;
+
         Ok(provider)
     }
 }

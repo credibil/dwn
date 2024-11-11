@@ -2,6 +2,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde_json::json;
 use test_utils::keystore::{Keystore, OWNER_DID};
 use test_utils::store::ProviderImpl;
+use vercre_dwn::handlers::query;
 use vercre_dwn::protocols::Query;
 
 #[tokio::main]
@@ -41,8 +42,7 @@ async fn main() {
     });
 
     let query: Query = serde_json::from_value(query_json).expect("should deserialize");
-    let reply =
-        vercre_dwn::handle_message(OWNER_DID, query, provider).await.expect("should send message");
+    let reply = query::handle(OWNER_DID, query, provider).await.expect("should send message");
 
     println!("{:?}", reply);
 }
