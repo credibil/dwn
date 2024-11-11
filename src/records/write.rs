@@ -1121,18 +1121,21 @@ async fn process_stream<R: Read + Send>(
     //     }
     // }
 
+    // HACK: for now, read the entire stream into memory to calculate CID
     let mut buffer = Vec::new();
     data.read_to_end(&mut buffer)?;
-
     let data_cid = cid::from_value(&buffer)?;
+
     if write.descriptor.data_cid != data_cid {
         return Err(unexpected!("computed data CID does not match descriptor cid"));
     }
+
+    // save to data store
     let data_size = store.put(owner, &write.record_id, &data_cid, buffer.as_slice()).await?;
 
     // verify result
     if write.descriptor.data_size != data_size {
-        return Err(unexpected!("actual data size does not match descriptor `data_size`"));
+        return Err(unexpected!("stored data size does not match descriptor data_size"));
     }
 
     Ok(write.clone())

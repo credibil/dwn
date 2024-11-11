@@ -83,7 +83,6 @@ derive_more = "1.0.0"
 http = "1.1.0"
 insta = { version = "1.41.1", features = ["redactions", "yaml"] }
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
-prqlc = "0.13.2"
 rand = "0.8.5"
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = { version = "1.0.132", features = ["alloc"] }

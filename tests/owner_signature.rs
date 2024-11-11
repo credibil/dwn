@@ -76,7 +76,7 @@ async fn flat_space() {
     };
     bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
 
-    let alice_data = reply.entry.data.as_ref().unwrap();
+    let alice_data = reply.entry.data.expect("should have data");
     let reply = write::handle(ALICE_DID, bob_msg, &provider, Some(&mut alice_data.as_slice()))
         .await
         .expect("should write");

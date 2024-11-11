@@ -4,23 +4,14 @@ use std::str::FromStr;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use blockstore::Blockstore;
-// use cid::Cid;
-use ipld::Ipld;
 use libipld::block::Block;
 use libipld::cbor::DagCborCodec;
-use libipld::ipld;
-use libipld::store::{DefaultParams, StoreParams};
-use multihash::Code;
+use libipld::cid::multihash::Code;
+use libipld::ipld::Ipld;
+use libipld::store::DefaultParams; // StoreParams
 use vercre_dwn::provider::DataStore;
 
 use super::ProviderImpl;
-
-// fn to_cid<T: Serialize>(payload: &T) -> Result<Cid> {
-//     let mut buf = Vec::new();
-//     ciborium::into_writer(payload, &mut buf)?;
-//     let hash = Code::Sha2_256.digest(&buf);
-//     Ok(Cid::new_v1(RAW, hash))
-// }
 
 #[async_trait]
 impl DataStore for ProviderImpl {
@@ -93,7 +84,10 @@ impl DataStore for ProviderImpl {
         };
 
         // resolve each data block link
-        let mut data = Vec::new();
+        let mut buffer = Vec::new();
+        // let reader = BufReader::new(buffer.as_slice());
+        // let mut writer = BufWriter::new(buffer);
+
         for link in links {
             let Ipld::Link(link_cid) = link else {
                 return Err(anyhow!("invalid link"));
@@ -111,10 +105,12 @@ impl DataStore for ProviderImpl {
             let Ipld::Bytes(bytes) = ipld else {
                 return Ok(None);
             };
-            data.extend(bytes);
+
+            // writer.write(&bytes)?;
+            buffer.extend(bytes);
         }
 
-        return Ok(Some(data));
+        return Ok(Some(buffer));
     }
 
     async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<()> {
