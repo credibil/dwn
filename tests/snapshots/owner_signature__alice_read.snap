@@ -1,0 +1,34 @@
+---
+source: tests/owner_signature.rs
+assertion_line: 59
+expression: reply
+snapshot_kind: text
+---
+status:
+  code: 200
+  detail: OK
+entry:
+  recordsWrite:
+    descriptor:
+      interface: Records
+      method: Write
+      messageTimestamp: "[messageTimestamp]"
+      dataCid: bafkreiehsisfijhvfjahl45vxul7wym4r4kgakkos6obtdvik544gbunlu
+      dataSize: 31
+      dataFormat: application/json
+      dateCreated: "[dateCreated]"
+      published: true
+      datePublished: "[datePublished]"
+    authorization:
+      signature:
+        payload: "[payload]"
+        signatures:
+          - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+            signature: "[signature]"
+    recordId: "[recordId]"
+    attestation:
+      payload: "[payload]"
+      signatures:
+        - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+          signature: "[signature]"
+  data: "[data]"

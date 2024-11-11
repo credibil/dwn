@@ -1,22 +1,17 @@
-// use url::Url;
 use http::uri::Uri;
 
 use crate::{unexpected, Result};
 
 pub fn clean_url(url: &str) -> Result<String> {
-    let url = if url.starts_with("http://") || url.starts_with("https://") {
-        url
-    } else {
-        &format!("http://{url}")
-    };
+    let parsed = url.parse::<Uri>()?;
 
-    let parsed: Uri = url.parse()?;
+    let scheme = parsed.scheme().map_or_else(|| "http://".to_string(), |s| format!("{s}://"));
     let Some(authority) = parsed.authority() else {
         return Err(unexpected!("protocol URI ${url} must have an authority"));
     };
+    let path = parsed.path().trim_end_matches('/');
 
-    let cleaned = format!("{authority}{path}", path = parsed.path());
-    Ok(cleaned.trim_end_matches('/').to_owned())
+    Ok(format!("{scheme}{authority}{path}"))
 }
 
 // pub fn validate_url(url: &str) -> Result<()> {
@@ -25,3 +20,22 @@ pub fn clean_url(url: &str) -> Result<String> {
 //     }
 //     Ok(())
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_scheme() {
+        let url = "example.com";
+        let cleaned = clean_url(url).expect("should clean");
+        assert_eq!(cleaned, "http://example.com");
+    }
+
+    #[test]
+    fn trailing_slash() {
+        let url = "http://example.com/";
+        let cleaned = clean_url(url).expect("should clean");
+        assert_eq!(cleaned, "http://example.com");
+    }
+}

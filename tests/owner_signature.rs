@@ -1,4 +1,4 @@
-//! Author Delegated Grant
+//! Owner Signature
 //!
 //! This test demonstrates how a web node owner can delegate permission to
 //! another entity to perform an action on their behalf. In this case, Alice
@@ -6,7 +6,7 @@
 
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use serde_json::json;
+use serde_json::{json, Value};
 use test_utils::store::ProviderImpl;
 use vercre_dwn::handlers::{read, write};
 use vercre_dwn::provider::KeyStore;
@@ -30,7 +30,7 @@ async fn flat_space() {
     }))
     .expect("should serialize");
 
-    let bob_write = WriteBuilder::new()
+    let bob_msg = WriteBuilder::new()
         .data(WriteData::Bytes {
             data: bob_data.clone(),
         })
@@ -39,28 +39,24 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    let bob_reply =
-        write::handle(BOB_DID, bob_write.clone(), &provider, Some(&mut bob_data.as_slice()))
-            .await
-            .expect("should write");
-    assert_eq!(bob_reply.status.code, StatusCode::ACCEPTED);
+    let reply = write::handle(BOB_DID, bob_msg.clone(), &provider, Some(&mut bob_data.as_slice()))
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
     // --------------------------------------------------
-    let alice_read = ReadBuilder::new()
-        .filter(RecordsFilter {
-            record_id: Some(bob_write.record_id),
-            ..RecordsFilter::default()
-        })
-        .build(&alice_keyring)
-        .await
-        .expect("should create write");
+    let filter = RecordsFilter {
+        record_id: Some(bob_msg.record_id),
+        ..RecordsFilter::default()
+    };
+    let alice_read =
+        ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should create write");
 
-    let alice_reply =
-        read::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
-    assert_eq!(alice_reply.status.code, StatusCode::OK);
-    assert_snapshot!("read", alice_reply, {
+    let reply = read::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert_snapshot!("alice_read", reply, {
         ".entry.recordsWrite.recordId" => "[recordId]",
         ".entry.recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
         ".entry.recordsWrite.descriptor.dateCreated" => "[dateCreated]",
@@ -73,29 +69,26 @@ async fn flat_space() {
     });
 
     // --------------------------------------------------
-    // Alice augments Bob's message as an external owner
+    // Alice augments Bob's message and saves to her web node
     // --------------------------------------------------
-    let Some(mut alice_signed) = alice_reply.entry.clone().records_write else {
+    let Some(mut bob_msg) = reply.entry.records_write else {
         panic!("should have records write entry");
     };
-    alice_signed.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
+    bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
+
+    let alice_data = reply.entry.data.as_ref().unwrap();
+    let reply = write::handle(ALICE_DID, bob_msg, &provider, Some(&mut alice_data.as_slice()))
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice saves Bob's message to her DWN
-    // --------------------------------------------------
-    let alice_data = alice_reply.entry.data.as_ref().unwrap();
-    let alice_reply =
-        write::handle(ALICE_DID, alice_signed, &provider, Some(&mut alice_data.as_slice()))
-            .await
-            .expect("should write");
-    assert_eq!(alice_reply.status.code, StatusCode::ACCEPTED);
-
-    // --------------------------------------------------
-    // Bob's message can be read from Alice's DWN
+    // Bob's message can be read from Alice's web node
     // --------------------------------------------------
     let reply = read::handle(BOB_DID, alice_read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let alice_data = reply.entry.data.expect("should have data");
-    //   expect(ArrayUtility.byteArraysEqual(dataFetched, dataBytes!)).to.be.true;
+    let bob_data: Value = serde_json::from_slice(&alice_data).expect("should deserialize");
+    assert_snapshot!("bob_data", bob_data);
 }
