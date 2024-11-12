@@ -22,14 +22,11 @@ async fn all_messages() {
     // let bob_keyring = provider.keyring(BOB_DID).expect("should get Alice's keyring");
 
     // scenario: Alice configures a protocol, and writes 5 records.
-    // Alice queries for messages without a cursor, and expects to see all 5 records as well as the protocol configuration message.
-    // Alice writes an additional record.
-    // Alice queries for messages beyond the cursor, and expects to see only the additional record.
 
     // --------------------------------------------------
-    // Bob writes a message to his web node
+    // Alice queries for messages without a cursor, and expects to see
+    // all 5 records as well as the protocol configuration message.
     // --------------------------------------------------
-
     let query = QueryBuilder::new()
         .add_filter(messages::Filter {
             protocol: Some("vercre_dwn".to_string()),
@@ -42,9 +39,9 @@ async fn all_messages() {
     let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    // // --------------------------------------------------
-    // // Alice fetches the message from Bob's web node
-    // // --------------------------------------------------
+    // --------------------------------------------------
+    // Alice writes an additional record.
+    // --------------------------------------------------
     // let filter = RecordsFilter {
     //     record_id: Some(bob_msg.record_id),
     //     ..RecordsFilter::default()
@@ -66,9 +63,10 @@ async fn all_messages() {
     //     ".entry.data" => "[data]",
     // });
 
-    // // --------------------------------------------------
-    // // Alice augments Bob's message and saves to her web node
-    // // --------------------------------------------------
+    // --------------------------------------------------
+    // Alice queries for messages beyond the cursor, and
+    // expects to see only the additional record.
+    // --------------------------------------------------
     // let Some(mut bob_msg) = reply.entry.records_write else {
     //     panic!("should have records write entry");
     // };
