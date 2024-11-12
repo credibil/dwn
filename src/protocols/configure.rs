@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
@@ -81,8 +82,8 @@ pub async fn handle(
 
     Ok(ConfigureReply {
         status: Status {
-            code: 202,
-            detail: Some("OK".to_string()),
+            code: StatusCode::ACCEPTED.as_u16(),
+            detail: None,
         },
         message: configure,
     })

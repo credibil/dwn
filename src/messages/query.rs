@@ -2,15 +2,19 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use chrono::{DateTime, Utc};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use super::Filter;
-use crate::auth::Authorization;
+use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::messages::Event;
 use crate::permissions::{self, ScopeType};
-use crate::provider::{EventLog, MessageStore, Provider};
+use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::service::Context;
-use crate::{cid, unexpected, Cursor, Descriptor, Error, Message, Result, Status};
+use crate::{
+    cid, schema, unexpected, Cursor, Descriptor, Interface, Message, Method, Result, Status,
+};
 
 /// Handle a query message.
 ///
@@ -28,34 +32,35 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
 
     let mut filter_sql = String::new();
     for filter in query.descriptor.filters {
-        if !filter_sql.is_empty() {
+        if filter_sql.is_empty() {
+            filter_sql.push_str("WHERE\n");
+        } else {
             filter_sql.push_str("OR\n");
         }
-        filter_sql.push_str("(");
+        filter_sql.push('(');
         filter_sql.push_str(&filter.to_sql());
-        filter_sql.push_str(")");
+        filter_sql.push(')');
     }
+
+    println!("{filter_sql}");
 
     let sql = format!(
         "
-        WHERE {filter_sql}
-        AND latestBase = true
+        {filter_sql}
         ORDER BY descriptor.messageTimestamp ASC
         "
     );
 
     // TODO: use pagination cursor
     let (events, _) = EventLog::query(provider, owner, &sql).await?;
-    if events.is_empty() {
-        return Err(Error::NotFound("No matching records found".to_string()));
-    }
+    let entries = if events.is_empty() { None } else { Some(events) };
 
     Ok(QueryReply {
         status: Status {
-            code: 200,
+            code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        entries: Some(events),
+        entries,
         cursor: None,
     })
 }
@@ -89,7 +94,7 @@ impl Query {
         let authzn = &self.authorization;
         let author = authzn.author()?;
 
-        if &author == owner {
+        if author == owner {
             return Ok(());
         }
 
@@ -149,4 +154,71 @@ pub struct QueryDescriptor {
     /// The pagination cursor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
+}
+
+/// Options to use when creating a permission grant.
+#[derive(Clone, Debug, Default)]
+pub struct QueryBuilder {
+    message_timestamp: Option<DateTime<Utc>>,
+    filters: Option<Vec<Filter>>,
+    permission_grant_id: Option<String>,
+}
+
+/// Builder for creating a permission grant.
+impl QueryBuilder {
+    /// Returns a new [`QueryBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        // set defaults
+        Self {
+            message_timestamp: Some(Utc::now()),
+            ..Self::default()
+        }
+    }
+
+    /// Specify a permission grant ID to use with the configuration.
+    #[must_use]
+    pub fn add_filter(mut self, filter: Filter) -> Self {
+        self.filters.get_or_insert_with(Vec::new).push(filter);
+        self
+    }
+
+    /// Specify a permission grant ID to use with the configuration.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
+        self
+    }
+
+    /// Generate the permission grant.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
+        let descriptor = QueryDescriptor {
+            base: Descriptor {
+                interface: Interface::Messages,
+                method: Method::Query,
+                message_timestamp: self.message_timestamp,
+            },
+            filters: self.filters.unwrap_or_default(),
+            cursor: None,
+        };
+
+        // authorization
+        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
+        if let Some(id) = self.permission_grant_id {
+            builder = builder.permission_grant_id(id);
+        }
+        let authorization = builder.build(signer).await?;
+
+        let query = Query {
+            descriptor,
+            authorization,
+        };
+
+        schema::validate(&query)?;
+
+        Ok(query)
+    }
 }

@@ -7,7 +7,6 @@ pub mod messages;
 pub mod permissions;
 pub mod protocols;
 pub mod provider;
-pub mod query;
 pub mod records;
 mod schema;
 pub mod service;
@@ -20,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 /// Rexport handlers as a module for simplicity and consistency.
 pub mod handlers {
+    pub use crate::messages;
     pub use crate::protocols::{configure, query};
     pub use crate::records::{read, write};
 }

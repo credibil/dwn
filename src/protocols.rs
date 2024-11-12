@@ -3,11 +3,11 @@
 pub mod configure;
 pub mod query;
 
-pub use crate::protocols::configure::{
+pub use self::configure::{
     Action, ActionRule, Actor, Configure, ConfigureBuilder, ConfigureReply, Definition,
     ProtocolType, RuleSet,
 };
-pub use crate::protocols::query::{Query, QueryBuilder, QueryReply};
+pub use self::query::{Query, QueryBuilder, QueryReply};
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL_URI: &str = "https://vercre.website/dwn/permissions";

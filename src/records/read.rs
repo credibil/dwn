@@ -35,7 +35,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
     if messages.is_empty() {
-        return Err(Error::NotFound("No matching records found".to_string()));
+        return Err(Error::NotFound("no matching records found".to_string()));
     }
 
     if messages.len() > 1 {
@@ -108,7 +108,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     Ok(ReadReply {
         status: Status {
             code: StatusCode::OK.as_u16(),
-            detail: Some("OK".to_string()),
+            detail: None,
         },
         entry: ReadReplyEntry {
             records_write: Some(write.clone()),

@@ -6,7 +6,7 @@ pub mod query;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::query::{Query, QueryReply};
+pub use self::query::{Query, QueryBuilder, QueryReply};
 use crate::auth::Authorization;
 use crate::{DateRange, Descriptor, Interface, Method};
 
@@ -92,7 +92,7 @@ pub struct Filter {
 
 impl Filter {
     fn to_sql(&self) -> String {
-        let mut sql = String::new();
+        let mut sql = String::from("1=1\n");
 
         if let Some(interface) = &self.interface {
             sql.push_str(&format!("AND descriptor.interface = '{interface}'\n"));

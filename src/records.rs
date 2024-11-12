@@ -8,14 +8,14 @@ pub mod write;
 
 use std::collections::BTreeMap;
 
-pub use read::{Read, ReadBuilder, ReadReply};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-pub(crate) use write::{existing_entries, first_and_last};
-pub use write::{
+
+pub use self::read::{Read, ReadBuilder, ReadReply};
+pub(crate) use self::write::{existing_entries, first_and_last};
+pub use self::write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol, WriteReply,
 };
-
 use crate::auth::Authorization;
 use crate::{utils, DateRange, Descriptor, Pagination, Quota, Result};
 
