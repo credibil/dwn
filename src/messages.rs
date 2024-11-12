@@ -8,7 +8,22 @@ use serde::{Deserialize, Serialize};
 
 pub use self::query::{Query, QueryReply};
 use crate::auth::Authorization;
-use crate::{DateRange, Interface, Method};
+use crate::{DateRange, Descriptor, Interface, Method};
+
+/// Message event.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Event {
+    /// The message's CID.
+    pub message_cid: String,
+
+    /// Event descriptor.
+    #[serde(flatten)]
+    pub base: Descriptor,
+
+    /// Message protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+}
 
 /// Messages Read payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -26,7 +41,7 @@ pub struct Read {
 pub struct ReadDescriptor {
     /// The base descriptor
     #[serde(flatten)]
-    pub base: crate::Descriptor,
+    pub base: Descriptor,
 
     /// Message CID.
     pub message_cid: String,
@@ -48,7 +63,7 @@ pub struct Subscribe {
 pub struct SubscribeDescriptor {
     /// The base descriptor
     #[serde(flatten)]
-    pub base: crate::Descriptor,
+    pub base: Descriptor,
 
     /// Message CID.
     pub filters: Vec<Filter>,
@@ -75,28 +90,53 @@ pub struct Filter {
     pub message_timestamp: Option<DateRange>,
 }
 
-/// Messages sort.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Sort {
-    /// Sort by `date_created`.
-    pub date_created: Option<Direction>,
+impl Filter {
+    fn to_sql(&self) -> String {
+        let mut sql = String::new();
 
-    /// Sort by `date_published`.
-    pub date_published: Option<Direction>,
+        if let Some(interface) = &self.interface {
+            sql.push_str(&format!("AND descriptor.interface = '{interface}'\n"));
+        }
+        if let Some(method) = &self.method {
+            sql.push_str(&format!("AND descriptor.method = '{method}'\n"));
+        }
+        if let Some(protocol) = &self.protocol {
+            sql.push_str(&format!("AND protocol = '{protocol}'\n"));
+        }
+        if let Some(timestamp) = &self.message_timestamp {
+            sql.push_str(&format!(
+                "AND descriptor.messageTimestamp BETWEEN {from} AND {to}'\n",
+                from = timestamp.from,
+                to = timestamp.to
+            ));
+        }
 
-    /// Sort by `message_timestamp`.
-    pub message_timestamp: Option<Direction>,
+        sql
+    }
 }
 
-/// Sort direction.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Direction {
-    /// Sort ascending.
-    #[default]
-    Ascending = 1,
+// /// Messages sort.
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Sort {
+//     /// Sort by `date_created`.
+//     pub date_created: Option<Direction>,
 
-    /// Sort descending.
-    Descending = -1,
-}
+//     /// Sort by `date_published`.
+//     pub date_published: Option<Direction>,
+
+//     /// Sort by `message_timestamp`.
+//     pub message_timestamp: Option<Direction>,
+// }
+
+// /// Sort direction.
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub enum Direction {
+//     /// Sort ascending.
+//     #[default]
+//     Ascending = 1,
+
+//     /// Sort descending.
+//     Descending = -1,
+// }

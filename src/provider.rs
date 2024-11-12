@@ -8,9 +8,8 @@ use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
-use crate::query::Filter;
-use crate::service::Message;
-use crate::Cursor;
+use crate::messages::Event;
+use crate::{Cursor, Message};
 
 /// Issuer Provider trait.
 pub trait Provider:
@@ -171,13 +170,13 @@ pub struct ResumableTask {
 #[async_trait]
 pub trait EventLog: Send + Sync {
     /// Adds a message event to a owner's event log.
-    async fn append<T: Message>(&self, owner: &str, message: &T) -> Result<()>;
+    async fn append(&self, owner: &str, event: &Event) -> Result<()>;
 
     /// Retrieves all of a owner's events that occurred after the cursor provided.
     /// If no cursor is provided, all events for a given owner will be returned.
     ///
     /// The cursor is a `message_cid`.
-    async fn events(&self, owner: &str, cursor: Option<Cursor>) -> Result<(Vec<String>, Cursor)>;
+    async fn events(&self, owner: &str, cursor: Option<Cursor>) -> Result<(Vec<Event>, Cursor)>;
 
     /// Retrieves a filtered set of events that occurred after a the cursor
     /// provided, accepts multiple filters. If no cursor is provided, all
@@ -185,9 +184,7 @@ pub trait EventLog: Send + Sync {
     /// is a `message_cid`.
     ///
     /// Returns an array of `message_cid`s that represent the events.
-    async fn query(
-        &self, owner: &str, filters: Vec<Filter>, cursor: Cursor,
-    ) -> Result<(Vec<String>, Cursor)>;
+    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Event>, Cursor)>;
 
     /// Deletes event for the specified `message_cid`.
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;
@@ -204,12 +201,12 @@ pub trait EventStream: Send + Sync {
     type Subscriber: EventSubscription;
 
     /// Subscribes to a owner's event stream.
-    async fn subscribe<T: Message>(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, T) + Send,
+    async fn subscribe(
+        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) + Send,
     ) -> Result<(String, Self::Subscriber)>;
 
     /// Emits an event to a owner's event stream.
-    async fn emit<T: Message>(&self, owner: &str, event: &T) -> Result<()>;
+    async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
 }
 
 /// `EventSubscription` is a subscription to an event stream.

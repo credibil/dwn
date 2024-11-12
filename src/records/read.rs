@@ -33,8 +33,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         filter_sql = read.descriptor.filter.to_sql(),
     );
 
-    // println!("SQL: {}", read.descriptor.filter.to_sql());
-
     let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
     if messages.is_empty() {
         return Err(Error::NotFound("No matching records found".to_string()));

@@ -11,6 +11,7 @@ use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::messages::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
@@ -69,8 +70,14 @@ pub async fn handle(
     // save the incoming message
 
     MessageStore::put(&provider, &ctx.owner, &configure).await?;
-    EventLog::append(&provider, &ctx.owner, &configure).await?;
-    EventStream::emit(&provider, &ctx.owner, &configure).await?;
+
+    let event = Event {
+        message_cid: configure.cid()?,
+        base: configure.descriptor.base.clone(),
+        protocol: Some(configure.descriptor.definition.protocol.clone()),
+    };
+    EventLog::append(&provider, &ctx.owner, &event).await?;
+    EventStream::emit(&provider, &ctx.owner, &event).await?;
 
     Ok(ConfigureReply {
         status: Status {

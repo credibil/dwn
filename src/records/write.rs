@@ -16,6 +16,7 @@ use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
+use crate::messages::Event;
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
@@ -103,16 +104,17 @@ pub async fn handle<R: Read + Send>(
 
     // save the message and log the event
     MessageStore::put(provider, owner, &write_index).await?;
-    EventLog::append(provider, owner, &write).await?;
+
+    let event = Event {
+        message_cid: write.cid()?,
+        base: write.descriptor.base.clone(),
+        protocol: write.descriptor.protocol.clone(),
+    };
+    EventLog::append(provider, owner, &event).await?;
 
     // only emit an event when the message is the latest base state
     if initial.is_some() {
-        // let initial_entry = initial;
-        //let event = Event {
-        //     message,
-        //     initial_entry,
-        // };
-        EventStream::emit(provider, owner, &write).await?;
+        EventStream::emit(provider, owner, &event).await?;
     }
 
     // delete messages with the same `record_id` EXCEPT the initial write
