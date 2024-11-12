@@ -1,12 +1,10 @@
-//! Owner Signature
+//! Message Query
 //!
-//! This test demonstrates how a web node owner can delegate permission to
-//! another entity to perform an action on their behalf. In this case, Alice
-//! grants Bob the ability to configure a protocol on her behalf.
+//! This test demonstrates how a web node owner create differnt types of
+//! messages and subsequently query for them.
 
 use http::StatusCode;
 use serde_json::json;
-// use insta::assert_yaml_snapshot as assert_snapshot;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::handlers::{configure, write};
 use vercre_dwn::messages::{query, QueryBuilder};
