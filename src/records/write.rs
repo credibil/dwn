@@ -186,6 +186,7 @@ pub struct Write {
 impl Message for Write {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
+        // self.record_id.clone()
     }
 
     fn descriptor(&self) -> &Descriptor {

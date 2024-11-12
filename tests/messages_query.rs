@@ -5,86 +5,121 @@
 //! grants Bob the ability to configure a protocol on her behalf.
 
 use http::StatusCode;
+use serde_json::json;
 // use insta::assert_yaml_snapshot as assert_snapshot;
-// use serde_json::{json, Value};
 use test_utils::store::ProviderImpl;
-use vercre_dwn::messages::{self, query, QueryBuilder};
+use vercre_dwn::handlers::{configure, write};
+use vercre_dwn::messages::{query, QueryBuilder};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
+use vercre_dwn::records::{WriteBuilder, WriteData};
+use vercre_dwn::Message;
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-// const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
 async fn all_messages() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Alice's keyring");
 
-    // scenario: Alice configures a protocol, and writes 5 records.
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let allow_any = include_bytes!("protocols/allow_any.json");
+    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let mut expected_cids = vec![configure.cid().unwrap()];
+
+    let reply = configure::handle(ALICE_DID, configure, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes 5 records.
+    // --------------------------------------------------
+    let data = serde_json::to_vec(&json!({
+        "message": "test record write",
+    }))
+    .expect("should serialize");
+    let schema = definition.types["post"].schema.clone().expect("should have schema");
+    let protocol = write::WriteProtocol {
+        protocol: definition.protocol.clone(),
+        protocol_path: "post".to_string(),
+    };
+
+    for _i in 1..=5 {
+        let message = WriteBuilder::new()
+            .protocol(protocol.clone())
+            .schema(&schema)
+            .data(WriteData::Bytes { data: data.clone() })
+            .published(true)
+            .build(&alice_keyring)
+            .await
+            .expect("should create write");
+
+        expected_cids.push(message.cid().unwrap());
+
+        let reply = write::handle(ALICE_DID, message, &provider, Some(&mut data.as_slice()))
+            .await
+            .expect("should write");
+        assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    }
 
     // --------------------------------------------------
     // Alice queries for messages without a cursor, and expects to see
     // all 5 records as well as the protocol configuration message.
     // --------------------------------------------------
-    let query = QueryBuilder::new()
-        .add_filter(messages::Filter {
-            protocol: Some("vercre_dwn".to_string()),
-            ..Default::default()
-        })
-        .build(&alice_keyring)
-        .await
-        .expect("should create write");
-
+    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
     let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
+
+    let Some(entries) = reply.entries else {
+        panic!("should have entries");
+    };
+    assert_eq!(entries.len(), 6);
+
+    for entry in entries {
+        assert!(expected_cids.contains(&entry));
+    }
 
     // --------------------------------------------------
     // Alice writes an additional record.
     // --------------------------------------------------
-    // let filter = RecordsFilter {
-    //     record_id: Some(bob_msg.record_id),
-    //     ..RecordsFilter::default()
-    // };
-    // let alice_read =
-    //     ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should create write");
+    let message = WriteBuilder::new()
+        .protocol(protocol.clone())
+        .schema(&schema)
+        .data(WriteData::Bytes { data: data.clone() })
+        .published(true)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
 
-    // let reply = read::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
-    // assert_eq!(reply.status.code, StatusCode::OK);
-    // assert_snapshot!("alice_read", reply, {
-    //     ".entry.recordsWrite.recordId" => "[recordId]",
-    //     ".entry.recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
-    //     ".entry.recordsWrite.descriptor.dateCreated" => "[dateCreated]",
-    //     ".entry.recordsWrite.descriptor.datePublished" => "[datePublished]",
-    //     ".entry.recordsWrite.authorization.signature.payload" => "[payload]",
-    //     ".entry.recordsWrite.authorization.signature.signatures[0].signature" => "[signature]",
-    //     ".entry.recordsWrite.attestation.payload" => "[payload]",
-    //     ".entry.recordsWrite.attestation.signatures[0].signature" => "[signature]",
-    //     ".entry.data" => "[data]",
-    // });
+    expected_cids.push(message.cid().unwrap());
+
+    let reply = write::handle(ALICE_DID, message, &provider, Some(&mut data.as_slice()))
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice queries for messages beyond the cursor, and
     // expects to see only the additional record.
     // --------------------------------------------------
-    // let Some(mut bob_msg) = reply.entry.records_write else {
-    //     panic!("should have records write entry");
-    // };
-    // bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
+    // TODO: implement cursor
+    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
+    let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
 
-    // let alice_data = reply.entry.data.expect("should have data");
-    // let reply = write::handle(ALICE_DID, bob_msg, &provider, Some(&mut alice_data.as_slice()))
-    //     .await
-    //     .expect("should write");
-    // assert_eq!(reply.status.code, StatusCode::ACCEPTED);
-
-    // // --------------------------------------------------
-    // // Bob's message can be read from Alice's web node
-    // // --------------------------------------------------
-    // let reply = read::handle(BOB_DID, alice_read, &provider).await.expect("should read");
-    // assert_eq!(reply.status.code, StatusCode::OK);
-
-    // let alice_data = reply.entry.data.expect("should have data");
-    // let bob_data: Value = serde_json::from_slice(&alice_data).expect("should deserialize");
-    // assert_snapshot!("bob_data", bob_data);
+    let Some(entries) = reply.entries else {
+        panic!("should have entries");
+    };
+    assert_eq!(entries.len(), 7);
 }

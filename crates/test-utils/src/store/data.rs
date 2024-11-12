@@ -8,10 +8,12 @@ use libipld::block::Block;
 use libipld::cbor::DagCborCodec;
 use libipld::cid::multihash::Code;
 use libipld::ipld::Ipld;
-use libipld::store::DefaultParams; // StoreParams
+use libipld::store::DefaultParams;
 use vercre_dwn::provider::DataStore;
 
 use super::ProviderImpl;
+
+const DEFAULT_CHUNK_SIZE: usize = 16; // 262_144; // -> 256KB
 
 #[async_trait]
 impl DataStore for ProviderImpl {
@@ -22,8 +24,7 @@ impl DataStore for ProviderImpl {
         let mut data_size = 0;
 
         loop {
-            // let mut buffer = [0u8; DefaultParams::MAX_BLOCK_SIZE]; // = 1MB
-            let mut buffer = [0u8; 10];
+            let mut buffer = [0u8; DEFAULT_CHUNK_SIZE];
             let block = None::<Block<DefaultParams>>;
 
             if let Ok(bytes_read) = data.read(&mut buffer[..]) {

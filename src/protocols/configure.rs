@@ -25,17 +25,17 @@ use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Resul
 /// # Errors
 /// TODO: Add errors
 pub async fn handle(
-    owner: &str, configure: Configure, provider: impl Provider,
+    owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<ConfigureReply> {
     let mut ctx = Context::new(owner);
-    Message::validate(&configure, &mut ctx, &provider).await?;
-    configure.authorize(&ctx, &provider).await?;
+    Message::validate(&configure, &mut ctx, provider).await?;
+    configure.authorize(&ctx, provider).await?;
 
     // find any matching protocol entries
     let filter = Filter {
         protocol: configure.descriptor.definition.protocol.clone(),
     };
-    let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
+    let results = query::fetch_config(&ctx.owner, Some(filter), provider).await?;
 
     // determine if incoming message is the latest
     let is_latest = if let Some(existing) = &results {
@@ -55,8 +55,8 @@ pub async fn handle(
             let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
             if current_ts.cmp(&latest_ts) == Ordering::Less {
                 let cid = cid::from_value(&e)?;
-                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-                EventLog::delete(&provider, &ctx.owner, &cid).await?;
+                MessageStore::delete(provider, &ctx.owner, &cid).await?;
+                EventLog::delete(provider, &ctx.owner, &cid).await?;
             }
         }
         is_latest
@@ -70,15 +70,15 @@ pub async fn handle(
 
     // save the incoming message
 
-    MessageStore::put(&provider, &ctx.owner, &configure).await?;
+    MessageStore::put(provider, &ctx.owner, &configure).await?;
 
     let event = Event {
         message_cid: configure.cid()?,
         base: configure.descriptor.base.clone(),
         protocol: Some(configure.descriptor.definition.protocol.clone()),
     };
-    EventLog::append(&provider, &ctx.owner, &event).await?;
-    EventStream::emit(&provider, &ctx.owner, &event).await?;
+    EventLog::append(provider, &ctx.owner, &event).await?;
+    EventStream::emit(provider, &ctx.owner, &event).await?;
 
     Ok(ConfigureReply {
         status: Status {
@@ -199,9 +199,11 @@ pub struct Definition {
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolType {
     /// The protocol schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
     /// Data formats supported by the protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data_formats: Option<Vec<String>>,
 }
 

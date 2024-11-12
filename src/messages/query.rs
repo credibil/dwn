@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 
 use super::Filter;
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::messages::Event;
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::service::Context;
@@ -53,6 +52,8 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
 
     // TODO: use pagination cursor
     let (events, _) = EventLog::query(provider, owner, &sql).await?;
+    let events = events.iter().map(|e| e.message_cid.clone()).collect::<Vec<String>>();
+
     let entries = if events.is_empty() { None } else { Some(events) };
 
     Ok(QueryReply {
@@ -67,15 +68,26 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
 
 /// Messages Query payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Query {
+pub struct Query
+// pub struct Query<F>
+// where
+//     F: Fn(usize) -> usize + Send,
+{
     /// The Query descriptor.
     pub descriptor: QueryDescriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
+    //
+    // #[serde(skip)]
+    // pub data: F,
 }
 
-impl Message for Query {
+impl Message for Query
+// impl<F> Message for Query<F>
+// where
+//     F: Fn(usize) -> usize + Clone + fmt::Debug + Send + Sync,
+{
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -133,8 +145,9 @@ pub struct QueryReply {
 
     /// The Query descriptor.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<Event>>,
-
+    pub entries: Option<Vec<String>>,
+    // pub entries: Option<Vec<Event>>,
+    //
     /// The message authorization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,

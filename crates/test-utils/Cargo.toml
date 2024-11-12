@@ -19,7 +19,7 @@ libipld = "0.16.0"
 multibase = "0.9"
 serde.workspace = true
 serde_json.workspace = true
-surrealdb = { version = "1.5.5", features = ["kv-mem"] }
+surrealdb = { version = "1.5.6", features = ["kv-mem"] }
 vercre-dwn = { path = "../.." }
 vercre-infosec.workspace = true
 
