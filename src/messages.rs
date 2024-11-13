@@ -8,7 +8,7 @@ pub mod read;
 use serde::{Deserialize, Serialize};
 
 pub use self::query::{Query, QueryBuilder, QueryReply};
-pub use self::read::{Read, ReadReply};
+pub use self::read::{Read, ReadBuilder, ReadReply};
 use crate::auth::Authorization;
 use crate::{DateRange, Descriptor, Interface, Method};
 

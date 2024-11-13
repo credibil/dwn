@@ -3,9 +3,9 @@
 //! Decentralized Web Node messaging framework.
 
 use std::fmt::Debug;
+use std::ops::Deref;
 
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -69,6 +69,14 @@ impl MessageRecord {
     }
 }
 
+impl Deref for MessageRecord {
+    type Target = Messages;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 /// Records read message payload
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
@@ -80,9 +88,15 @@ pub enum Messages {
     ProtocolsConfigure(protocols::Configure),
 }
 
+impl Default for Messages {
+    fn default() -> Self {
+        Self::RecordsWrite(records::Write::default())
+    }
+}
+
 /// Methods common to all messages.
 #[async_trait]
-pub trait Message: Serialize + DeserializeOwned + Clone + Debug + Send + Sync {
+pub trait Message: Serialize + Clone + Debug + Send + Sync {
     /// Compute the CID of the message.
     ///
     /// # Errors

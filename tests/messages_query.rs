@@ -4,10 +4,11 @@
 //! messages and subsequently query for them.
 
 use http::StatusCode;
+// use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::handlers::{configure, write};
-use vercre_dwn::messages::{query, QueryBuilder};
+use vercre_dwn::messages::{query, read, QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
@@ -112,7 +113,7 @@ async fn all_messages() {
     // expects to see only the additional record.
     // --------------------------------------------------
     // TODO: implement cursor
-    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
+    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
     let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -120,4 +121,19 @@ async fn all_messages() {
         panic!("should have entries");
     };
     assert_eq!(entries.len(), 7);
+
+    // --------------------------------------------------
+    // Alice reads one of the returned messages.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(&entries[0])
+        .build(&alice_keyring)
+        .await
+        .expect("should create read");
+    let reply = read::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    // assert_snapshot!("read", reply, {
+    //     ".entry.message.descriptor.messageTimestamp" => "[messageTimestamp]",
+    // });
 }

@@ -2,10 +2,11 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use std::io::BufReader;
 use std::str::FromStr;
 
 use ::cid::Cid;
-// use base64ct::{Base64UrlUnpadded, Encoding};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -13,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::service::Context;
+use crate::service::{Context, Messages};
 use crate::{
     cid, schema, unexpected, Descriptor, Error, Interface, Message, Method, Result, Status,
 };
@@ -22,46 +23,49 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle<T: Message + Default>(
-    owner: &str, read: Read, provider: &impl Provider,
-) -> Result<ReadReply<T>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<ReadReply> {
     let mut ctx = Context::new(owner);
     Message::validate(&read, &mut ctx, provider).await?;
 
     read.authorize(owner, provider).await?;
 
-    let Some(message) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
+    let Some(record) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
     else {
         return Err(Error::NotFound("message not found".to_string()));
     };
 
+    let message = (*record).clone();
+
     // include data with RecordsWrite messages
-    let desc = message.descriptor();
-
-    if desc.interface == Interface::Records && desc.method == Method::Write {
-        // let mut write = entry.message as RecordsQueryReplyEntry;
-
-        // // return embedded `encoded_data` as entry data stream.
-        // if let Some(encoded) = write.encoded_data {
-        //     write.encoded_data = None;
-        //     let bytes = Base64UrlUnpadded::encode_string(write.encoded_data);
-        //     entry.data = DataStream.fromBytes(bytes);
-        // } else {
-        //     let result =
-        //         DataStore::get(&provider, owner, write.record_id, write.descriptor.data_id)?;
-        //     if result.data_stream.is_some() {
-        //         entry.data = result.data_stream;
+    let data = if let Messages::RecordsWrite(ref write) = message {
+        //     // return embedded `encoded_data` as entry data stream.
+        //     if let Some(encoded) = &write.encoded_data {
+        //         write.encoded_data = None;
+        //         let bytes = Base64UrlUnpadded::decode_vec(encoded)?;
+        //         entry.data = DataStream.fromBytes(bytes);
+        //     } else {
+        //         let result =
+        //             DataStore::get(&provider, owner, write.record_id, write.descriptor.data_id)?;
+        //         if result.data_stream.is_some() {
+        //             entry.data = result.data_stream;
+        //         }
         //     }
-        // }
-    }
+
+        None
+    } else {
+        None
+    };
 
     Ok(ReadReply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        // entry,
-        ..ReadReply::default()
+        entry: Some(ReadReplyEntry {
+            message_cid: record.cid()?,
+            message,
+            data,
+        }),
     })
 }
 
@@ -122,27 +126,28 @@ impl Read {
 /// Messages Read reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
-pub struct ReadReply<T: Default> {
+pub struct ReadReply {
     /// Status message to accompany the reply.
     pub status: Status,
 
     /// The Read descriptor.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub entry: Option<ReadReplyEntry<T>>,
+    pub entry: Option<ReadReplyEntry>,
 }
 
 /// Messages Read reply entry
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
-pub struct ReadReplyEntry<T> {
+pub struct ReadReplyEntry {
     /// The CID of the message.
     pub message_cid: String,
 
     /// The message.
-    pub message: T,
-    // /// The data associated with the message.
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub data: Option<DataStream>,
+    pub message: Messages,
+
+    /// The data associated with the message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
 }
 
 /// Read descriptor.
