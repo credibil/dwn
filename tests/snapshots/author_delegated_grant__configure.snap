@@ -6,7 +6,6 @@ snapshot_kind: text
 ---
 status:
   code: 202
-  detail: OK
 descriptor:
   interface: Protocols
   method: Configure

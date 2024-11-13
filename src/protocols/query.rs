@@ -101,11 +101,19 @@ pub(crate) async fn fetch_config(
     );
 
     // execute query
-    let (messages, _) = store.query::<Configure>(owner, &sql).await?;
+    let (messages, _) = store.query(owner, &sql).await?;
     if messages.is_empty() {
         return Ok(None);
     }
-    Ok(Some(messages))
+
+    // unpack messages
+
+    let mut entries = vec![];
+    for message in messages {
+        entries.push(Configure::try_from(message)?);
+    }
+
+    Ok(Some(entries))
 }
 
 impl Query {

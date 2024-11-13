@@ -3,7 +3,7 @@
 //! `Write` is a message type used to create a new record in the web node.
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::Read;
 
 // use std::io::{BufReader, BufWriter, Read, Write as _};
@@ -20,7 +20,7 @@ use crate::messages::Event;
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::protocol;
-use crate::service::{Context, Message};
+use crate::service::{Context, Message, MessageRecord, Messages};
 use crate::{
     cid, permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, Status,
     MAX_ENCODED_SIZE,
@@ -99,11 +99,14 @@ pub async fn handle<R: Read + Send>(
     //
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
-    let mut write_index = WriteIndex::from(&write);
-    write_index.latest_base = latest.is_none();
+    // let mut write_index = WriteIndex::from(&write);
+    // write_index.latest_base = latest.is_none();
+
+    let mut message = MessageRecord::from(&write);
+    message.indexes.insert("latestBase".to_string(), Value::Bool(latest.is_none()));
 
     // save the message and log the event
-    MessageStore::put(provider, owner, &write_index).await?;
+    MessageStore::put(provider, owner, &message).await?;
 
     let event = Event {
         message_cid: write.cid()?,
@@ -203,6 +206,45 @@ impl Message for Write {
 pub struct WriteReply {
     /// Status message to accompany the reply.
     pub status: Status,
+}
+
+impl From<&Write> for MessageRecord {
+    fn from(write: &Write) -> Self {
+        let mut message2 = Self {
+            inner: Messages::RecordsWrite(write.clone()),
+            indexes: Map::new(),
+        };
+        message2.indexes.insert(
+            "author".to_string(),
+            Value::String(write.authorization.author().unwrap_or_default()),
+        );
+
+        // TODO: add following fields
+        // attester: None,
+        // tags: None,
+        // dateUpdated: None,
+
+        if let Some(tags) = &write.descriptor.tags {
+            let mut tag_map = Map::new();
+            for (k, v) in tags {
+                tag_map.insert(format!("tag.{k}"), v.clone());
+            }
+            message2.indexes.insert("tags".to_string(), Value::Object(tag_map));
+        }
+
+        message2
+    }
+}
+
+impl TryFrom<MessageRecord> for Write {
+    type Error = crate::Error;
+
+    fn try_from(message: MessageRecord) -> Result<Self> {
+        match message.inner {
+            Messages::RecordsWrite(write) => Ok(write),
+            Messages::ProtocolsConfigure(_) => Err(unexpected!("expected `RecordsWrite` message")),
+        }
+    }
 }
 
 impl Write {
@@ -600,71 +642,6 @@ pub struct WriteDescriptor {
     pub date_published: Option<DateTime<Utc>>,
 }
 
-/// Index (flatten) the `Write` message for SQL-based queries.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct WriteIndex {
-    /// The timestamp of the message.
-    #[serde(flatten)]
-    pub write: Write,
-
-    /// Records matching the specified author.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub author: Option<String>,
-
-    /// Records matching the specified creator.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attester: Option<String>,
-
-    /// Match records with the specified tags.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    pub tags: Option<BTreeMap<String, Value>>,
-
-    /// Match messages updated within the specified range.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_updated: Option<DateTime<Utc>>,
-
-    pub latest_base: bool,
-}
-
-impl From<&Write> for WriteIndex {
-    fn from(write: &Write) -> Self {
-        let mut index = Self {
-            write: write.clone(),
-            author: Some(write.authorization.author().unwrap_or_default()),
-            attester: None, // TODO: add attester
-            tags: None,
-            date_updated: None, // TODO: add date_updated
-            latest_base: false,
-        };
-
-        if let Some(tags) = &write.descriptor.tags {
-            let mut tag_map = BTreeMap::new();
-            for (k, v) in tags {
-                tag_map.insert(format!("tag.{k}"), v.clone());
-            }
-            index.tags = Some(tag_map);
-        }
-
-        index
-    }
-}
-
-impl Message for WriteIndex {
-    fn cid(&self) -> Result<String> {
-        self.write.cid()
-    }
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.write.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.write.authorization)
-    }
-}
-
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct WriteBuilder {
@@ -1038,11 +1015,11 @@ pub(crate) async fn existing_entries(
         ",
         interface = Interface::Records,
     );
-    let (messages, _) = store.query::<Write>(owner, &sql).await.unwrap();
+    let (messages, _) = store.query(owner, &sql).await.unwrap();
 
     let mut writes = Vec::new();
     for message in messages {
-        writes.push(message);
+        writes.push(Write::try_from(message)?);
     }
 
     Ok(writes)
@@ -1201,12 +1178,11 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         method = Method::Write,
     );
 
-    let (messages, _) = MessageStore::query::<Write>(provider, owner, &sql).await?;
+    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
 
     // delete any messages with the same `record_id` except the initial write
-    for msg in messages {
-        let cid = cid::from_value(&msg)?;
-        EventLog::delete(provider, owner, &cid).await?;
+    for m in messages {
+        EventLog::delete(provider, owner, &m.cid()?).await?;
     }
 
     Ok(())

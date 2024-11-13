@@ -6,7 +6,6 @@ snapshot_kind: text
 ---
 status:
   code: 200
-  detail: OK
 entry:
   recordsWrite:
     descriptor:

@@ -46,7 +46,7 @@ impl ProviderImpl {
         // load a protocol configuration
         let bytes = include_bytes!("./store/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
-        MessageStore::put(&provider, OWNER_DID, &config).await?;
+        MessageStore::put(&provider, OWNER_DID, &config.into()).await?;
 
         Ok(provider)
     }

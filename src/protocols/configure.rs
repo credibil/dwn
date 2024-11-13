@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
@@ -17,7 +17,7 @@ use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
-use crate::service::{Context, Message};
+use crate::service::{Context, Message, MessageRecord, Messages};
 use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
 
 /// Process query message.
@@ -69,8 +69,8 @@ pub async fn handle(
     }
 
     // save the incoming message
-
-    MessageStore::put(provider, &ctx.owner, &configure).await?;
+    let message = MessageRecord::from(&configure);
+    MessageStore::put(provider, &ctx.owner, &message).await?;
 
     let event = Event {
         message_cid: configure.cid()?,
@@ -121,6 +121,35 @@ pub struct ConfigureReply {
 
     #[serde(flatten)]
     message: Configure,
+}
+
+impl From<Configure> for MessageRecord {
+    fn from(configure: Configure) -> Self {
+        Self {
+            inner: Messages::ProtocolsConfigure(configure),
+            indexes: Map::new(),
+        }
+    }
+}
+
+impl From<&Configure> for MessageRecord {
+    fn from(configure: &Configure) -> Self {
+        Self {
+            inner: Messages::ProtocolsConfigure(configure.clone()),
+            indexes: Map::new(),
+        }
+    }
+}
+
+impl TryFrom<MessageRecord> for Configure {
+    type Error = crate::Error;
+
+    fn try_from(message: MessageRecord) -> Result<Self> {
+        match message.inner {
+            Messages::ProtocolsConfigure(configure) => Ok(configure),
+            Messages::RecordsWrite(_) => Err(unexpected!("expected `ProtocolsConfigure` message")),
+        }
+    }
 }
 
 impl Configure {

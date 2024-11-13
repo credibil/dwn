@@ -138,6 +138,7 @@ pub struct Status {
     pub code: u16,
 
     /// Status detail.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
 
@@ -181,14 +182,14 @@ mod stream {
     /// Records write message payload
     #[derive(Clone, Debug, Default, Deserialize, Serialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct Message2<T>
+    pub struct MessageRecord<T>
     where
         T: BufRead + Write,
     {
         data: T,
     }
 
-    impl<T> Message2<T>
+    impl<T> MessageRecord<T>
     where
         T: BufRead + Write,
     {
@@ -197,7 +198,7 @@ mod stream {
         }
     }
 
-    impl<T> Stream for Message2<T>
+    impl<T> Stream for MessageRecord<T>
     where
         T: BufRead + Write + Serialize + Clone + Debug + Send + Sync,
     {
@@ -273,7 +274,7 @@ mod stream {
 
     #[test]
     fn test_streaming() {
-        let message = Message2::new(DataStream::new());
+        let message = MessageRecord::new(DataStream::new());
         message.load_data().unwrap();
         message.save_data().unwrap();
     }

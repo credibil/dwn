@@ -30,8 +30,7 @@ pub async fn handle<T: Message + Default>(
 
     read.authorize(owner, provider).await?;
 
-    let Some(message) =
-        MessageStore::get::<T>(provider, owner, &read.descriptor.message_cid).await?
+    let Some(message) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
     else {
         return Err(Error::NotFound("message not found".to_string()));
     };

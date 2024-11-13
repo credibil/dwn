@@ -33,7 +33,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         filter_sql = read.descriptor.filter.to_sql(),
     );
 
-    let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
+    let (messages, _) = MessageStore::query(provider, &ctx.owner, &sql).await?;
     if messages.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
@@ -41,7 +41,10 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     if messages.len() > 1 {
         return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
     }
-    let write = &messages[0];
+
+    let Some(write) = messages[0].as_write() else {
+        return Err(unexpected!("expected `RecordsWrite` message"));
+    };
 
     // if the matched message is a RecordsDelete, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
@@ -96,11 +99,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             record_id = write.record_id,
         );
 
-        let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
+        let (messages, _) = MessageStore::query(provider, &ctx.owner, &sql).await?;
         if messages.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
-        let mut initial_write = messages[0].clone();
+
+        let Some(mut initial_write) = messages[0].as_write().cloned() else {
+            return Err(unexpected!("expected `RecordsWrite` message"));
+        };
+
         initial_write.encoded_data = None;
         Some(initial_write)
     };

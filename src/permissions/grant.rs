@@ -9,7 +9,6 @@ use super::{ConditionPublication, Conditions, GrantData, RecordsOptions, Scope, 
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{self, Write, WriteBuilder, WriteData, WriteProtocol};
-use crate::service::Message;
 use crate::{unexpected, utils, Descriptor, Interface, Method, Result};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -95,14 +94,15 @@ impl Grant {
             AND descriptor.method = '{method}'
             AND descriptor.parentId = '{parent_id}'
             AND descriptor.protocolPath = '{REVOCATION_PATH}'
+            AND lastestBase = true
             ORDER BY descriptor.messageTimestamp DESC
             ",
             interface = Interface::Records,
             method = Method::Write,
-            parent_id = self.id // AND isLatestBaseState = true
+            parent_id = self.id
         );
 
-        let (messages, _) = store.query::<Write>(grantor, &sql).await?;
+        let (messages, _) = store.query(grantor, &sql).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(unexpected!("grant has been revoked"));
         };

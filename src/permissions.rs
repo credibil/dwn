@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 pub use self::grant::{Grant, GrantBuilder};
 use crate::protocols::Definition;
 use crate::provider::MessageStore;
-use crate::records::Write;
 use crate::{unexpected, Interface, Method, Result};
 
 /// Fetch the grant specified by `grant_id`.
@@ -21,13 +20,16 @@ pub(crate) async fn fetch_grant(
         WHERE descriptor.interface = '{interface}'
         AND descriptor.method = '{method}'
         AND recordId = '{grant_id}'
+        AND latestBase = true
         ",
         interface = Interface::Records,
         method = Method::Write,
-    ); // AND isLatestBaseState = true
-    let (messages, _) = store.query::<Write>(owner, &sql).await?;
+    );
+    let (messages, _) = store.query(owner, &sql).await?;
 
-    let write = &messages[0];
+    let Some(write) = messages[0].as_write() else {
+        return Err(unexpected!("grant not found"));
+    };
     let desc = &write.descriptor;
 
     // unpack message payload

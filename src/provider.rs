@@ -9,7 +9,8 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::messages::Event;
-use crate::{Cursor, Message};
+use crate::service::MessageRecord;
+use crate::Cursor;
 
 /// Issuer Provider trait.
 pub trait Provider:
@@ -71,14 +72,14 @@ pub trait Keyring: Signer + Cipher + Send + Sync {}
 #[async_trait]
 pub trait MessageStore: Send + Sync {
     /// Store a message in the underlying store.
-    async fn put<T: Message>(&self, owner: &str, message: &T) -> Result<()>;
+    async fn put(&self, owner: &str, message: &MessageRecord) -> Result<()>;
+
+    /// Queries the underlying store for matches to the provided SQL WHERE clause.
+    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<MessageRecord>, Cursor)>;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.
-    async fn get<T: Message>(&self, owner: &str, message_cid: &str) -> Result<Option<T>>;
-
-    /// Queries the underlying store for matches to the provided SQL WHERE clause.
-    async fn query<T: Message>(&self, owner: &str, sql: &str) -> Result<(Vec<T>, Cursor)>;
+    async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<MessageRecord>>;
 
     /// Delete message associated with the specified id.
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;
