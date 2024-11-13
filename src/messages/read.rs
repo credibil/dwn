@@ -2,11 +2,11 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::io::BufReader;
+// use std::io::BufReader;
 use std::str::FromStr;
 
 use ::cid::Cid;
-use base64ct::{Base64UrlUnpadded, Encoding};
+// use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let message = (*record).clone();
 
     // include data with RecordsWrite messages
-    let data = if let Messages::RecordsWrite(ref write) = message {
+    let data = if let Messages::RecordsWrite(ref _write) = message {
         //     // return embedded `encoded_data` as entry data stream.
         //     if let Some(encoded) = &write.encoded_data {
         //         write.encoded_data = None;
@@ -51,6 +51,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         //         }
         //     }
 
+        // let reader = BufReader::new(Vec::<u8>::new().as_slice());
         None
     } else {
         None
@@ -149,6 +150,9 @@ pub struct ReadReplyEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
 }
+
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// pub struct DataReader(BufReader<Vec<u8>>);
 
 /// Read descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
