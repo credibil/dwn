@@ -3,19 +3,18 @@
 //! Decentralized Web Node messaging framework.
 
 pub mod query;
+pub mod read;
 
 use serde::{Deserialize, Serialize};
 
 pub use self::query::{Query, QueryBuilder, QueryReply};
+pub use self::read::{Read, ReadReply};
 use crate::auth::Authorization;
 use crate::{DateRange, Descriptor, Interface, Method};
 
 /// Message event.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Event {
-    /// The message's CID.
-    pub message_cid: String,
-
     /// Event descriptor.
     #[serde(flatten)]
     pub base: Descriptor,
@@ -23,27 +22,8 @@ pub struct Event {
     /// Message protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
-}
 
-/// Messages Read payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Read {
-    /// The Read descriptor.
-    pub descriptor: ReadDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
-/// Read descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Message CID.
+    /// The message's CID.
     pub message_cid: String,
 }
 

@@ -25,10 +25,6 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
 
     query.authorize(owner, provider).await?;
 
-    // an empty array of filters means no filtering and all events are returned
-    // const eventFilters = Messages.convertFilters(message.descriptor.filters);
-    // const { events, cursor } = await this.eventLog.queryEvents(tenant, eventFilters, message.descriptor.cursor);
-
     let mut filter_sql = String::new();
     for filter in query.descriptor.filters {
         if filter_sql.is_empty() {
@@ -41,8 +37,6 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
         filter_sql.push(')');
     }
 
-    println!("{filter_sql}");
-
     let sql = format!(
         "
         {filter_sql}
@@ -53,7 +47,6 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
     // TODO: use pagination cursor
     let (events, _) = EventLog::query(provider, owner, &sql).await?;
     let events = events.iter().map(|e| e.message_cid.clone()).collect::<Vec<String>>();
-
     let entries = if events.is_empty() { None } else { Some(events) };
 
     Ok(QueryReply {
