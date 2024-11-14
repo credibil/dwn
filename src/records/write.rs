@@ -911,21 +911,22 @@ impl WriteBuilder {
         let now = Utc::now();
         let timestamp = self.message_timestamp.unwrap_or(now);
 
-        let mut write = Write::default();
-
-        write.descriptor = WriteDescriptor {
-            base: Descriptor {
-                interface: Interface::Records,
-                method: Method::Write,
-                message_timestamp: Some(timestamp),
+        let mut write = Write {
+            descriptor: WriteDescriptor {
+                base: Descriptor {
+                    interface: Interface::Records,
+                    method: Method::Write,
+                    message_timestamp: Some(timestamp),
+                },
+                recipient: self.recipient,
+                tags: self.tags,
+                date_created: self.date_created.unwrap_or(now),
+                published: self.published,
+                data_format: self.data_format,
+                parent_id: self.parent_context_id.clone(),
+                ..WriteDescriptor::default()
             },
-            recipient: self.recipient,
-            tags: self.tags,
-            date_created: self.date_created.unwrap_or(now),
-            published: self.published,
-            data_format: self.data_format,
-            parent_id: self.parent_context_id.clone(),
-            ..WriteDescriptor::default()
+            ..Write::default()
         };
 
         match self.data {

@@ -12,16 +12,14 @@ use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::data_stream::cid;
 use crate::messages::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Message, MessageRecord, Messages};
-use crate::{
-     schema, unexpected, utils, Descriptor, Interface, Method, Result, Status,
-};
-use crate::data_stream::cid;
+use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
 
 /// Process query message.
 ///

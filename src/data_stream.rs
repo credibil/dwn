@@ -87,6 +87,9 @@ impl DataStream {
     }
 
     /// Write data stream to the underlying block store.
+    ///
+    /// # Errors
+    /// TODO: Add errors
     pub async fn to_store(
         &mut self, owner: &str, store: &impl BlockStore,
     ) -> Result<(String, usize)> {
@@ -124,9 +127,12 @@ impl DataStream {
     }
 
     /// Read data stream from the underlying block store.
+    ///
+    /// # Errors
+    /// TODO: Add errors
     pub async fn from_store(
         owner: &str, cid: &str, store: &impl BlockStore,
-    ) -> Result<Option<DataStream>> {
+    ) -> Result<Option<Self>> {
         // get root block
         let Some(bytes) = store.get(owner, cid).await? else {
             return Ok(None);
@@ -141,7 +147,7 @@ impl DataStream {
         };
 
         // fetch each data block
-        let mut data_stream = DataStream::new();
+        let mut data_stream = Self::new();
         for link in links {
             let Ipld::Link(link_cid) = link else {
                 return Err(unexpected!("invalid link"));
@@ -159,10 +165,10 @@ impl DataStream {
                 return Ok(None);
             };
 
-            data_stream.write(&bytes)?;
+            data_stream.write_all(&bytes)?;
         }
 
-        return Ok(Some(data_stream));
+        Ok(Some(data_stream))
     }
 }
 

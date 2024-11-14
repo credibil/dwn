@@ -2,7 +2,6 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-
 pub(crate) mod protocol;
 pub mod read;
 pub mod write;
@@ -12,13 +11,13 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use crate::data_stream::DataStream;
 pub use self::read::{Read, ReadBuilder, ReadReply};
 pub(crate) use self::write::{existing_entries, first_and_last};
 pub use self::write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol, WriteReply,
 };
 use crate::auth::Authorization;
+pub use crate::data_stream::DataStream;
 use crate::{utils, DateRange, Descriptor, Pagination, Quota, Result};
 
 /// Records Query payload
