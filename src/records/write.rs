@@ -6,13 +6,12 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::io::Read;
 
-// use std::io::{BufReader, BufWriter, Read, Write as _};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
+use vercre_infosec::jose::{EncryptionAlgorithm, Jws, JwsBuilder, PublicKeyJwk};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
@@ -362,7 +361,8 @@ impl Write {
         let payload = Payload {
             descriptor_cid: cid::from_value(&self.descriptor)?,
         };
-        self.attestation = Some(Jws::new(Type::Jwt, &payload, signer).await?);
+        let signature = JwsBuilder::new().payload(payload).build(signer).await?;
+        self.attestation = Some(signature);
         let attestation_cid = Some(cid::from_value(&self.attestation)?);
 
         let encryption_cid = if let Some(encryption) = &self.encryption {
@@ -384,7 +384,7 @@ impl Write {
             encryption_cid,
         };
 
-        self.authorization.signature = Jws::new(Type::Jwt, &payload, signer).await?;
+        self.authorization.signature = JwsBuilder::new().payload(payload).build(signer).await?;
 
         Ok(())
     }
@@ -406,7 +406,7 @@ impl Write {
             descriptor_cid: cid::from_value(&self.descriptor)?,
             ..JwsPayload::default()
         };
-        let owner_jws = Jws::new(Type::Jwt, &payload, signer).await?;
+        let owner_jws = JwsBuilder::new().payload(payload).build(signer).await?;
         self.authorization.owner_signature = Some(owner_jws);
 
         Ok(())
@@ -437,7 +437,7 @@ impl Write {
             delegated_grant_id: Some(delegated_grant_id),
             ..JwsPayload::default()
         };
-        let owner_jws = Jws::new(Type::Jwt, &payload, signer).await?;
+        let owner_jws = JwsBuilder::new().payload(payload).build(signer).await?;
 
         self.authorization.owner_signature = Some(owner_jws);
         self.authorization.owner_delegated_grant = Some(delegated_grant);
@@ -770,7 +770,7 @@ pub struct EncryptionKeyInput {
     pub algorithm: EncryptionAlgorithm,
 }
 
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Payload {
     descriptor_cid: String,

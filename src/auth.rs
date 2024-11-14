@@ -5,7 +5,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
-use vercre_infosec::jose::Type;
+use vercre_infosec::jose::JwsBuilder;
 use vercre_infosec::{Jws, Signer};
 
 use crate::data_stream::cid;
@@ -238,7 +238,7 @@ impl AuthorizationBuilder {
             delegated_grant_id,
             protocol_role: self.protocol_role,
         };
-        let signature = Jws::new(Type::Jwt, &payload, signer).await?;
+        let signature = JwsBuilder::new().payload(payload).build(signer).await?;
 
         Ok(Authorization {
             signature,
