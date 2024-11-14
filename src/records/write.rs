@@ -936,7 +936,7 @@ impl WriteBuilder {
             }
             WriteData::Reader { reader } => {
                 let mut stream = reader.clone();
-                let (data_cid, data_size) = cid::from_stream(&mut stream)?;
+                let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
 

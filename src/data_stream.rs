@@ -17,18 +17,11 @@ const CHUNK_SIZE: usize = 16;
 
 /// Compuet CID from a data value or stream.
 pub mod cid {
-    use std::io::Read;
 
     use cid::Cid;
-    use libipld::block::Block;
-    use libipld::cbor::DagCborCodec;
-    use libipld::cid::multihash::Code;
-    use libipld::ipld::Ipld;
-    use libipld::store::DefaultParams;
     use multihash_codetable::MultihashDigest;
     use serde::Serialize;
 
-    use super::{DataStream, CHUNK_SIZE};
     use crate::Result;
 
     const RAW: u64 = 0x55;
@@ -43,18 +36,35 @@ pub mod cid {
         let hash = multihash_codetable::Code::Sha2_256.digest(&buf);
         Ok(Cid::new_v1(RAW, hash).to_string())
     }
+}
 
-    // /// Compute a CID for the provided data stream.
-    // ///
-    // /// # Errors
-    // /// TODO: Add errors
-    pub(crate) fn from_stream(reader: &mut DataStream) -> Result<(String, usize)> {
+/// Data stream for serializing/deserializing web node data.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DataStream {
+    /// The data to be read.
+    pub data: Vec<u8>,
+}
+
+impl DataStream {
+    /// Create a new `DataStream`.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl DataStream {
+    /// Compute a CID for the provided data stream.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub(crate) fn compute_cid(&mut self) -> Result<(String, usize)> {
         let mut links = vec![];
         let mut byte_count = 0;
 
         loop {
             let mut buffer = [0u8; CHUNK_SIZE];
-            if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
+            if let Ok(bytes_read) = self.read(&mut buffer[..]) {
                 if bytes_read == 0 {
                     break;
                 }
@@ -75,24 +85,7 @@ pub mod cid {
 
         Ok((cid.to_string(), byte_count))
     }
-}
 
-/// Data stream for serializing/deserializing web node data.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct DataStream {
-    /// The data to be read.
-    pub data: Vec<u8>,
-}
-
-impl DataStream {
-    /// Create a new `DataStream`.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl DataStream {
     /// Write data stream to the underlying block store.
     pub async fn to_store(
         &mut self, owner: &str, store: &impl BlockStore,
@@ -138,7 +131,6 @@ impl DataStream {
         let Some(bytes) = store.get(owner, cid).await? else {
             return Ok(None);
         };
-
         let cid = libipld::Cid::from_str(cid)?;
         let block = Block::<DefaultParams>::new(cid, bytes)?;
         let ipld = block.decode::<DagCborCodec, Ipld>()?;
@@ -148,9 +140,8 @@ impl DataStream {
             return Ok(None);
         };
 
-        // resolve each data block link
+        // fetch each data block
         let mut data_stream = DataStream::new();
-
         for link in links {
             let Ipld::Link(link_cid) = link else {
                 return Err(unexpected!("invalid link"));
