@@ -45,7 +45,9 @@ impl EventLog for ProviderImpl {
     }
 }
 
-pub struct EventSubscriptionImpl;
+pub struct EventSubscriptionImpl {
+    pub id: String,
+}
 
 #[async_trait]
 impl EventSubscription for EventSubscriptionImpl {
@@ -60,9 +62,9 @@ impl EventStream for ProviderImpl {
 
     /// Subscribes to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) + Send,
-    ) -> Result<(String, Self::Subscriber)> {
-        Ok((String::new(), EventSubscriptionImpl {}))
+        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) -> Result<()> + Send,
+    ) -> Result<Self::Subscriber> {
+        Ok(EventSubscriptionImpl { id: String::new() })
     }
 
     /// Emits an event to a owner's event stream.

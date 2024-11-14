@@ -247,6 +247,17 @@ impl TryFrom<MessageRecord> for Write {
     }
 }
 
+impl TryFrom<&MessageRecord> for Write {
+    type Error = crate::Error;
+
+    fn try_from(message: &MessageRecord) -> Result<Self> {
+        match &message.inner {
+            Messages::RecordsWrite(write) => Ok(write.clone()),
+            Messages::ProtocolsConfigure(_) => Err(unexpected!("expected `RecordsWrite` message")),
+        }
+    }
+}
+
 impl Write {
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;

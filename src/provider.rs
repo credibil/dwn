@@ -10,7 +10,7 @@ pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::messages::Event;
 use crate::service::MessageRecord;
-use crate::Cursor;
+use crate::{Cursor, DataStream};
 
 /// Issuer Provider trait.
 pub trait Provider:
@@ -99,7 +99,8 @@ pub trait DataStore: Send + Sync {
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no match was found.
-    async fn get(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<Option<Vec<u8>>>;
+    async fn get(&self, owner: &str, record_id: &str, data_cid: &str)
+        -> Result<Option<DataStream>>;
 
     /// Delete data associated with the specified id.
     async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<()>;
@@ -203,8 +204,8 @@ pub trait EventStream: Send + Sync {
 
     /// Subscribes to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) + Send,
-    ) -> Result<(String, Self::Subscriber)>;
+        &self, owner: &str, message_cid: &str, listener: impl Fn(&str, Event) -> Result<()> + Send,
+    ) -> Result<Self::Subscriber>;
 
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()>;

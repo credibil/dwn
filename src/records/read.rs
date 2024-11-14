@@ -11,7 +11,7 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::provider::{DataStore, MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::service::{Context, Message};
-use crate::{cid, unexpected, Descriptor, Error, Interface, Method, Result, Status};
+use crate::{cid, unexpected, DataStream, Descriptor, Error, Interface, Method, Result, Status};
 
 /// Process `Read` message.
 ///
@@ -32,19 +32,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         interface = Interface::Records,
         filter_sql = read.descriptor.filter.to_sql(),
     );
-
     let (messages, _) = MessageStore::query(provider, &ctx.owner, &sql).await?;
     if messages.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
-
     if messages.len() > 1 {
         return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
     }
 
-    let Some(write) = messages[0].as_write() else {
-        return Err(unexpected!("expected `RecordsWrite` message"));
-    };
+    let mut write = Write::try_from(&messages[0])?;
 
     // if the matched message is a RecordsDelete, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
@@ -72,15 +68,17 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     }
 
     // TODO: review against the original code — it should take a store provider
-    read.authorize(&ctx.owner, write)?;
+    read.authorize(&ctx.owner, &write)?;
 
-    let data = if let Some(encoded) = &write.encoded_data {
-        let mut write = write.clone();
+    let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
-        Some(Base64UrlUnpadded::decode_vec(encoded)?)
+        let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
+        Some(DataStream::from(buffer))
     } else {
         DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
     };
+
+    write.encoded_data = None;
 
     // attach initial write if latest RecordsWrite is not initial write
     let initial_write = if write.is_initial()? {
@@ -183,7 +181,7 @@ pub struct ReadReplyEntry {
 
     /// The data for the record.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Vec<u8>>,
+    pub data: Option<DataStream>,
 }
 
 impl Read {

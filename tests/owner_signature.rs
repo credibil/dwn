@@ -4,6 +4,8 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
+use std::io::Read;
+
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{json, Value};
@@ -76,7 +78,10 @@ async fn flat_space() {
     };
     bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
 
-    let alice_data = reply.entry.data.expect("should have data");
+    let mut reader = reply.entry.data.expect("should have data");
+    let mut alice_data = Vec::new();
+    reader.read_to_end(&mut alice_data).expect("should read to end");
+
     let reply = write::handle(ALICE_DID, bob_msg, &provider, Some(&mut alice_data.as_slice()))
         .await
         .expect("should write");
@@ -88,7 +93,10 @@ async fn flat_space() {
     let reply = read::handle(BOB_DID, alice_read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let alice_data = reply.entry.data.expect("should have data");
+    let mut reader = reply.entry.data.expect("should have data");
+    let mut alice_data = Vec::new();
+    reader.read_to_end(&mut alice_data).expect("should read to end");
+
     let bob_data: Value = serde_json::from_slice(&alice_data).expect("should deserialize");
     assert_snapshot!("bob_data", bob_data);
 }

@@ -4,6 +4,7 @@
 
 pub mod query;
 pub mod read;
+pub mod subscribe;
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +12,8 @@ pub use self::query::{Query, QueryBuilder, QueryReply};
 pub use self::read::{Read, ReadBuilder, ReadReply};
 use crate::auth::Authorization;
 use crate::{DateRange, Descriptor, Interface, Method};
+
+// pub type EventListener = fn(owner: &str, event: Event) -> Result<()>;
 
 /// Message event.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -25,6 +28,19 @@ pub struct Event {
 
     /// The message's CID.
     pub message_cid: String,
+}
+
+/// Subscription to events
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Subscription {
+    id: String,
+}
+
+impl Subscription {
+    /// Closes the subscription to the event stream.
+    pub async fn close() {
+        todo!()
+    }
 }
 
 /// Messages Subscribe payload
@@ -45,7 +61,7 @@ pub struct SubscribeDescriptor {
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Message CID.
+    /// Filters to apply when subscribing to messages.
     pub filters: Vec<Filter>,
 }
 

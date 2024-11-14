@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::str::FromStr;
 
 use anyhow::{anyhow, Result};
@@ -10,6 +10,7 @@ use libipld::cid::multihash::Code;
 use libipld::ipld::Ipld;
 use libipld::store::DefaultParams;
 use vercre_dwn::provider::DataStore;
+use vercre_dwn::DataStream;
 
 use super::ProviderImpl;
 
@@ -63,7 +64,9 @@ impl DataStore for ProviderImpl {
         Ok(data_size)
     }
 
-    async fn get(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<Option<Vec<u8>>> {
+    async fn get(
+        &self, owner: &str, record_id: &str, data_cid: &str,
+    ) -> Result<Option<DataStream>> {
         // get CID for root block
         let data_cid = cid::Cid::from_str(data_cid)?;
         let Some(root_bytes) = self.blockstore.get(&data_cid).await? else {
@@ -85,9 +88,7 @@ impl DataStore for ProviderImpl {
         };
 
         // resolve each data block link
-        let mut buffer = Vec::new();
-        // let reader = BufReader::new(buffer.as_slice());
-        // let mut writer = BufWriter::new(buffer);
+        let mut data_stream = DataStream::new();
 
         for link in links {
             let Ipld::Link(link_cid) = link else {
@@ -107,11 +108,10 @@ impl DataStore for ProviderImpl {
                 return Ok(None);
             };
 
-            // writer.write(&bytes)?;
-            buffer.extend(bytes);
+            data_stream.write(&bytes)?;
         }
 
-        return Ok(Some(buffer));
+        return Ok(Some(data_stream));
     }
 
     async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<()> {

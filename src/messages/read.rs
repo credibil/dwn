@@ -6,17 +6,18 @@
 use std::str::FromStr;
 
 use ::cid::Cid;
-// use base64ct::{Base64UrlUnpadded, Encoding};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::permissions::{self, ScopeType};
-use crate::provider::{MessageStore, Provider, Signer};
+use crate::provider::{DataStore, MessageStore, Provider, Signer};
 use crate::service::{Context, Messages};
 use crate::{
-    cid, schema, unexpected, Descriptor, Error, Interface, Message, Method, Result, Status,
+    cid, schema, unexpected, DataStream, Descriptor, Error, Interface, Message, Method, Result,
+    Status,
 };
 
 /// Handle a read message.
@@ -26,7 +27,6 @@ use crate::{
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<ReadReply> {
     let mut ctx = Context::new(owner);
     Message::validate(&read, &mut ctx, provider).await?;
-
     read.authorize(owner, provider).await?;
 
     let Some(record) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
@@ -34,25 +34,18 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         return Err(Error::NotFound("message not found".to_string()));
     };
 
-    let message = (*record).clone();
+    let mut message = (*record).clone();
 
     // include data with RecordsWrite messages
-    let data = if let Messages::RecordsWrite(ref _write) = message {
+    let data = if let Messages::RecordsWrite(ref mut write) = message {
         //     // return embedded `encoded_data` as entry data stream.
-        //     if let Some(encoded) = &write.encoded_data {
-        //         write.encoded_data = None;
-        //         let bytes = Base64UrlUnpadded::decode_vec(encoded)?;
-        //         entry.data = DataStream.fromBytes(bytes);
-        //     } else {
-        //         let result =
-        //             DataStore::get(&provider, owner, write.record_id, write.descriptor.data_id)?;
-        //         if result.data_stream.is_some() {
-        //             entry.data = result.data_stream;
-        //         }
-        //     }
-
-        // let reader = BufReader::new(Vec::<u8>::new().as_slice());
-        None
+        if let Some(encoded) = write.encoded_data.clone() {
+            write.encoded_data = None;
+            let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
+            Some(DataStream::from(bytes))
+        } else {
+            DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
+        }
     } else {
         None
     };
@@ -148,11 +141,11 @@ pub struct ReadReplyEntry {
 
     /// The data associated with the message.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<String>,
+    pub data: Option<DataStream>,
 }
 
 // #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-// pub struct DataReader(BufReader<Vec<u8>>);
+// pub struct DataStream(BufReader<Vec<u8>>);
 
 /// Read descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

@@ -13,6 +13,8 @@ pub mod service;
 mod store;
 mod utils;
 
+use std::io::{self, Read, Write};
+
 use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
@@ -51,52 +53,31 @@ pub struct Descriptor {
 
 /// web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
-// #[serde(rename_all = "camelCase")]
+#[allow(missing_docs)]
 pub enum Interface {
-    /// Records interface.
     #[default]
     Records,
-
-    /// Protocols interface.
     Protocols,
-
-    /// Messages interface.
     Messages,
 }
 
-// impl Display for Interface {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", format!("{self:?}").to_lowercase())
-//     }
-// }
-
 /// Interface methods.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
+#[allow(missing_docs)]
 pub enum Method {
-    /// Read method.
     #[default]
     Read,
-
-    /// Write method.
     Write,
-
-    /// Query method.
     Query,
-
-    /// Subscribe method.
     Configure,
-
-    /// Subscribe method.
     Subscribe,
-
-    /// Delete method.
     Delete,
 }
 
 /// Interface protocols.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum Protocol {
-    /// IPFS protocol.
     #[default]
     Http,
 }
@@ -105,17 +86,56 @@ pub enum Protocol {
 /// objects.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
+#[allow(missing_docs)]
 pub enum Quota<T> {
-    /// Single object
     One(T),
-
-    /// Set of objects
     Many(Vec<T>),
 }
 
 impl<T: Default> Default for Quota<T> {
     fn default() -> Self {
         Self::One(T::default())
+    }
+}
+
+/// Data stream for serializing/deserializing web node data.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct DataStream {
+    /// The data to be read.
+    pub data: Vec<u8>,
+}
+
+impl DataStream {
+    /// Create a new `DataStream`.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl From<Vec<u8>> for DataStream {
+    fn from(data: Vec<u8>) -> Self {
+        Self { data }
+    }
+}
+
+impl Write for DataStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.data.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Read for DataStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = std::cmp::min(buf.len(), self.data.len());
+        buf[..n].copy_from_slice(&self.data[..n]);
+        self.data = self.data[n..].to_vec();
+        Ok(n)
     }
 }
 

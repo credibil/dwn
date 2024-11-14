@@ -1,4 +1,4 @@
-//! # Messages
+//! # Messages Subscribe
 //!
 //! Decentralized Web Node messaging framework.
 
@@ -6,77 +6,70 @@ use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use super::Filter;
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::messages::{Event, Filter, Subscription};
 use crate::permissions::{self, ScopeType};
-use crate::provider::{EventLog, MessageStore, Provider, Signer};
+use crate::provider::{EventStream, MessageStore, Provider, Signer};
 use crate::service::Context;
-use crate::{cid, schema, Cursor, Descriptor, Error, Interface, Message, Method, Result, Status};
+use crate::{cid, schema, Descriptor, Error, Interface, Message, Method, Result, Status};
 
-/// Handle a query message.
+/// Handle a subscribe message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<QueryReply> {
+pub async fn handle(
+    owner: &str, subscribe: Subscribe, sub_handler: impl Fn(Event) -> Result<()> + Send + Sync,
+    provider: &impl Provider,
+) -> Result<SubscribeReply> {
     let mut ctx = Context::new(owner);
-    Message::validate(&query, &mut ctx, provider).await?;
+    Message::validate(&subscribe, &mut ctx, provider).await?;
+    subscribe.authorize(owner, provider).await?;
 
-    query.authorize(owner, provider).await?;
+    // let mut filter_sql = String::new();
+    // for filter in subscribe.descriptor.filters {
+    //     if filter_sql.is_empty() {
+    //         filter_sql.push_str("WHERE\n");
+    //     } else {
+    //         filter_sql.push_str("OR\n");
+    //     }
+    //     filter_sql.push('(');
+    //     filter_sql.push_str(&filter.to_sql());
+    //     filter_sql.push(')');
+    // }
 
-    let mut filter_sql = String::new();
-    for filter in query.descriptor.filters {
-        if filter_sql.is_empty() {
-            filter_sql.push_str("WHERE\n");
-        } else {
-            filter_sql.push_str("OR\n");
-        }
-        filter_sql.push_str(&format!("({filter})", filter = filter.to_sql()));
-    }
+    let listener = |_event_owner: &str, event: Event| -> anyhow::Result<()> {
+        // if owner == event_owner && FilterUtility.matchAnyFilter(eventIndexes, messagesFilters) {
+        sub_handler(event).map_err(Into::into)
+        // }
+    };
 
-    let sql = format!(
-        "
-        {filter_sql}
-        ORDER BY descriptor.messageTimestamp ASC
-        "
-    );
+    let message_cid = subscribe.cid()?;
+    let _subscription = EventStream::subscribe(provider, owner, &message_cid, listener).await?;
+    // const subscription = await this.eventStream.subscribe(tenant, messageCid, listener);
 
-    // TODO: use pagination cursor
-    let (events, _) = EventLog::query(provider, owner, &sql).await?;
-    let events = events.iter().map(|e| e.message_cid.clone()).collect::<Vec<String>>();
-    let entries = if events.is_empty() { None } else { Some(events) };
-
-    Ok(QueryReply {
+    Ok(SubscribeReply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        entries,
-        cursor: None,
+        subscription: None, // Some(Subscription {
+                            //     id: "123".to_string(),
+                            //     close: || Ok(()),
+                            // }),
     })
 }
 
-/// Messages Query payload
+/// Messages Subscribe payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Query
-// pub struct Query<F>
-// where
-//     F: Fn(usize) -> usize + Send,
-{
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
+pub struct Subscribe {
+    /// The Subscribe descriptor.
+    pub descriptor: SubscribeDescriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
-    //
-    // #[serde(skip)]
-    // pub data: F,
 }
 
-impl Message for Query
-// impl<F> Message for Query<F>
-// where
-//     F: Fn(usize) -> usize + Clone + fmt::Debug + Send + Sync,
-{
+impl Message for Subscribe {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -90,7 +83,7 @@ impl Message for Query
     }
 }
 
-impl Query {
+impl Subscribe {
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
         let author = authzn.author()?;
@@ -107,7 +100,7 @@ impl Query {
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
 
-        // ensure query filters include scoped protocol
+        // ensure subscribe filters include scoped protocol
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
             return Err(Error::Unauthorized("missing protocol scope".to_string()));
         };
@@ -127,50 +120,42 @@ impl Query {
         Ok(())
     }
 }
-/// Messages Query reply
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+
+/// Messages Subscribe reply
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
-pub struct QueryReply {
+pub struct SubscribeReply {
     /// Status message to accompany the reply.
     pub status: Status,
 
-    /// The Query descriptor.
+    /// The Subscribe descriptor.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<String>>,
-    // pub entries: Option<Vec<Event>>,
-    //
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
+    pub subscription: Option<Subscription>,
 }
 
-/// Query descriptor.
+/// Subscribe descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
+pub struct SubscribeDescriptor {
     /// The base descriptor
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Filters to apply when querying messages.
+    /// Filters to apply when subscribing to messages.
     pub filters: Vec<Filter>,
-
-    /// The pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
 }
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub struct QueryBuilder {
+pub struct SubscribeBuilder {
     message_timestamp: Option<DateTime<Utc>>,
     filters: Option<Vec<Filter>>,
     permission_grant_id: Option<String>,
 }
 
 /// Builder for creating a permission grant.
-impl QueryBuilder {
-    /// Returns a new [`QueryBuilder`]
+impl SubscribeBuilder {
+    /// Returns a new [`SubscribeBuilder`]
     #[must_use]
     pub fn new() -> Self {
         // set defaults
@@ -198,15 +183,14 @@ impl QueryBuilder {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
-        let descriptor = QueryDescriptor {
+    pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
+        let descriptor = SubscribeDescriptor {
             base: Descriptor {
                 interface: Interface::Messages,
-                method: Method::Query,
+                method: Method::Subscribe,
                 message_timestamp: self.message_timestamp,
             },
             filters: self.filters.unwrap_or_default(),
-            cursor: None,
         };
 
         // authorization
@@ -216,7 +200,7 @@ impl QueryBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        let query = Query {
+        let query = Subscribe {
             descriptor,
             authorization,
         };

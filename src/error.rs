@@ -11,6 +11,10 @@ pub enum Error {
     #[error(r#"{{"code": 400, "detail": "{0}"}}"#)]
     Unexpected(String),
 
+    /// The web node encountered an unexpected condition in a dependant library.
+    #[error(r#"{{"code": 400, "detail": "{0}"}}"#)]
+    Server(String),
+
     /// A required resource was not found.
     #[error(r#"{{"code": 401, "detail": "{0}"}}"#)]
     Unauthorized(String),
@@ -27,9 +31,9 @@ pub enum Error {
     #[error(r#"{{"code": 409, "detail": "{0}"}}"#)]
     Conflict(String),
 
-    /// The web node encountered an unexpected condition in a dependednt library.
-    #[error(r#"{{"code": 400, "detail": "{0}"}}"#)]
-    Server(String),
+    /// A database write conflict occurred.
+    #[error(r#"{{"code": 501, "detail": "{0}"}}"#)]
+    Unimplemented(String),
 }
 
 impl Serialize for Error {
