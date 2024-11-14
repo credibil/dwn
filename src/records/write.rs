@@ -16,13 +16,14 @@ use vercre_infosec::jose::{EncryptionAlgorithm, Jws, PublicKeyJwk, Type};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
+use crate::data_stream::cid;
 use crate::messages::Event;
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
-use crate::provider::{DataStore, EventLog, EventStream, Keyring, MessageStore, Provider};
-use crate::records::protocol;
+use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
+use crate::records::{protocol, DataStream};
 use crate::service::{Context, Message, MessageRecord, Messages};
 use crate::{
-    cid, permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, Status,
+    permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, Status,
     MAX_ENCODED_SIZE,
 };
 
@@ -30,9 +31,7 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle<R: Read + Send>(
-    owner: &str, write: Write, provider: &impl Provider, data: Option<&mut R>,
-) -> Result<WriteReply> {
+pub async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Result<WriteReply> {
     let mut ctx = Context::new(owner);
     Message::validate(&write, &mut ctx, provider).await?;
     write.authorize(owner, provider).await?;
@@ -66,8 +65,8 @@ pub async fn handle<R: Read + Send>(
         }
     }
 
-    let (write, code) = if let Some(data) = data {
-        process_stream(owner, &write, data, provider).await?;
+    let (write, code) = if let Some(mut data) = write.data_stream.clone() {
+        let write = process_stream(owner, &write, &mut data, provider).await?;
         (write, StatusCode::ACCEPTED)
     } else {
         // if the incoming message is not the initial write, and no `data_stream` is
@@ -184,6 +183,10 @@ pub struct Write {
     /// the recordnis equal or smaller than `MAX_ENCODING_SIZE`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoded_data: Option<String>,
+
+    /// The data stream of the record if the data associated with the record
+    #[serde(skip)]
+    pub data_stream: Option<DataStream>,
 }
 
 impl Message for Write {
@@ -210,29 +213,30 @@ pub struct WriteReply {
 
 impl From<&Write> for MessageRecord {
     fn from(write: &Write) -> Self {
-        let mut message2 = Self {
+        let mut record = Self {
             inner: Messages::RecordsWrite(write.clone()),
             indexes: Map::new(),
         };
-        message2.indexes.insert(
+        record.indexes.insert(
             "author".to_string(),
             Value::String(write.authorization.author().unwrap_or_default()),
         );
-
-        // TODO: add following fields
-        // attester: None,
-        // tags: None,
-        // dateUpdated: None,
-
+        record.indexes.insert(
+            "dateUpdated".to_string(),
+            Value::String(write.descriptor.base.message_timestamp.unwrap_or_default().to_rfc3339()),
+        );
         if let Some(tags) = &write.descriptor.tags {
             let mut tag_map = Map::new();
             for (k, v) in tags {
                 tag_map.insert(format!("tag.{k}"), v.clone());
             }
-            message2.indexes.insert("tags".to_string(), Value::Object(tag_map));
+            record.indexes.insert("tags".to_string(), Value::Object(tag_map));
         }
 
-        message2
+        // TODO: add fields
+        // attester: None,
+
+        record
     }
 }
 
@@ -259,6 +263,11 @@ impl TryFrom<&MessageRecord> for Write {
 }
 
 impl Write {
+    /// Add a data stream to the write message.
+    pub fn with_reader(&mut self, data_stream: DataStream) {
+        self.data_stream = Some(data_stream);
+    }
+
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
         let record_owner = authzn.owner()?;
@@ -330,6 +339,7 @@ impl Write {
                     Some(cid::from_value(&grant)?),
                 )
             } else {
+                // TODO: add helper method to Signer trait
                 (signer.verification_method().split('#').next().map(ToString::to_string), None)
             };
 
@@ -699,6 +709,12 @@ pub enum WriteData {
         data: Vec<u8>,
     },
 
+    /// Data is provided as a `DataStream` implementing `std::io::Read`.
+    Reader {
+        /// A data reader for the record's data.
+        reader: DataStream,
+    },
+
     /// Data CID.
     Cid {
         /// CID of data already stored by the web node. If not set, the `data`
@@ -892,20 +908,12 @@ impl WriteBuilder {
     /// # Errors
     /// TODO: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<Write> {
-        // CID
-        let (data_cid, data_size) = match self.data {
-            WriteData::Cid { data_cid, data_size } => (data_cid, data_size),
-            WriteData::Bytes { data } => {
-                let data_cid = cid::from_value(&data)?;
-                let data_size = data.len();
-                (data_cid, data_size)
-            }
-        };
-
         let now = Utc::now();
         let timestamp = self.message_timestamp.unwrap_or(now);
 
-        let mut descriptor = WriteDescriptor {
+        let mut write = Write::default();
+
+        write.descriptor = WriteDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
                 method: Method::Write,
@@ -913,8 +921,6 @@ impl WriteBuilder {
             },
             recipient: self.recipient,
             tags: self.tags,
-            data_cid,
-            data_size,
             date_created: self.date_created.unwrap_or(now),
             published: self.published,
             data_format: self.data_format,
@@ -922,41 +928,56 @@ impl WriteBuilder {
             ..WriteDescriptor::default()
         };
 
+        match self.data {
+            WriteData::Bytes { data } => {
+                // TODO: store data as encoded_data or in DataStore
+                write.descriptor.data_cid = cid::from_value(&data)?;
+                write.descriptor.data_size = data.len();
+            }
+            WriteData::Reader { reader } => {
+                let mut stream = reader.clone();
+                let (data_cid, data_size) = cid::from_stream(&mut stream)?;
+                write.descriptor.data_cid = data_cid;
+                write.descriptor.data_size = data_size;
+
+                write.data_stream = Some(reader);
+            }
+            WriteData::Cid { data_cid, data_size } => {
+                write.descriptor.data_cid = data_cid;
+                write.descriptor.data_size = data_size;
+            }
+        };
+
         // protocol, protocol_ path
         if let Some(p) = self.protocol {
             let normalized = utils::clean_url(&p.protocol)?;
-            descriptor.protocol = Some(normalized);
-            descriptor.protocol_path = Some(p.protocol_path);
+            write.descriptor.protocol = Some(normalized);
+            write.descriptor.protocol_path = Some(p.protocol_path);
         }
 
         // schema
         if let Some(s) = self.schema {
-            descriptor.schema = Some(utils::clean_url(&s)?);
+            write.descriptor.schema = Some(utils::clean_url(&s)?);
         }
 
         // parent_id - first segment of  `parent_context_id`
         if let Some(id) = self.parent_context_id {
             let parent_id = id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-            descriptor.parent_id = parent_id;
+            write.descriptor.parent_id = parent_id;
         }
 
         // when published true and date_published not set
         if self.published.unwrap_or_default() && self.date_published.is_none() {
-            descriptor.date_published = Some(now);
+            write.descriptor.date_published = Some(now);
         }
 
-        // TODO: encryption
-
-        let mut write = Write {
-            record_id: self.record_id.unwrap_or_default(),
-            authorization: Authorization {
-                author_delegated_grant: self.delegated_grant,
-                ..Authorization::default()
-            },
-            descriptor,
-            ..Write::default()
+        write.record_id = self.record_id.unwrap_or_default();
+        write.authorization = Authorization {
+            author_delegated_grant: self.delegated_grant,
+            ..Authorization::default()
         };
 
+        // TODO: encryption
         if let Some(ecryption_input) = &self.encryption_input {
             write.encrypt(ecryption_input, keyring).await?;
         }
@@ -1064,9 +1085,11 @@ pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>,
     Ok((initial.cloned(), messages.last().cloned()))
 }
 
-async fn process_stream<R: Read + Send>(
-    owner: &str, write: &Write, data: &mut R, store: &impl DataStore,
+async fn process_stream(
+    owner: &str, write: &Write, data: &mut DataStream, store: &impl BlockStore,
 ) -> Result<Write> {
+    let mut write = write.clone();
+
     // when data is below the threshold, store it within MessageStore
     if write.descriptor.data_size <= MAX_ENCODED_SIZE {
         // read data from stream
@@ -1080,62 +1103,35 @@ async fn process_stream<R: Read + Send>(
         if write.descriptor.data_size != data_bytes.len() {
             return Err(unexpected!("actual data size does not match descriptor `data_size`"));
         }
-
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            protocol::verify_schema(write, &data_bytes)?;
+            protocol::verify_schema(&write, &data_bytes)?;
         }
 
-        let mut write = write.clone();
+        write.descriptor.data_cid = data_cid;
+        write.descriptor.data_size = data_bytes.len();
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
-        return Ok(write);
+    } else {
+        let (data_cid, data_size) = data.to_store(owner, store).await?;
+
+        // verify data CID and size
+        if write.descriptor.data_cid != data_cid {
+            return Err(unexpected!("computed data CID does not match descriptor cid"));
+        }
+        if write.descriptor.data_size != data_size {
+            return Err(unexpected!("stored data size does not match descriptor data_size"));
+        }
+
+        write.descriptor.data_cid = data_cid;
+        write.descriptor.data_size = data_size;
     }
 
-    // // split stream to do storage and CID computation in parallel
-    // let mut reader = BufReader::new(data);
-
-    // let write_buffer_1 = Vec::new();
-    // let write_buffer_2 = Vec::new();
-    // let mut stream_1 = BufWriter::new(write_buffer_1);
-    // let mut stream_2 = BufWriter::new(write_buffer_2);
-
-    // loop {
-    //     let mut buffer = [0u8; 10];
-    //     if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
-    //         if bytes_read > 0 {
-    //             let _ = stream_1.write(&buffer[..bytes_read]).unwrap();
-    //             let _ = stream_2.write(&buffer[..bytes_read]).unwrap();
-    //         } else {
-    //             stream_1.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
-    //             stream_2.flush().map_err(|e| unexpected!("issue flushing stream:{e}"))?;
-    //             break;
-    //         }
-    //     }
-    // }
-
-    // HACK: for now, read the entire stream into memory to calculate CID
-    let mut buffer = Vec::new();
-    data.read_to_end(&mut buffer)?;
-    let data_cid = cid::from_value(&buffer)?;
-
-    if write.descriptor.data_cid != data_cid {
-        return Err(unexpected!("computed data CID does not match descriptor cid"));
-    }
-
-    // save to data store
-    let data_size = store.put(owner, &write.record_id, &data_cid, buffer.as_slice()).await?;
-
-    // verify result
-    if write.descriptor.data_size != data_size {
-        return Err(unexpected!("stored data size does not match descriptor data_size"));
-    }
-
-    Ok(write.clone())
+    Ok(write)
 }
 
 // Write message is not an 'initial write' with no data_stream.
 // Check integrity against the most recent existing write.
 async fn process_data(
-    owner: &str, write: &Write, existing: &Write, store: &impl DataStore,
+    owner: &str, write: &Write, existing: &Write, store: &impl BlockStore,
 ) -> Result<Write> {
     // Perform `data_cid` check in case a user attempts to gain access to data
     // by referencing a different known `data_cid`. This  ensures the data is
@@ -1159,7 +1155,7 @@ async fn process_data(
     };
 
     // otherwise, make sure the data is in the data store
-    let result = store.get(owner, &existing.record_id, &write.descriptor.data_cid).await?;
+    let result = store.get(owner, &write.descriptor.data_cid).await?;
     if result.is_none() {
         return Err(unexpected!(
             "`data_stream` not set and unable to get data from previous message"

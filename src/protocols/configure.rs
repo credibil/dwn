@@ -18,7 +18,10 @@ use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
 use crate::service::{Context, Message, MessageRecord, Messages};
-use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
+use crate::{
+     schema, unexpected, utils, Descriptor, Interface, Method, Result, Status,
+};
+use crate::data_stream::cid;
 
 /// Process query message.
 ///

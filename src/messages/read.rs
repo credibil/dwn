@@ -12,13 +12,12 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::data_stream::cid;
 use crate::permissions::{self, ScopeType};
-use crate::provider::{DataStore, MessageStore, Provider, Signer};
+use crate::provider::{MessageStore, Provider, Signer};
+use crate::records::DataStream;
 use crate::service::{Context, Messages};
-use crate::{
-    cid, schema, unexpected, DataStream, Descriptor, Error, Interface, Message, Method, Result,
-    Status,
-};
+use crate::{schema, unexpected, Descriptor, Error, Interface, Message, Method, Result, Status};
 
 /// Handle a read message.
 ///
@@ -44,7 +43,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
             Some(DataStream::from(bytes))
         } else {
-            DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
+            DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
         }
     } else {
         None
@@ -143,9 +142,6 @@ pub struct ReadReplyEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<DataStream>,
 }
-
-// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-// pub struct DataStream(BufReader<Vec<u8>>);
 
 /// Read descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

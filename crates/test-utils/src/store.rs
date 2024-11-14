@@ -5,7 +5,7 @@
 //!
 //! Implementation of the `Provider` trait for testing and examples.
 
-pub mod data;
+pub mod block;
 pub mod event;
 pub mod message;
 pub mod task;

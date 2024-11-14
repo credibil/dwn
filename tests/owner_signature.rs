@@ -10,6 +10,7 @@ use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{json, Value};
 use test_utils::store::ProviderImpl;
+use vercre_dwn::data_stream::DataStream;
 use vercre_dwn::handlers::{read, write};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
@@ -33,17 +34,15 @@ async fn flat_space() {
     .expect("should serialize");
 
     let bob_msg = WriteBuilder::new()
-        .data(WriteData::Bytes {
-            data: bob_data.clone(),
+        .data(WriteData::Reader {
+            reader: DataStream::from(bob_data),
         })
         .published(true)
         .build(&bob_keyring)
         .await
         .expect("should create write");
 
-    let reply = write::handle(BOB_DID, bob_msg.clone(), &provider, Some(&mut bob_data.as_slice()))
-        .await
-        .expect("should write");
+    let reply = write::handle(BOB_DID, bob_msg.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -73,18 +72,15 @@ async fn flat_space() {
     // --------------------------------------------------
     // Alice augments Bob's message and saves to her web node
     // --------------------------------------------------
+    let alice_data = reply.entry.data.expect("should have data");
+
     let Some(mut bob_msg) = reply.entry.records_write else {
         panic!("should have records write entry");
     };
     bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
+    bob_msg.with_reader(alice_data);
 
-    let mut reader = reply.entry.data.expect("should have data");
-    let mut alice_data = Vec::new();
-    reader.read_to_end(&mut alice_data).expect("should read to end");
-
-    let reply = write::handle(ALICE_DID, bob_msg, &provider, Some(&mut alice_data.as_slice()))
-        .await
-        .expect("should write");
+    let reply = write::handle(ALICE_DID, bob_msg, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------

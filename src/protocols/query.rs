@@ -6,13 +6,13 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::data_stream::cid;
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::service::{Context, Message};
-use crate::{
-    cid, schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Result, Status,
-};
+use crate::{schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Result, Status};
+
 /// Process query message.
 ///
 /// # Errors

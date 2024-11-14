@@ -4978,6 +4978,7 @@ dependencies = [
  "http 1.1.0",
  "insta",
  "jsonschema",
+ "libipld",
  "multihash-codetable",
  "rand",
  "serde",

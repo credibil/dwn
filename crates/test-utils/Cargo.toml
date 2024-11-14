@@ -15,7 +15,7 @@ blockstore = "0.7.0"
 cid = { workspace = true, features = ["alloc"] }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 insta.workspace = true
-libipld = "0.16.0"
+libipld.workspace=true
 multibase = "0.9"
 serde.workspace = true
 serde_json.workspace = true

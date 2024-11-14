@@ -1,7 +1,5 @@
 //! # Provider
 
-use std::io::Read;
-
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
@@ -10,11 +8,11 @@ pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::messages::Event;
 use crate::service::MessageRecord;
-use crate::{Cursor, DataStream};
+use crate::Cursor;
 
 /// Issuer Provider trait.
 pub trait Provider:
-    MessageStore + DataStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver + Clone
+    MessageStore + BlockStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver + Clone
 {
 }
 
@@ -88,24 +86,21 @@ pub trait MessageStore: Send + Sync {
     async fn purge(&self) -> Result<()>;
 }
 
-/// The `DataStore` trait is used by implementers to provide data storage
+/// The `BlockStore` trait is used by implementers to provide data storage
 /// capability.
 #[async_trait]
-pub trait DataStore: Send + Sync {
-    /// Store data in the underlying store.
-    async fn put(
-        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read + Send,
-    ) -> Result<usize>;
+pub trait BlockStore: Send + Sync {
+    /// Store a data block in the underlying block store.
+    async fn put(&self, owner: &str, cid: &str, block: &[u8]) -> Result<()>;
 
-    /// Fetches a single message by CID from the underlying store, returning
+    /// Fetches a single block by CID from the underlying store, returning
     /// `None` if no match was found.
-    async fn get(&self, owner: &str, record_id: &str, data_cid: &str)
-        -> Result<Option<DataStream>>;
+    async fn get(&self, owner: &str, cid: &str) -> Result<Option<Vec<u8>>>;
 
-    /// Delete data associated with the specified id.
-    async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<()>;
+    /// Delete the data block associated with the specified CID.
+    async fn delete(&self, owner: &str, cid: &str) -> Result<()>;
 
-    /// Purge all data from the store.
+    /// Purge all blocks from the store.
     async fn purge(&self) -> Result<()>;
 }
 

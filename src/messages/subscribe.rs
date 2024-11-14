@@ -7,11 +7,12 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::data_stream::cid;
 use crate::messages::{Event, Filter, Subscription};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventStream, MessageStore, Provider, Signer};
 use crate::service::Context;
-use crate::{cid, schema, Descriptor, Error, Interface, Message, Method, Result, Status};
+use crate::{schema, Descriptor, Error, Interface, Message, Method, Result, Status};
 
 /// Handle a subscribe message.
 ///

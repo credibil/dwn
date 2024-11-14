@@ -7,6 +7,7 @@ use http::StatusCode;
 // use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
+use vercre_dwn::data_stream::DataStream;
 use vercre_dwn::handlers::{configure, write};
 use vercre_dwn::messages::{query, read, QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
@@ -54,11 +55,16 @@ async fn all_messages() {
         protocol_path: "post".to_string(),
     };
 
+    let reader = DataStream::from(data);
+
     for _i in 1..=5 {
         let message = WriteBuilder::new()
             .protocol(protocol.clone())
             .schema(&schema)
-            .data(WriteData::Bytes { data: data.clone() })
+            // .data(WriteData::Bytes { data: data.clone() })
+            .data(WriteData::Reader {
+                reader: reader.clone(),
+            })
             .published(true)
             .build(&alice_keyring)
             .await
@@ -66,9 +72,7 @@ async fn all_messages() {
 
         expected_cids.push(message.cid().unwrap());
 
-        let reply = write::handle(ALICE_DID, message, &provider, Some(&mut data.as_slice()))
-            .await
-            .expect("should write");
+        let reply = write::handle(ALICE_DID, message, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
 
@@ -95,7 +99,8 @@ async fn all_messages() {
     let message = WriteBuilder::new()
         .protocol(protocol.clone())
         .schema(&schema)
-        .data(WriteData::Bytes { data: data.clone() })
+        // .data(WriteData::Bytes { data: data.clone() })
+        .data(WriteData::Reader { reader })
         .published(true)
         .build(&alice_keyring)
         .await
@@ -103,9 +108,7 @@ async fn all_messages() {
 
     expected_cids.push(message.cid().unwrap());
 
-    let reply = write::handle(ALICE_DID, message, &provider, Some(&mut data.as_slice()))
-        .await
-        .expect("should write");
+    let reply = write::handle(ALICE_DID, message, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------

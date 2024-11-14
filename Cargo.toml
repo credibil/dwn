@@ -30,6 +30,7 @@ derive_more = { workspace = true, features = ["display"] }
 http.workspace = true
 insta.workspace = true
 jsonschema = { version = "0.26.1", default-features = false, features = ["resolve-file"] }
+libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -82,6 +83,7 @@ cid = "0.11.1"
 derive_more = "1.0.0"
 http = "1.1.0"
 insta = { version = "1.41.1", features = ["redactions", "yaml"] }
+libipld = "0.16.0"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 rand = "0.8.5"
 serde = { version = "1.0.215", features = ["derive"] }

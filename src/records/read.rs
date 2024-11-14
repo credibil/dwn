@@ -8,10 +8,11 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::provider::{DataStore, MessageStore, Provider, Signer};
-use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
+use crate::data_stream::cid;
+use crate::provider::{MessageStore, Provider, Signer};
+use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::service::{Context, Message};
-use crate::{cid, unexpected, DataStream, Descriptor, Error, Interface, Method, Result, Status};
+use crate::{unexpected, Descriptor, Error, Interface, Method, Result, Status};
 
 /// Process `Read` message.
 ///
@@ -75,7 +76,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
         Some(DataStream::from(buffer))
     } else {
-        DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
+        DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
     };
 
     write.encoded_data = None;

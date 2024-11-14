@@ -89,6 +89,18 @@ impl From<std::io::Error> for Error {
     }
 }
 
+// impl From<cid::Error> for Error {
+//     fn from(error: cid::Error) -> Self {
+//         Self::Server(error.to_string())
+//     }
+// }
+
+impl From<libipld::cid::Error> for Error {
+    fn from(error: libipld::cid::Error) -> Self {
+        Self::Server(error.to_string())
+    }
+}
+
 /// Construct an `Error::Unexpected` error from a string or existing error
 /// value.
 ///

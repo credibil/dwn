@@ -8,8 +8,9 @@ pub use vercre_did::{dereference, Resource};
 use vercre_infosec::jose::Type;
 use vercre_infosec::{Jws, Signer};
 
+use crate::data_stream::cid;
 use crate::records::DelegatedGrant;
-use crate::{cid, unexpected, Result};
+use crate::{unexpected, Result};
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///

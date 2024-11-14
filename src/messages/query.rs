@@ -8,10 +8,11 @@ use serde::{Deserialize, Serialize};
 
 use super::Filter;
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::data_stream::cid;
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::service::Context;
-use crate::{cid, schema, Cursor, Descriptor, Error, Interface, Message, Method, Result, Status};
+use crate::{schema, Cursor, Descriptor, Error, Interface, Message, Method, Result, Status};
 
 /// Handle a query message.
 ///
@@ -57,26 +58,15 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
 
 /// Messages Query payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Query
-// pub struct Query<F>
-// where
-//     F: Fn(usize) -> usize + Send,
-{
+pub struct Query {
     /// The Query descriptor.
     pub descriptor: QueryDescriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
-    //
-    // #[serde(skip)]
-    // pub data: F,
 }
 
-impl Message for Query
-// impl<F> Message for Query<F>
-// where
-//     F: Fn(usize) -> usize + Clone + fmt::Debug + Send + Sync,
-{
+impl Message for Query {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }

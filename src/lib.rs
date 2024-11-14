@@ -1,7 +1,7 @@
 //! # Decentralized Web Node (web node)
 
 pub mod auth;
-pub mod cid;
+pub mod data_stream;
 mod error;
 pub mod messages;
 pub mod permissions;
@@ -12,8 +12,6 @@ mod schema;
 pub mod service;
 mod store;
 mod utils;
-
-use std::io::{self, Read, Write};
 
 use chrono::{DateTime, Utc};
 use derive_more::Display;
@@ -95,47 +93,6 @@ pub enum Quota<T> {
 impl<T: Default> Default for Quota<T> {
     fn default() -> Self {
         Self::One(T::default())
-    }
-}
-
-/// Data stream for serializing/deserializing web node data.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct DataStream {
-    /// The data to be read.
-    pub data: Vec<u8>,
-}
-
-impl DataStream {
-    /// Create a new `DataStream`.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl From<Vec<u8>> for DataStream {
-    fn from(data: Vec<u8>) -> Self {
-        Self { data }
-    }
-}
-
-impl Write for DataStream {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.data.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl Read for DataStream {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = std::cmp::min(buf.len(), self.data.len());
-        buf[..n].copy_from_slice(&self.data[..n]);
-        self.data = self.data[n..].to_vec();
-        Ok(n)
     }
 }
 
