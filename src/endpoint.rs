@@ -21,7 +21,7 @@ use crate::{messages, protocols, records, schema, unexpected, Descriptor, Error,
 pub async fn handle(owner: &str, message: impl Message, provider: &impl Provider) -> Result<Reply> {
     let mut ctx = Context::new(owner);
     message.validate(&mut ctx, provider).await?;
-    message.handle(&mut ctx, provider).await
+    message.handle(&ctx, provider).await
 }
 
 /// Methods common to all messages.

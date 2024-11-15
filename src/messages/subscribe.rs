@@ -7,14 +7,14 @@ use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use super::EventListener;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, ReplyType, Status};
-use crate::messages::{EventHandler, Filter};
+use crate::event::{Listener, Subscriber};
+use crate::messages::Filter;
 use crate::permissions::{self, ScopeType};
-use crate::provider::{EventStream, EventSubscription, MessageStore, Provider, Signer};
-use crate::{schema, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::provider::{EventStream, MessageStore, Provider, Signer};
+use crate::{schema, Descriptor, Error, Interface, Method, Result};
 
 /// Handle a subscribe message.
 ///
@@ -27,12 +27,12 @@ pub(crate) async fn handle(
 
     let message_cid = subscribe.cid()?;
 
-    let listener = EventListener {
+    let listener = Listener {
         owner: owner.to_string(),
         filters: subscribe.descriptor.filters,
-        handler: subscribe.callback,
+        ..Default::default()
     };
-    let _subscription = EventStream::subscribe(provider, owner, &message_cid, &listener).await?;
+    let subscriber = EventStream::subscribe(provider, owner, &message_cid, &listener).await?;
 
     Ok(Reply {
         status: Status {
@@ -40,7 +40,7 @@ pub(crate) async fn handle(
             detail: None,
         },
         reply: Some(ReplyType::MessagesSubscribe(SubscribeReply {
-            // subscription: Some(subscription),
+            subscription: subscriber,
         })),
     })
 }
@@ -53,9 +53,6 @@ pub struct Subscribe {
 
     /// The message authorization.
     pub authorization: Authorization,
-
-    /// The subscription callback.
-    pub callback: EventHandler,
 }
 
 #[async_trait]
@@ -119,9 +116,8 @@ impl Subscribe {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct SubscribeReply {
-    // /// The subscription.
-    // #[serde(skip)]
-    // pub subscription: Option<Box<dyn EventSubscription>>,
+    /// The subscription to the requested events.
+    pub subscription: Subscriber,
 }
 
 /// Subscribe descriptor.
@@ -142,7 +138,7 @@ pub struct SubscribeBuilder {
     message_timestamp: Option<DateTime<Utc>>,
     filters: Option<Vec<Filter>>,
     permission_grant_id: Option<String>,
-    callback: Option<EventHandler>,
+    // callback: Option<EventHandler>,
 }
 
 /// Builder for creating a permission grant.
@@ -171,12 +167,12 @@ impl SubscribeBuilder {
         self
     }
 
-    /// Specify a permission grant ID to use with the configuration.
-    #[must_use]
-    pub fn callback(mut self, callback: EventHandler) -> Self {
-        self.callback = Some(callback);
-        self
-    }
+    // /// Specify a permission grant ID to use with the configuration.
+    // #[must_use]
+    // pub fn callback(mut self, callback: EventHandler) -> Self {
+    //     self.callback = Some(callback);
+    //     self
+    // }
 
     /// Generate the permission grant.
     ///
@@ -199,14 +195,14 @@ impl SubscribeBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        let Some(callback) = self.callback else {
-            return Err(unexpected!("missing callback"));
-        };
+        // let Some(callback) = self.callback else {
+        //     return Err(unexpected!("missing callback"));
+        // };
 
         let query = Subscribe {
             descriptor,
             authorization,
-            callback,
+            // callback,
         };
 
         schema::validate(&query)?;

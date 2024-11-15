@@ -7,7 +7,7 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::endpoint::MessageRecord;
-use crate::messages::{Event, EventListener};
+use crate::event::{Event, Listener, Subscriber};
 use crate::Cursor;
 
 /// Issuer Provider trait.
@@ -194,13 +194,10 @@ pub trait EventLog: Send + Sync {
 /// and `Server` metadata to the library.
 #[async_trait]
 pub trait EventStream: Send + Sync {
-    /// Specifies the type of the event stream subscriber.
-    // type Subscriber: EventSubscription;
-
     /// Subscribes to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, message_cid: &str, listener: &EventListener,
-    ) -> Result<()>;
+        &self, owner: &str, message_cid: &str, listener: &Listener,
+    ) -> Result<Subscriber>;
 
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
@@ -210,5 +207,5 @@ pub trait EventStream: Send + Sync {
 #[async_trait]
 pub trait EventSubscription: Send + Sync {
     /// Close the subscription to the event stream.
-    async fn close(self: &Self) -> Result<()>;
+    async fn close(&self) -> Result<()>;
 }

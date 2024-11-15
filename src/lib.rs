@@ -1,9 +1,12 @@
+#![feature(async_iterator)]
+
 //! # Decentralized Web Node (web node)
 
 pub mod auth;
 pub mod data;
 pub mod endpoint;
 mod error;
+pub mod event;
 pub mod messages;
 pub mod permissions;
 pub mod protocols;
