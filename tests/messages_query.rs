@@ -8,7 +8,7 @@ use http::StatusCode;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
-use vercre_dwn::messages::{query, read, QueryBuilder, ReadBuilder};
+use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
@@ -79,7 +79,7 @@ async fn all_messages() {
     // all 5 records as well as the protocol configuration message.
     // --------------------------------------------------
     let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
-    let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.messages_query().expect("should be records read");
@@ -116,7 +116,7 @@ async fn all_messages() {
     // --------------------------------------------------
     // TODO: implement cursor
     let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
-    let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.messages_query().expect("should be records read");
@@ -133,7 +133,7 @@ async fn all_messages() {
         .build(&alice_keyring)
         .await
         .expect("should create read");
-    let reply = read::handle(ALICE_DID, read, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     // assert_snapshot!("read", reply, {
