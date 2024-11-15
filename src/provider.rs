@@ -7,7 +7,7 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::endpoint::MessageRecord;
-use crate::messages::Event;
+use crate::messages::{Event, EventListener};
 use crate::Cursor;
 
 /// Issuer Provider trait.
@@ -195,12 +195,12 @@ pub trait EventLog: Send + Sync {
 #[async_trait]
 pub trait EventStream: Send + Sync {
     /// Specifies the type of the event stream subscriber.
-    type Subscriber: EventSubscription;
+    // type Subscriber: EventSubscription;
 
     /// Subscribes to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, message_cid: &str, listener: impl Fn(&str, Event) -> Result<()> + Send,
-    ) -> Result<Self::Subscriber>;
+        &self, owner: &str, message_cid: &str, listener: &EventListener,
+    ) -> Result<()>;
 
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
@@ -210,14 +210,5 @@ pub trait EventStream: Send + Sync {
 #[async_trait]
 pub trait EventSubscription: Send + Sync {
     /// Close the subscription to the event stream.
-    async fn close(&self) -> Result<()>;
+    async fn close(self: &Self) -> Result<()>;
 }
-
-// pub struct Event {
-//     /// The message being emitted.
-//     pub message: Box<dyn Message>,
-
-//     /// The initial write of the `RecordsWrite` or `RecordsDelete` message.
-//     // #[serde(skip_serializing_if = "Option::is_none")]
-//     pub initial_entry: Box<dyn Message>,
-// }

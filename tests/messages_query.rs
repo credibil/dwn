@@ -83,9 +83,7 @@ async fn all_messages() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.messages_query().expect("should be records read");
-    let Some(entries) = query_reply.entries else {
-        panic!("should have entries");
-    };
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 6);
 
     for entry in entries {
@@ -120,9 +118,7 @@ async fn all_messages() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.messages_query().expect("should be records read");
-    let Some(entries) = query_reply.entries else {
-        panic!("should have entries");
-    };
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 7);
 
     // --------------------------------------------------

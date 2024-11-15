@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub use self::query::{Query, QueryBuilder, QueryReply};
 pub use self::read::{Read, ReadBuilder, ReadReply};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
-use crate::{DateRange, Descriptor, Interface, Method};
+use crate::{DateRange, Descriptor, Interface, Method, Result};
 
 // pub type EventListener = fn(owner: &str, event: Event) -> Result<()>;
 
@@ -28,13 +28,42 @@ pub struct Event {
     pub message_cid: String,
 }
 
-/// Subscription to events
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Subscription {
+/// Event listener.
+pub struct EventListener {
+    /// The web node owner.
+    pub owner: String,
+
+    /// Message filters for the subscription.
+    pub filters: Vec<Filter>,
+
+    /// The event handler.
+    pub handler: EventHandler,
+}
+
+impl EventListener {
+    /// Event callback.
+    pub fn on_event(&self, event: Event) -> Result<()> {
+        // if owner == event_owner && FilterUtility.matchAnyFilter(eventIndexes, messagesFilters) {
+        println!("event received: {:?}", event);
+        self.handler.on_event(&event);
+        // }
+
+        Ok(())
+    }
+}
+
+/// Used by the client to handle events subscribed to.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct EventHandler {
     id: String,
 }
 
-impl Subscription {
+impl EventHandler {
+    /// Called by the event handler when a new event is received.
+    pub fn on_event(&self, event: &Event) {
+        println!("event received: {:?}", event);
+    }
+
     /// Closes the subscription to the event stream.
     pub async fn close() {
         todo!()

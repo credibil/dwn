@@ -76,9 +76,7 @@ async fn flat_space() {
     let read_reply = reply.records_read().expect("should be records read");
     let alice_data = read_reply.entry.data.expect("should have data");
 
-    let Some(mut bob_msg) = read_reply.entry.records_write else {
-        panic!("should have records write entry");
-    };
+    let mut bob_msg = read_reply.entry.records_write.expect("should have records write entry");
     bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
     bob_msg.with_stream(alice_data);
 

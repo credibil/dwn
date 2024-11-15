@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
-use vercre_dwn::messages::Event;
+use vercre_dwn::messages::{Event, EventListener};
 use vercre_dwn::provider::{EventLog, EventStream, EventSubscription};
 use vercre_dwn::Cursor;
 
@@ -58,13 +58,11 @@ impl EventSubscription for EventSubscriptionImpl {
 
 #[async_trait]
 impl EventStream for ProviderImpl {
-    type Subscriber = EventSubscriptionImpl;
-
     /// Subscribes to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, Event) -> Result<()> + Send,
-    ) -> Result<Self::Subscriber> {
-        Ok(EventSubscriptionImpl { id: String::new() })
+        &self, owner: &str, message_cid: &str, listener: &EventListener,
+    ) -> Result<()> {
+        Ok(()) //Ok(EventSubscriptionImpl { id: String::new() }))
     }
 
     /// Emits an event to a owner's event stream.

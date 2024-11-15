@@ -42,7 +42,7 @@ pub mod cid {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DataStream {
     /// The data to be read.
-    pub data: Vec<u8>,
+    pub buffer: Vec<u8>,
 }
 
 impl DataStream {
@@ -174,22 +174,22 @@ impl DataStream {
 
 impl From<Vec<u8>> for DataStream {
     fn from(data: Vec<u8>) -> Self {
-        Self { data }
+        Self { buffer: data }
     }
 }
 
 impl Read for DataStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = std::cmp::min(buf.len(), self.data.len());
-        buf[..n].copy_from_slice(&self.data[..n]);
-        self.data = self.data[n..].to_vec();
+        let n = std::cmp::min(buf.len(), self.buffer.len());
+        buf[..n].copy_from_slice(&self.buffer[..n]);
+        self.buffer = self.buffer[n..].to_vec();
         Ok(n)
     }
 }
 
 impl Write for DataStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.data.extend_from_slice(buf);
+        self.buffer.extend_from_slice(buf);
         Ok(buf.len())
     }
 
