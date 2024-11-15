@@ -28,6 +28,7 @@ const NAMESPACE: &str = "integration-test";
 pub struct ProviderImpl {
     db: Surreal<Db>,
     blockstore: InMemoryBlockstore<64>,
+    nats_client: async_nats::Client,
 }
 
 impl Provider for ProviderImpl {}
@@ -41,7 +42,14 @@ impl ProviderImpl {
         // blockstore
         let blockstore = InMemoryBlockstore::<64>::new();
 
-        let provider = Self { db, blockstore };
+        // NATS client
+        let nats_client = async_nats::connect("demo.nats.io").await?;
+
+        let provider = Self {
+            db,
+            blockstore,
+            nats_client,
+        };
 
         // load a protocol configuration
         let bytes = include_bytes!("./store/protocol.json");

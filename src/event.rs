@@ -28,9 +28,6 @@ pub struct Event {
 /// Event listener.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Listener {
-    /// The web node owner.
-    pub owner: String,
-
     /// Message filters for the subscription.
     pub filters: Vec<Filter>,
 
@@ -82,3 +79,11 @@ impl AsyncIterator for Subscriber {
         // Poll::Ready(None)
     }
 }
+
+// impl Stream for Subscriber {
+//     type Item = Message;
+
+//     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+//         self.receiver.poll_recv(cx)
+//     }
+// }

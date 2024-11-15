@@ -8,14 +8,16 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+futures = "0.3.31"
 anyhow.workspace = true
+async-nats = "0.36.0"
 async-trait = "0.1.83"
 base64ct.workspace = true
 blockstore = "0.7.0"
 cid = { workspace = true, features = ["alloc"] }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 insta.workspace = true
-libipld.workspace=true
+libipld.workspace = true
 multibase = "0.9"
 serde.workspace = true
 serde_json.workspace = true

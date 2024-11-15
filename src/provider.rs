@@ -194,18 +194,20 @@ pub trait EventLog: Send + Sync {
 /// and `Server` metadata to the library.
 #[async_trait]
 pub trait EventStream: Send + Sync {
+    type Subscriber: EventSubscriber;
+    
     /// Subscribes to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, message_cid: &str, listener: &Listener,
+        &self, owner: &str, message_cid: &str, listener: &mut Listener,
     ) -> Result<Subscriber>;
 
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
 }
 
-/// `EventSubscription` is a subscription to an event stream.
+/// `EventSubscriber` is a subscriber to an event stream.
 #[async_trait]
-pub trait EventSubscription: Send + Sync {
+pub trait EventSubscriber: Send + Sync {
     /// Close the subscription to the event stream.
     async fn close(&self) -> Result<()>;
 }

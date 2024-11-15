@@ -27,12 +27,11 @@ pub(crate) async fn handle(
 
     let message_cid = subscribe.cid()?;
 
-    let listener = Listener {
-        owner: owner.to_string(),
+    let mut listener = Listener {
         filters: subscribe.descriptor.filters,
         ..Default::default()
     };
-    let subscriber = EventStream::subscribe(provider, owner, &message_cid, &listener).await?;
+    let subscriber = EventStream::subscribe(provider, owner, &message_cid, &mut listener).await?;
 
     Ok(Reply {
         status: Status {
