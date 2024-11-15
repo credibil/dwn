@@ -3,7 +3,7 @@ use jsonschema::{Retrieve, Uri};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::service::Message;
+use crate::endpoint::Message;
 use crate::{unexpected, Result};
 
 /// Validates the given payload using JSON schema keyed by the given schema name.

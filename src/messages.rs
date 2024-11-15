@@ -1,6 +1,4 @@
 //! # Messages
-//!
-//! Decentralized Web Node messaging framework.
 
 pub mod query;
 pub mod read;
@@ -10,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 pub use self::query::{Query, QueryBuilder, QueryReply};
 pub use self::read::{Read, ReadBuilder, ReadReply};
-use crate::auth::Authorization;
+pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 use crate::{DateRange, Descriptor, Interface, Method};
 
 // pub type EventListener = fn(owner: &str, event: Event) -> Result<()>;
@@ -43,29 +41,7 @@ impl Subscription {
     }
 }
 
-/// Messages Subscribe payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Subscribe {
-    /// The Subscribe descriptor.
-    pub descriptor: SubscribeDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
-/// Suscribe descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubscribeDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filters to apply when subscribing to messages.
-    pub filters: Vec<Filter>,
-}
-
-/// Messages filter.
+/// `Messages` filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Filter {
@@ -111,7 +87,7 @@ impl Filter {
     }
 }
 
-// /// Messages sort.
+// /// MessageType sort.
 // #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 // #[serde(rename_all = "camelCase")]
 // pub struct Sort {

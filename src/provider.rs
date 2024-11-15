@@ -6,8 +6,8 @@ use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
+use crate::endpoint::MessageRecord;
 use crate::messages::Event;
-use crate::service::MessageRecord;
 use crate::Cursor;
 
 /// Issuer Provider trait.
@@ -70,7 +70,7 @@ pub trait Keyring: Signer + Cipher + Send + Sync {}
 #[async_trait]
 pub trait MessageStore: Send + Sync {
     /// Store a message in the underlying store.
-    async fn put(&self, owner: &str, message: &MessageRecord) -> Result<()>;
+    async fn put(&self, owner: &str, record: &MessageRecord) -> Result<()>;
 
     /// Queries the underlying store for matches to the provided SQL WHERE clause.
     async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<MessageRecord>, Cursor)>;

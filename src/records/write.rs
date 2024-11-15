@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::io::Read;
 
+use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
@@ -15,24 +16,21 @@ use vercre_infosec::jose::{EncryptionAlgorithm, Jws, JwsBuilder, PublicKeyJwk};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
-use crate::data_stream::cid;
+use crate::data::cid;
+use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
 use crate::messages::Event;
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::{protocol, DataStream};
-use crate::service::{Context, Message, MessageRecord, Messages};
 use crate::{
-    permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, Status,
-    MAX_ENCODED_SIZE,
+    permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, MAX_ENCODED_SIZE,
 };
 
 /// Handle `RecordsWrite` messages.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Result<WriteReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&write, &mut ctx, provider).await?;
+pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Result<Reply> {
     write.authorize(owner, provider).await?;
 
     // verify integrity of messages with protocol
@@ -145,11 +143,12 @@ pub async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Resu
     //
     // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
 
-    Ok(WriteReply {
+    Ok(Reply {
         status: Status {
             code: code.as_u16(),
             detail: Some("OK".to_string()),
         },
+        reply: None,
     })
 }
 
@@ -188,6 +187,7 @@ pub struct Write {
     pub data_stream: Option<DataStream>,
 }
 
+#[async_trait]
 impl Message for Write {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -201,19 +201,16 @@ impl Message for Write {
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.authorization)
     }
-}
 
-/// Write reply.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct WriteReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+        handle(&ctx.owner, self, provider).await
+    }
 }
 
 impl From<&Write> for MessageRecord {
     fn from(write: &Write) -> Self {
         let mut record = Self {
-            inner: Messages::RecordsWrite(write.clone()),
+            message: MessageType::RecordsWrite(write.clone()),
             indexes: Map::new(),
         };
         record.indexes.insert(
@@ -242,10 +239,12 @@ impl From<&Write> for MessageRecord {
 impl TryFrom<MessageRecord> for Write {
     type Error = crate::Error;
 
-    fn try_from(message: MessageRecord) -> Result<Self> {
-        match message.inner {
-            Messages::RecordsWrite(write) => Ok(write),
-            Messages::ProtocolsConfigure(_) => Err(unexpected!("expected `RecordsWrite` message")),
+    fn try_from(record: MessageRecord) -> Result<Self> {
+        match record.message {
+            MessageType::RecordsWrite(write) => Ok(write),
+            MessageType::ProtocolsConfigure(_) => {
+                Err(unexpected!("expected `RecordsWrite` message"))
+            }
         }
     }
 }
@@ -253,17 +252,19 @@ impl TryFrom<MessageRecord> for Write {
 impl TryFrom<&MessageRecord> for Write {
     type Error = crate::Error;
 
-    fn try_from(message: &MessageRecord) -> Result<Self> {
-        match &message.inner {
-            Messages::RecordsWrite(write) => Ok(write.clone()),
-            Messages::ProtocolsConfigure(_) => Err(unexpected!("expected `RecordsWrite` message")),
+    fn try_from(record: &MessageRecord) -> Result<Self> {
+        match &record.message {
+            MessageType::RecordsWrite(write) => Ok(write.clone()),
+            MessageType::ProtocolsConfigure(_) => {
+                Err(unexpected!("expected `RecordsWrite` message"))
+            }
         }
     }
 }
 
 impl Write {
     /// Add a data stream to the write message.
-    pub fn with_reader(&mut self, data_stream: DataStream) {
+    pub fn with_stream(&mut self, data_stream: DataStream) {
         self.data_stream = Some(data_stream);
     }
 

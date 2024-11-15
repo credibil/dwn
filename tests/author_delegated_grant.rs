@@ -7,11 +7,10 @@
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use test_utils::store::ProviderImpl;
-use vercre_dwn::handlers::{configure, query};
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::{Interface, Method};
+use vercre_dwn::{endpoint, Interface, Method};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -48,9 +47,8 @@ async fn configure_any() {
         .await
         .expect("should build");
 
-    let reply = configure::handle(ALICE_DID, configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     assert_snapshot!("configure", reply, {
@@ -68,8 +66,7 @@ async fn configure_any() {
         .await
         .expect("should build");
 
-    let reply =
-        query::handle(ALICE_DID, query, provider.clone()).await.expect("should find protocol");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should find protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     assert_snapshot!("query", reply, {

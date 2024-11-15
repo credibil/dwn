@@ -1,10 +1,11 @@
-//! # Configure
+//! # Protocols Configure
 //!
 //! Decentralized Web Node messaging framework.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -12,25 +13,23 @@ use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::data_stream::cid;
+use crate::data::cid;
+use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, ReplyType, Status};
 use crate::messages::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
-use crate::service::{Context, Message, MessageRecord, Messages};
-use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
+use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(
-    owner: &str, configure: Configure, provider: &impl Provider,
-) -> Result<ConfigureReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&configure, &mut ctx, provider).await?;
-    configure.authorize(&ctx, provider).await?;
+pub(crate) async fn handle(
+    ctx: &Context, configure: Configure, provider: &impl Provider,
+) -> Result<Reply> {
+    configure.authorize(ctx, provider).await?;
 
     // find any matching protocol entries
     let filter = Filter {
@@ -81,12 +80,12 @@ pub async fn handle(
     EventLog::append(provider, &ctx.owner, &event).await?;
     EventStream::emit(provider, &ctx.owner, &event).await?;
 
-    Ok(ConfigureReply {
+    Ok(Reply {
         status: Status {
             code: StatusCode::ACCEPTED.as_u16(),
             detail: None,
         },
-        message: configure,
+        reply: Some(ReplyType::ProtocolsConfigure(ConfigureReply { message: configure })),
     })
 }
 
@@ -100,6 +99,7 @@ pub struct Configure {
     pub authorization: Authorization,
 }
 
+#[async_trait]
 impl Message for Configure {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -112,14 +112,15 @@ impl Message for Configure {
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.authorization)
     }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+        handle(ctx, self, provider).await
+    }
 }
 
 /// Configure reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigureReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
     #[serde(flatten)]
     message: Configure,
 }
@@ -127,7 +128,7 @@ pub struct ConfigureReply {
 impl From<Configure> for MessageRecord {
     fn from(configure: Configure) -> Self {
         Self {
-            inner: Messages::ProtocolsConfigure(configure),
+            message: MessageType::ProtocolsConfigure(configure),
             indexes: Map::new(),
         }
     }
@@ -136,7 +137,7 @@ impl From<Configure> for MessageRecord {
 impl From<&Configure> for MessageRecord {
     fn from(configure: &Configure) -> Self {
         Self {
-            inner: Messages::ProtocolsConfigure(configure.clone()),
+            message: MessageType::ProtocolsConfigure(configure.clone()),
             indexes: Map::new(),
         }
     }
@@ -145,10 +146,12 @@ impl From<&Configure> for MessageRecord {
 impl TryFrom<MessageRecord> for Configure {
     type Error = crate::Error;
 
-    fn try_from(message: MessageRecord) -> Result<Self> {
-        match message.inner {
-            Messages::ProtocolsConfigure(configure) => Ok(configure),
-            Messages::RecordsWrite(_) => Err(unexpected!("expected `ProtocolsConfigure` message")),
+    fn try_from(record: MessageRecord) -> Result<Self> {
+        match record.message {
+            MessageType::ProtocolsConfigure(configure) => Ok(configure),
+            MessageType::RecordsWrite(_) => {
+                Err(unexpected!("expected `ProtocolsConfigure` message"))
+            }
         }
     }
 }

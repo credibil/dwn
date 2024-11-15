@@ -1,7 +1,8 @@
 //! # Decentralized Web Node (web node)
 
 pub mod auth;
-pub mod data_stream;
+pub mod data;
+pub mod endpoint;
 mod error;
 pub mod messages;
 pub mod permissions;
@@ -9,7 +10,6 @@ pub mod protocols;
 pub mod provider;
 pub mod records;
 mod schema;
-pub mod service;
 mod store;
 mod utils;
 
@@ -17,15 +17,9 @@ use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-/// Rexport handlers as a module for simplicity and consistency.
-pub mod handlers {
-    pub use crate::messages;
-    pub use crate::protocols::{configure, query};
-    pub use crate::records::{read, write};
-}
+pub use crate::endpoint::Message;
 pub use crate::error::Error;
 pub use crate::provider::Provider;
-pub use crate::service::Message;
 
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: usize = 5; //30000;
@@ -105,18 +99,6 @@ pub struct DateRange {
 
     /// Match messages with `message_timestamp` on or before.
     pub to: String,
-}
-
-/// Reply status.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Status {
-    /// Status code.
-    pub code: u16,
-
-    /// Status detail.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
 }
 
 /// Pagination cursor.

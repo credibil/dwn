@@ -1,27 +1,23 @@
-//! # Messages
-//!
-//! Decentralized Web Node messaging framework.
+//! # Messages Query
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use super::Filter;
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::data_stream::cid;
+use crate::data::cid;
+use crate::endpoint::{Context, Reply, ReplyType, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
-use crate::service::Context;
-use crate::{schema, Cursor, Descriptor, Error, Interface, Message, Method, Result, Status};
+use crate::{schema, Cursor, Descriptor, Error, Interface, Message, Method, Result};
 
 /// Handle a query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<QueryReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&query, &mut ctx, provider).await?;
-
+pub(crate) async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
     query.authorize(owner, provider).await?;
 
     let mut filter_sql = String::new();
@@ -46,26 +42,29 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
     let events = events.iter().map(|e| e.message_cid.clone()).collect::<Vec<String>>();
     let entries = if events.is_empty() { None } else { Some(events) };
 
-    Ok(QueryReply {
+    Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        entries,
-        cursor: None,
+        reply: Some(ReplyType::MessagesQuery(QueryReply {
+            entries,
+            cursor: None,
+        })),
     })
 }
 
-/// Messages Query payload
+/// `Query` payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
-    /// The Query descriptor.
+    /// The `Query` descriptor.
     pub descriptor: QueryDescriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
 }
 
+#[async_trait]
 impl Message for Query {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -77,6 +76,10 @@ impl Message for Query {
 
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.authorization)
+    }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+        handle(&ctx.owner, self, provider).await
     }
 }
 
@@ -117,14 +120,11 @@ impl Query {
         Ok(())
     }
 }
-/// Messages Query reply
+/// `Query` reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct QueryReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
-    /// The Query descriptor.
+    /// Entries matching the message's query.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<String>>,
     // pub entries: Option<Vec<Event>>,
@@ -134,7 +134,7 @@ pub struct QueryReply {
     pub cursor: Option<Cursor>,
 }
 
-/// Query descriptor.
+/// `Query` descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryDescriptor {

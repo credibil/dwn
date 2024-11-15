@@ -7,13 +7,12 @@ use http::StatusCode;
 // use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
-use vercre_dwn::data_stream::DataStream;
-use vercre_dwn::handlers::{configure, write};
+use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{query, read, QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::Message;
+use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
+use vercre_dwn::{endpoint, Message};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
@@ -37,9 +36,8 @@ async fn all_messages() {
 
     let mut expected_cids = vec![configure.cid().unwrap()];
 
-    let reply = configure::handle(ALICE_DID, configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -50,7 +48,7 @@ async fn all_messages() {
     }))
     .expect("should serialize");
     let schema = definition.types["post"].schema.clone().expect("should have schema");
-    let protocol = write::WriteProtocol {
+    let protocol = WriteProtocol {
         protocol: definition.protocol.clone(),
         protocol_path: "post".to_string(),
     };
@@ -72,7 +70,7 @@ async fn all_messages() {
 
         expected_cids.push(message.cid().unwrap());
 
-        let reply = write::handle(ALICE_DID, message, &provider).await.expect("should write");
+        let reply = endpoint::handle(ALICE_DID, message, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
 
@@ -84,7 +82,8 @@ async fn all_messages() {
     let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let Some(entries) = reply.entries else {
+    let query_reply = reply.messages_query().expect("should be records read");
+    let Some(entries) = query_reply.entries else {
         panic!("should have entries");
     };
     assert_eq!(entries.len(), 6);
@@ -108,7 +107,7 @@ async fn all_messages() {
 
     expected_cids.push(message.cid().unwrap());
 
-    let reply = write::handle(ALICE_DID, message, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, message, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -120,7 +119,8 @@ async fn all_messages() {
     let reply = query::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let Some(entries) = reply.entries else {
+    let query_reply = reply.messages_query().expect("should be records read");
+    let Some(entries) = query_reply.entries else {
         panic!("should have entries");
     };
     assert_eq!(entries.len(), 7);

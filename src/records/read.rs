@@ -2,26 +2,24 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
+use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::data_stream::cid;
+use crate::data::cid;
+use crate::endpoint::{Context, Message, Reply, ReplyType, Status};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::service::{Context, Message};
-use crate::{unexpected, Descriptor, Error, Interface, Method, Result, Status};
+use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Read` message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<ReadReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&read, &mut ctx, provider).await?;
-
+pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
         "
@@ -33,7 +31,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         interface = Interface::Records,
         filter_sql = read.descriptor.filter.to_sql(),
     );
-    let (messages, _) = MessageStore::query(provider, &ctx.owner, &sql).await?;
+    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
     if messages.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
@@ -69,7 +67,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     }
 
     // TODO: review against the original code — it should take a store provider
-    read.authorize(&ctx.owner, &write)?;
+    read.authorize(owner, &write)?;
 
     let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
@@ -98,7 +96,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             record_id = write.record_id,
         );
 
-        let (messages, _) = MessageStore::query(provider, &ctx.owner, &sql).await?;
+        let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
         if messages.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
@@ -111,17 +109,19 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         Some(initial_write)
     };
 
-    Ok(ReadReply {
+    Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        entry: ReadReplyEntry {
-            records_write: Some(write.clone()),
-            records_delete: None,
-            initial_write,
-            data,
-        },
+        reply: Some(ReplyType::RecordsRead(ReadReply {
+            entry: ReadReplyEntry {
+                records_write: Some(write.clone()),
+                records_delete: None,
+                initial_write,
+                data,
+            },
+        })),
     })
 }
 
@@ -137,6 +137,7 @@ pub struct Read {
     pub authorization: Option<Authorization>,
 }
 
+#[async_trait]
 impl Message for Read {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -149,15 +150,16 @@ impl Message for Read {
     fn authorization(&self) -> Option<&Authorization> {
         self.authorization.as_ref()
     }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+        handle(&ctx.owner, self, provider).await
+    }
 }
 
 /// Read reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
     /// The read reply entry.
     pub entry: ReadReplyEntry,
 }

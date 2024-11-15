@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use vercre_dwn::endpoint::MessageRecord;
 use vercre_dwn::provider::MessageStore;
-use vercre_dwn::service::MessageRecord;
 use vercre_dwn::Cursor;
 
 use super::ProviderImpl;
@@ -10,10 +10,10 @@ pub(crate) const TABLE: &str = "message";
 
 #[async_trait]
 impl MessageStore for ProviderImpl {
-    async fn put(&self, owner: &str, message: &MessageRecord) -> Result<()> {
+    async fn put(&self, owner: &str, record: &MessageRecord) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<MessageRecord> =
-            self.db.create((TABLE, message.cid()?)).content(message).await?;
+            self.db.create((TABLE, record.cid()?)).content(record).await?;
         Ok(())
     }
 

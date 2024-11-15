@@ -2,28 +2,24 @@
 //!
 //! Decentralized Web Node messaging framework.
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::data_stream::cid;
-use crate::messages::{Event, Filter, Subscription};
+use crate::data::cid;
+use crate::endpoint::{Context, Message, Reply, ReplyType, Status};
+use crate::messages::{Filter, Subscription};
 use crate::permissions::{self, ScopeType};
-use crate::provider::{EventStream, MessageStore, Provider, Signer};
-use crate::service::Context;
-use crate::{schema, Descriptor, Error, Interface, Message, Method, Result, Status};
+use crate::provider::{MessageStore, Provider, Signer};
+use crate::{schema, Descriptor, Error, Interface, Method, Result};
 
 /// Handle a subscribe message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(
-    owner: &str, subscribe: Subscribe, sub_handler: impl Fn(Event) -> Result<()> + Send + Sync,
-    provider: &impl Provider,
-) -> Result<SubscribeReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&subscribe, &mut ctx, provider).await?;
+pub(crate) async fn handle(owner: &str, subscribe: Subscribe, provider: &impl Provider) -> Result<Reply> {
     subscribe.authorize(owner, provider).await?;
 
     // let mut filter_sql = String::new();
@@ -38,29 +34,26 @@ pub async fn handle(
     //     filter_sql.push(')');
     // }
 
-    let listener = |_event_owner: &str, event: Event| -> anyhow::Result<()> {
-        // if owner == event_owner && FilterUtility.matchAnyFilter(eventIndexes, messagesFilters) {
-        sub_handler(event).map_err(Into::into)
-        // }
-    };
+    // let listener = |_event_owner: &str, event: Event| -> anyhow::Result<()> {
+    //     // if owner == event_owner && FilterUtility.matchAnyFilter(eventIndexes, messagesFilters) {
+    //     //sub_handler(event).map_err(Into::into)
+    //     // }
+    // };
 
-    let message_cid = subscribe.cid()?;
-    let _subscription = EventStream::subscribe(provider, owner, &message_cid, listener).await?;
+    // let message_cid = subscribe.cid()?;
+    // let _subscription = EventStream::subscribe(provider, owner, &message_cid, listener).await?;
     // const subscription = await this.eventStream.subscribe(tenant, messageCid, listener);
 
-    Ok(SubscribeReply {
+    Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        subscription: None, // Some(Subscription {
-                            //     id: "123".to_string(),
-                            //     close: || Ok(()),
-                            // }),
+        reply: Some(ReplyType::MessagesSubscribe(SubscribeReply { subscription: None })),
     })
 }
 
-/// Messages Subscribe payload
+/// Subscribe message.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Subscribe {
     /// The Subscribe descriptor.
@@ -70,6 +63,7 @@ pub struct Subscribe {
     pub authorization: Authorization,
 }
 
+#[async_trait]
 impl Message for Subscribe {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -81,6 +75,10 @@ impl Message for Subscribe {
 
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.authorization)
+    }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+        handle(&ctx.owner, self, provider).await
     }
 }
 
@@ -122,14 +120,11 @@ impl Subscribe {
     }
 }
 
-/// Messages Subscribe reply
+/// Subscribe reply
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct SubscribeReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
-    /// The Subscribe descriptor.
+    /// The subscription.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription: Option<Subscription>,
 }

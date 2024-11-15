@@ -10,8 +10,8 @@ use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{json, Value};
 use test_utils::store::ProviderImpl;
-use vercre_dwn::data_stream::DataStream;
-use vercre_dwn::handlers::{read, write};
+use vercre_dwn::data::DataStream;
+use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
 
@@ -42,7 +42,7 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    let reply = write::handle(BOB_DID, bob_msg.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(BOB_DID, bob_msg.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -55,7 +55,8 @@ async fn flat_space() {
     let alice_read =
         ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should create write");
 
-    let reply = read::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
+    let reply =
+        endpoint::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
     assert_snapshot!("alice_read", reply, {
         ".entry.recordsWrite.recordId" => "[recordId]",
@@ -72,24 +73,26 @@ async fn flat_space() {
     // --------------------------------------------------
     // Alice augments Bob's message and saves to her web node
     // --------------------------------------------------
-    let alice_data = reply.entry.data.expect("should have data");
+    let read_reply = reply.records_read().expect("should be records read");
+    let alice_data = read_reply.entry.data.expect("should have data");
 
-    let Some(mut bob_msg) = reply.entry.records_write else {
+    let Some(mut bob_msg) = read_reply.entry.records_write else {
         panic!("should have records write entry");
     };
     bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
-    bob_msg.with_reader(alice_data);
+    bob_msg.with_stream(alice_data);
 
-    let reply = write::handle(ALICE_DID, bob_msg, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, bob_msg, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob's message can be read from Alice's web node
     // --------------------------------------------------
-    let reply = read::handle(BOB_DID, alice_read, &provider).await.expect("should read");
+    let reply = endpoint::handle(BOB_DID, alice_read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let mut reader = reply.entry.data.expect("should have data");
+    let read_reply = reply.records_read().expect("should be records read");
+    let mut reader = read_reply.entry.data.expect("should have data");
     let mut alice_data = Vec::new();
     reader.read_to_end(&mut alice_data).expect("should read to end");
 

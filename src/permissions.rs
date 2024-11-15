@@ -139,21 +139,21 @@ pub struct Scope {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ScopeType {
-    /// Protocols scope fields.
+    /// `Protocols` scope fields.
     Protocols {
         /// The protocol the permission is applied to.
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
 
-    /// Messages scope fields.
-    Messages {
+    /// `MessageType` scope fields.
+    MessageType {
         /// The protocol the permission is applied to.
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
 
-    /// Records scope fields.
+    /// `Records` scope fields.
     Records {
         /// The protocol the permission is applied to.
         protocol: String,

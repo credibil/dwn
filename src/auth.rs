@@ -8,7 +8,7 @@ pub use vercre_did::{dereference, Resource};
 use vercre_infosec::jose::JwsBuilder;
 use vercre_infosec::{Jws, Signer};
 
-use crate::data_stream::cid;
+use crate::data::cid;
 use crate::records::DelegatedGrant;
 use crate::{unexpected, Result};
 

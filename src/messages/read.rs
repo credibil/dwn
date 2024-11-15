@@ -1,31 +1,27 @@
 //! # Messages Read
-//!
-//! Decentralized Web Node messaging framework.
 
-// use std::io::BufReader;
 use std::str::FromStr;
 
 use ::cid::Cid;
+use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::data_stream::cid;
+use crate::data::cid;
+use crate::endpoint::{Context, Message, MessageType, Reply, ReplyType, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::DataStream;
-use crate::service::{Context, Messages};
-use crate::{schema, unexpected, Descriptor, Error, Interface, Message, Method, Result, Status};
+use crate::{schema, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Handle a read message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<ReadReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&read, &mut ctx, provider).await?;
+pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
     read.authorize(owner, provider).await?;
 
     let Some(record) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
@@ -36,7 +32,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let mut message = (*record).clone();
 
     // include data with RecordsWrite messages
-    let data = if let Messages::RecordsWrite(ref mut write) = message {
+    let data = if let MessageType::RecordsWrite(ref mut write) = message {
         //     // return embedded `encoded_data` as entry data stream.
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
@@ -49,29 +45,32 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         None
     };
 
-    Ok(ReadReply {
+    Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        entry: Some(ReadReplyEntry {
-            message_cid: record.cid()?,
-            message,
-            data,
-        }),
+        reply: Some(ReplyType::MessagesRead(ReadReply {
+            entry: Some(ReadReplyEntry {
+                message_cid: read.descriptor.message_cid,
+                message,
+                data,
+            }),
+        })),
     })
 }
 
-/// Messages Read payload
+/// `Read` payload
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Read {
-    /// The Read descriptor.
+    /// The `Read` descriptor.
     pub descriptor: ReadDescriptor,
 
     /// The message authorization.
     pub authorization: Authorization,
 }
 
+#[async_trait]
 impl Message for Read {
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -83,6 +82,10 @@ impl Message for Read {
 
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.authorization)
+    }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+        handle(&ctx.owner, self, provider).await
     }
 }
 
@@ -116,19 +119,16 @@ impl Read {
     }
 }
 
-/// Messages Read reply
+/// `Read` reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct ReadReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
-    /// The Read descriptor.
+    /// The `Read` descriptor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<ReadReplyEntry>,
 }
 
-/// Messages Read reply entry
+/// `Read` reply entry
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct ReadReplyEntry {
@@ -136,7 +136,7 @@ pub struct ReadReplyEntry {
     pub message_cid: String,
 
     /// The message.
-    pub message: Messages,
+    pub message: MessageType,
 
     /// The data associated with the message.
     #[serde(skip_serializing_if = "Option::is_none")]
