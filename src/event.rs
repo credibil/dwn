@@ -26,16 +26,17 @@ pub struct Event {
 }
 
 /// Event listener.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Listener {
+pub struct Listener<T> {
     /// Message filters for the subscription.
     pub filters: Vec<Filter>,
 
+    pub receiver: Option<T>,
+
     /// The event handler.
-    pub subscriber: Subscriber,
+    pub subscriber: Option<Subscriber>,
 }
 
-impl Listener {
+impl<T> Listener<T> {
     /// Event callback.
     ///
     /// # Errors
@@ -45,7 +46,7 @@ impl Listener {
         println!("event received: {event:?}");
         // }
 
-        self.subscriber.send(event);
+        self.subscriber.as_mut().unwrap().send(event);
 
         Ok(())
     }

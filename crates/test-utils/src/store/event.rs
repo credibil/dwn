@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::ops::Sub;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -49,6 +48,7 @@ impl EventLog for ProviderImpl {
 
 pub struct SubscriberImpl {
     pub id: String,
+    pub receiver: async_nats::Subscriber,
 }
 
 #[async_trait]
@@ -64,7 +64,7 @@ impl EventStream for ProviderImpl {
 
     /// Subscribe to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, message_cid: &str, listener: &mut Listener,
+        &self, owner: &str, message_cid: &str, listener: &mut Listener<Self::Subscriber>,
     ) -> Result<Subscriber> {
         let mut nats_sub = self.nats_client.subscribe("subject").await?;
 

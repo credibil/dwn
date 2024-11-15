@@ -27,9 +27,10 @@ pub(crate) async fn handle(
 
     let message_cid = subscribe.cid()?;
 
-    let mut listener = Listener {
+    let mut listener = Listener::<_> {
         filters: subscribe.descriptor.filters,
-        ..Default::default()
+        receiver: None,
+        subscriber: None,
     };
     let subscriber = EventStream::subscribe(provider, owner, &message_cid, &mut listener).await?;
 
