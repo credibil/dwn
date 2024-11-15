@@ -62,6 +62,9 @@ impl EventStream for ProviderImpl {
     async fn subscribe(
         &self, owner: &str, message_cid: &str, listener: &EventListener,
     ) -> Result<()> {
+        listener.handler.callback(|event| {
+            println!("event received: {:?}", event);
+        });
         Ok(()) //Ok(EventSubscriptionImpl { id: String::new() }))
     }
 

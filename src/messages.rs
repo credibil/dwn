@@ -64,6 +64,11 @@ impl EventHandler {
         println!("event received: {:?}", event);
     }
 
+    /// Called by the event handler when a new event is received.
+    pub fn callback(&self, cb: impl Fn(&Event)) {
+        // println!("event received: {:?}", event);
+    }
+
     /// Closes the subscription to the event stream.
     pub async fn close() {
         todo!()

@@ -32,7 +32,6 @@ pub(crate) async fn handle(
         filters: subscribe.descriptor.filters,
         handler: subscribe.callback,
     };
-
     let _subscription = EventStream::subscribe(provider, owner, &message_cid, &listener).await?;
 
     Ok(Reply {
