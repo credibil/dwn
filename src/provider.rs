@@ -204,9 +204,9 @@ pub trait EventStream: Send + Sync {
     async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
 }
 
-/// `EventSubscriber` is a subscriber to an event stream.
-#[async_trait]
-pub trait EventSubscriber: Send + Sync {
-    /// Close the subscription to the event stream.
-    async fn close(&self) -> Result<()>;
-}
+// /// `EventSubscriber` is a subscriber to an event stream.
+// #[async_trait]
+// pub trait EventSubscriber: Send + Sync {
+//     /// Close the subscription to the event stream.
+//     async fn close(&self) -> Result<()>;
+// }

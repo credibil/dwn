@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use vercre_dwn::event::{Event, Subscriber};
 use vercre_dwn::messages::Filter;
-use vercre_dwn::provider::{EventLog, EventStream, EventSubscriber};
+use vercre_dwn::provider::{EventLog, EventStream};
 use vercre_dwn::Cursor;
 
 use super::ProviderImpl;

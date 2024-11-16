@@ -25,21 +25,12 @@ pub struct Event {
 }
 
 /// Used by the client to handle events subscribed to.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Subscriber {
     id: String,
 
     #[serde(skip)]
     receiver: Option<mpsc::Receiver<Event>>,
-}
-
-impl Default for Subscriber {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            receiver: None,
-        }
-    }
 }
 
 impl Clone for Subscriber {
