@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageType, Reply, ReplyType, Status};
+use crate::endpoint::{Context, Message, MessageType, Reply, Replys, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::DataStream;
@@ -50,7 +50,7 @@ pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) ->
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(ReplyType::MessagesRead(ReadReply {
+        reply: Some(Replys::MessagesRead(ReadReply {
             entry: Some(ReadReplyEntry {
                 message_cid: read.descriptor.message_cid,
                 message,

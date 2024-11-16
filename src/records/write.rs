@@ -92,12 +92,8 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     // `latest_base` is set when the incoming `Write` message is:
     //   - an intial write with data
     //   - not an initial write
-    //
-    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
 
-    // let mut write_index = WriteIndex::from(&write);
-    // write_index.latest_base = latest.is_none();
-
+    // TODO: the use of `latest` is confusing: refactor to use a `latest_base` flag
     let mut message = MessageRecord::from(&write);
     message.indexes.insert("latestBase".to_string(), Value::Bool(latest.is_none()));
 
@@ -112,7 +108,7 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     EventLog::append(provider, owner, &event).await?;
 
     // only emit an event when the message is the latest base state
-    if initial.is_some() {
+    if latest.is_none() {
         EventStream::emit(provider, owner, &event).await?;
     }
 
@@ -190,8 +186,16 @@ pub struct Write {
 #[async_trait]
 impl Message for Write {
     fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-        // self.record_id.clone()
+        #[derive(Serialize)]
+        struct Cid {
+            #[serde(flatten)]
+            descriptor: WriteDescriptor,
+            authorization: Authorization,
+        }
+        cid::from_value(&Cid {
+            descriptor: self.descriptor.clone(),
+            authorization: self.authorization.clone(),
+        })
     }
 
     fn descriptor(&self) -> &Descriptor {

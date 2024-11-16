@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, ReplyType, Status};
+use crate::endpoint::{Context, Message, Reply, Replys, Status};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
@@ -114,7 +114,7 @@ pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) ->
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(ReplyType::RecordsRead(ReadReply {
+        reply: Some(Replys::RecordsRead(ReadReply {
             entry: ReadReplyEntry {
                 records_write: Some(write.clone()),
                 records_delete: None,

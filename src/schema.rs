@@ -46,6 +46,10 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/messages-read.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "messages-subscribe" => {
+            let schema = include_bytes!("../schemas/interface-methods/messages-subscribe.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
         "protocols-configure" => {
             let schema = include_bytes!("../schemas/interface-methods/protocols-configure.json");
             Ok(serde_json::from_slice(schema)?)

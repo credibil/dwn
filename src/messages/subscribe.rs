@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, ReplyType, Status};
+use crate::endpoint::{Context, Message, Reply, Replys, Status};
 use crate::event::Subscriber;
 use crate::messages::Filter;
 use crate::permissions::{self, ScopeType};
@@ -35,7 +35,7 @@ pub(crate) async fn handle(
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(ReplyType::MessagesSubscribe(SubscribeReply {
+        reply: Some(Replys::MessagesSubscribe(SubscribeReply {
             subscription: subscriber,
         })),
     })
@@ -134,7 +134,6 @@ pub struct SubscribeBuilder {
     message_timestamp: Option<DateTime<Utc>>,
     filters: Option<Vec<Filter>>,
     permission_grant_id: Option<String>,
-    // callback: Option<EventHandler>,
 }
 
 /// Builder for creating a permission grant.
@@ -163,13 +162,6 @@ impl SubscribeBuilder {
         self
     }
 
-    // /// Specify a permission grant ID to use with the configuration.
-    // #[must_use]
-    // pub fn callback(mut self, callback: EventHandler) -> Self {
-    //     self.callback = Some(callback);
-    //     self
-    // }
-
     /// Generate the permission grant.
     ///
     /// # Errors
@@ -191,14 +183,9 @@ impl SubscribeBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        // let Some(callback) = self.callback else {
-        //     return Err(unexpected!("missing callback"));
-        // };
-
         let query = Subscribe {
             descriptor,
             authorization,
-            // callback,
         };
 
         schema::validate(&query)?;

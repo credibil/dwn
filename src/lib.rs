@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-pub use crate::endpoint::Message;
+pub use crate::endpoint::{Message, Replys};
 pub use crate::error::Error;
 pub use crate::provider::Provider;
 

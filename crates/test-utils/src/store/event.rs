@@ -85,7 +85,8 @@ impl EventStream for ProviderImpl {
 
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()> {
-        // todo!()
+        let bytes = serde_json::to_vec(event)?;
+        self.nats_client.publish("messages", bytes.into()).await?;
         Ok(())
     }
 }

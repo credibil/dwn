@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, ReplyType, Status};
+use crate::endpoint::{Context, Message, Reply, Replys, Status};
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
@@ -29,7 +29,7 @@ pub(crate) async fn handle(ctx: &Context, query: Query, provider: &impl Provider
             code: 200,
             detail: Some("OK".to_string()),
         },
-        reply: Some(ReplyType::ProtocolsQuery(QueryReply {
+        reply: Some(Replys::ProtocolsQuery(QueryReply {
             entries,
             cursor: None,
         })),

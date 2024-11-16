@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::Filter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Reply, ReplyType, Status};
+use crate::endpoint::{Context, Reply, Replys, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::{schema, Cursor, Descriptor, Error, Interface, Message, Method, Result};
@@ -47,7 +47,7 @@ pub(crate) async fn handle(owner: &str, query: Query, provider: &impl Provider) 
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(ReplyType::MessagesQuery(QueryReply {
+        reply: Some(Replys::MessagesQuery(QueryReply {
             entries,
             cursor: None,
         })),

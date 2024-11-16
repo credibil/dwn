@@ -90,7 +90,7 @@ pub struct Reply {
     /// Endpoint-specific reply.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub reply: Option<ReplyType>,
+    pub reply: Option<Replys>,
 }
 
 impl Reply {
@@ -98,7 +98,7 @@ impl Reply {
     #[must_use]
     pub fn records_read(self) -> Option<records::ReadReply> {
         match self.reply {
-            Some(ReplyType::RecordsRead(reply)) => Some(reply),
+            Some(Replys::RecordsRead(reply)) => Some(reply),
             _ => None,
         }
     }
@@ -107,7 +107,7 @@ impl Reply {
     #[must_use]
     pub fn messages_query(self) -> Option<messages::QueryReply> {
         match self.reply {
-            Some(ReplyType::MessagesQuery(reply)) => Some(reply),
+            Some(Replys::MessagesQuery(reply)) => Some(reply),
             _ => None,
         }
     }
@@ -116,7 +116,7 @@ impl Reply {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 #[allow(missing_docs)]
-pub enum ReplyType {
+pub enum Replys {
     MessagesQuery(messages::QueryReply),
     MessagesRead(messages::ReadReply),
     MessagesSubscribe(messages::SubscribeReply),
