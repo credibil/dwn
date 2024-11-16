@@ -39,46 +39,40 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
-    let (initial, latest) = first_and_last(&existing).await?;
+    let (initial_write, last_write) = first_and_last(&existing).await?;
 
-    // if current message is not the initial write, check 'immutable' properties
+    // when current message is not the initial write, check 'immutable' properties
     // haven't been altered
-    if let Some(initial) = &initial {
-        if !write.compare_immutable(initial) {
+    if let Some(initial_write) = &initial_write {
+        if !write.compare_immutable(initial_write) {
             return Err(unexpected!("immutable properties do not match"));
         }
     }
 
-    // confirm current message is the latest AND not a delete
-    if let Some(latest) = &latest {
+    // confirm current message will be the latest write AND last write was not a delete
+    if let Some(last_write) = &last_write {
         let current_ts = write.descriptor.base.message_timestamp.unwrap_or_default();
-        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+        let latest_ts = last_write.descriptor.base.message_timestamp.unwrap_or_default();
 
         if current_ts.cmp(&latest_ts) == Ordering::Less {
             return Err(Error::Conflict("newer write record already exists".to_string()));
         }
-        if latest.descriptor.base.method == Method::Delete {
+        if last_write.descriptor.base.method == Method::Delete {
             return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
         }
     }
 
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
-        let write = process_stream(owner, &write, &mut data, provider).await?;
-        (write, StatusCode::ACCEPTED)
-    } else {
-        // if the incoming message is not the initial write, and no `data_stream` is
-        // set, we can process
-        let (write, code) = if initial.is_some() {
-            let Some(latest) = &latest else {
-                return Err(unexpected!("newest existing message not found"));
-            };
-            let write = process_data(owner, &write, latest, provider).await?;
-            (write, StatusCode::ACCEPTED)
-        } else {
-            (write, StatusCode::NO_CONTENT)
+        (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
+    } else if initial_write.is_some() {
+        // only process when the incoming message has no `data_stream` and is not the
+        // initial write
+        let Some(last_write) = &last_write else {
+            return Err(unexpected!("latest existing message not found"));
         };
-
-        (write, code)
+        (process_data(owner, &write, last_write, provider).await?, StatusCode::ACCEPTED)
+    } else {
+        (write, StatusCode::NO_CONTENT)
     };
 
     // ----------------------------------------------------------------
@@ -93,9 +87,9 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     //   - an intial write with data
     //   - not an initial write
 
-    // TODO: the use of `latest` is confusing: refactor to use a `latest_base` flag
+    // TODO: the use of `last_write` is confusing: refactor to use a `latest_base` flag
     let mut message = MessageRecord::from(&write);
-    message.indexes.insert("latestBase".to_string(), Value::Bool(latest.is_none()));
+    message.indexes.insert("latestBase".to_string(), Value::Bool(true));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &message).await?;
@@ -108,7 +102,7 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     EventLog::append(provider, owner, &event).await?;
 
     // only emit an event when the message is the latest base state
-    if latest.is_none() {
+    if last_write.is_none() {
         EventStream::emit(provider, owner, &event).await?;
     }
 
