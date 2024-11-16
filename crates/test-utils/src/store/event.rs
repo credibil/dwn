@@ -4,7 +4,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde_json::Value;
-use vercre_dwn::event::{Event, Listener, Subscriber};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use vercre_dwn::event::{Event, Subscriber};
+use vercre_dwn::messages::Filter;
 use vercre_dwn::provider::{EventLog, EventStream, EventSubscriber};
 use vercre_dwn::Cursor;
 
@@ -46,34 +49,38 @@ impl EventLog for ProviderImpl {
     }
 }
 
-pub struct SubscriberImpl {
-    pub id: String,
-    pub receiver: async_nats::Subscriber,
-}
+// pub struct SubscriberImpl {
+//     pub id: String,
+//     pub receiver: async_nats::Subscriber,
+// }
 
-#[async_trait]
-impl EventSubscriber for SubscriberImpl {
-    async fn close(&self) -> Result<()> {
-        todo!()
-    }
-}
+// #[async_trait]
+// impl EventSubscriber for SubscriberImpl {
+//     async fn close(&self) -> Result<()> {
+//         todo!()
+//     }
+// }
 
 #[async_trait]
 impl EventStream for ProviderImpl {
-    type Subscriber = SubscriberImpl;
-
     /// Subscribe to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, message_cid: &str, listener: &mut Listener<Self::Subscriber>,
+        &self, owner: &str, message_cid: &str, filters: &[Filter],
     ) -> Result<Subscriber> {
-        let mut nats_sub = self.nats_client.subscribe("subject").await?;
+        // set up subscriber
+        let mut nats_subscriber = self.nats_client.subscribe("messages").await?;
+        let (sender, receiver) = mpsc::channel::<Event>(100);
 
-        while let Some(m) = nats_sub.next().await {
-            let event: Event = serde_json::from_slice(&m.payload)?;
-            let _ = listener.push(event)?;
-        }
+        // forward filtered messages from NATS to our subscriber
+        let task: JoinHandle<Result<()>> = tokio::spawn(async move {
+            while let Some(message) = nats_subscriber.next().await {
+                let event: Event = serde_json::from_slice(&message.payload)?;
+                sender.send(event).await?;
+            }
+            Ok(())
+        });
 
-        todo!()
+        Ok(Subscriber::new(message_cid, receiver))
     }
 
     /// Emits an event to a owner's event stream.

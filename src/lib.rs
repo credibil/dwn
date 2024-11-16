@@ -1,5 +1,3 @@
-#![feature(async_iterator)]
-
 //! # Decentralized Web Node (web node)
 
 pub mod auth;

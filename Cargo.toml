@@ -22,6 +22,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+futures.workspace = true
 base64ct.workspace = true
 chrono.workspace = true
 ciborium = "0.2.2"
@@ -35,6 +36,7 @@ multihash-codetable.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror = "2.0.3"
+tokio = { workspace = true, features = ["sync"] }
 vercre-did.workspace = true
 vercre-infosec.workspace = true
 
@@ -81,6 +83,7 @@ base64ct = { version = "1.6.0", features = ["std"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 cid = "0.11.1"
 derive_more = "1.0.0"
+futures = "0.3.31"
 http = "1.1.0"
 insta = { version = "1.41.1", features = ["redactions", "yaml"] }
 libipld = "0.16.0"

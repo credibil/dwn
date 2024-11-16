@@ -81,7 +81,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
 }
 
 /// Reply used by all endpoints.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct Reply {
     /// Status message to accompany the reply.
@@ -113,7 +113,7 @@ impl Reply {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 #[allow(missing_docs)]
 pub enum ReplyType {

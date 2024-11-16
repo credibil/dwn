@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, ReplyType, Status};
-use crate::event::{Listener, Subscriber};
+use crate::event::Subscriber;
 use crate::messages::Filter;
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventStream, MessageStore, Provider, Signer};
@@ -26,13 +26,9 @@ pub(crate) async fn handle(
     subscribe.authorize(owner, provider).await?;
 
     let message_cid = subscribe.cid()?;
-
-    let mut listener = Listener::<_> {
-        filters: subscribe.descriptor.filters,
-        receiver: None,
-        subscriber: None,
-    };
-    let subscriber = EventStream::subscribe(provider, owner, &message_cid, &mut listener).await?;
+    let subscriber =
+        EventStream::subscribe(provider, owner, &message_cid, &subscribe.descriptor.filters)
+            .await?;
 
     Ok(Reply {
         status: Status {
