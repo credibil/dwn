@@ -1,3 +1,5 @@
+//! # Protocol Permissions
+
 use std::collections::BTreeMap;
 
 use serde_json::{json, Map, Value};
@@ -12,7 +14,7 @@ use crate::records::{self, Write};
 use crate::{schema, unexpected, utils, Interface, Method, Result};
 
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
-pub async fn verify_integrity(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+pub(crate) async fn verify_integrity(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(protocol) = &write.descriptor.protocol else {
         return Err(unexpected!("missing protocol"));
     };
@@ -62,7 +64,7 @@ fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<
 }
 
 // Verifies the given `RecordsWrite` protocol.
-pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
+pub(crate) fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(unexpected!("missing protocol path"));
     };
@@ -87,7 +89,7 @@ pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
 }
 
 /// Validate tags include a protocol tag matching the scoped protocol.
-pub fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
+pub(crate) fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
     // validation difficult to do using JSON schema
     let scope_protocol = match scope {
         ScopeType::Records { protocol, .. } => {
@@ -427,7 +429,7 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
 }
 
 // Protocol-based authorization for records::Write messages.
-pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+pub(crate) async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let messages = records::existing_entries(owner, &write.record_id, store).await?;
     let (initial, _) = records::first_and_last(&messages).await?;
 

@@ -1,6 +1,7 @@
-//! # Grant
+//! # Permissions
 
 pub mod grant;
+pub(crate) mod protocol;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};

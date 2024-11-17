@@ -19,12 +19,11 @@ use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
 use crate::event::Event;
+use crate::permissions::{self, protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
-use crate::records::{protocol, DataStream};
-use crate::{
-    permissions, unexpected, utils, Descriptor, Error, Interface, Method, Result, MAX_ENCODED_SIZE,
-};
+use crate::records::DataStream;
+use crate::{unexpected, utils, Descriptor, Error, Interface, Method, Result, MAX_ENCODED_SIZE};
 
 /// Handle `RecordsWrite` messages.
 ///

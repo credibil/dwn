@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
+use crate::permissions::{self}; //protocol
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::{protocol, Write};
-use crate::{permissions, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::records::Write;
+use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Delete` message.
 ///

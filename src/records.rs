@@ -1,7 +1,6 @@
 //! # Records
 
 pub mod delete;
-pub(crate) mod protocol;
 pub mod read;
 pub mod write;
 

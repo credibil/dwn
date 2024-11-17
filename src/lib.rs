@@ -1,6 +1,6 @@
 //! # Decentralized Web Node (web node)
 
-pub mod auth;
+mod auth;
 pub mod data;
 pub mod endpoint;
 mod error;
