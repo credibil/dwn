@@ -151,9 +151,7 @@ impl TryFrom<MessageRecord> for Configure {
     fn try_from(record: MessageRecord) -> Result<Self> {
         match record.message {
             MessageType::ProtocolsConfigure(configure) => Ok(configure),
-            MessageType::RecordsWrite(_) => {
-                Err(unexpected!("expected `ProtocolsConfigure` message"))
-            }
+            _ => Err(unexpected!("expected `ProtocolsConfigure` message")),
         }
     }
 }

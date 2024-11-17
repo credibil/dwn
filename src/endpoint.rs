@@ -132,6 +132,7 @@ impl MessageRecord {
     pub fn cid(&self) -> Result<String> {
         match self.message {
             MessageType::RecordsWrite(ref write) => write.cid(),
+            MessageType::RecordsDelete(ref delete) => delete.cid(),
             MessageType::ProtocolsConfigure(ref configure) => configure.cid(),
         }
     }
@@ -141,6 +142,7 @@ impl MessageRecord {
     pub fn descriptor(&self) -> &Descriptor {
         match self.message {
             MessageType::RecordsWrite(ref write) => write.descriptor(),
+            MessageType::RecordsDelete(ref delete) => delete.descriptor(),
             MessageType::ProtocolsConfigure(ref configure) => configure.descriptor(),
         }
     }
@@ -152,16 +154,24 @@ impl MessageRecord {
     pub const fn as_write(&self) -> Option<&records::Write> {
         match &self.message {
             MessageType::RecordsWrite(write) => Some(write),
-            MessageType::ProtocolsConfigure(_) => None,
+            _ => None,
         }
     }
 
+    /// Return the `RecordsDelete` message, if set.
+    #[must_use]
+    pub const fn as_delete(&self) -> Option<&records::Delete> {
+        match &self.message {
+            MessageType::RecordsDelete(delete) => Some(delete),
+            _ => None,
+        }
+    }
     /// Return the `ProtocolsConfigure` message, if set.
     #[must_use]
     pub const fn as_configure(&self) -> Option<&protocols::Configure> {
         match &self.message {
             MessageType::ProtocolsConfigure(configure) => Some(configure),
-            MessageType::RecordsWrite(_) => None,
+            _ => None,
         }
     }
 }
@@ -180,6 +190,7 @@ impl Deref for MessageRecord {
 #[allow(missing_docs)]
 pub enum MessageType {
     RecordsWrite(records::Write),
+    RecordsDelete(records::Delete),
     ProtocolsConfigure(protocols::Configure),
 }
 

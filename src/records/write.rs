@@ -51,7 +51,7 @@ pub(crate) async fn handle(
         }
     }
 
-    // confirm current message will be the latest write AND last write was not a delete
+    // confirm current message will be the latest write AND previous write was not a delete
     if let Some(newest_existing) = &newest_existing {
         let current_ts = write.descriptor.base.message_timestamp.unwrap_or_default();
         let latest_ts = newest_existing.descriptor.base.message_timestamp.unwrap_or_default();
@@ -248,9 +248,7 @@ impl TryFrom<MessageRecord> for Write {
     fn try_from(record: MessageRecord) -> Result<Self> {
         match record.message {
             MessageType::RecordsWrite(write) => Ok(write),
-            MessageType::ProtocolsConfigure(_) => {
-                Err(unexpected!("expected `RecordsWrite` message"))
-            }
+            _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
 }
@@ -261,9 +259,7 @@ impl TryFrom<&MessageRecord> for Write {
     fn try_from(record: &MessageRecord) -> Result<Self> {
         match &record.message {
             MessageType::RecordsWrite(write) => Ok(write.clone()),
-            MessageType::ProtocolsConfigure(_) => {
-                Err(unexpected!("expected `RecordsWrite` message"))
-            }
+            _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
 }
@@ -596,14 +592,14 @@ impl DelegatedGrant {
     /// # Errors
     /// TODO: Add errors
     pub fn to_grant(&self) -> Result<permissions::Grant> {
-        self.clone().try_into()
+        self.try_into()
     }
 }
 
-impl TryFrom<DelegatedGrant> for permissions::Grant {
+impl TryFrom<&DelegatedGrant> for permissions::Grant {
     type Error = crate::Error;
 
-    fn try_from(value: DelegatedGrant) -> Result<Self> {
+    fn try_from(value: &DelegatedGrant) -> Result<Self> {
         let bytes = Base64UrlUnpadded::decode_vec(&value.encoded_data)?;
         let mut grant: Self = serde_json::from_slice(&bytes)
             .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;

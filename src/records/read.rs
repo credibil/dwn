@@ -42,11 +42,9 @@ pub(crate) async fn handle(
         return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
     }
 
-    let mut write = Write::try_from(&messages[0])?;
-
     // if the matched message is a RecordsDelete, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
-    if write.descriptor().method == Method::Delete {
+    if messages[0].descriptor().method == Method::Delete {
         // TODO: implement this
 
         //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
@@ -70,6 +68,8 @@ pub(crate) async fn handle(
         //     }
         // }
     }
+
+    let mut write = Write::try_from(&messages[0])?;
 
     // TODO: review against the original code — it should take a store provider
     read.authorize(owner, &write)?;
@@ -287,6 +287,13 @@ impl ReadBuilder {
 
     /// Specify a protocol role for the record.
     #[must_use]
+    pub fn authorize(mut self, authorize: bool) -> Self {
+        self.authorize = Some(authorize);
+        self
+    }
+
+    /// Specify a protocol role for the record.
+    #[must_use]
     pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
         self.protocol_role = Some(protocol_role.into());
         self
@@ -314,12 +321,18 @@ impl ReadBuilder {
         };
 
         let authorization = if self.authorize.unwrap_or(true) {
-            let mut builder =
+            let mut auth_builder =
                 AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
             if let Some(id) = self.permission_grant_id {
-                builder = builder.permission_grant_id(id);
+                auth_builder = auth_builder.permission_grant_id(id);
             }
-            Some(builder.build(signer).await?)
+            if let Some(role) = self.protocol_role {
+                auth_builder = auth_builder.protocol_role(role);
+            }
+            if let Some(delegated_grant) = self.delegated_grant {
+                auth_builder = auth_builder.delegated_grant(delegated_grant);
+            }
+            Some(auth_builder.build(signer).await?)
         } else {
             None
         };

@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::{ConditionPublication, Conditions, GrantData, RecordsOptions, Scope, ScopeType};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
-use crate::records::{self, Write, WriteBuilder, WriteData, WriteProtocol};
+use crate::records::{self, Delete, Write, WriteBuilder, WriteData, WriteProtocol};
 use crate::{unexpected, utils, Descriptor, Interface, Method, Result};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -126,6 +126,26 @@ impl Grant {
         self.verify(grantor, grantee, &write.descriptor.base, store).await?;
         self.verify_scope(write)?;
         self.verify_conditions(write)?;
+        Ok(())
+    }
+
+    /// Verify the grant allows the `records::Write` message to be deleted.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn permit_records_delete(
+        &self, grantor: &str, grantee: &str, delete: &Delete, write: &Write,
+        store: &impl MessageStore,
+    ) -> Result<()> {
+        self.verify(grantor, grantee, &delete.descriptor.base, store).await?;
+
+        // must be deleting a record with the same protocol
+        if let ScopeType::Protocols { protocol } = &self.data.scope.scope_type {
+            if protocol != &write.descriptor.protocol {
+                return Err(unexpected!("grant and record to delete protocol do not match"));
+            }
+        };
+
         Ok(())
     }
 

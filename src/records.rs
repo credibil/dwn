@@ -1,5 +1,6 @@
 //! # Records
 
+pub mod delete;
 pub(crate) mod protocol;
 pub mod read;
 pub mod write;
@@ -9,6 +10,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
 pub use self::read::{Read, ReadBuilder, ReadReply};
 pub(crate) use self::write::{existing_entries, first_and_last};
 pub use self::write::{
@@ -29,27 +31,6 @@ pub struct Query {
     pub authorization: Option<Authorization>,
 }
 
-/// Records Subscribe payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Subscribe {
-    /// The Subscribe descriptor.
-    pub descriptor: SubscribeDescriptor,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
-}
-
-/// Records Delete payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Delete {
-    /// The Subscribe descriptor.
-    pub descriptor: DeleteDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
 /// Query descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,45 +44,6 @@ pub struct QueryDescriptor {
 
     /// The pagination cursor.
     pub pagination: Option<Pagination>,
-}
-
-/// Read descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Record CID.
-    pub filter: RecordsFilter,
-}
-
-/// Suscribe descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubscribeDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filter Records to subscribe to.
-    pub filter: RecordsFilter,
-}
-
-/// Read descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Record CID.
-    pub record_id: String,
-
-    /// Purge any descendent records should?
-    pub prune: bool,
 }
 
 /// Records filter.

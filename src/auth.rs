@@ -198,10 +198,17 @@ impl AuthorizationBuilder {
         Self::default()
     }
 
-    /// Set the `Descriptor`.
+    /// Set the `Descriptor` CID.
     #[must_use]
     pub fn descriptor_cid(mut self, descriptor_cid: impl Into<String>) -> Self {
         self.descriptor_cid = Some(descriptor_cid.into());
+        self
+    }
+
+    /// Set the `Descriptor`.
+    #[must_use]
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
+        self.delegated_grant = Some(delegated_grant);
         self
     }
 
