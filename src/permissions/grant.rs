@@ -102,6 +102,39 @@ impl Grant {
         Ok(())
     }
 
+    /// Verify the grant allows the `records::Write` message to be written.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn permit_write(
+        &self, grantor: &str, grantee: &str, write: &Write, store: &impl MessageStore,
+    ) -> Result<()> {
+        self.verify(grantor, grantee, &write.descriptor.base, store).await?;
+        self.verify_scope(write)?;
+        self.verify_conditions(write)?;
+        Ok(())
+    }
+
+    /// Verify the grant allows the `records::Write` message to be deleted.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn permit_delete(
+        &self, grantor: &str, grantee: &str, delete: &Delete, write: &Write,
+        store: &impl MessageStore,
+    ) -> Result<()> {
+        self.verify(grantor, grantee, &delete.descriptor.base, store).await?;
+
+        // must be deleting a record with the same protocol
+        if let ScopeType::Protocols { protocol } = &self.data.scope.scope_type {
+            if protocol != &write.descriptor.protocol {
+                return Err(unexpected!("grant and record to delete protocol do not match"));
+            }
+        };
+
+        Ok(())
+    }
+
     /// Verify that the message is within the allowed time frame of the grant, and
     /// the grant has not been revoked.
     async fn is_current(
@@ -141,39 +174,6 @@ impl Grant {
         if message_timestamp.lt(timestamp) {
             return Err(unexpected!("grant with CID {} has been revoked", self.id));
         }
-
-        Ok(())
-    }
-
-    /// Verify the grant allows the `records::Write` message to be written.
-    ///
-    /// # Errors
-    /// TODO: Add errors
-    pub async fn permit_records_write(
-        &self, grantor: &str, grantee: &str, write: &Write, store: &impl MessageStore,
-    ) -> Result<()> {
-        self.verify(grantor, grantee, &write.descriptor.base, store).await?;
-        self.verify_scope(write)?;
-        self.verify_conditions(write)?;
-        Ok(())
-    }
-
-    /// Verify the grant allows the `records::Write` message to be deleted.
-    ///
-    /// # Errors
-    /// TODO: Add errors
-    pub async fn permit_records_delete(
-        &self, grantor: &str, grantee: &str, delete: &Delete, write: &Write,
-        store: &impl MessageStore,
-    ) -> Result<()> {
-        self.verify(grantor, grantee, &delete.descriptor.base, store).await?;
-
-        // must be deleting a record with the same protocol
-        if let ScopeType::Protocols { protocol } = &self.data.scope.scope_type {
-            if protocol != &write.descriptor.protocol {
-                return Err(unexpected!("grant and record to delete protocol do not match"));
-            }
-        };
 
         Ok(())
     }

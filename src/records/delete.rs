@@ -163,7 +163,7 @@ impl Delete {
             let grant: permissions::Grant = delegated_grant.try_into()?;
             let author = authzn.author()?;
             let signer = authzn.signer()?;
-            grant.permit_records_delete(&author, &signer, self, write, store).await?;
+            grant.permit_delete(&author, &signer, self, write, store).await?;
         };
         if authzn.author()? == owner {
             return Ok(());

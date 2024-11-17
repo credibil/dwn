@@ -47,40 +47,6 @@ pub(crate) async fn fetch_grant(
     })
 }
 
-// /// Verify the grant allows the `records::Write` message to be written.
-// ///
-// /// # Errors
-// /// TODO: Add errors
-// pub async fn permit_records_write(
-//     &self, grantor: &str, grantee: &str, write: &Write, store: &impl MessageStore,
-// ) -> Result<()> {
-//     self.verify(grantor, grantee, &write.descriptor.base, store).await?;
-//     self.verify_scope(write)?;
-//     self.verify_conditions(write)?;
-//     Ok(())
-// }
-
-// /// Verify the grant allows the `records::Write` message to be deleted.
-// ///
-// /// # Errors
-// /// TODO: Add errors
-// pub async fn permit_records_delete(
-//     &self, grantor: &str, grantee: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
-// ) -> Result<()> {
-//     self.verify(grantor, grantee, &delete.descriptor.base, store).await?;
-
-//     // must be deleting a record with the same protocol
-//     if let ScopeType::Protocols { protocol } = &self.data.scope.scope_type {
-//         if protocol != &write.descriptor.protocol {
-//             return Err(unexpected!("grant and record to delete protocol do not match"));
-//         }
-//     };
-
-//     Ok(())
-// }
-
-
-
 /// Scope of the permission grant.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Scope {
@@ -105,14 +71,12 @@ pub enum ScopeType {
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
-
     /// `MessageType` scope fields.
     MessageType {
         /// The protocol the permission is applied to.
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
-
     /// `Records` scope fields.
     Records {
         /// The protocol the permission is applied to.

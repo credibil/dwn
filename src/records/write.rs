@@ -36,7 +36,7 @@ pub(crate) async fn handle(
 
     // verify integrity of messages with protocol
     if write.descriptor.protocol.is_some() {
-        protocol::verify_integrity(owner, &write, provider).await?;
+        protocol::verify(owner, &write, provider).await?;
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
@@ -284,7 +284,7 @@ impl Write {
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let signer = authzn.signer()?;
             let grant = delegated_grant.to_grant()?;
-            grant.permit_records_write(&author, &signer, self, store).await?;
+            grant.permit_write(&author, &signer, self, store).await?;
         }
 
         // authorize owner delegate
@@ -294,7 +294,7 @@ impl Write {
             };
             let signer = authzn.owner_signer()?;
             let grant = delegated_grant.to_grant()?;
-            grant.permit_records_write(owner, &signer, self, store).await?;
+            grant.permit_write(owner, &signer, self, store).await?;
         }
 
         // when record owner is set, we can directly grant access
@@ -314,7 +314,7 @@ impl Write {
 
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
-            return grant.permit_records_write(owner, &author, self, store).await;
+            return grant.permit_write(owner, &author, self, store).await;
         };
 
         // protocol-specific authorization

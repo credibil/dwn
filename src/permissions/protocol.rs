@@ -59,7 +59,7 @@ pub struct RevocationData {
 }
 
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
-pub(crate) async fn verify_integrity(
+pub(crate) async fn verify(
     owner: &str, write: &Write, store: &impl MessageStore,
 ) -> Result<()> {
     let Some(protocol) = &write.descriptor.protocol else {
@@ -81,6 +81,47 @@ pub(crate) async fn verify_integrity(
     verify_size_limit(write.descriptor.data_size, &rule_set)?;
     verify_tags(write.descriptor.tags.as_ref(), &rule_set)?;
     verify_revoke(owner, write, store).await?;
+
+    Ok(())
+}
+
+// Protocol-based authorization for records::Write messages.
+pub(crate) async fn permit_write(
+    owner: &str, write: &Write, store: &impl MessageStore,
+) -> Result<()> {
+    let messages = records::existing_entries(owner, &write.record_id, store).await?;
+    let (initial, _) = records::first_and_last(&messages).await?;
+
+    let record_chain = if initial.is_some() {
+        record_chain(owner, &write.record_id, store).await?
+    } else {
+        // NOTE: we can assume this message is an initial write because an existing
+        // initial write does not exist.  Additionally, we check further down in the
+        // `RecordsWriteHandler` if the incoming message is an initialWrite,
+        // so we don't check explicitly here to avoid an unnecessary duplicate check.
+        if let Some(parent_id) = &write.descriptor.parent_id {
+            record_chain(owner, parent_id, store).await?
+        } else {
+            vec![]
+        }
+    };
+
+    // protocol definition
+    let Some(protocol) = &write.descriptor.protocol else {
+        return Err(unexpected!("missing protocol"));
+    };
+    let definition = protocol_definition(owner, protocol, store).await?;
+
+    // rule set
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(unexpected!("missing protocol"));
+    };
+    let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
+        return Err(unexpected!("no rule set defined for protocol path"));
+    };
+
+    verify_invoked_role(owner, write, &definition, store).await?;
+    verify_actions(owner, write, &rule_set, record_chain, store).await?;
 
     Ok(())
 }
@@ -472,47 +513,6 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
             }
         }
     }
-    Ok(())
-}
-
-// Protocol-based authorization for records::Write messages.
-pub(crate) async fn permit_write(
-    owner: &str, write: &Write, store: &impl MessageStore,
-) -> Result<()> {
-    let messages = records::existing_entries(owner, &write.record_id, store).await?;
-    let (initial, _) = records::first_and_last(&messages).await?;
-
-    let record_chain = if initial.is_some() {
-        record_chain(owner, &write.record_id, store).await?
-    } else {
-        // NOTE: we can assume this message is an initial write because an existing
-        // initial write does not exist.  Additionally, we check further down in the
-        // `RecordsWriteHandler` if the incoming message is an initialWrite,
-        // so we don't check explicitly here to avoid an unnecessary duplicate check.
-        if let Some(parent_id) = &write.descriptor.parent_id {
-            record_chain(owner, parent_id, store).await?
-        } else {
-            vec![]
-        }
-    };
-
-    // protocol definition
-    let Some(protocol) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
-    };
-    let definition = protocol_definition(owner, protocol, store).await?;
-
-    // rule set
-    let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol"));
-    };
-    let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
-        return Err(unexpected!("no rule set defined for protocol path"));
-    };
-
-    verify_invoked_role(owner, write, &definition, store).await?;
-    verify_actions(owner, write, &rule_set, record_chain, store).await?;
-
     Ok(())
 }
 
