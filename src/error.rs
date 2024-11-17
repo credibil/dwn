@@ -7,19 +7,16 @@ use thiserror::Error;
 /// `DWN` errors.
 #[derive(Error, Debug, Deserialize)]
 pub enum Error {
-    /// Placeholder error type until moving to more strongly typed errors.
+    /// The server cannot or will not process the request due to something that
+    /// is perceived to be a client error.
     #[error(r#"{{"code": 400, "detail": "{0}"}}"#)]
-    Unexpected(String),
+    BadRequest(String),
 
-    /// The web node encountered an unexpected condition in a dependant library.
-    #[error(r#"{{"code": 400, "detail": "{0}"}}"#)]
-    Server(String),
-
-    /// A required resource was not found.
+    /// Semantically, this response means 'unauthenticated'.
     #[error(r#"{{"code": 401, "detail": "{0}"}}"#)]
     Unauthorized(String),
 
-    /// A required resource was not found.
+    /// The client does not have access rights to the content.
     #[error(r#"{{"code": 403, "detail": "{0}"}}"#)]
     Forbidden(String),
 
@@ -31,7 +28,13 @@ pub enum Error {
     #[error(r#"{{"code": 409, "detail": "{0}"}}"#)]
     Conflict(String),
 
-    /// A database write conflict occurred.
+    /// The server has encountered a situation it does not know how to handle.
+    /// Used when the web node encounters an unexpected condition in a dependant
+    /// library.
+    #[error(r#"{{"code": 500, "detail": "{0}"}}"#)]
+    InternalServerError(String),
+
+    /// The request method is not supported by the server and cannot be handled.
     #[error(r#"{{"code": 501, "detail": "{0}"}}"#)]
     Unimplemented(String),
 }
@@ -49,59 +52,59 @@ impl Serialize for Error {
 
 impl From<anyhow::Error> for Error {
     fn from(error: anyhow::Error) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
 impl From<base64ct::Error> for Error {
     fn from(error: Base64Error) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(error: serde_json::Error) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
 impl From<ciborium::ser::Error<std::io::Error>> for Error {
     fn from(error: ciborium::ser::Error<std::io::Error>) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
 impl From<http::uri::InvalidUri> for Error {
     fn from(error: http::uri::InvalidUri) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
 impl From<jsonschema::error::ValidationError<'_>> for Error {
     fn from(error: jsonschema::error::ValidationError<'_>) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
 // impl From<cid::Error> for Error {
 //     fn from(error: cid::Error) -> Self {
-//         Self::Server(error.to_string())
+//         Self::InternalServerError(error.to_string())
 //     }
 // }
 
 impl From<libipld::cid::Error> for Error {
     fn from(error: libipld::cid::Error) -> Self {
-        Self::Server(error.to_string())
+        Self::InternalServerError(error.to_string())
     }
 }
 
-/// Construct an `Error::Unexpected` error from a string or existing error
+/// Construct an `Error::BadRequest` error from a string or existing error
 /// value.
 ///
 /// This evaluates to an [`Error`][crate::Error]. It can take either just a
@@ -127,13 +130,13 @@ impl From<libipld::cid::Error> for Error {
 #[macro_export]
 macro_rules! unexpected {
     ($fmt:expr, $($arg:tt)*) => {
-        $crate::Error::Unexpected(format!($fmt, $($arg)*))
+        $crate::Error::BadRequest(format!($fmt, $($arg)*))
     };
     // ($msg:literal $(,)?) => {
-    //     $crate::Error::Unexpected($msg.into())
+    //     $crate::Error::BadRequest($msg.into())
     // };
      ($err:expr $(,)?) => {
-        $crate::Error::Unexpected(format!($err))
+        $crate::Error::BadRequest(format!($err))
     };
 
 }
@@ -166,7 +169,7 @@ mod test {
     // Test that error details are retuned as json.
     #[test]
     fn err_json() {
-        let err = Error::Unexpected("bad request".into());
+        let err = Error::BadRequest("bad request".into());
         let ser: Value = serde_json::from_str(&err.to_string()).unwrap();
         assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
     }
