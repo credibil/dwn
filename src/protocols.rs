@@ -21,9 +21,4 @@ pub const GRANT_PATH: &str = "grant";
 ///The protocol path of the `revocation` record.
 pub const REVOCATION_PATH: &str = "grant/revocation";
 
-impl Default for Definition {
-    fn default() -> Self {
-        let bytes = include_bytes!("protocols/default_protocol.json");
-        serde_json::from_slice(bytes).expect("should deserialize")
-    }
-}
+

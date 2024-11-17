@@ -2,9 +2,10 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
-use crate::permissions::{self, ScopeType};
+use crate::permissions::{self, Conditions, Scope, ScopeType};
 use crate::protocols::{
     self, Action, ActionRule, Actor, Definition, ProtocolType, RuleSet, GRANT_PATH, REQUEST_PATH,
     REVOCATION_PATH,
@@ -13,8 +14,54 @@ use crate::provider::MessageStore;
 use crate::records::{self, Write};
 use crate::{schema, unexpected, utils, Interface, Method, Result};
 
+// /// Protocol for managing web node permission grants.
+// pub struct Protocol {
+//     /// The URI of the web node Permissions protocol.
+//     pub uri: String,
+
+//     /// The protocol path of the `request` record.
+//     pub request_path: String,
+
+//     /// The protocol path of the `grant` record.
+//     pub grant_path: String,
+
+//     /// The protocol path of the `revocation` record.
+//     pub revocation_path: String,
+
+//     /// Permissions protocol definition.
+//     pub definition: Definition,
+// }
+
+/// Type for the data payload of a permission request message.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct RequestData {
+    /// If the grant is a delegated grant or not. If `true`, `granted_to` will
+    /// be able to act as the `granted_by` within the scope of this grant.
+    pub delegated: bool,
+
+    /// Optional string that communicates what the grant would be used for.
+    pub description: Option<String>,
+
+    /// The scope of the allowed access.
+    pub scope: Scope,
+
+    /// Optional conditions that must be met when the grant is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<Conditions>,
+}
+
+/// Type for the data payload of a permission revocation message.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct RevocationData {
+    /// Optional string that communicates the details of the revocation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
-pub(crate) async fn verify_integrity(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+pub(crate) async fn verify_integrity(
+    owner: &str, write: &Write, store: &impl MessageStore,
+) -> Result<()> {
     let Some(protocol) = &write.descriptor.protocol else {
         return Err(unexpected!("missing protocol"));
     };
@@ -71,17 +118,17 @@ pub(crate) fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
 
     match protocol_path.as_str() {
         REQUEST_PATH => {
-            let request_data: permissions::RequestData = serde_json::from_slice(data)?;
+            let request_data: RequestData = serde_json::from_slice(data)?;
             schema::validate_value("PermissionRequestData", &request_data)?;
             verify_scope(write, &request_data.scope.scope_type)
         }
         GRANT_PATH => {
-            let grant_data: permissions::RequestData = serde_json::from_slice(data)?;
+            let grant_data: RequestData = serde_json::from_slice(data)?;
             schema::validate_value("PermissionGrantData", &grant_data)?;
             verify_scope(write, &grant_data.scope.scope_type)
         }
         REVOCATION_PATH => {
-            let revocation_data: permissions::RevocationData = serde_json::from_slice(data)?;
+            let revocation_data: RevocationData = serde_json::from_slice(data)?;
             schema::validate_value("PermissionGrantData", &revocation_data)
         }
         _ => Err(unexpected!("unexpected permission record: ${protocol_path}")),
@@ -429,7 +476,9 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
 }
 
 // Protocol-based authorization for records::Write messages.
-pub(crate) async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+pub(crate) async fn permit_write(
+    owner: &str, write: &Write, store: &impl MessageStore,
+) -> Result<()> {
     let messages = records::existing_entries(owner, &write.record_id, store).await?;
     let (initial, _) = records::first_and_last(&messages).await?;
 

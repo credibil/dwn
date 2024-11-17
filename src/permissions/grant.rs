@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ConditionPublication, Conditions, GrantData, RecordsOptions, Scope, ScopeType};
+use super::{ConditionPublication, Conditions, RecordsOptions, Scope, ScopeType};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{self, Delete, Write, WriteBuilder, WriteData, WriteProtocol};
@@ -31,6 +31,35 @@ pub struct Grant {
     /// The grant's descriptor.
     #[serde(flatten)]
     pub data: GrantData,
+}
+
+/// Permission grant message payload
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrantData {
+    /// Describes intended grant use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// CID of permission request. Optional as grants may be given without
+    /// being requested.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+
+    /// Datetime when grant expires.
+    pub date_expires: DateTime<Utc>,
+
+    /// Whether grant is delegated or not. When `true`, the `granted_to` acts
+    /// as the `granted_to` within the scope of the grant.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegated: Option<bool>,
+
+    /// The scope of the allowed access.
+    pub scope: Scope,
+
+    /// Optional conditions that must be met when the grant is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<Conditions>,
 }
 
 impl Grant {

@@ -227,6 +227,13 @@ pub struct Definition {
     pub structure: BTreeMap<String, RuleSet>,
 }
 
+impl Default for Definition {
+    fn default() -> Self {
+        let bytes = include_bytes!("default_protocol.json");
+        serde_json::from_slice(bytes).expect("should deserialize")
+    }
+}
+
 /// Protocol type
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
