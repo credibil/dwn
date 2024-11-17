@@ -282,6 +282,7 @@ impl RecordsFilter {
             ));
         }
 
+        sql.pop(); // remove trailing newline
         sql
     }
 }

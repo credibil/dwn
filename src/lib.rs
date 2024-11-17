@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-pub use crate::endpoint::{Message, Replys};
+pub use crate::endpoint::Message;
 pub use crate::error::Error;
 pub use crate::provider::Provider;
 
@@ -124,118 +124,4 @@ pub struct Cursor {
 
     /// The number of messages to return.
     pub value: u64,
-}
-
-#[cfg(test)]
-mod stream {
-    use std::fmt::Debug;
-    use std::io::{self, BufRead, Read, Write};
-
-    use super::*;
-
-    /// Methods common to all messages.
-    pub trait Stream: Send + Sync {
-        fn save_data(&self) -> Result<()>;
-        fn load_data(&self) -> Result<()>;
-    }
-
-    /// Records write message payload
-    #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-    #[serde(rename_all = "camelCase")]
-    pub struct MessageRecord<T>
-    where
-        T: BufRead + Write,
-    {
-        data: T,
-    }
-
-    impl<T> MessageRecord<T>
-    where
-        T: BufRead + Write,
-    {
-        pub fn new(data: T) -> Self {
-            Self { data }
-        }
-    }
-
-    impl<T> Stream for MessageRecord<T>
-    where
-        T: BufRead + Write + Serialize + Clone + Debug + Send + Sync,
-    {
-        // push data out of the app
-        fn save_data(&self) -> Result<()> {
-            let internal = vec![5, 6, 7, 8, 9];
-            let mut stream = internal.as_slice();
-
-            let mut data_stream = DataStream::new();
-            data_stream.write(&mut stream).unwrap();
-            println!("data pushed out: {:?}", internal);
-
-            Ok(())
-        }
-
-        // pull data into the app
-        fn load_data(&self) -> Result<()> {
-            let mut data_stream = DataStream::new();
-
-            let mut buffer = Vec::new();
-            buffer.resize(5, 0);
-            data_stream.read(&mut buffer).unwrap();
-
-            // let buffer = data_stream.fill_buf().unwrap();
-            println!("data pulled in: {:?}", buffer);
-
-            Ok(())
-        }
-    }
-
-    #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-    struct DataStream {
-        data: Vec<u8>,
-    }
-
-    impl DataStream {
-        fn new() -> Self {
-            Self {
-                data: vec![1, 2, 3, 4, 5],
-            }
-        }
-    }
-
-    impl BufRead for DataStream {
-        fn fill_buf(&mut self) -> io::Result<&[u8]> {
-            Ok(&self.data)
-        }
-
-        fn consume(&mut self, amt: usize) {
-            self.data = self.data[amt..].to_vec();
-        }
-    }
-
-    impl Read for DataStream {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            let n = std::cmp::min(buf.len(), self.data.len());
-            buf[..n].copy_from_slice(&self.data[..n]);
-            self.data = self.data[n..].to_vec();
-            Ok(n)
-        }
-    }
-
-    impl Write for DataStream {
-        fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-            self.data.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> Result<(), std::io::Error> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn test_streaming() {
-        let message = MessageRecord::new(DataStream::new());
-        message.load_data().unwrap();
-        message.save_data().unwrap();
-    }
 }

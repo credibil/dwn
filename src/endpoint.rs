@@ -12,13 +12,15 @@ use serde_json::{Map, Value};
 use crate::auth::Authorization;
 use crate::permissions::{self, Grant};
 use crate::provider::Provider;
-use crate::{messages, protocols, records, schema, unexpected, Descriptor, Error, Result};
+use crate::{protocols, records, schema, unexpected, Descriptor, Error, Result};
 
 /// Handle incoming messages.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, message: impl Message, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle<T>(
+    owner: &str, message: impl Message<Reply = T>, provider: &impl Provider,
+) -> Result<Reply<T>> {
     let mut ctx = Context::new(owner);
     message.validate(&mut ctx, provider).await?;
     message.handle(&ctx, provider).await
@@ -27,6 +29,9 @@ pub async fn handle(owner: &str, message: impl Message, provider: &impl Provider
 /// Methods common to all messages.
 #[async_trait]
 pub trait Message: Serialize + Clone + Debug + Send + Sync {
+    /// The message's inner reply type.
+    type Reply;
+
     /// Compute the CID of the message.
     ///
     /// # Errors
@@ -40,7 +45,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
     fn authorization(&self) -> Option<&Authorization>;
 
     /// Handle the message.
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply>;
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>>;
 
     /// Validate the message. This is a generic validation common to all messages.
     /// Message-specific validation is done in the message handler.
@@ -83,47 +88,14 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
 /// Reply used by all endpoints.
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
-pub struct Reply {
+pub struct Reply<T> {
     /// Status message to accompany the reply.
     pub status: Status,
 
     /// Endpoint-specific reply.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub reply: Option<Replys>,
-}
-
-impl Reply {
-    /// Surface the underlying `RecordsRead` reply.
-    #[must_use]
-    pub fn records_read(self) -> Option<records::ReadReply> {
-        match self.reply {
-            Some(Replys::RecordsRead(reply)) => Some(reply),
-            _ => None,
-        }
-    }
-
-    /// Surface the underlying `MessagesQuery` reply.
-    #[must_use]
-    pub fn messages_query(self) -> Option<messages::QueryReply> {
-        match self.reply {
-            Some(Replys::MessagesQuery(reply)) => Some(reply),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-#[allow(missing_docs)]
-pub enum Replys {
-    MessagesQuery(messages::QueryReply),
-    MessagesRead(messages::ReadReply),
-    MessagesSubscribe(messages::SubscribeReply),
-    ProtocolsConfigure(protocols::ConfigureReply),
-    ProtocolsQuery(protocols::QueryReply),
-    RecordsRead(records::ReadReply),
-    // RecordsWrite(records::WriteReply),
+    pub body: Option<T>,
 }
 
 /// Reply status.
@@ -148,6 +120,7 @@ pub struct MessageRecord {
 
     /// Indexed message object fields, flattened for querying.
     #[serde(flatten)]
+    #[serde(skip_deserializing)]
     pub indexes: Map<String, Value>,
 }
 

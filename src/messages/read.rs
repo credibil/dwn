@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageType, Reply, Replys, Status};
+use crate::endpoint::{Context, Message, MessageType, Reply, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::DataStream;
@@ -21,7 +21,9 @@ use crate::{schema, unexpected, Descriptor, Error, Interface, Method, Result};
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
+pub(crate) async fn handle(
+    owner: &str, read: Read, provider: &impl Provider,
+) -> Result<Reply<ReadReply>> {
     read.authorize(owner, provider).await?;
 
     let Some(record) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
@@ -50,13 +52,13 @@ pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) ->
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(Replys::MessagesRead(ReadReply {
+        body: Some(ReadReply {
             entry: Some(ReadReplyEntry {
                 message_cid: read.descriptor.message_cid,
                 message,
                 data,
             }),
-        })),
+        }),
     })
 }
 
@@ -72,6 +74,8 @@ pub struct Read {
 
 #[async_trait]
 impl Message for Read {
+    type Reply = ReadReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -84,7 +88,7 @@ impl Message for Read {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(&ctx.owner, self, provider).await
     }
 }

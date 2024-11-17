@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::Filter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Reply, Replys, Status};
+use crate::endpoint::{Context, Reply, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::{schema, Cursor, Descriptor, Error, Interface, Message, Method, Result};
@@ -17,7 +17,9 @@ use crate::{schema, Cursor, Descriptor, Error, Interface, Message, Method, Resul
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
+pub(crate) async fn handle(
+    owner: &str, query: Query, provider: &impl Provider,
+) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;
 
     let mut filter_sql = String::new();
@@ -47,10 +49,10 @@ pub(crate) async fn handle(owner: &str, query: Query, provider: &impl Provider) 
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(Replys::MessagesQuery(QueryReply {
+        body: Some(QueryReply {
             entries,
             cursor: None,
-        })),
+        }),
     })
 }
 
@@ -66,6 +68,8 @@ pub struct Query {
 
 #[async_trait]
 impl Message for Query {
+    type Reply = QueryReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -78,7 +82,7 @@ impl Message for Query {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(&ctx.owner, self, provider).await
     }
 }

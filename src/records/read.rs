@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Replys, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
@@ -19,23 +19,26 @@ use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
+pub(crate) async fn handle(
+    owner: &str, read: Read, provider: &impl Provider,
+) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
         "
-        WHERE descriptor.interface = '{interface}'
+        WHERE descriptor.interface = '{interface}' 
         {filter_sql}
         AND latestBase = true
-        ORDER BY descriptor.messageTimestamp ASC
+        ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
         filter_sql = read.descriptor.filter.to_sql(),
     );
+
     let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
     if messages.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
-    if messages.len() > 1 {
+    if messages.len() > 2 {
         return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
     }
 
@@ -44,6 +47,8 @@ pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) ->
     // if the matched message is a RecordsDelete, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
     if write.descriptor().method == Method::Delete {
+        // TODO: implement this
+
         //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
         //   if initial_write.is_none() {
         //     return Err(unexpected!("Initial write for deleted record not found"));
@@ -114,14 +119,14 @@ pub(crate) async fn handle(owner: &str, read: Read, provider: &impl Provider) ->
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(Replys::RecordsRead(ReadReply {
+        body: Some(ReadReply {
             entry: ReadReplyEntry {
                 records_write: Some(write.clone()),
                 records_delete: None,
                 initial_write,
                 data,
             },
-        })),
+        }),
     })
 }
 
@@ -139,6 +144,8 @@ pub struct Read {
 
 #[async_trait]
 impl Message for Read {
+    type Reply = ReadReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -151,7 +158,7 @@ impl Message for Read {
         self.authorization.as_ref()
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(&ctx.owner, self, provider).await
     }
 }

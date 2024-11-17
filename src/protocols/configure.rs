@@ -14,7 +14,7 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Replys, Status};
+use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
 use crate::event::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
@@ -28,7 +28,7 @@ use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result};
 /// TODO: Add errors
 pub(crate) async fn handle(
     ctx: &Context, configure: Configure, provider: &impl Provider,
-) -> Result<Reply> {
+) -> Result<Reply<ConfigureReply>> {
     configure.authorize(ctx, provider).await?;
 
     // find any matching protocol entries
@@ -85,7 +85,7 @@ pub(crate) async fn handle(
             code: StatusCode::ACCEPTED.as_u16(),
             detail: None,
         },
-        reply: Some(Replys::ProtocolsConfigure(ConfigureReply { message: configure })),
+        body: Some(ConfigureReply { message: configure }),
     })
 }
 
@@ -101,6 +101,8 @@ pub struct Configure {
 
 #[async_trait]
 impl Message for Configure {
+    type Reply = ConfigureReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -113,7 +115,7 @@ impl Message for Configure {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(ctx, self, provider).await
     }
 }

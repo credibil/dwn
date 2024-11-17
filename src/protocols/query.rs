@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Replys, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
@@ -16,7 +16,9 @@ use crate::{schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Re
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(ctx: &Context, query: Query, provider: &impl Provider) -> Result<Reply> {
+pub(crate) async fn handle(
+    ctx: &Context, query: Query, provider: &impl Provider,
+) -> Result<Reply<QueryReply>> {
     query.authorize(ctx)?;
 
     let entries = fetch_config(&ctx.owner, query.descriptor.filter, provider).await?;
@@ -29,10 +31,10 @@ pub(crate) async fn handle(ctx: &Context, query: Query, provider: &impl Provider
             code: 200,
             detail: Some("OK".to_string()),
         },
-        reply: Some(Replys::ProtocolsQuery(QueryReply {
+        body: Some(QueryReply {
             entries,
             cursor: None,
-        })),
+        }),
     })
 }
 
@@ -51,6 +53,8 @@ pub struct Query {
 
 #[async_trait]
 impl Message for Query {
+    type Reply = QueryReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -63,7 +67,7 @@ impl Message for Query {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(ctx, self, provider).await
     }
 }

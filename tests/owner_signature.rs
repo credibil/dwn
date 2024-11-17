@@ -73,7 +73,7 @@ async fn flat_space() {
     // --------------------------------------------------
     // Alice augments Bob's message and saves to her web node
     // --------------------------------------------------
-    let read_reply = reply.records_read().expect("should be records read");
+    let read_reply = reply.body.expect("should be records read");
     let alice_data = read_reply.entry.data.expect("should have data");
 
     let mut bob_msg = read_reply.entry.records_write.expect("should have records write entry");
@@ -89,7 +89,7 @@ async fn flat_space() {
     let reply = endpoint::handle(BOB_DID, alice_read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let read_reply = reply.records_read().expect("should be records read");
+    let read_reply = reply.body.expect("should be records read");
     let mut reader = read_reply.entry.data.expect("should have data");
     let mut alice_data = Vec::new();
     reader.read_to_end(&mut alice_data).expect("should read to end");

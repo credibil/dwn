@@ -30,7 +30,9 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Result<Reply> {
+pub(crate) async fn handle(
+    owner: &str, write: Write, provider: &impl Provider,
+) -> Result<Reply<WriteReply>> {
     write.authorize(owner, provider).await?;
 
     // verify integrity of messages with protocol
@@ -39,7 +41,7 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
-    let (initial_write, last_write) = first_and_last(&existing).await?;
+    let (initial_write, newest_existing) = first_and_last(&existing).await?;
 
     // when current message is not the initial write, check 'immutable' properties
     // haven't been altered
@@ -50,29 +52,29 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     }
 
     // confirm current message will be the latest write AND last write was not a delete
-    if let Some(last_write) = &last_write {
+    if let Some(newest_existing) = &newest_existing {
         let current_ts = write.descriptor.base.message_timestamp.unwrap_or_default();
-        let latest_ts = last_write.descriptor.base.message_timestamp.unwrap_or_default();
+        let latest_ts = newest_existing.descriptor.base.message_timestamp.unwrap_or_default();
 
         if current_ts.cmp(&latest_ts) == Ordering::Less {
             return Err(Error::Conflict("newer write record already exists".to_string()));
         }
-        if last_write.descriptor.base.method == Method::Delete {
+        if newest_existing.descriptor.base.method == Method::Delete {
             return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
         }
     }
 
-    let (write, code) = if let Some(mut data) = write.data_stream.clone() {
-        (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
+    let (write, code, latest_base) = if let Some(mut data) = write.data_stream.clone() {
+        (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED, true)
     } else if initial_write.is_some() {
         // only process when the incoming message has no `data_stream` and is not the
         // initial write
-        let Some(last_write) = &last_write else {
-            return Err(unexpected!("latest existing message not found"));
+        let Some(newest_existing) = &newest_existing else {
+            return Err(unexpected!("latest existing message should exist"));
         };
-        (process_data(owner, &write, last_write, provider).await?, StatusCode::ACCEPTED)
+        (process_data(owner, &write, newest_existing, provider).await?, StatusCode::ACCEPTED, true)
     } else {
-        (write, StatusCode::NO_CONTENT)
+        (write, StatusCode::NO_CONTENT, false)
     };
 
     // ----------------------------------------------------------------
@@ -87,9 +89,8 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     //   - an intial write with data
     //   - not an initial write
 
-    // TODO: the use of `last_write` is confusing: refactor to use a `latest_base` flag
     let mut message = MessageRecord::from(&write);
-    message.indexes.insert("latestBase".to_string(), Value::Bool(true));
+    message.indexes.insert("latestBase".to_string(), Value::Bool(latest_base));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &message).await?;
@@ -102,15 +103,15 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
     EventLog::append(provider, owner, &event).await?;
 
     // only emit an event when the message is the latest base state
-    if last_write.is_none() {
+    if newest_existing.is_none() {
         EventStream::emit(provider, owner, &event).await?;
     }
 
-    // delete messages with the same `record_id` EXCEPT the initial write
+    // delete any previous messages with the same `record_id` EXCEPT initial write
     let mut deletable = VecDeque::from(existing);
     let _ = deletable.pop_front(); // initial write is first entry
     for msg in deletable {
-        let cid = cid::from_value(&msg)?;
+        let cid = msg.cid()?;
         MessageStore::delete(provider, owner, &cid).await?;
         EventLog::delete(provider, owner, &cid).await?;
     }
@@ -138,7 +139,7 @@ pub(crate) async fn handle(owner: &str, write: Write, provider: &impl Provider) 
             code: code.as_u16(),
             detail: Some("OK".to_string()),
         },
-        reply: None,
+        body: None,
     })
 }
 
@@ -179,6 +180,8 @@ pub struct Write {
 
 #[async_trait]
 impl Message for Write {
+    type Reply = WriteReply;
+
     fn cid(&self) -> Result<String> {
         #[derive(Serialize)]
         struct Cid {
@@ -200,10 +203,15 @@ impl Message for Write {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(&ctx.owner, self, provider).await
     }
 }
+
+/// `Write` reply
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct WriteReply;
 
 impl From<&Write> for MessageRecord {
     fn from(write: &Write) -> Self {
@@ -1038,7 +1046,8 @@ pub enum DerivationScheme {
 pub(crate) async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Write>> {
-    // N.B. only use `interface` to get `RecordsWrite` and `RecordsDelete` messages
+    // N.B. only use `interface` in order to to get both `RecordsWrite` and
+    //`RecordsDelete` messages
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
@@ -1165,7 +1174,7 @@ async fn process_data(
     Ok(message)
 }
 
-// Revoke grants if records::Write is a permission revocation .
+// Revoke grants if records::Write is a permission revocation.
 async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> Result<()> {
     // get grant from revocation message `parent_id`
     let Some(grant_id) = &write.descriptor.parent_id else {
@@ -1187,9 +1196,11 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
 
     let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
 
-    // delete any messages with the same `record_id` except the initial write
+    // delete matching messages
     for m in messages {
-        EventLog::delete(provider, owner, &m.cid()?).await?;
+        let message_cid = m.cid()?;
+        MessageStore::delete(provider, owner, &message_cid).await?;
+        EventLog::delete(provider, owner, &message_cid).await?;
     }
 
     Ok(())

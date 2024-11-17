@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Replys, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::event::Subscriber;
 use crate::messages::Filter;
 use crate::permissions::{self, ScopeType};
@@ -22,7 +22,7 @@ use crate::{schema, Descriptor, Error, Interface, Method, Result};
 /// TODO: Add errors
 pub(crate) async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
-) -> Result<Reply> {
+) -> Result<Reply<SubscribeReply>> {
     subscribe.authorize(owner, provider).await?;
 
     let message_cid = subscribe.cid()?;
@@ -35,9 +35,9 @@ pub(crate) async fn handle(
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        reply: Some(Replys::MessagesSubscribe(SubscribeReply {
+        body: Some(SubscribeReply {
             subscription: subscriber,
-        })),
+        }),
     })
 }
 
@@ -53,6 +53,8 @@ pub struct Subscribe {
 
 #[async_trait]
 impl Message for Subscribe {
+    type Reply = SubscribeReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -65,7 +67,7 @@ impl Message for Subscribe {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply> {
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(&ctx.owner, self, provider).await
     }
 }

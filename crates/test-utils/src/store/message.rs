@@ -21,8 +21,10 @@ impl MessageStore for ProviderImpl {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
         let sql = format!("SELECT * FROM {TABLE} {sql}");
+
         let mut response = self.db.query(&sql).await?;
         let messages: Vec<MessageRecord> = response.take(0)?;
+
         Ok((messages, Cursor::default()))
 
         // TODO: sort and paginate

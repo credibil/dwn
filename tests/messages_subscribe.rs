@@ -11,7 +11,7 @@ use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{QueryBuilder, SubscribeBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Message, Replys};
+use vercre_dwn::{endpoint, Message};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
@@ -29,7 +29,7 @@ async fn owner_events() {
         endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let Some(Replys::MessagesSubscribe(mut subscribe_reply)) = reply.reply else {
+    let Some(mut subscribe_reply) = reply.body else {
         panic!("unexpected reply: {:?}", reply);
     };
 
@@ -61,7 +61,7 @@ async fn owner_events() {
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.messages_query().expect("should be records read");
+    let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0], message_cid);

@@ -82,7 +82,7 @@ async fn all_messages() {
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.messages_query().expect("should be records read");
+    let query_reply = reply.body.expect("should be records read");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 6);
 
@@ -117,7 +117,7 @@ async fn all_messages() {
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.messages_query().expect("should be records read");
+    let query_reply = reply.body.expect("should be records read");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 7);
 
