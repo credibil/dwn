@@ -158,16 +158,17 @@ impl Delete {
     /// Authorize the delete message.
     async fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
+        let author = &authzn.author()?;
 
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
-            let grant: permissions::Grant = delegated_grant.try_into()?;
-            let author = authzn.author()?;
-            let signer = authzn.signer()?;
-            grant.permit_delete(&author, &signer, self, write, store).await?;
+            let grant = permissions::Grant::try_from(delegated_grant)?;
+            grant.permit_delete(&author, &authzn.signer()?, self, write, store).await?;
         };
-        if authzn.author()? == owner {
+        
+        if author == owner {
             return Ok(());
         }
+
         if write.descriptor.protocol.is_some() {
             return protocol::permit_delete(owner, self, write, store).await;
         }
