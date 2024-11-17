@@ -20,5 +20,3 @@ pub const GRANT_PATH: &str = "grant";
 
 ///The protocol path of the `revocation` record.
 pub const REVOCATION_PATH: &str = "grant/revocation";
-
-

@@ -5,32 +5,30 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
+use crate::auth::Authorization;
+use crate::endpoint::Message;
 use crate::permissions::{self, Conditions, Scope, ScopeType};
 use crate::protocols::{
     self, Action, ActionRule, Actor, Definition, ProtocolType, RuleSet, GRANT_PATH, REQUEST_PATH,
     REVOCATION_PATH,
 };
 use crate::provider::MessageStore;
-use crate::records::{self, Write};
+use crate::records::{self, Delete, Write};
 use crate::{schema, unexpected, utils, Interface, Method, Result};
 
-// /// Protocol for managing web node permission grants.
-// pub struct Protocol {
-//     /// The URI of the web node Permissions protocol.
-//     pub uri: String,
+enum Record {
+    Write(Write),
+    Delete(Delete),
+}
 
-//     /// The protocol path of the `request` record.
-//     pub request_path: String,
-
-//     /// The protocol path of the `grant` record.
-//     pub grant_path: String,
-
-//     /// The protocol path of the `revocation` record.
-//     pub revocation_path: String,
-
-//     /// Permissions protocol definition.
-//     pub definition: Definition,
-// }
+impl Record {
+    const fn authorization(&self) -> &Authorization {
+        match self {
+            Self::Write(write) => &write.authorization,
+            Self::Delete(delete) => &delete.authorization,
+        }
+    }
+}
 
 /// Type for the data payload of a permission request message.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -59,9 +57,7 @@ pub struct RevocationData {
 }
 
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
-pub(crate) async fn verify(
-    owner: &str, write: &Write, store: &impl MessageStore,
-) -> Result<()> {
+pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(protocol) = &write.descriptor.protocol else {
         return Err(unexpected!("missing protocol"));
     };
@@ -86,12 +82,17 @@ pub(crate) async fn verify(
 }
 
 // Protocol-based authorization for records::Write messages.
-pub(crate) async fn permit_write(
-    owner: &str, write: &Write, store: &impl MessageStore,
-) -> Result<()> {
+pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+    // protocol definition
+    let Some(protocol) = &write.descriptor.protocol else {
+        return Err(unexpected!("missing protocol"));
+    };
+    let definition = protocol_definition(owner, protocol, store).await?;
+    verify_invoked_role(owner, write, write, &definition, store).await?;
+
+    // rule set
     let messages = records::existing_entries(owner, &write.record_id, store).await?;
     let (initial, _) = records::first_and_last(&messages).await?;
-
     let record_chain = if initial.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
@@ -106,13 +107,6 @@ pub(crate) async fn permit_write(
         }
     };
 
-    // protocol definition
-    let Some(protocol) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
-    };
-    let definition = protocol_definition(owner, protocol, store).await?;
-
-    // rule set
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(unexpected!("missing protocol"));
     };
@@ -120,8 +114,33 @@ pub(crate) async fn permit_write(
         return Err(unexpected!("no rule set defined for protocol path"));
     };
 
-    verify_invoked_role(owner, write, &definition, store).await?;
-    verify_actions(owner, write, &rule_set, record_chain, store).await?;
+    verify_actions(owner, &Record::Write(write.clone()), &rule_set, &record_chain, store).await?;
+
+    Ok(())
+}
+
+// Protocol-based authorization for records::Delete messages.
+pub async fn permit_delete(
+    owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
+) -> Result<()> {
+    // protocol definition
+    let Some(protocol) = &write.descriptor.protocol else {
+        return Err(unexpected!("missing protocol"));
+    };
+    let definition = protocol_definition(owner, protocol, store).await?;
+
+    verify_invoked_role(owner, delete, write, &definition, store).await?;
+
+    // rule set
+    let record_chain = record_chain(owner, &delete.descriptor.record_id, store).await?;
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(unexpected!("missing protocol"));
+    };
+    let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
+        return Err(unexpected!("no rule set defined for protocol path"));
+    };
+
+    verify_actions(owner, &Record::Delete(delete.clone()), &rule_set, &record_chain, store).await?;
 
     Ok(())
 }
@@ -152,7 +171,7 @@ fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<
 }
 
 // Verifies the given `RecordsWrite` protocol.
-pub(crate) fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
+pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(unexpected!("missing protocol path"));
     };
@@ -177,7 +196,7 @@ pub(crate) fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
 }
 
 /// Validate tags include a protocol tag matching the scoped protocol.
-pub(crate) fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
+pub fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
     // validation difficult to do using JSON schema
     let scope_protocol = match scope {
         ScopeType::Records { protocol, .. } => {
@@ -319,12 +338,17 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
 
 // Check if the incoming message is invoking a role. If so, validate the invoked role.
 async fn verify_invoked_role(
-    owner: &str, write: &Write, definition: &Definition, store: &impl MessageStore,
+    owner: &str, msg: &impl Message, write: &Write, definition: &Definition,
+    store: &impl MessageStore,
 ) -> Result<()> {
-    let Some(protocol_role) = write.authorization.jws_payload()?.protocol_role else {
+    let Some(authzn) = msg.authorization() else {
+        return Err(unexpected!("missing authorization"));
+    };
+
+    let author = authzn.author()?;
+    let Some(protocol_role) = authzn.jws_payload()?.protocol_role else {
         return Ok(());
     };
-    let author = write.authorization.author()?;
 
     let Some(protocol_uri) = &write.descriptor.protocol else {
         return Err(unexpected!("missing protocol"));
@@ -423,11 +447,11 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
 
 // Verifies the given message is authorized by one of the action rules in the given protocol rule set.
 async fn verify_actions(
-    owner: &str, write: &Write, rule_set: &RuleSet, record_chain: Vec<Write>,
+    owner: &str, record: &Record, rule_set: &RuleSet, record_chain: &[Write],
     store: &impl MessageStore,
 ) -> Result<()> {
-    let author = write.authorization.author()?;
-    let allowed_actions = allowed_actions(owner, write, store).await?;
+    let author = record.authorization().author()?;
+    let allowed_actions = allowed_actions(owner, record, store).await?;
 
     // NOTE: We have already checked that the message is not from tenant, owner,
     // or permission grant authorized prior to this method being called.
@@ -438,7 +462,7 @@ async fn verify_actions(
         ));
     };
 
-    let invoked_role = write.authorization.jws_payload()?.protocol_role;
+    let invoked_role = record.authorization().jws_payload()?.protocol_role;
 
     // find a rule that authorizes the incoming message
     for rule in action_rules {
@@ -462,7 +486,7 @@ async fn verify_actions(
 
         // actor validation
         if rule.who == Some(Actor::Recipient) && rule.of.is_none() {
-            let message = if write.descriptor.base.method == Method::Write {
+            let message = if let Record::Write(write) = &record {
                 write
             } else {
                 // the incoming message must be a `RecordsDelete` because only
@@ -477,7 +501,7 @@ async fn verify_actions(
         }
 
         // is actor allowed by the current action rule?
-        if check_actor(&author, rule, &record_chain)? {
+        if check_actor(&author, rule, record_chain)? {
             return Ok(());
         }
     }
@@ -591,10 +615,10 @@ async fn record_chain(
 //
 // N.B. keep in mind an author's 'write' access may be revoked.
 async fn allowed_actions(
-    owner: &str, write: &Write, store: &impl MessageStore,
+    owner: &str, record: &Record, store: &impl MessageStore,
 ) -> Result<Vec<Action>> {
-    match write.descriptor.base.method {
-        Method::Write => {
+    match record {
+        Record::Write(write) => {
             if write.is_initial()? {
                 return Ok(vec![Action::Create]);
             }
@@ -611,37 +635,35 @@ async fn allowed_actions(
 
             Ok(vec![Action::CoUpdate])
         }
-        Method::Query => Ok(vec![Action::Query]),
-        Method::Read => Ok(vec![Action::Read]),
-        Method::Subscribe => Ok(vec![Action::Subscribe]),
-        Method::Delete => {
-            //   let Message::RecordsDelete(delete) = message else {
-            //     return Err(unexpected!("unexpected message type"));
-            //   };
-            //   let Some(initial_entry) = records::initial_entry(owner, &delete.record_id, store).await? else {
-            //     return Ok(vec![]);
-            //   };
+        // Method::Query => Ok(vec![Action::Query]),
+        // Method::Read => Ok(vec![Action::Read]),
+        // Method::Subscribe => Ok(vec![Action::Subscribe]),
+        Record::Delete(delete) => {
+            let messages =
+                records::existing_entries(owner, &delete.descriptor.record_id, store).await?;
+            let (initial, _) = records::first_and_last(&messages).await?;
+            let Some(initial) = initial else {
+                return Ok(Vec::new());
+            };
 
-            let actions = vec![];
-            // let author= delete.authorization.author()?;
-            // let initial_author = initial_entry.authorization.author()?;
+            let mut actions = vec![];
+            let author = delete.authorization.author()?;
+            let initial_author = initial.authorization.author()?;
 
-            //   if delete.descriptor.prune {
-            //     actions.push(Action::CoPrune);
-            //     if author == initial_author {
-            //       actions.push(Action::Prune);
-            //     }
-            //   }
+            if delete.descriptor.prune {
+                actions.push(Action::CoPrune);
+                if author == initial_author {
+                    actions.push(Action::Prune);
+                }
+            }
 
-            //   actions.push(Action::CoDelete);
-            //   if author == initial_author {
-            //       actions.push(Action::Delete);
-            //   }
+            actions.push(Action::CoDelete);
+            if author == initial_author {
+                actions.push(Action::Delete);
+            }
 
             Ok(actions)
-        }
-
-        Method::Configure => Err(unexpected!("configure method not allowed")),
+        } // Method::Configure => Err(unexpected!("configure method not allowed")),
     }
 }
 

@@ -166,6 +166,7 @@ impl MessageRecord {
             _ => None,
         }
     }
+
     /// Return the `ProtocolsConfigure` message, if set.
     #[must_use]
     pub const fn as_configure(&self) -> Option<&protocols::Configure> {

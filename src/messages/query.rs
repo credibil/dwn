@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 use super::Filter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Reply, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
-use crate::{schema, Cursor, Descriptor, Error, Interface, Message, Method, Result};
+use crate::{schema, Cursor, Descriptor, Error, Interface, Method, Result};
 
 /// Handle a query message.
 ///

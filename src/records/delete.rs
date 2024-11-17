@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
-use crate::permissions::{self}; //protocol
+use crate::permissions::{self, protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
@@ -53,7 +53,7 @@ pub(crate) async fn handle(
         if !delete.descriptor.prune {
             return Err(Error::NotFound("Not Found".to_string()));
         }
-        if existing_delete.descriptor.prune == true {
+        if existing_delete.descriptor.prune {
             return Err(Error::NotFound("Not Found".to_string()));
         }
     }
@@ -169,12 +169,10 @@ impl Delete {
             return Ok(());
         }
         if write.descriptor.protocol.is_some() {
-            // return protocol::permit_delete(owner, self, write, store).await;
+            return protocol::permit_delete(owner, self, write, store).await;
         }
 
-        return Err(Error::Unauthorized(
-            "`RecordsDelete` message failed authorization".to_string(),
-        ));
+        Err(Error::Unauthorized("`RecordsDelete` message failed authorization".to_string()))
     }
 }
 
@@ -189,8 +187,8 @@ pub struct DeleteDescriptor {
     /// The ID of the record to delete.
     pub record_id: String,
 
-    // Specifies whether descendent records should be pruned or not.
-    prune: bool,
+    /// Specifies whether descendent records should be pruned or not.
+    pub prune: bool,
 }
 
 /// Options to use when creating a permission grant.
@@ -224,7 +222,7 @@ impl DeleteBuilder {
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn prune(mut self, prune: bool) -> Self {
+    pub const fn prune(mut self, prune: bool) -> Self {
         self.prune = Some(prune);
         self
     }

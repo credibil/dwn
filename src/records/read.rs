@@ -287,7 +287,7 @@ impl ReadBuilder {
 
     /// Specify a protocol role for the record.
     #[must_use]
-    pub fn authorize(mut self, authorize: bool) -> Self {
+    pub const fn authorize(mut self, authorize: bool) -> Self {
         self.authorize = Some(authorize);
         self
     }

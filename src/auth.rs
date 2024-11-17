@@ -111,7 +111,7 @@ pub struct Attestation {
 
 impl Authorization {
     /// Verify message signatures.
-    pub(crate) async fn authenticate(&self, resolver: &impl DidResolver) -> Result<()> {
+    pub async fn authenticate(&self, resolver: &impl DidResolver) -> Result<()> {
         let verifier = verify_key!(resolver);
         self.signature.verify(verifier).await?;
 
@@ -130,14 +130,14 @@ impl Authorization {
 
     // TODO: cache this value
     /// Get message author's DID.
-    pub(crate) fn author(&self) -> Result<String> {
+    pub fn author(&self) -> Result<String> {
         self.author_delegated_grant.as_ref().map_or_else(
             || signer_did(&self.signature),
             |grant| signer_did(&grant.authorization.signature),
         )
     }
 
-    pub(crate) fn owner(&self) -> Result<Option<String>> {
+    pub fn owner(&self) -> Result<Option<String>> {
         let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
             signer_did(&grant.authorization.signature)?
         } else {
@@ -150,18 +150,18 @@ impl Authorization {
     }
 
     /// Get message signer's DID from the message authorization.
-    pub(crate) fn signer(&self) -> Result<String> {
+    pub fn signer(&self) -> Result<String> {
         signer_did(&self.signature)
     }
 
-    pub(crate) fn owner_signer(&self) -> Result<String> {
+    pub fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
             return Err(unexpected!("owner delegated grant not found"));
         };
         signer_did(&grant.authorization.signature)
     }
 
-    pub(crate) fn jws_payload(&self) -> Result<JwsPayload> {
+    pub fn jws_payload(&self) -> Result<JwsPayload> {
         let base64 = &self.signature.payload;
         let decoded = Base64UrlUnpadded::decode_vec(base64)
             .map_err(|e| unexpected!("issue decoding header: {e}"))?;
@@ -171,7 +171,7 @@ impl Authorization {
 
 /// Gets the DID of the signer of the given message, returning an error if the
 /// message is not signed.
-pub(crate) fn signer_did(jws: &Jws) -> Result<String> {
+pub fn signer_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
         return Err(unexpected!("Invalid `kid`"));
     };
