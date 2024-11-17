@@ -64,33 +64,33 @@ pub(crate) async fn handle(
         }
     }
 
-    let (write, code, latest_base) = if let Some(mut data) = write.data_stream.clone() {
-        (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED, true)
-    } else if initial_write.is_some() {
-        // only process when the incoming message has no `data_stream` and is not the
-        // initial write
-        let Some(newest_existing) = &newest_existing else {
-            return Err(unexpected!("latest existing message should exist"));
-        };
-        (process_data(owner, &write, newest_existing, provider).await?, StatusCode::ACCEPTED, true)
-    } else {
-        (write, StatusCode::NO_CONTENT, false)
-    };
-
     // ----------------------------------------------------------------
-    // TODO: Latest Base State
+    // TODO: Queryable
     // ----------------------------------------------------------------
-    // `latest_base` is used to prevent querying of initial writes that do
+    // `queryable` is used to prevent querying of initial writes that do
     // not have data. This prevents a malicious user from gaining access to
     // data by referencing the `data_cid` of private data in their initial
     // writes.
     //
-    // `latest_base` is set when the incoming `Write` message is:
+    // `queryable` is true when the incoming `Write` message is:
     //   - an intial write with data
     //   - not an initial write
+    let (write, code) = if let Some(mut data) = write.data_stream.clone() {
+        // incoming message WITH data
+        (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
+    } else if initial_write.is_some() {
+        // incoming message WITHOUT data AND not an initial write
+        let Some(newest_existing) = &newest_existing else {
+            return Err(unexpected!("latest existing message should exist"));
+        };
+        (process_data(owner, &write, newest_existing, provider).await?, StatusCode::ACCEPTED)
+    } else {
+        // incoming message WITHOUT data AND an initial write
+        (write, StatusCode::NO_CONTENT)
+    };
 
     let mut message = MessageRecord::from(&write);
-    message.indexes.insert("latestBase".to_string(), Value::Bool(latest_base));
+    message.indexes.insert("queryable".to_string(), Value::Bool(code != StatusCode::NO_CONTENT));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &message).await?;
@@ -1188,7 +1188,7 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         AND descriptor.method = '{method}'
         AND recordId = '{grant_id}'
         AND dateCreated >= '{message_timestamp}
-        AND latestBase = true
+        AND queryable = true
         ",
         interface = Interface::Records,
         method = Method::Write,

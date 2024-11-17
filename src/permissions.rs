@@ -20,7 +20,7 @@ pub(crate) async fn fetch_grant(
         WHERE descriptor.interface = '{interface}'
         AND descriptor.method = '{method}'
         AND recordId = '{grant_id}'
-        AND latestBase = true
+        AND queryable = true
         ",
         interface = Interface::Records,
         method = Method::Write,

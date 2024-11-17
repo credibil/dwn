@@ -27,7 +27,7 @@ pub(crate) async fn handle(
         "
         WHERE descriptor.interface = '{interface}' 
         {filter_sql}
-        AND latestBase = true
+        AND queryable = true
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
@@ -93,7 +93,7 @@ pub(crate) async fn handle(
             WHERE descriptor.interface = '{interface}'
             AND descriptor.method = '{method}'
             AND recordId = '{record_id}'
-            AND latestBase = false
+            AND queryable = false
             ORDER BY descriptor.messageTimestamp ASC
             ",
             interface = Interface::Records,
