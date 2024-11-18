@@ -22,25 +22,28 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-futures.workspace = true
 base64ct.workspace = true
 chrono.workspace = true
 ciborium = "0.2.2"
 cid.workspace = true
 derive_more = { workspace = true, features = ["display"] }
+futures.workspace = true
 http.workspace = true
-insta.workspace = true
+
 jsonschema = { version = "0.26.1", default-features = false, features = ["resolve-file"] }
+lazy_static = "1.5.0"
 libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror = "2.0.3"
 tokio = { workspace = true, features = ["sync"] }
+typetag = "0.2.18"
 vercre-did.workspace = true
 vercre-infosec.workspace = true
 
 [dev-dependencies]
+insta.workspace = true
 rand.workspace = true
 test-utils.workspace = true
 tokio.workspace = true

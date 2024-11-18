@@ -1,7 +1,4 @@
 //! Messages Subscribe
-//!
-//! This test demonstrates how a web node owner create differnt types of
-//! messages and subsequently query for them.
 
 use futures::StreamExt;
 use http::StatusCode;

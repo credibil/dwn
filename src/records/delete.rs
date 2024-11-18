@@ -13,9 +13,9 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
 use crate::permissions::{self, protocol};
-use crate::provider::{MessageStore, Provider, Signer};
+use crate::provider::{MessageStore, Provider, Signer, Task};
 use crate::records::Write;
-use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{task_manager, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Delete` message.
 ///
@@ -24,47 +24,6 @@ use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 pub(crate) async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
-    // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}' 
-        AND recordId = '{record_id}'
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        record_id = delete.descriptor.record_id,
-    );
-
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
-    if messages.is_empty() {
-        return Err(Error::NotFound("no matching records found".to_string()));
-    }
-    if messages.len() > 2 {
-        return Err(unexpected!("multiple messages exist for the RecordsDelete filter"));
-    }
-
-    let newest_existing = &messages[0];
-
-    // delete fails when:
-    // - attempting to delete an already deleted record
-    // - attempting to prune an already pruned record
-    if newest_existing.descriptor().method == Method::Delete {
-        let existing_delete = Delete::try_from(&messages[0])?;
-        if !delete.descriptor.prune {
-            return Err(Error::NotFound("Not Found".to_string()));
-        }
-        if existing_delete.descriptor.prune {
-            return Err(Error::NotFound("Not Found".to_string()));
-        }
-    }
-
-    // if the incoming message is not the newest, return Conflict
-    let current_ts = delete.descriptor().message_timestamp.unwrap_or_default();
-    let latest_ts = newest_existing.descriptor().message_timestamp.unwrap_or_default();
-    if current_ts.cmp(&latest_ts) == Ordering::Less {
-        return Err(Error::Conflict("newer record already exists".to_string()));
-    }
-
     // a `RecordsWrite` record is required for delete processing
     let sql = format!(
         "
@@ -83,10 +42,8 @@ pub(crate) async fn handle(
 
     delete.authorize(owner, &Write::try_from(&messages[0])?, provider).await?;
 
-    // await this.resumableTaskManager.run({
-    //   name : ResumableTaskName.RecordsDelete,
-    //   data : { tenant, message }
-    // });
+    let task = Task::RecordsDelete(delete.clone());
+    task_manager::run(owner, task, provider).await?;
 
     Ok(Reply {
         status: Status {
@@ -164,7 +121,7 @@ impl Delete {
             let grant = permissions::Grant::try_from(delegated_grant)?;
             grant.permit_delete(&author, &authzn.signer()?, self, write, store).await?;
         };
-        
+
         if author == owner {
             return Ok(());
         }
@@ -273,4 +230,87 @@ impl DeleteBuilder {
             authorization,
         })
     }
+}
+
+pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
+    // get the latest active `RecordsWrite` and `RecordsDelete` messages
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}' 
+        AND recordId = '{record_id}'
+        ORDER BY descriptor.messageTimestamp DESC
+        ",
+        interface = Interface::Records,
+        record_id = delete.descriptor.record_id,
+    );
+
+    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
+    if messages.is_empty() {
+        return Err(Error::NotFound("no matching records found".to_string()));
+    }
+    if messages.len() > 2 {
+        return Err(unexpected!("multiple messages exist for the RecordsDelete filter"));
+    }
+
+    let newest_existing = &messages[0];
+
+    // delete fails when:
+    // - attempting to delete an already deleted record
+    // - attempting to prune an already pruned record
+    if newest_existing.descriptor().method == Method::Delete {
+        let existing_delete = Delete::try_from(&messages[0])?;
+        if !delete.descriptor.prune {
+            return Err(Error::NotFound("Not Found".to_string()));
+        }
+        if existing_delete.descriptor.prune {
+            return Err(Error::NotFound("Not Found".to_string()));
+        }
+    }
+
+    // if the incoming message is not the newest, return Conflict
+    let current_ts = delete.descriptor().message_timestamp.unwrap_or_default();
+    let latest_ts = newest_existing.descriptor().message_timestamp.unwrap_or_default();
+    if current_ts.cmp(&latest_ts) == Ordering::Less {
+        return Err(Error::Conflict("newer record already exists".to_string()));
+    }
+
+    //     if (!Records.canPerformDeleteAgainstRecord(message, newestExistingMessage)) {
+    //       return;
+    //     }
+
+    //     // NOTE: code above is duplicated from `RecordsDeleteHandler` and is already performed if this was invoked by the `RecordsDeleteHandler`,
+    //     // But we repeat the logic for the code path when the ResumableTaskManager resumes the task.
+    //     // We make the two different code paths to share this same method to reduce code duplication, there might be a better way to refactor this.
+
+    //     const recordsDelete = await RecordsDelete.parse(message);
+    //     const initialWrite = await RecordsWrite.getInitialWrite(existingMessages);
+    //     const indexes = recordsDelete.constructIndexes(initialWrite);
+    //     const messageCid = await Message.getCid(message);
+    //     await this.messageStore.put(tenant, message, indexes);
+    //     await this.eventLog.append(tenant, messageCid, indexes);
+
+    //     // only emit if the event stream is set
+    //       this.eventStream.emit(tenant, { message, initialWrite }, indexes);
+
+    // purge/hard-delete all descendent records
+    if delete.descriptor.prune {
+        // await StorageController.purgeRecordDescendants(tenant, message.descriptor.recordId, this.messageStore, this.dataStore, this.eventLog);
+    }
+
+    //     // delete all existing messages that are not newest, except for the initial write
+    //     await StorageController.deleteAllOlderMessagesButKeepInitialWrite(
+    //       tenant, existingMessages, message, this.messageStore, this.dataStore, this.eventLog
+    //     );
+    //   }
+
+    Ok(())
+}
+
+pub(crate) fn is_newest(delete: &Delete, newest_existing: &MessageRecord) -> Result<bool> {
+    let current_ts = delete.descriptor().message_timestamp.unwrap_or_default();
+    let latest_ts = newest_existing.descriptor().message_timestamp.unwrap_or_default();
+    if current_ts.cmp(&latest_ts) == Ordering::Less {
+        return Err(Error::Conflict("newer record already exists".to_string()));
+    }
+    Ok(true)
 }

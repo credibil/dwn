@@ -12,6 +12,7 @@ pub mod provider;
 pub mod records;
 mod schema;
 mod store;
+mod task_manager;
 mod utils;
 
 use chrono::{DateTime, Utc};

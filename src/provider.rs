@@ -2,13 +2,13 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::endpoint::MessageRecord;
 use crate::event::{Event, Subscriber};
 use crate::messages::Filter;
+pub use crate::task_manager::{ManagedTask, Task};
 use crate::Cursor;
 
 /// Issuer Provider trait.
@@ -114,7 +114,7 @@ pub trait TaskStore: Send + Sync {
     ///
     /// If the task has timed out, a client will be able to grab it through the
     /// `grab()` method and resume the task.
-    async fn register(&self, task: &Value, timeout_secs: u64) -> Result<ResumableTask>;
+    async fn register(&self, task: &ManagedTask, timeout_secs: u64) -> Result<()>;
 
     /// Grabs `count` unhandled tasks from the store.
     ///
@@ -124,43 +124,27 @@ pub trait TaskStore: Send + Sync {
     /// N.B.: The implementation must make sure that once a task is grabbed by a client,
     /// tis timeout must be updated so that it is considered in-flight/under processing
     /// and cannot be grabbed by another client until it is timed-out.
-    async fn grab(count: u64) -> Result<Vec<ResumableTask>>;
+    async fn grab(&self, count: u64) -> Result<Vec<ManagedTask>>;
 
     /// Reads the task associated with the task ID provided regardless of whether
     /// it is in-flight/under processing or not.
     ///
     /// This is mainly introduced for testing purposes: ie. to check the status of
     /// a task for easy test verification.
-    async fn read(task_id: &str) -> Result<Option<ResumableTask>>;
+    async fn read(&self, task_id: &str) -> Result<Option<ManagedTask>>;
 
     /// Extends the timeout of the task associated with the task ID provided.
     ///
     /// No-op if the task is not found, as this implies that the task has already
     /// been completed. This allows the client that is executing the task to
     /// continue working on it before the task is considered timed out.
-    async fn extend(task_id: &str, timeout_secs: u64) -> Result<()>;
+    async fn extend(&self, task_id: &str, timeout_secs: u64) -> Result<()>;
 
     /// Delete data associated with the specified id.
     async fn delete(&self, task_id: &str) -> Result<()>;
 
     /// Purge all data from the store.
     async fn purge(&self) -> Result<()>;
-}
-
-/// An managed resumable task model.
-pub struct ResumableTask {
-    /// Globally unique ID. Used to extend or delete the task.
-    pub id: String,
-
-    /// Task specific data. This is deliberately of type `any` because this store
-    /// should not have to be ware of its type.
-    pub task: Value,
-
-    /// Task timeout in Epoch Time.
-    pub timeout: u64,
-
-    /// Number of retries
-    pub retry_count: u64,
 }
 
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,

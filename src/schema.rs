@@ -66,6 +66,10 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/records-read.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "records-delete" => {
+            let schema = include_bytes!("../schemas/interface-methods/records-delete.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
 
         _ => Err(unexpected!("Schema not found: {schema_name}")),
     }
