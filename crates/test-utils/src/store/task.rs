@@ -24,7 +24,7 @@ impl TaskStore for ProviderImpl {
     }
 
     async fn extend(&self, owner: &str, task_id: &str, timeout_secs: u64) -> Result<()> {
-        todo!()
+        Ok(())
     }
 
     async fn delete(&self, owner: &str, task_id: &str) -> Result<()> {

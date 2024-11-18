@@ -33,7 +33,6 @@ jsonschema = { version = "0.26.1", default-features = false, features = ["resolv
 libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
-serde_bytes = "0.11.15"
 serde_json.workspace = true
 thiserror = "2.0.3"
 tokio = { workspace = true, features = ["sync"] }
@@ -94,7 +93,7 @@ serde = { version = "1.0.215", features = ["derive"] }
 serde_json = { version = "1.0.133", features = ["alloc"] }
 sha2 = "0.10.8"
 test-utils = { path = "crates/test-utils" }
-tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 

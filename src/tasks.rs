@@ -1,50 +1,48 @@
 //! # Task Manager
 
-use std::time::Duration;
+// use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use tokio::time::{sleep, Duration};
 
 use crate::endpoint::Message;
-// use tokio::time::{interval, sleep};
 use crate::provider::{Provider, TaskStore};
 use crate::records::Delete;
-use crate::Result;
+use crate::{unexpected, Result};
 
 // Frequency with which an automatic timeout extension is requested.
-const EXTENSION_PERIOD: u64 = 30;
+const EXTEND_SECS: u64 = 30;
 
 /// Runs a resumable task with automatic timeout extension.
 pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Result<()> {
-    let timeout = EXTENSION_PERIOD * 2;
-
-    // let mut interval = interval(Duration::from_millis(100));
-    let timeout = (Utc::now() + Duration::from_secs(timeout)).timestamp() as u64;
-
     // register the task
+    let timeout = (Utc::now() + Duration::from_secs(EXTEND_SECS * 2)).timestamp() as u64;
     let resumable = ResumableTask {
         task_id: task.cid()?,
         task: task.clone(),
         timeout,
         retry_count: 0,
     };
-
     TaskStore::register(provider, owner, &resumable, timeout).await?;
 
-    // // extend the timeout  until complete
-    // let task_id = resumable.id.clone();
-    // let store_1 = store.clone();
-    // tokio::spawn(async move {
-    //     sleep(Duration::from_secs(EXTENSION_PERIOD)).await;
-    //     let _ = store_1.extend(&task_id, timeout).await;
-    // });
+    // wait until the task is complete or the timeout is reached
+    tokio::select! {
+        _ = task.run(owner, provider) =>Ok(()),
+        _ = extend_timeout(owner, &resumable.task_id,provider) => Ok(()),
+    }
+}
 
-    task.run(owner, provider).await?;
-
-    // clearTimeoutExtensionTimer(timer);
-
+// Extend the timeout period.
+async fn extend_timeout(owner: &str, task_id: &str, provider: &impl Provider) -> Result<()> {
+    for _ in 0..2 {
+        sleep(Duration::from_secs(EXTEND_SECS)).await;
+        TaskStore::extend(provider, owner, task_id, EXTEND_SECS)
+            .await
+            .map_err(|e| unexpected!("failed to extend timeout: {e}"))?;
+    }
     Ok(())
 }
 
@@ -82,13 +80,13 @@ pub enum TaskType {
 impl TaskType {
     pub fn cid(&self) -> Result<String> {
         match self {
-            TaskType::RecordsDelete(delete) => delete.cid(),
+            Self::RecordsDelete(delete) => delete.cid(),
         }
     }
 
     pub async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         match self {
-            TaskType::RecordsDelete(delete) => delete.run(owner, provider).await,
+            Self::RecordsDelete(delete) => delete.run(owner, provider).await,
         }
     }
 }
