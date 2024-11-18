@@ -7,19 +7,17 @@ use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::endpoint::Message;
 // use tokio::time::{interval, sleep};
 use crate::provider::{Provider, TaskStore};
-use crate::Result;
 use crate::records::Delete;
+use crate::Result;
 
 // Frequency with which an automatic timeout extension is requested.
 const EXTENSION_PERIOD: u64 = 30;
 
-enum Task2{
-    RecordsDelete(Delete)
-}
 /// Runs a resumable task with automatic timeout extension.
-pub async fn run(owner: &str, task: impl Task, provider: &impl Provider) -> Result<()> {
+pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Result<()> {
     let timeout = EXTENSION_PERIOD * 2;
 
     // let mut interval = interval(Duration::from_millis(100));
@@ -28,7 +26,7 @@ pub async fn run(owner: &str, task: impl Task, provider: &impl Provider) -> Resu
     // register the task
     let resumable = ResumableTask {
         task_id: task.cid()?,
-        task: serde_json::to_vec(&task)?,
+        task: task.clone(),
         timeout,
         retry_count: 0,
     };
@@ -56,9 +54,6 @@ pub trait Task: Serialize + DeserializeOwned + Send + Sync
 where
     Self: Sized,
 {
-    /// Returns the task's unique identifier.
-    fn cid(&self) -> Result<String>;
-
     /// Runs the task.
     async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()>;
 }
@@ -70,12 +65,30 @@ pub struct ResumableTask {
     pub task_id: String,
 
     /// Task type, serialized as bytes.
-    #[serde(with = "serde_bytes")]
-    pub task: Vec<u8>,
+    pub task: TaskType,
 
     /// Task timeout in Epoch Time.
     pub timeout: u64,
 
     /// Number of retries
     pub retry_count: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum TaskType {
+    RecordsDelete(Delete),
+}
+
+impl TaskType {
+    pub fn cid(&self) -> Result<String> {
+        match self {
+            TaskType::RecordsDelete(delete) => delete.cid(),
+        }
+    }
+
+    pub async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
+        match self {
+            TaskType::RecordsDelete(delete) => delete.run(owner, provider).await,
+        }
+    }
 }

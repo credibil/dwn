@@ -15,7 +15,7 @@ use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Statu
 use crate::permissions::{self, protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::Write;
-use crate::tasks::{self, Task};
+use crate::tasks::{self, Task, TaskType};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Delete` message.
@@ -44,7 +44,7 @@ pub(crate) async fn handle(
     delete.authorize(owner, &Write::try_from(&messages[0])?, provider).await?;
 
     let task = delete.clone();
-    tasks::run(owner, task, provider).await?;
+    tasks::run(owner, TaskType::RecordsDelete(task), provider).await?;
 
     Ok(Reply {
         status: Status {
@@ -114,28 +114,10 @@ impl TryFrom<&MessageRecord> for Delete {
 
 #[async_trait]
 impl Task for Delete {
-    fn cid(&self) -> Result<String> {
-        Message::cid(self)
-    }
-
     async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         delete(owner, self, provider).await
     }
-
-    // fn serialize(&self) -> Result<Vec<u8>> {
-    //     serde_json::to_vec(self).map_err(Into::into)
-    // }
-
-    // fn deserialize(data: &[u8]) -> Result<Self> {
-    //     serde_json::from_slice(data).map_err(Into::into)
-    // }
 }
-
-// impl task_manager::Deserializable for Delete {
-//     fn deserialize(data: &[u8]) -> Result<Self> {
-//         serde_json::from_slice(data).map_err(Into::into)
-//     }
-// }
 
 impl Delete {
     /// Authorize the delete message.
