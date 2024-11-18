@@ -29,16 +29,14 @@ cid.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 futures.workspace = true
 http.workspace = true
-
 jsonschema = { version = "0.26.1", default-features = false, features = ["resolve-file"] }
-lazy_static = "1.5.0"
 libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
+serde_bytes = "0.11.15"
 serde_json.workspace = true
 thiserror = "2.0.3"
 tokio = { workspace = true, features = ["sync"] }
-typetag = "0.2.18"
 vercre-did.workspace = true
 vercre-infosec.workspace = true
 

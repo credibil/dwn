@@ -8,7 +8,7 @@ pub use vercre_infosec::{Cipher, KeyOps, Signer};
 use crate::endpoint::MessageRecord;
 use crate::event::{Event, Subscriber};
 use crate::messages::Filter;
-pub use crate::task_manager::{ManagedTask, Task};
+pub use crate::tasks::ResumableTask;
 use crate::Cursor;
 
 /// Issuer Provider trait.
@@ -114,7 +114,7 @@ pub trait TaskStore: Send + Sync {
     ///
     /// If the task has timed out, a client will be able to grab it through the
     /// `grab()` method and resume the task.
-    async fn register(&self, task: &ManagedTask, timeout_secs: u64) -> Result<()>;
+    async fn register(&self, owner: &str, task: &ResumableTask, timeout_secs: u64) -> Result<()>;
 
     /// Grabs `count` unhandled tasks from the store.
     ///
@@ -124,27 +124,27 @@ pub trait TaskStore: Send + Sync {
     /// N.B.: The implementation must make sure that once a task is grabbed by a client,
     /// tis timeout must be updated so that it is considered in-flight/under processing
     /// and cannot be grabbed by another client until it is timed-out.
-    async fn grab(&self, count: u64) -> Result<Vec<ManagedTask>>;
+    async fn grab(&self, owner: &str, count: u64) -> Result<Vec<ResumableTask>>;
 
     /// Reads the task associated with the task ID provided regardless of whether
     /// it is in-flight/under processing or not.
     ///
     /// This is mainly introduced for testing purposes: ie. to check the status of
     /// a task for easy test verification.
-    async fn read(&self, task_id: &str) -> Result<Option<ManagedTask>>;
+    async fn read(&self, owner: &str, task_id: &str) -> Result<Option<ResumableTask>>;
 
     /// Extends the timeout of the task associated with the task ID provided.
     ///
     /// No-op if the task is not found, as this implies that the task has already
     /// been completed. This allows the client that is executing the task to
     /// continue working on it before the task is considered timed out.
-    async fn extend(&self, task_id: &str, timeout_secs: u64) -> Result<()>;
+    async fn extend(&self, owner: &str, task_id: &str, timeout_secs: u64) -> Result<()>;
 
     /// Delete data associated with the specified id.
-    async fn delete(&self, task_id: &str) -> Result<()>;
+    async fn delete(&self, owner: &str, task_id: &str) -> Result<()>;
 
     /// Purge all data from the store.
-    async fn purge(&self) -> Result<()>;
+    async fn purge(&self, owner: &str) -> Result<()>;
 }
 
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,

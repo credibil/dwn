@@ -13,9 +13,10 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
 use crate::permissions::{self, protocol};
-use crate::provider::{MessageStore, Provider, Signer, Task};
+use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::Write;
-use crate::{task_manager, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::tasks::{self, Task};
+use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Delete` message.
 ///
@@ -42,8 +43,8 @@ pub(crate) async fn handle(
 
     delete.authorize(owner, &Write::try_from(&messages[0])?, provider).await?;
 
-    let task = Task::RecordsDelete(delete.clone());
-    task_manager::run(owner, task, provider).await?;
+    let task = delete.clone();
+    tasks::run(owner, task, provider).await?;
 
     Ok(Reply {
         status: Status {
@@ -111,6 +112,31 @@ impl TryFrom<&MessageRecord> for Delete {
     }
 }
 
+#[async_trait]
+impl Task for Delete {
+    fn cid(&self) -> Result<String> {
+        Message::cid(self)
+    }
+
+    async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
+        delete(owner, self, provider).await
+    }
+
+    // fn serialize(&self) -> Result<Vec<u8>> {
+    //     serde_json::to_vec(self).map_err(Into::into)
+    // }
+
+    // fn deserialize(data: &[u8]) -> Result<Self> {
+    //     serde_json::from_slice(data).map_err(Into::into)
+    // }
+}
+
+// impl task_manager::Deserializable for Delete {
+//     fn deserialize(data: &[u8]) -> Result<Self> {
+//         serde_json::from_slice(data).map_err(Into::into)
+//     }
+// }
+
 impl Delete {
     /// Authorize the delete message.
     async fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
@@ -119,7 +145,7 @@ impl Delete {
 
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = permissions::Grant::try_from(delegated_grant)?;
-            grant.permit_delete(&author, &authzn.signer()?, self, write, store).await?;
+            grant.permit_delete(author, &authzn.signer()?, self, write, store).await?;
         };
 
         if author == owner {
