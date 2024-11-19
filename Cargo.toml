@@ -21,6 +21,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-recursion = "1.1.1"
 async-trait.workspace = true
 base64ct.workspace = true
 chrono.workspace = true

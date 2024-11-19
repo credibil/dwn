@@ -3,7 +3,9 @@
 //! `Delete` is a message type used to delete a record in the web node.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
+use async_recursion::async_recursion;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
@@ -15,7 +17,7 @@ use crate::data::cid;
 use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
 use crate::event::Event;
 use crate::permissions::{self, protocol};
-use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
+use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::tasks::{self, Task, TaskType};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
@@ -43,8 +45,21 @@ pub(crate) async fn handle(
         return Err(Error::NotFound("no matching records found".to_string()));
     }
 
-    if messages[0].descriptor().method == Method::Delete {
-        return Err(Error::NotFound("no matching records found".to_string()));
+    // run checks when latest existing message is a `RecordsDelete`
+    let newest_existing = &messages[0];
+    if newest_existing.descriptor().method == Method::Delete {
+        // cannot delete a `RecordsDelete` record
+        if !delete.descriptor.prune {
+            return Err(Error::NotFound("cannot delete a `RecordsDelete` record".to_string()));
+        }
+
+        // cannot prune previously pruned record
+        let existing_delete = Delete::try_from(newest_existing)?;
+        if existing_delete.descriptor.prune {
+            return Err(Error::NotFound(
+                "attempting to prune an already pruned record".to_string(),
+            ));
+        }
     }
 
     delete.authorize(owner, &Write::try_from(&messages[0])?, provider).await?;
@@ -282,22 +297,6 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
         return Err(unexpected!("multiple messages exist for the RecordsDelete filter"));
     }
     let newest_existing = &messages[0];
-    let method = &newest_existing.descriptor().method;
-
-    if method == &Method::Delete {
-        // cannot delete a `RecordsDelete` record
-        if !delete.descriptor.prune {
-            return Err(Error::NotFound("cannot delete a RecordsDelete record".to_string()));
-        }
-
-        // fail when existing `RecordsDelete` has `prune` set
-        let existing_delete = Delete::try_from(newest_existing)?;
-        if existing_delete.descriptor.prune {
-            return Err(Error::NotFound(
-                "attempting to prune an already pruned record".to_string(),
-            ));
-        }
-    }
 
     // TODO: merge this code with `RecordsWrite`
     // if the incoming message is not the newest, return Conflict
@@ -332,14 +331,96 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
 
     // purge/hard-delete all descendent records
     if delete.descriptor.prune {
-        // await StorageController.purgeRecordDescendants(tenant, message.descriptor.recordId, this.messageStore, this.dataStore, this.eventLog);
+        purge_descendants(owner, &delete.descriptor.record_id, provider).await?;
     }
 
     // delete all existing messages that are not newest, except for the initial write
-    //     await StorageController.deleteAllOlderMessagesButKeepInitialWrite(
+    //     delete_older(
     //       tenant, existingMessages, message, this.messageStore, this.dataStore, this.eventLog
     //     );
     //   }
+
+    Ok(())
+}
+
+// Purge a record's descendant records and data.
+#[async_recursion]
+async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
+    let sql = format!(
+        "
+        WHERE descriptor.interface = '{interface}'
+        AND parentId = '{record_id}'
+        ORDER BY descriptor.messageTimestamp DESC
+        ",
+        interface = Interface::Records,
+    );
+
+    let (children, _) = MessageStore::query(provider, owner, &sql).await?;
+    if children.is_empty() {
+        return Ok(());
+    }
+
+    // group by record_id
+    let mut record_id_map = HashMap::<&str, Vec<MessageRecord>>::new();
+    for message in children {
+        let record_id = if let Some(write) = message.as_write() {
+            &write.record_id
+        } else {
+            let Some(delete) = message.as_delete() else {
+                return Err(unexpected!("unexpected message type"));
+            };
+            &delete.descriptor.record_id
+        };
+
+        record_id_map
+            .get_mut(record_id.as_str())
+            .unwrap_or(&mut Vec::<MessageRecord>::new())
+            .push(message.clone());
+    }
+
+    for (record_id, messages) in record_id_map {
+        // purge child's descendants
+        purge_descendants(owner, record_id, provider).await?;
+
+        // purge child's messages
+        purge_records(owner, &messages, provider).await?;
+    }
+
+    Ok(())
+}
+
+// Purge record's specified records and data.
+async fn purge_records(
+    owner: &str, records: &[MessageRecord], provider: &impl Provider,
+) -> Result<()> {
+    // filter out `RecordsDelete` messages
+    let mut writes = records
+        .iter()
+        .filter(|m| m.descriptor().method == Method::Write)
+        .collect::<Vec<&MessageRecord>>();
+
+    // order records from earliest to most recent
+    writes.sort_by(|a, b| {
+        let ts_a = a.descriptor().message_timestamp.unwrap_or_default();
+        let ts_b = b.descriptor().message_timestamp.unwrap_or_default();
+        ts_a.cmp(&ts_b)
+    });
+
+    // delete data for the most recent write
+    let Some(latest) = writes.pop() else {
+        return Ok(());
+    };
+    let Some(write) = latest.as_write() else {
+        return Err(unexpected!("latest record is not a `RecordsWrite`"));
+    };
+    BlockStore::delete(provider, owner, &write.descriptor.data_cid).await?;
+
+    // delete message events
+    for message in records {
+        let cid = message.cid()?;
+        EventLog::delete(provider, owner, &cid).await?;
+        MessageStore::delete(provider, owner, &cid).await?;
+    }
 
     Ok(())
 }

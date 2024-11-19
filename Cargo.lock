@@ -5184,6 +5184,7 @@ name = "vercre-dwn"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "async-trait",
  "base64ct",
  "chrono",
