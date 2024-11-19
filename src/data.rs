@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use crate::provider::BlockStore;
 use crate::{unexpected, Result};
 
+/// The maximum size of a message.
+pub const MAX_ENCODED_SIZE: usize = 5; //30000;
+
 const CHUNK_SIZE: usize = 16;
 
 /// Compuet CID from a data value or stream.

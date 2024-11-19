@@ -17,13 +17,13 @@ use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
+use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
 use crate::event::Event;
 use crate::permissions::{self, protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
-use crate::{unexpected, utils, Descriptor, Error, Interface, Method, Result, MAX_ENCODED_SIZE};
+use crate::{data, unexpected, utils, Descriptor, Error, Interface, Method, Result};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -88,7 +88,7 @@ pub(crate) async fn handle(
         (write, StatusCode::NO_CONTENT)
     };
 
-    let mut record = MessageRecord::from(&write);
+    let mut record = Record::from(&write);
     record.indexes.insert("queryable".to_string(), Value::Bool(code != StatusCode::NO_CONTENT));
 
     // save the message and log the event
@@ -212,7 +212,7 @@ impl Message for Write {
 #[allow(clippy::module_name_repetitions)]
 pub struct WriteReply;
 
-impl From<&Write> for MessageRecord {
+impl From<&Write> for Record {
     fn from(write: &Write) -> Self {
         let mut save = write.clone();
         save.encoded_data = None;
@@ -245,10 +245,10 @@ impl From<&Write> for MessageRecord {
     }
 }
 
-impl TryFrom<MessageRecord> for Write {
+impl TryFrom<Record> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: MessageRecord) -> Result<Self> {
+    fn try_from(record: Record) -> Result<Self> {
         match record.message {
             MessageType::RecordsWrite(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
@@ -256,10 +256,10 @@ impl TryFrom<MessageRecord> for Write {
     }
 }
 
-impl TryFrom<&MessageRecord> for Write {
+impl TryFrom<&Record> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: &MessageRecord) -> Result<Self> {
+    fn try_from(record: &Record) -> Result<Self> {
         match &record.message {
             MessageType::RecordsWrite(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
@@ -1098,7 +1098,7 @@ async fn process_stream(
     let mut write = write.clone();
 
     // when data is below the threshold, store it within MessageStore
-    if write.descriptor.data_size <= MAX_ENCODED_SIZE {
+    if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {
         // read data from stream
         let mut data_bytes = Vec::new();
         data.read_to_end(&mut data_bytes)?;
@@ -1154,7 +1154,7 @@ async fn process_data(
     // encode the data from the original write if it is smaller than the
     // data-store threshold
     let mut message = write.clone();
-    if write.descriptor.data_size <= MAX_ENCODED_SIZE {
+    if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {
         let Some(encoded) = &existing.encoded_data else {
             return Err(unexpected!("no `encoded_data` in most recent existing message"));
         };

@@ -14,7 +14,7 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
+use crate::endpoint::{Context, Message, Record, MessageType, Reply, Status};
 use crate::event::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
@@ -69,7 +69,7 @@ pub(crate) async fn handle(
     }
 
     // save the incoming message
-    let message = MessageRecord::from(&configure);
+    let message = Record::from(&configure);
     MessageStore::put(provider, &ctx.owner, &message).await?;
 
     let event = Event {
@@ -127,7 +127,7 @@ pub struct ConfigureReply {
     message: Configure,
 }
 
-impl From<Configure> for MessageRecord {
+impl From<Configure> for Record {
     fn from(configure: Configure) -> Self {
         Self {
             message: MessageType::ProtocolsConfigure(configure),
@@ -136,7 +136,7 @@ impl From<Configure> for MessageRecord {
     }
 }
 
-impl From<&Configure> for MessageRecord {
+impl From<&Configure> for Record {
     fn from(configure: &Configure) -> Self {
         Self {
             message: MessageType::ProtocolsConfigure(configure.clone()),
@@ -145,10 +145,10 @@ impl From<&Configure> for MessageRecord {
     }
 }
 
-impl TryFrom<MessageRecord> for Configure {
+impl TryFrom<Record> for Configure {
     type Error = crate::Error;
 
-    fn try_from(record: MessageRecord) -> Result<Self> {
+    fn try_from(record: Record) -> Result<Self> {
         match record.message {
             MessageType::ProtocolsConfigure(configure) => Ok(configure),
             _ => Err(unexpected!("expected `ProtocolsConfigure` message")),

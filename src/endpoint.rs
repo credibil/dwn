@@ -113,7 +113,7 @@ pub struct Status {
 /// Wraps each message with a unifying type used in operations common to all
 /// messages. For example, storing and retrieving from the `MessageStore`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct MessageRecord {
+pub struct Record {
     /// The message type.
     #[serde(flatten)]
     pub message: MessageType,
@@ -124,7 +124,7 @@ pub struct MessageRecord {
     pub indexes: Map<String, Value>,
 }
 
-impl MessageRecord {
+impl Record {
     /// The message's CID.
     ///
     /// # Errors
@@ -148,7 +148,7 @@ impl MessageRecord {
     }
 }
 
-impl MessageRecord {
+impl Record {
     /// Return the `RecordsWrite` message, if set.
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
@@ -177,7 +177,7 @@ impl MessageRecord {
     }
 }
 
-impl Deref for MessageRecord {
+impl Deref for Record {
     type Target = MessageType;
 
     fn deref(&self) -> &Self::Target {

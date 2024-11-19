@@ -14,11 +14,11 @@ use serde_json::{Map, Value};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Status};
+use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
 use crate::event::Event;
 use crate::permissions::{self, protocol};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
-use crate::records::{self, Write};
+use crate::records::Write;
 use crate::tasks::{self, Task, TaskType};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
@@ -110,10 +110,10 @@ impl Message for Delete {
 #[derive(Debug)]
 pub struct DeleteReply;
 
-impl TryFrom<MessageRecord> for Delete {
+impl TryFrom<Record> for Delete {
     type Error = crate::Error;
 
-    fn try_from(record: MessageRecord) -> Result<Self> {
+    fn try_from(record: Record) -> Result<Self> {
         match record.message {
             MessageType::RecordsDelete(delete) => Ok(delete),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
@@ -121,10 +121,10 @@ impl TryFrom<MessageRecord> for Delete {
     }
 }
 
-impl TryFrom<&MessageRecord> for Delete {
+impl TryFrom<&Record> for Delete {
     type Error = crate::Error;
 
-    fn try_from(record: &MessageRecord) -> Result<Self> {
+    fn try_from(record: &Record) -> Result<Self> {
         match &record.message {
             MessageType::RecordsDelete(delete) => Ok(delete.clone()),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
@@ -132,7 +132,7 @@ impl TryFrom<&MessageRecord> for Delete {
     }
 }
 
-impl From<&Delete> for MessageRecord {
+impl From<&Delete> for Record {
     fn from(delete: &Delete) -> Self {
         let mut record = Self {
             message: MessageType::RecordsDelete(delete.clone()),
@@ -316,8 +316,8 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
     }
 
     // save the delete message using same indexes as the initial write
-    let initial = MessageRecord::from(&write);
-    let mut record = MessageRecord::from(delete);
+    let initial = Record::from(&write);
+    let mut record = Record::from(delete);
     record.indexes.extend(initial.indexes);
     MessageStore::put(provider, owner, &record).await?;
 
@@ -335,7 +335,7 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
     }
 
     // delete all messages except initial write and most recent
-    delete_older(owner, &MessageRecord::from(delete), &messages, provider).await?;
+    delete_older(owner, &Record::from(delete), &messages, provider).await?;
 
     Ok(())
 }
@@ -358,7 +358,7 @@ async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provide
     }
 
     // group by `record_id` (a record can have multiple children)
-    let mut record_id_map = HashMap::<&str, Vec<MessageRecord>>::new();
+    let mut record_id_map = HashMap::<&str, Vec<Record>>::new();
     for message in children {
         let record_id = if let Some(write) = message.as_write() {
             &write.record_id
@@ -371,7 +371,7 @@ async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provide
 
         record_id_map
             .get_mut(record_id.as_str())
-            .unwrap_or(&mut Vec::<MessageRecord>::new())
+            .unwrap_or(&mut Vec::<Record>::new())
             .push(message.clone());
     }
 
@@ -386,14 +386,10 @@ async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provide
 }
 
 // Purge record's specified records and data.
-async fn purge_records(
-    owner: &str, records: &[MessageRecord], provider: &impl Provider,
-) -> Result<()> {
+async fn purge_records(owner: &str, records: &[Record], provider: &impl Provider) -> Result<()> {
     // filter out `RecordsDelete` messages
-    let mut writes = records
-        .iter()
-        .filter(|m| m.descriptor().method == Method::Write)
-        .collect::<Vec<&MessageRecord>>();
+    let mut writes =
+        records.iter().filter(|m| m.descriptor().method == Method::Write).collect::<Vec<&Record>>();
 
     // order records from earliest to most recent
     writes.sort_by(|a, b| {
@@ -425,7 +421,7 @@ async fn purge_records(
 // in the given tenant, but keep the initial write write for future processing by
 // ensuring its `isLatestBaseState` index is "false".
 async fn delete_older(
-    owner: &str, newest: &MessageRecord, existing: &[MessageRecord], provider: &impl Provider,
+    owner: &str, newest: &Record, existing: &[Record], provider: &impl Provider,
 ) -> Result<()> {
     // NOTE: under normal circumstances, there will only be, at most, two existing
     // records per `record_id` (initial + a potential subsequent write/delete),
@@ -442,7 +438,7 @@ async fn delete_older(
             if let Some(write) = message.as_write()
                 && write.is_initial()?
             {
-                let mut record = MessageRecord::from(write);
+                let mut record = Record::from(write);
                 record.indexes.insert("queryable".to_string(), Value::Bool(false));
                 MessageStore::put(provider, owner, &record).await?;
             } else {
@@ -451,30 +447,31 @@ async fn delete_older(
         }
     }
 
-    // }
-
     Ok(())
 }
 
 // Deletes the data referenced by the given message if needed.
 async fn delete_data(
-    owner: &str, message: &MessageRecord, newest: &MessageRecord, store: &impl BlockStore,
+    owner: &str, message: &Record, newest: &Record, store: &impl BlockStore,
 ) -> Result<()> {
-    // const recordsWriteMessage = message as RecordsWriteMessage;
+    let Some(write) = message.as_write() else {
+        return Err(unexpected!("unexpected message type"));
+    };
+    let Some(newest_write) = newest.as_write() else {
+        return Err(unexpected!("unexpected message type"));
+    };
 
-    // // Optional short-circuit optimization to avoid unnecessary data store call since the data should be encoded with the message itself in this case,
-    // // but data store call is a no-op thus code still works correctly even if this short-circuit is removed.
-    // if (recordsWriteMessage.descriptor.dataSize <= DwnConstant.maxDataSizeAllowedToBeEncoded) {
-    //   return;
+    // // short-circuit when data is encoded in message (i.e. not in block store)
+    // if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {
+    //     return Ok(());
     // }
 
-    // // We must still keep the data if the newest message still references the same data.
-    // if (recordsWriteMessage.descriptor.dataCid === (newestMessage as RecordsWriteMessage).descriptor.dataCid) {
-    //   return;
-    // }
+    // keep data if referenced by newest message
+    if write.descriptor.data_cid == newest_write.descriptor.data_cid {
+        return Ok(());
+    }
 
-    // // Else we delete the data from the data store.
-    // await dataStore.delete(tenant, recordsWriteMessage.recordId, recordsWriteMessage.descriptor.dataCid);
-
-    Ok(())
+    BlockStore::delete(store, owner, &write.descriptor.data_cid)
+        .await
+        .map_err(|e| unexpected!("failed to delete data: {e}"))
 }
