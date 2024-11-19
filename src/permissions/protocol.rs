@@ -92,7 +92,7 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
 
     // rule set
     let messages = records::existing_entries(owner, &write.record_id, store).await?;
-    let (initial, _) = records::first_and_last(&messages).await?;
+    let (initial, _) = records::earliest_and_latest(&messages).await?;
     let record_chain = if initial.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
@@ -594,7 +594,7 @@ async fn record_chain(
 
     while let Some(record_id) = &current_id {
         let messages = records::existing_entries(owner, record_id, store).await?;
-        let (initial, _) = records::first_and_last(&messages).await?;
+        let (initial, _) = records::earliest_and_latest(&messages).await?;
 
         let Some(initial) = initial else {
             return Err(unexpected!(
@@ -624,7 +624,7 @@ async fn allowed_actions(
             }
 
             let messages = records::existing_entries(owner, &write.record_id, store).await?;
-            let (initial, _) = records::first_and_last(&messages).await?;
+            let (initial, _) = records::earliest_and_latest(&messages).await?;
 
             let Some(initial) = initial else {
                 return Ok(Vec::new());
@@ -641,7 +641,7 @@ async fn allowed_actions(
         Record::Delete(delete) => {
             let messages =
                 records::existing_entries(owner, &delete.descriptor.record_id, store).await?;
-            let (initial, _) = records::first_and_last(&messages).await?;
+            let (initial, _) = records::earliest_and_latest(&messages).await?;
             let Some(initial) = initial else {
                 return Ok(Vec::new());
             };

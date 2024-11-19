@@ -40,7 +40,7 @@ pub(crate) async fn handle(
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
-    let (initial_write, newest_existing) = first_and_last(&existing).await?;
+    let (initial_write, newest_existing) = earliest_and_latest(&existing).await?;
 
     // when current message is not the initial write, check 'immutable' properties
     // haven't been altered
@@ -88,11 +88,11 @@ pub(crate) async fn handle(
         (write, StatusCode::NO_CONTENT)
     };
 
-    let mut message = MessageRecord::from(&write);
-    message.indexes.insert("queryable".to_string(), Value::Bool(code != StatusCode::NO_CONTENT));
+    let mut record = MessageRecord::from(&write);
+    record.indexes.insert("queryable".to_string(), Value::Bool(code != StatusCode::NO_CONTENT));
 
     // save the message and log the event
-    MessageStore::put(provider, owner, &message).await?;
+    MessageStore::put(provider, owner, &record).await?;
 
     let event = Event {
         message_cid: write.cid()?,
@@ -1074,19 +1074,18 @@ pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<St
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-pub(crate) async fn first_and_last(messages: &[Write]) -> Result<(Option<Write>, Option<Write>)> {
-    // get initial entry
-    let initial = if let Some(first) = messages.first() {
-        // check initial write is found
+pub(crate) async fn earliest_and_latest(
+    messages: &[Write],
+) -> Result<(Option<Write>, Option<Write>)> {
+    // check initial write is found
+    if let Some(first) = messages.first() {
         if !first.is_initial()? {
             return Err(unexpected!("initial write is not earliest message"));
         }
-        Some(first)
+        Ok((Some(first.clone()), messages.last().cloned()))
     } else {
-        None
-    };
-
-    Ok((initial.cloned(), messages.last().cloned()))
+        Ok((None, None))
+    }
 }
 
 async fn process_stream(

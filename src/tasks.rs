@@ -30,7 +30,7 @@ pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Resul
 
     // wait until the task is complete or the timeout is reached
     tokio::select! {
-        _ = task.run(owner, provider) =>Ok(()),
+        _ = task.run(owner, provider) => Ok(()),
         _ = extend_timeout(owner, &resumable.task_id,provider) => Ok(()),
     }
 }

@@ -11,7 +11,7 @@ use serde_json::Value;
 
 pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
 pub use self::read::{Read, ReadBuilder, ReadReply};
-pub(crate) use self::write::{existing_entries, first_and_last};
+pub(crate) use self::write::{earliest_and_latest, existing_entries};
 pub use self::write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
 };

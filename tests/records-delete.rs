@@ -76,6 +76,8 @@ async fn delete_record() {
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
-    assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
+    let err = endpoint::handle(ALICE_DID, delete, &provider).await.expect_err("should be 404");
+    assert_eq!(err.to_json(), json!({"code": 404, "detail": "no matching records found"}));
+    // println!("{:?}", err);
+    // assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
 }
