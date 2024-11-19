@@ -18,7 +18,7 @@ use crate::endpoint::{Context, Message, MessageRecord, MessageType, Reply, Statu
 use crate::event::Event;
 use crate::permissions::{self, protocol};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
-use crate::records::Write;
+use crate::records::{self, Write};
 use crate::tasks::{self, Task, TaskType};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
@@ -334,11 +334,8 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
         purge_descendants(owner, &delete.descriptor.record_id, provider).await?;
     }
 
-    // delete all existing messages that are not newest, except for the initial write
-    //     delete_older(
-    //       tenant, existingMessages, message, this.messageStore, this.dataStore, this.eventLog
-    //     );
-    //   }
+    // delete all messages except initial write and most recent
+    delete_older(owner, &MessageRecord::from(delete), &messages, provider).await?;
 
     Ok(())
 }
@@ -346,6 +343,7 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
 // Purge a record's descendant records and data.
 #[async_recursion]
 async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
+    // fetch child records
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
@@ -354,13 +352,12 @@ async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provide
         ",
         interface = Interface::Records,
     );
-
     let (children, _) = MessageStore::query(provider, owner, &sql).await?;
     if children.is_empty() {
         return Ok(());
     }
 
-    // group by record_id
+    // group by `record_id` (a record can have multiple children)
     let mut record_id_map = HashMap::<&str, Vec<MessageRecord>>::new();
     for message in children {
         let record_id = if let Some(write) = message.as_write() {
@@ -381,7 +378,6 @@ async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provide
     for (record_id, messages) in record_id_map {
         // purge child's descendants
         purge_descendants(owner, record_id, provider).await?;
-
         // purge child's messages
         purge_records(owner, &messages, provider).await?;
     }
@@ -421,6 +417,64 @@ async fn purge_records(
         EventLog::delete(provider, owner, &cid).await?;
         MessageStore::delete(provider, owner, &cid).await?;
     }
+
+    Ok(())
+}
+
+// Deletes all messages in `existingMessages` that are older than the `newestMessage`
+// in the given tenant, but keep the initial write write for future processing by
+// ensuring its `isLatestBaseState` index is "false".
+async fn delete_older(
+    owner: &str, newest: &MessageRecord, existing: &[MessageRecord], provider: &impl Provider,
+) -> Result<()> {
+    // NOTE: under normal circumstances, there will only be, at most, two existing
+    // records per `record_id` (initial + a potential subsequent write/delete),
+    for message in existing {
+        let ts_message = message.descriptor().message_timestamp.unwrap_or_default();
+        let ts_newest = newest.descriptor().message_timestamp.unwrap_or_default();
+
+        if ts_message.cmp(&ts_newest) == Ordering::Less {
+            delete_data(owner, message, newest, provider).await?;
+            MessageStore::delete(provider, owner, &message.cid()?).await?;
+
+            // if the existing message is the initial write, retain it
+            // BUT, ensure the message is no longer marked as the `queryable`
+            if let Some(write) = message.as_write()
+                && write.is_initial()?
+            {
+                let mut record = MessageRecord::from(write);
+                record.indexes.insert("queryable".to_string(), Value::Bool(false));
+                MessageStore::put(provider, owner, &record).await?;
+            } else {
+                EventLog::delete(provider, owner, &message.cid()?).await?;
+            }
+        }
+    }
+
+    // }
+
+    Ok(())
+}
+
+// Deletes the data referenced by the given message if needed.
+async fn delete_data(
+    owner: &str, message: &MessageRecord, newest: &MessageRecord, store: &impl BlockStore,
+) -> Result<()> {
+    // const recordsWriteMessage = message as RecordsWriteMessage;
+
+    // // Optional short-circuit optimization to avoid unnecessary data store call since the data should be encoded with the message itself in this case,
+    // // but data store call is a no-op thus code still works correctly even if this short-circuit is removed.
+    // if (recordsWriteMessage.descriptor.dataSize <= DwnConstant.maxDataSizeAllowedToBeEncoded) {
+    //   return;
+    // }
+
+    // // We must still keep the data if the newest message still references the same data.
+    // if (recordsWriteMessage.descriptor.dataCid === (newestMessage as RecordsWriteMessage).descriptor.dataCid) {
+    //   return;
+    // }
+
+    // // Else we delete the data from the data store.
+    // await dataStore.delete(tenant, recordsWriteMessage.recordId, recordsWriteMessage.descriptor.dataCid);
 
     Ok(())
 }

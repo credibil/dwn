@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 //! # Decentralized Web Node (web node)
 
 mod auth;

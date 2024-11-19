@@ -214,10 +214,14 @@ pub struct WriteReply;
 
 impl From<&Write> for MessageRecord {
     fn from(write: &Write) -> Self {
+        let mut save = write.clone();
+        save.encoded_data = None;
+
         let mut record = Self {
-            message: MessageType::RecordsWrite(write.clone()),
+            message: MessageType::RecordsWrite(save),
             indexes: Map::new(),
         };
+
         record.indexes.insert(
             "author".to_string(),
             Value::String(write.authorization.author().unwrap_or_default()),
