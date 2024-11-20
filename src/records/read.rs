@@ -42,7 +42,7 @@ pub(crate) async fn handle(
         return Err(unexpected!("multiple messages exist"));
     }
 
-    // if the matched message is a RecordsDelete, mark as not-found and return
+    // if the matched message is a `RecordsDelete`, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
     if messages[0].descriptor().method == Method::Delete {
         // TODO: implement this

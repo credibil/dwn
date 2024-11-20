@@ -42,12 +42,9 @@ pub(crate) async fn handle(
     let existing = existing_entries(owner, &write.record_id, provider).await?;
     let (initial_write, newest_existing) = earliest_and_latest(&existing).await?;
 
-    // when current message is not the initial write, check 'immutable' properties
-    // haven't been altered
+    // when message is not the initial write, verify 'immutable' properties
     if let Some(initial_write) = &initial_write {
-        if !write.compare_immutable(initial_write) {
-            return Err(unexpected!("immutable properties do not match"));
-        }
+        write.compare_immutable(initial_write)?;
     }
 
     // confirm current message will be the latest write AND previous write was not a delete
@@ -66,14 +63,13 @@ pub(crate) async fn handle(
     // ----------------------------------------------------------------
     // TODO: Hidden
     // ----------------------------------------------------------------
-    // `hidden` is used to prevent querying of initial writes that do
-    // not have data. This prevents a malicious user from gaining access to
-    // data by referencing the `data_cid` of private data in their initial
-    // writes.
+    // **`hidden` is set to true when the 'intial write' HAS NO data**
     //
-    // `hidden` is true when the incoming `Write` message is:
-    //   - an intial write WITH data
-    //   - NOT an initial write
+    // It prevents querying of initial writes without data, thus preventing users
+    // from accessing private data they wouldn't ordinarily be able to access.
+    //
+    // The potential exploit occurs when an initial write has no data but sets
+    // the `data_cid` property to point to another user's private data.
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
         // incoming message WITH data
         (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
@@ -84,7 +80,7 @@ pub(crate) async fn handle(
         };
         (process_data(owner, &write, newest_existing, provider).await?, StatusCode::ACCEPTED)
     } else {
-        // incoming message WITHOUT data AND an initial write
+        // **incoming message WITHOUT data AND an initial write**
         (write, StatusCode::NO_CONTENT)
     };
 
@@ -512,13 +508,14 @@ impl Write {
         todo!()
     }
 
+    // Determine whether the record is the initial write.
     pub(crate) fn is_initial(&self) -> Result<bool> {
         let entry_id = entry_id(self.descriptor.clone(), self.authorization.author()?)?;
         Ok(entry_id == self.record_id)
     }
 
     // Verify immutable properties of two records are identical.
-    fn compare_immutable(&self, other: &Self) -> bool {
+    fn compare_immutable(&self, other: &Self) -> Result<()> {
         let self_desc = &self.descriptor;
         let other_desc = &other.descriptor;
 
@@ -531,10 +528,10 @@ impl Write {
             || self_desc.parent_id != other_desc.parent_id
             || self_desc.date_created != other_desc.date_created
         {
-            return false;
+            return Err(unexpected!("immutable properties do not match"));
         }
 
-        true
+        Ok(())
     }
 }
 

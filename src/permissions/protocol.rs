@@ -102,13 +102,11 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
     // get permitted actions
     let messages = records::existing_entries(owner, &write.record_id, store).await?;
     let (initial, _) = records::earliest_and_latest(&messages).await?;
+
+    // build record chain 
     let record_chain = if initial.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
-        // NOTE: we can assume this message is an initial write because an existing
-        // initial write does not exist.  Additionally, we check further down in the
-        // `RecordsWriteHandler` if the incoming message is an initialWrite,
-        // so we don't check explicitly here to avoid an unnecessary duplicate check.
         if let Some(parent_id) = &write.descriptor.parent_id {
             record_chain(owner, parent_id, store).await?
         } else {
