@@ -16,7 +16,7 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
 use crate::event::Event;
-use crate::permissions::{self, protocol};
+use crate::permissions::protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::tasks::{self, Task, TaskType};
@@ -163,7 +163,7 @@ impl Delete {
         let author = &authzn.author()?;
 
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
-            let grant = permissions::Grant::try_from(delegated_grant)?;
+            let grant = delegated_grant.to_grant()?;
             grant.permit_delete(author, &authzn.signer()?, self, write, store).await?;
         };
 

@@ -1,6 +1,7 @@
 //! # Records
 
 pub mod delete;
+pub mod query;
 pub mod read;
 pub mod write;
 
@@ -10,40 +11,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
+pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder, ReadReply};
 pub(crate) use self::write::{earliest_and_latest, existing_entries};
 pub use self::write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
 };
-use crate::auth::Authorization;
 pub use crate::data::DataStream;
-use crate::{utils, DateRange, Descriptor, Pagination, Quota, Result};
-
-/// Records Query payload
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Query {
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
-}
-
-/// Query descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filter Records for query.
-    pub filter: RecordsFilter,
-
-    /// The pagination cursor.
-    pub pagination: Option<Pagination>,
-}
+use crate::{utils, DateRange, Quota, Result};
 
 /// Records filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

@@ -1,9 +1,8 @@
-//! # Read
+//! # Query
 //!
-//! `Read` is a message type used to read a record in the web node.
+//! `Query` is a message type used to query a record in the web node.
 
 use async_trait::async_trait;
-use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -11,17 +10,25 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
+use crate::permissions::{protocol, Grant};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{unexpected, Descriptor, Error, Interface, Method, Pagination, Result};
 
-/// Process `Read` message.
+/// Process `Query` message.
 ///
 /// # Errors
 /// TODO: Add errors
 pub(crate) async fn handle(
-    owner: &str, read: Read, provider: &impl Provider,
-) -> Result<Reply<ReadReply>> {
+    owner: &str, query: Query, provider: &impl Provider,
+) -> Result<Reply<QueryReply>> {
+    let filter = &query.descriptor.filter;
+
+    // authorize messages querying for private records
+    if !filter.published.unwrap_or_default() {
+        query.authorize(owner, provider).await?
+    }
+
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
         "
@@ -31,120 +38,47 @@ pub(crate) async fn handle(
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
-        filter_sql = read.descriptor.filter.to_sql(),
+        filter_sql = query.descriptor.filter.to_sql(),
     );
-
     let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
     if messages.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
     if messages.len() > 2 {
-        return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
+        return Err(unexpected!("multiple messages exist for the `RecordsQuery` filter"));
     }
-
-    // if the matched message is a RecordsDelete, mark as not-found and return
-    // both the RecordsDelete and the initial RecordsWrite
-    if messages[0].descriptor().method == Method::Delete {
-        // TODO: implement this
-
-        //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
-        //   if initial_write.is_none() {
-        //     return Err(unexpected!("Initial write for deleted record not found"));
-        //   }
-
-        //   // perform authorization before returning the delete and initial write messages
-        //   const parsedInitialWrite = await RecordsWrite.parse(initial_write);
-        //
-        // if let Err(e)= RecordsReadHandler.authorizeRecordsRead(tenant, recordsRead, parsedInitialWrite, this.messageStore){
-        //     // return messageReplyFromError(error, 401);
-        //     return Err(e);
-        // }
-        //
-        // return {
-        //     status : { code: 404, detail: 'Not Found' },
-        //     entry  : {
-        //       recordsDelete: recordsDeleteMessage,
-        //       initialWrite
-        //     }
-        // }
-    }
-
-    let mut write = Write::try_from(&messages[0])?;
-
-    // TODO: review against the original code — it should take a store provider
-    read.authorize(owner, &write)?;
-
-    let data = if let Some(encoded) = write.encoded_data {
-        write.encoded_data = None;
-        let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
-        Some(DataStream::from(buffer))
-    } else {
-        DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
-    };
-
-    write.encoded_data = None;
-
-    // attach initial write if latest RecordsWrite is not initial write
-    let initial_write = if write.is_initial()? {
-        None
-    } else {
-        let sql = format!(
-            "
-            WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'
-            AND recordId = '{record_id}'
-            AND queryable = false
-            ORDER BY descriptor.messageTimestamp ASC
-            ",
-            interface = Interface::Records,
-            method = Method::Write,
-            record_id = write.record_id,
-        );
-
-        let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
-        if messages.is_empty() {
-            return Err(unexpected!("initial write not found"));
-        }
-
-        let Some(mut initial_write) = messages[0].as_write().cloned() else {
-            return Err(unexpected!("expected `RecordsWrite` message"));
-        };
-
-        initial_write.encoded_data = None;
-        Some(initial_write)
-    };
 
     Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        body: Some(ReadReply {
-            entry: ReadReplyEntry {
-                records_write: Some(write.clone()),
-                records_delete: None,
-                initial_write,
-                data,
-            },
-        }),
+        ..Default::default() // body: Some(QueryReply {
+                             //     entry: QueryReplyEntry {
+                             //         records_write: Some(write.clone()),
+                             //         records_delete: None,
+                             //         initial_write,
+                             //         data,
+                             //     },
+                             // }),
     })
 }
 
-/// Records read message payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+/// Records Query payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Read {
-    /// Read descriptor.
-    pub descriptor: ReadDescriptor,
+pub struct Query {
+    /// The Query descriptor.
+    pub descriptor: QueryDescriptor,
 
-    /// Message authorization.
+    /// The message authorization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authorization: Option<Authorization>,
 }
 
 #[async_trait]
-impl Message for Read {
-    type Reply = ReadReply;
+impl Message for Query {
+    type Reply = QueryReply;
 
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -163,18 +97,18 @@ impl Message for Read {
     }
 }
 
-/// Read reply.
+/// Query reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadReply {
-    /// The read reply entry.
-    pub entry: ReadReplyEntry,
+pub struct QueryReply {
+    /// The query reply entry.
+    pub entry: QueryReplyEntry,
 }
 
-/// Read reply.
+/// Query reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadReplyEntry {
+pub struct QueryReplyEntry {
     /// The latest `RecordsWrite` message of the record if record exists
     /// (not deleted).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -194,55 +128,50 @@ pub struct ReadReplyEntry {
     pub data: Option<DataStream>,
 }
 
-impl Read {
-    fn authorize(&self, owner: &str, write: &Write) -> Result<()> {
+impl Query {
+    async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         let Some(authzn) = &self.authorization else {
-            return Ok(());
+            return Err(Error::Unauthorized("missing authorization".to_string()));
         };
-        let author = authzn.author()?;
 
-        // authorize delegate
+        // authenticate the message
+        if let Err(e) = authzn.authenticate(provider).await {
+            return Err(Error::Unauthorized(format!("failed to authenticate: {e}")));
+        }
+
+        // verify grant
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
-            let grant = delegated_grant.to_grant()?;
-            grant.verify_scope(write)?;
-        }
-        // if author is owner, directly grant access
-        if author == owner {
-            return Ok(());
-        }
-        // authorization not required for published data
-        if write.descriptor.published.unwrap_or_default() {
-            return Ok(());
+            let grant: Grant = delegated_grant.try_into()?;
+            grant.permit_read(&authzn.author()?, &authzn.signer()?, self, provider).await?;
         }
 
-        if let Some(recipient) = &write.descriptor.recipient {
-            if &author == recipient {
-                return Ok(());
-            }
-        }
-        if author == write.authorization.author()? {
-            return Ok(());
+        // verify protocol when request invokes a protocol role
+        if authzn.jws_payload()?.protocol_role.is_some() {
+            protocol::permit_read(owner, self, provider).await?;
         }
 
-        Err(Error::Forbidden("unauthorized".to_string()))
+        Ok(())
     }
 }
 
-/// Reads read descriptor.
+/// Query descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
+pub struct QueryDescriptor {
     /// The base descriptor
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Defines the filter for the read.
+    /// Filter Records for query.
     pub filter: RecordsFilter,
+
+    /// The pagination cursor.
+    pub pagination: Option<Pagination>,
 }
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub struct ReadBuilder {
+pub struct QueryBuilder {
     filter: RecordsFilter,
     message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
@@ -251,8 +180,8 @@ pub struct ReadBuilder {
     authorize: Option<bool>,
 }
 
-impl ReadBuilder {
-    /// Returns a new [`ReadBuilder`]
+impl QueryBuilder {
+    /// Returns a new [`QueryBuilder`]
     #[must_use]
     pub fn new() -> Self {
         let now = Utc::now();
@@ -310,14 +239,15 @@ impl ReadBuilder {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Read> {
-        let descriptor = ReadDescriptor {
+    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
+        let descriptor = QueryDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
-                method: Method::Read,
+                method: Method::Query,
                 message_timestamp: self.message_timestamp,
             },
             filter: self.filter.normalize()?,
+            pagination: None,
         };
 
         let authorization = if self.authorize.unwrap_or(true) {
@@ -337,7 +267,7 @@ impl ReadBuilder {
             None
         };
 
-        Ok(Read {
+        Ok(Query {
             descriptor,
             authorization,
         })

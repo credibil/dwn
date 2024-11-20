@@ -13,19 +13,26 @@ use crate::protocols::{
     REVOCATION_PATH,
 };
 use crate::provider::MessageStore;
-use crate::records::{self, Delete, Write};
-use crate::{schema, unexpected, utils, Interface, Method, Result};
+use crate::records::{self, Delete, Query, Write};
+use crate::{forbidden, schema, utils, Interface, Method, Result};
 
 enum Record {
     Write(Write),
+    Query(Query),
     Delete(Delete),
 }
 
 impl Record {
-    const fn authorization(&self) -> &Authorization {
+    fn authorization(&self) -> Authorization {
         match self {
-            Self::Write(write) => &write.authorization,
-            Self::Delete(delete) => &delete.authorization,
+            Self::Write(write) => write.authorization.clone(),
+            Self::Delete(delete) => delete.authorization.clone(),
+            Self::Query(query) => {
+                let Some(authzn) = query.authorization.clone() else {
+                    return Authorization::default();
+                };
+                authzn
+            }
         }
     }
 }
@@ -59,14 +66,14 @@ pub struct RevocationData {
 /// Performs validation on the structure of `RecordsWrite` messages that use a protocol.
 pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(protocol) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
+        return Err(forbidden!("missing protocol"));
     };
     let definition = protocol_definition(owner, protocol, store).await?;
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol"));
+        return Err(forbidden!("missing protocol"));
     };
     let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
-        return Err(unexpected!("no rule set defined for protocol path"));
+        return Err(forbidden!("no rule set defined for protocol path"));
     };
 
     verify_type(write, &definition.types)?;
@@ -81,16 +88,18 @@ pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Re
     Ok(())
 }
 
-// Protocol-based authorization for records::Write messages.
+/// Protocol-based authorization for records::Write messages.
 pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
-    // protocol definition
+    // get permitted roles
     let Some(protocol) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
+        return Err(forbidden!("missing protocol"));
     };
     let definition = protocol_definition(owner, protocol, store).await?;
-    verify_invoked_role(owner, write, write, &definition, store).await?;
 
-    // rule set
+    verify_invoked_role(owner, write, protocol, write.context_id.clone(), &definition, store)
+        .await?;
+
+    // get permitted actions
     let messages = records::existing_entries(owner, &write.record_id, store).await?;
     let (initial, _) = records::earliest_and_latest(&messages).await?;
     let record_chain = if initial.is_some() {
@@ -108,10 +117,10 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
     };
 
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol"));
+        return Err(forbidden!("missing protocol"));
     };
     let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
-        return Err(unexpected!("no rule set defined for protocol path"));
+        return Err(forbidden!("no rule set defined for protocol path"));
     };
 
     verify_actions(owner, &Record::Write(write.clone()), &rule_set, &record_chain, store).await?;
@@ -119,26 +128,54 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
     Ok(())
 }
 
-// Protocol-based authorization for records::Delete messages.
-pub async fn permit_delete(
-    owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
-) -> Result<()> {
-    // protocol definition
-    let Some(protocol) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
+/// Protocol-based authorization for records::Query and records::Subscribe
+/// messages.
+pub async fn permit_read(owner: &str, query: &Query, store: &impl MessageStore) -> Result<()> {
+    let filter = &query.descriptor.filter;
+
+    // get permitted roles
+    let Some(protocol) = &filter.protocol else {
+        return Err(forbidden!("missing protocol"));
     };
     let definition = protocol_definition(owner, protocol, store).await?;
 
-    verify_invoked_role(owner, delete, write, &definition, store).await?;
+    verify_invoked_role(owner, query, protocol, filter.context_id.clone(), &definition, store)
+        .await?;
 
-    // rule set
-    let record_chain = record_chain(owner, &delete.descriptor.record_id, store).await?;
-    let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol"));
+    // get permitted actions
+    let Some(protocol_path) = &filter.protocol_path else {
+        return Err(forbidden!("missing protocol path"));
     };
     let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
-        return Err(unexpected!("no rule set defined for protocol path"));
+        return Err(forbidden!("no rule set defined for protocol path"));
     };
+
+    verify_actions(owner, &Record::Query(query.clone()), &rule_set, &[], store).await?;
+
+    Ok(())
+}
+
+/// Protocol-based authorization for records::Delete messages.
+pub async fn permit_delete(
+    owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
+) -> Result<()> {
+    // get permitted roles
+    let Some(protocol) = &write.descriptor.protocol else {
+        return Err(forbidden!("missing protocol"));
+    };
+    let definition = protocol_definition(owner, protocol, store).await?;
+
+    verify_invoked_role(owner, delete, protocol, write.context_id.clone(), &definition, store)
+        .await?;
+
+    // get permitted actions
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(forbidden!("missing protocol"));
+    };
+    let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
+        return Err(forbidden!("no rule set defined for protocol path"));
+    };
+    let record_chain = record_chain(owner, &delete.descriptor.record_id, store).await?;
 
     verify_actions(owner, &Record::Delete(delete.clone()), &rule_set, &record_chain, store).await?;
 
@@ -148,22 +185,22 @@ pub async fn permit_delete(
 /// Verifies the `data_format` and `schema` parameters .
 fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol path"));
+        return Err(forbidden!("missing protocol path"));
     };
     let Some(type_name) = protocol_path.split('/').last() else {
-        return Err(unexpected!("missing type name"));
+        return Err(forbidden!("missing type name"));
     };
     let Some(protocol_type) = types.get(type_name) else {
-        return Err(unexpected!("record with type {type_name} not allowed in protocol"));
+        return Err(forbidden!("record with type {type_name} not allowed in protocol"));
     };
 
     if protocol_type.schema.is_some() && protocol_type.schema != write.descriptor.schema {
-        return Err(unexpected!("invalid schema for type {type_name}"));
+        return Err(forbidden!("invalid schema for type {type_name}"));
     }
 
     if let Some(data_formats) = &protocol_type.data_formats {
         if !data_formats.contains(&write.descriptor.data_format) {
-            return Err(unexpected!("invalid data_format for type {type_name}"));
+            return Err(forbidden!("invalid data_format for type {type_name}"));
         }
     }
 
@@ -173,7 +210,7 @@ fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<
 // Verifies the given `RecordsWrite` protocol.
 pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol path"));
+        return Err(forbidden!("missing protocol path"));
     };
 
     match protocol_path.as_str() {
@@ -191,7 +228,7 @@ pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
             let revocation_data: RevocationData = serde_json::from_slice(data)?;
             schema::validate_value("PermissionGrantData", &revocation_data)
         }
-        _ => Err(unexpected!("unexpected permission record: ${protocol_path}")),
+        _ => Err(forbidden!("unexpected permission record: {protocol_path}")),
     }
 }
 
@@ -201,21 +238,23 @@ pub fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
     let scope_protocol = match scope {
         ScopeType::Records { protocol, .. } => {
             if Some(protocol) != write.descriptor.protocol.as_ref() {
-                return Err(unexpected!("scope protocol does not match record protocol"));
+                return Err(forbidden!("scope protocol does not match record protocol",));
             }
             protocol
         }
-        _ => return Err(unexpected!("invalid scope type")),
+        _ => return Err(forbidden!("invalid scope type")),
     };
 
     let Some(tags) = &write.descriptor.tags else {
-        return Err(unexpected!("grants require a `tags` property"));
+        return Err(forbidden!("grants require a `tags` property"));
     };
     let Some(tag_protocol) = tags.get("protocol") else {
-        return Err(unexpected!("grants must have a `tags` property containing a protocol tag"));
+        return Err(forbidden!("grants must have a `tags` property containing a protocol tag",));
     };
     if tag_protocol != scope_protocol {
-        return Err(unexpected!("grants must have a scope with a protocol matching the tagged protocol: ${tag_protocol}"));
+        return Err(forbidden!(
+            "grants must have a scope with a protocol matching the tagged protocol: {tag_protocol}"
+        ));
     }
 
     Ok(())
@@ -224,21 +263,21 @@ pub fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
 // Verify the `protocol_path` matches the path of actual record chain.
 async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol path"));
+        return Err(forbidden!("missing protocol path"));
     };
     let Some(type_name) = protocol_path.split('/').last() else {
-        return Err(unexpected!("missing type name"));
+        return Err(forbidden!("missing type name"));
     };
 
     // fetch the parent message
     let Some(parent_id) = &write.descriptor.parent_id else {
         if protocol_path != type_name {
-            return Err(unexpected!("invalid protocol path for parentless record"));
+            return Err(forbidden!("invalid protocol path for parentless record",));
         }
         return Ok(());
     };
     let Some(protocol) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
+        return Err(forbidden!("missing protocol"));
     };
 
     let sql = format!(
@@ -255,30 +294,30 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
 
     let (records, _) = store.query(owner, &sql).await?;
     if records.is_empty() {
-        return Err(unexpected!("unable to find Write Record for parent_id {parent_id}"));
+        return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
     }
 
     let Some(parent) = &records[0].as_write() else {
-        return Err(unexpected!("expected `RecordsWrite` message"));
+        return Err(forbidden!("expected `RecordsWrite` message"));
     };
 
     // verify protocol_path is a child of the parent message's protocol_path
     let Some(parent_path) = &parent.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol path"));
+        return Err(forbidden!("missing protocol path"));
     };
     if &format!("{parent_path}/${type_name}") != protocol_path {
-        return Err(unexpected!("invalid `protocol_path`"));
+        return Err(forbidden!("invalid `protocol_path`"));
     }
 
     // verifying context_id is a child of the parent's context_id
     let Some(context_id) = &write.context_id else {
-        return Err(unexpected!("missing context_id"));
+        return Err(forbidden!("missing context_id"));
     };
     let Some(parent_context_id) = &parent.context_id else {
-        return Err(unexpected!("missing parent context_id"));
+        return Err(forbidden!("missing parent context_id"));
     };
     if context_id != &format!("{parent_context_id}/{}", write.record_id) {
-        return Err(unexpected!("invalid `context_id`"));
+        return Err(forbidden!("invalid `context_id`"));
     }
 
     Ok(())
@@ -287,13 +326,13 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
 /// Verify the integrity of the `records::Write` as a role record.
 async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(recipient) = &write.descriptor.recipient else {
-        return Err(unexpected!("role record is missing recipient"));
+        return Err(forbidden!("role record is missing recipient"));
     };
     let Some(protocol) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
+        return Err(forbidden!("missing protocol"));
     };
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(unexpected!("missing protocol_path"));
+        return Err(forbidden!("missing protocol_path"));
     };
 
     // if this is not the root record, add a prefix filter to the query
@@ -321,15 +360,15 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
 
     let (messages, _) = store.query(owner, &sql).await?;
     // if records.is_empty() {
-    //     return Err(unexpected!("unable to find Write Record for parent_id {parent_id}"));
+    //     return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
     // }
 
     for message in messages {
         let Some(w) = message.as_write() else {
-            return Err(unexpected!("expected `RecordsWrite` message"));
+            return Err(forbidden!("expected `RecordsWrite` message"));
         };
         if w.record_id != write.record_id {
-            return Err(unexpected!("DID '{recipient}' is already recipient of a role record"));
+            return Err(forbidden!("DID '{recipient}' is already recipient of a role record",));
         }
     }
 
@@ -338,11 +377,11 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
 
 // Check if the incoming message is invoking a role. If so, validate the invoked role.
 async fn verify_invoked_role(
-    owner: &str, msg: &impl Message, write: &Write, definition: &Definition,
-    store: &impl MessageStore,
+    owner: &str, msg: &impl Message, protocol: &str, context_id: Option<String>,
+    definition: &Definition, store: &impl MessageStore,
 ) -> Result<()> {
     let Some(authzn) = msg.authorization() else {
-        return Err(unexpected!("missing authorization"));
+        return Err(forbidden!("missing authorization"));
     };
 
     let author = authzn.author()?;
@@ -350,26 +389,26 @@ async fn verify_invoked_role(
         return Ok(());
     };
 
-    let Some(protocol_uri) = &write.descriptor.protocol else {
-        return Err(unexpected!("missing protocol"));
-    };
+    // let Some(protocol_uri) = &write.descriptor.protocol else {
+    //     return Err(forbidden!("missing protocol"));
+    // };
 
     let Some(rule_set) = rule_set(&protocol_role, &definition.structure) else {
-        return Err(unexpected!("no rule set defined for protocol role"));
+        return Err(forbidden!("no rule set defined for protocol role"));
     };
     if !rule_set.role.unwrap_or_default() {
-        return Err(unexpected!("protocol path {protocol_role} does not match role record type"));
+        return Err(forbidden!("protocol path {protocol_role} does not match role record type"));
     }
 
     let segment_count = protocol_role.split('/').count();
-    if write.context_id.is_none() && segment_count > 1 {
-        return Err(unexpected!("unable verify role without `context_id`"));
+    if context_id.is_none() && segment_count > 1 {
+        return Err(forbidden!("unable verify role without `context_id`"));
     }
 
     // `context_id` prefix filter
     let context_prefix = if segment_count > 0 {
         // context_id segment count is never shorter than the role path count.
-        let context_id = write.context_id.clone().unwrap_or_default();
+        let context_id = context_id.unwrap_or_default();
         let context_id_segments: Vec<&str> = context_id.split('/').collect();
         let prefix = context_id_segments[..segment_count].join("/");
         format!("AND contextId BETWEEN '{prefix}' AND '{prefix}\u{ffff}'")
@@ -382,7 +421,7 @@ async fn verify_invoked_role(
         "
         WHERE descriptor.interface = '{interface}'
         AND descriptor.method = '{method}'
-        AND protocol = '{protocol_uri}'
+        AND protocol = '{protocol}'
         AND protocolPath = '{protocol_role}'
         AND recipient = '{author}'
         {context_prefix}
@@ -393,7 +432,7 @@ async fn verify_invoked_role(
     );
     let (records, _) = store.query(owner, &sql).await?;
     if records.is_empty() {
-        return Err(unexpected!("unable to find records for {protocol_role}"));
+        return Err(forbidden!("unable to find records for {protocol_role}"));
     }
 
     Ok(())
@@ -407,12 +446,12 @@ fn verify_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
 
     if let Some(min) = range.min {
         if data_size < min {
-            return Err(unexpected!("data size is less than allowed"));
+            return Err(forbidden!("data size is less than allowed"));
         }
     }
     if let Some(max) = range.max {
         if data_size > max {
-            return Err(unexpected!("data size is greater than allowed"));
+            return Err(forbidden!("data size is greater than allowed"));
         }
     }
 
@@ -439,7 +478,7 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
     // validate tags against schema
     let instance = serde_json::to_value(tags)?;
     if !jsonschema::is_valid(&schema, &instance) {
-        return Err(unexpected!("tags do not match schema"));
+        return Err(forbidden!("tags do not match schema"));
     }
 
     Ok(())
@@ -457,8 +496,8 @@ async fn verify_actions(
     // or permission grant authorized prior to this method being called.
 
     let Some(action_rules) = &rule_set.actions else {
-        return Err(unexpected!(
-            "no action rule defined for RecordsWrite), ${author} is unauthorized"
+        return Err(forbidden!(
+            "no action rule defined for RecordsWrite, ${author} is unauthorized"
         ));
     };
 
@@ -506,7 +545,7 @@ async fn verify_actions(
         }
     }
 
-    Err(unexpected!("RecordsWrite by {author} not allowed"))
+    Err(forbidden!("RecordsWrite by {author} not allowed"))
 }
 
 // Performs additional validation before storing the RecordsWrite if it is
@@ -519,7 +558,7 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
     {
         // get grant from revocation message `parent_id`
         let Some(parent_id) = &write.descriptor.parent_id else {
-            return Err(unexpected!("missing `parent_id`"));
+            return Err(forbidden!("missing `parent_id`"));
         };
         let grant = permissions::fetch_grant(owner, parent_id, store).await?;
 
@@ -529,11 +568,11 @@ async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) ->
                 tags.get("protocol").map_or("", |p| p.as_str().unwrap_or_default());
 
             let ScopeType::Records { protocol, .. } = grant.data.scope.scope_type else {
-                return Err(unexpected!("missing protocol in grant scope"));
+                return Err(forbidden!("missing protocol in grant scope"));
             };
 
             if protocol != revoke_protocol {
-                return Err(unexpected!("revocation protocol {revoke_protocol} does not match grant protocol {protocol}"));
+                return Err(forbidden!("revocation protocol {revoke_protocol} does not match grant protocol {protocol}"));
             }
         }
     }
@@ -564,11 +603,11 @@ async fn protocol_definition(
 
     let (messages, _) = store.query(owner, &sql).await?;
     if messages.is_empty() {
-        return Err(unexpected!("unable to find protocol definition for {protocol_uri}"));
+        return Err(forbidden!("unable to find protocol definition for {protocol_uri}"));
     }
 
     let Some(protocol) = messages[0].as_configure() else {
-        return Err(unexpected!("expected `ProtocolsConfigure` message"));
+        return Err(forbidden!("expected `ProtocolsConfigure` message"));
     };
     Ok(protocol.descriptor.definition.clone())
 }
@@ -597,7 +636,7 @@ async fn record_chain(
         let (initial, _) = records::earliest_and_latest(&messages).await?;
 
         let Some(initial) = initial else {
-            return Err(unexpected!(
+            return Err(forbidden!(
                 "no parent found with ID {record_id} when constructing record chain"
             ));
         };
@@ -635,7 +674,7 @@ async fn allowed_actions(
 
             Ok(vec![Action::CoUpdate])
         }
-        // Method::Query => Ok(vec![Action::Query]),
+        Record::Query(_) => Ok(vec![Action::Query]),
         // Method::Read => Ok(vec![Action::Read]),
         // Method::Subscribe => Ok(vec![Action::Subscribe]),
         Record::Delete(delete) => {
@@ -663,7 +702,7 @@ async fn allowed_actions(
             }
 
             Ok(actions)
-        } // Method::Configure => Err(unexpected!("configure method not allowed")),
+        } // Method::Configure => Err(forbidden!("configure method not allowed")),
     }
 }
 

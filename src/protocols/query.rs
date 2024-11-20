@@ -10,7 +10,7 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::{schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Result};
+use crate::{schema, unexpected, utils, Cursor, Descriptor, Error, Interface, Method, Result};
 
 /// Process query message.
 ///
@@ -141,7 +141,7 @@ impl Query {
                 return Err(unexpected!("missing filter"));
             };
             if protocol != &filter.protocol {
-                return Err(unexpected!("unauthorized protocol"));
+                return Err(Error::Forbidden("unauthorized protocol".to_string()));
             }
         }
 

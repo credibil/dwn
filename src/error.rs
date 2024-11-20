@@ -110,22 +110,6 @@ impl From<libipld::cid::Error> for Error {
 /// This evaluates to an [`Error`][crate::Error]. It can take either just a
 /// string, or a format string with arguments. It also can take any custom type
 /// which implements `Debug` and `Display`.
-///
-/// # Example
-///
-/// ```
-/// # type V = ();
-/// #
-/// use crate::{unexpected, Result};
-///
-/// fn lookup(key: &str) -> Result<V> {
-///     if key.len() != 16 {
-///         return Err(unexpected!("key length must be 16 characters, got {:?}", key"));
-///     }
-///
-///     // ...
-///     # Ok(())
-/// }
 /// ```
 #[macro_export]
 macro_rules! unexpected {
@@ -138,7 +122,26 @@ macro_rules! unexpected {
      ($err:expr $(,)?) => {
         $crate::Error::BadRequest(format!($err))
     };
+}
 
+/// Construct an `Error::Forbidden` error from a string or existing error
+/// value.
+///
+/// This evaluates to an [`Error`][crate::Error]. It can take either just a
+/// string, or a format string with arguments. It also can take any custom type
+/// which implements `Debug` and `Display`.
+/// ```
+#[macro_export]
+macro_rules! forbidden {
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::Error::Forbidden(format!($fmt, $($arg)*))
+    };
+    // ($msg:literal $(,)?) => {
+    //     $crate::Error::Forbidden($msg.into())
+    // };
+     ($err:expr $(,)?) => {
+        $crate::Error::Forbidden(format!($err))
+    };
 }
 
 // Error response for serializing internal errors to JSON.
