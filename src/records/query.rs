@@ -12,8 +12,8 @@ use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{protocol, Grant};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::{unexpected, Descriptor, Error, Interface, Method, Pagination, Result};
+use crate::records::{DelegatedGrant, RecordsFilter, Write};
+use crate::{forbidden, Cursor, Descriptor, Error, Interface, Method, Pagination, Quota, Result};
 
 /// Process `Query` message.
 ///
@@ -22,45 +22,87 @@ use crate::{unexpected, Descriptor, Error, Interface, Method, Pagination, Result
 pub(crate) async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
-    let filter = &query.descriptor.filter;
+    let mut filter = query.descriptor.filter.clone();
 
     // authorize messages querying for private records
     if !filter.published.unwrap_or_default() {
-        query.authorize(owner, provider).await?
+        query.authorize(owner, provider).await?;
+
+        let Some(authzn) = &query.authorization else {
+            return Err(forbidden!("missing authorization"));
+        };
+        let author = authzn.author()?;
+
+        // non-owner queries
+        if author != owner {
+            // when query.author is in filter.author or filter.author is empty/None,
+            filter.author = Some(Quota::One(author.clone()));
+
+            // when query.author is in filter.recipient || filter.recipient is
+            // empty/None, set filter.recipient = query.author
+            filter.recipient = Some(Quota::One(author));
+
+            // when filter.protocol_role ??
+        }
     }
 
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}' 
+        AND descriptor.method = '{method}'
         {filter_sql}
         AND queryable = true
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
-        filter_sql = query.descriptor.filter.to_sql(),
+        method = Method::Write,
+        filter_sql = filter.to_sql(),
     );
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
-    if messages.is_empty() {
-        return Err(Error::NotFound("no matching records found".to_string()));
+    let (records, _) = MessageStore::query(provider, owner, &sql).await?;
+
+    // build reply
+    let mut entries = vec![];
+    for record in records {
+        let write: Write = record.try_into()?;
+
+        let initial_write = if write.is_initial()? {
+            let sql = format!(
+                "
+                WHERE descriptor.interface = '{interface}' 
+                AND descriptor.method = '{method}'
+                AND recordId = '{record_id}'
+                AND queryable = true
+                ORDER BY descriptor.messageTimestamp DESC
+                ",
+                interface = Interface::Records,
+                method = Method::Write,
+                record_id = &write.record_id,
+                // AND queryable = false
+            );
+
+            let (records, _) = MessageStore::query(provider, owner, &sql).await?;
+            let mut initial_write: Write = (&records[0]).try_into()?;
+            initial_write.encoded_data = None;
+            Some(initial_write)
+        } else {
+            None
+        };
+
+        entries.push(QueryReplyEntry { write, initial_write });
     }
-    if messages.len() > 2 {
-        return Err(unexpected!("multiple messages exist for the `RecordsQuery` filter"));
-    }
+
+    let entries = if entries.is_empty() { Some(entries) } else { None };
 
     Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        ..Default::default() // body: Some(QueryReply {
-                             //     entry: QueryReplyEntry {
-                             //         records_write: Some(write.clone()),
-                             //         records_delete: None,
-                             //         initial_write,
-                             //         data,
-                             //     },
-                             // }),
+        body: Some(QueryReply {
+            entries,
+            cursor: None,
+        }),
     })
 }
 
@@ -101,31 +143,27 @@ impl Message for Query {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryReply {
-    /// The query reply entry.
-    pub entry: QueryReplyEntry,
+    /// Query reply entries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Vec<QueryReplyEntry>>,
+
+    /// Pagination cursor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
 }
 
 /// Query reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryReplyEntry {
-    /// The latest `RecordsWrite` message of the record if record exists
-    /// (not deleted).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub records_write: Option<Write>,
-
-    /// The `RecordsDelete` if the record is deleted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub records_delete: Option<Delete>,
+    /// The `RecordsWrite` message of the record if record exists.
+    #[serde(flatten)]
+    pub write: Write,
 
     /// The initial write of the record if the returned `RecordsWrite` message
-    /// itself is not the initial write or if a `RecordsDelete` is returned.
+    /// itself is not the initial write.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_write: Option<Write>,
-
-    /// The data for the record.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<DataStream>,
 }
 
 impl Query {

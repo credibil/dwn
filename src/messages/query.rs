@@ -131,8 +131,7 @@ pub struct QueryReply {
     /// Entries matching the message's query.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<String>>,
-    // pub entries: Option<Vec<Event>>,
-    //
+
     /// The message authorization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
