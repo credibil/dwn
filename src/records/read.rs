@@ -27,7 +27,7 @@ pub(crate) async fn handle(
         "
         WHERE descriptor.interface = '{interface}' 
         {filter_sql}
-        AND queryable = true
+        AND hidden = false
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
@@ -39,7 +39,7 @@ pub(crate) async fn handle(
         return Err(Error::NotFound("no matching records found".to_string()));
     }
     if messages.len() > 2 {
-        return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
+        return Err(unexpected!("multiple messages exist"));
     }
 
     // if the matched message is a RecordsDelete, mark as not-found and return
@@ -93,7 +93,7 @@ pub(crate) async fn handle(
             WHERE descriptor.interface = '{interface}'
             AND descriptor.method = '{method}'
             AND recordId = '{record_id}'
-            AND queryable = false
+            AND hidden = true
             ORDER BY descriptor.messageTimestamp ASC
             ",
             interface = Interface::Records,

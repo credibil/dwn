@@ -35,8 +35,8 @@ impl Keystore {
         Algorithm::EdDSA
     }
 
-    pub fn verification_method() -> String {
-        format!("{OWNER_DID}#{OWNER_VERIFY_KEY}")
+    pub async fn verification_method() -> Result<String> {
+        Ok(format!("{OWNER_DID}#{OWNER_VERIFY_KEY}"))
     }
 
     pub fn public_jwk() -> PublicKeyJwk {

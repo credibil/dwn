@@ -104,8 +104,8 @@ impl Signer for KeyStoreImpl {
         Keystore::algorithm()
     }
 
-    fn verification_method(&self) -> String {
-        Keystore::verification_method()
+    async fn verification_method(&self) -> Result<String> {
+        Keystore::verification_method().await
     }
 }
 

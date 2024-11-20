@@ -64,16 +64,16 @@ pub(crate) async fn handle(
     }
 
     // ----------------------------------------------------------------
-    // TODO: Queryable
+    // TODO: Hidden
     // ----------------------------------------------------------------
-    // `queryable` is used to prevent querying of initial writes that do
+    // `hidden` is used to prevent querying of initial writes that do
     // not have data. This prevents a malicious user from gaining access to
     // data by referencing the `data_cid` of private data in their initial
     // writes.
     //
-    // `queryable` is true when the incoming `Write` message is:
-    //   - an intial write with data
-    //   - not an initial write
+    // `hidden` is true when the incoming `Write` message is:
+    //   - an intial write WITH data
+    //   - NOT an initial write
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
         // incoming message WITH data
         (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
@@ -89,7 +89,7 @@ pub(crate) async fn handle(
     };
 
     let mut record = Record::from(&write);
-    record.indexes.insert("queryable".to_string(), Value::Bool(code != StatusCode::NO_CONTENT));
+    record.indexes.insert("hidden".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &record).await?;
@@ -126,17 +126,14 @@ pub(crate) async fn handle(
     // ----------------------------------------------------------------
     // Response Codes
     // ----------------------------------------------------------------
-    // In order to discern between a message accepted as a queryable write and
-    // something accepted as an initial state we use separate response codes:
+    // In order to discern between a 'private' write and an accessible initial
+    // state we use separate response codes:
     //   - 202 for queryable writes
-    //   - 204 for non-queryable writes
-    //
-    // See https://github.com/TBD54566975/dwn-sdk-js/issues/695 for more details.
-
+    //   - 204 for private, non-queryable writes
     Ok(Reply {
         status: Status {
             code: code.as_u16(),
-            detail: Some("OK".to_string()),
+            detail: None,
         },
         body: None,
     })
@@ -337,16 +334,17 @@ impl Write {
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
         signer: &impl Signer,
     ) -> Result<()> {
-        let (author_did, delegated_grant_id) =
-            if let Some(grant) = &self.authorization.author_delegated_grant {
-                (
-                    Some(auth::signer_did(&grant.authorization.signature)?),
-                    Some(cid::from_value(&grant)?),
-                )
-            } else {
-                // TODO: add helper method to Signer trait
-                (signer.verification_method().split('#').next().map(ToString::to_string), None)
-            };
+        let (author_did, delegated_grant_id) = if let Some(grant) =
+            &self.authorization.author_delegated_grant
+        {
+            (
+                Some(auth::signer_did(&grant.authorization.signature)?),
+                Some(cid::from_value(&grant)?),
+            )
+        } else {
+            // TODO: add helper method to Signer trait
+            (signer.verification_method().await?.split('#').next().map(ToString::to_string), None)
+        };
 
         // compute `record_id` if not given at construction time
         if self.record_id.is_empty() {
@@ -1186,7 +1184,7 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         AND descriptor.method = '{method}'
         AND recordId = '{grant_id}'
         AND dateCreated >= '{message_timestamp}
-        AND queryable = true
+        AND hidden = false
         ",
         interface = Interface::Records,
         method = Method::Write,

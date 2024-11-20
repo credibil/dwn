@@ -62,7 +62,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
         };
 
         // authenticate the message
-        if let Err(e) = authzn.authenticate(provider).await {
+        if let Err(e) = authzn.authenticate(provider.clone()).await {
             return Err(Error::Unauthorized(format!("failed to authenticate message: {e}")));
         }
 

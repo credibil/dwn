@@ -28,15 +28,15 @@ macro_rules! verify_key {
     ($resolver:expr) => {{
         // create local reference before moving into closure
         let resolver = $resolver;
-
-        move |kid: String| async move {
-            let resp = dereference(&kid, None, resolver)
-                .await
-                .map_err(|e| anyhow!("JWK not found: {e}"))?;
-            let Some(Resource::VerificationMethod(vm)) = resp.content_stream else {
-                return Err(anyhow!("Verification method not found"));
-            };
-            vm.method_type.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
+        move |kid: String| {
+            let local_resolver = resolver.clone();
+            async move {
+                let resp = dereference(&kid, None, local_resolver).await?;
+                let Some(Resource::VerificationMethod(vm)) = resp.content_stream else {
+                    return Err(anyhow!("Verification method not found"));
+                };
+                vm.method_type.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
+            }
         }
     }};
 }
@@ -111,18 +111,18 @@ pub struct Attestation {
 
 impl Authorization {
     /// Verify message signatures.
-    pub async fn authenticate(&self, resolver: &impl DidResolver) -> Result<()> {
-        let verifier = verify_key!(resolver);
-        self.signature.verify(verifier).await?;
+    pub async fn authenticate(&self, resolver: impl DidResolver) -> Result<()> {
+        // let verifier = verify_key!(resolver);
+        self.signature.verify(verify_key!(resolver.clone())).await?;
 
         if let Some(signature) = &self.owner_signature {
-            signature.verify(verifier).await?;
+            signature.verify(verify_key!(resolver.clone())).await?;
         }
         if let Some(grant) = &self.author_delegated_grant {
-            grant.authorization.signature.verify(verifier).await?;
+            grant.authorization.signature.verify(verify_key!(resolver.clone())).await?;
         }
         if let Some(grant) = &self.owner_delegated_grant {
-            grant.authorization.signature.verify(verifier).await?;
+            grant.authorization.signature.verify(verify_key!(resolver)).await?;
         }
 
         Ok(())

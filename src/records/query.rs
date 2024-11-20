@@ -52,7 +52,7 @@ pub(crate) async fn handle(
         WHERE descriptor.interface = '{interface}' 
         AND descriptor.method = '{method}'
         {filter_sql}
-        AND queryable = true
+        AND hidden = false
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
@@ -72,13 +72,13 @@ pub(crate) async fn handle(
                 WHERE descriptor.interface = '{interface}' 
                 AND descriptor.method = '{method}'
                 AND recordId = '{record_id}'
-                AND queryable = true
+                AND hidden = false
                 ORDER BY descriptor.messageTimestamp DESC
                 ",
                 interface = Interface::Records,
                 method = Method::Write,
                 record_id = &write.record_id,
-                // AND queryable = false
+                // AND hidden = true
             );
 
             let (records, _) = MessageStore::query(provider, owner, &sql).await?;
@@ -173,7 +173,7 @@ impl Query {
         };
 
         // authenticate the message
-        if let Err(e) = authzn.authenticate(provider).await {
+        if let Err(e) = authzn.authenticate(provider.clone()).await {
             return Err(Error::Unauthorized(format!("failed to authenticate: {e}")));
         }
 

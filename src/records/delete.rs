@@ -34,7 +34,7 @@ pub(crate) async fn handle(
         "
         WHERE descriptor.interface = '{interface}'
         AND recordId = '{record_id}'
-        AND queryable = true
+        AND hidden = false
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
@@ -143,7 +143,7 @@ impl From<&Delete> for Record {
         record
             .indexes
             .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
-        record.indexes.insert("queryable".to_string(), Value::Bool(true));
+        record.indexes.insert("hidden".to_string(), Value::Bool(false));
 
         record
     }
@@ -294,7 +294,7 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
         return Err(Error::NotFound("no matching records found".to_string()));
     }
     if messages.len() > 2 {
-        return Err(unexpected!("multiple messages exist for the RecordsDelete filter"));
+        return Err(unexpected!("multiple messages exist"));
     }
     let newest_existing = &messages[0];
 
@@ -417,9 +417,9 @@ async fn purge_records(owner: &str, records: &[Record], provider: &impl Provider
     Ok(())
 }
 
-// Deletes all messages in `existingMessages` that are older than the `newestMessage`
-// in the given tenant, but keep the initial write write for future processing by
-// ensuring its `isLatestBaseState` index is "false".
+// Deletes all messages in `existing` that are older than the `newest` in the
+// given tenant, but keep the initial write write for future processing by
+// ensuring its `private` index is "true".
 async fn delete_older(
     owner: &str, newest: &Record, existing: &[Record], provider: &impl Provider,
 ) -> Result<()> {
@@ -434,12 +434,12 @@ async fn delete_older(
             MessageStore::delete(provider, owner, &message.cid()?).await?;
 
             // if the existing message is the initial write, retain it
-            // BUT, ensure the message is no longer marked as the `queryable`
+            // BUT, ensure the message is no longer marked as `private`
             if let Some(write) = message.as_write()
                 && write.is_initial()?
             {
                 let mut record = Record::from(write);
-                record.indexes.insert("queryable".to_string(), Value::Bool(false));
+                record.indexes.insert("hidden".to_string(), Value::Bool(true));
                 MessageStore::put(provider, owner, &record).await?;
             } else {
                 EventLog::delete(provider, owner, &message.cid()?).await?;
