@@ -12,8 +12,7 @@ pub(crate) const TABLE: &str = "message";
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, record: &Record) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<Record> =
-            self.db.create((TABLE, record.cid()?)).content(record).await?;
+        let _: Option<Record> = self.db.create((TABLE, record.cid()?)).content(record).await?;
         Ok(())
     }
 

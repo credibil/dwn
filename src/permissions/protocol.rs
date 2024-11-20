@@ -88,7 +88,7 @@ pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Re
     Ok(())
 }
 
-/// Protocol-based authorization for records::Write messages.
+/// Protocol-based authorization for `records::Write` messages.
 pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     // get permitted roles
     let Some(protocol) = &write.descriptor.protocol else {
@@ -128,7 +128,7 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
     Ok(())
 }
 
-/// Protocol-based authorization for records::Query and records::Subscribe
+/// Protocol-based authorization for `records::Query` and `records::Subscribe`
 /// messages.
 pub async fn permit_read(owner: &str, query: &Query, store: &impl MessageStore) -> Result<()> {
     let filter = &query.descriptor.filter;
@@ -155,7 +155,7 @@ pub async fn permit_read(owner: &str, query: &Query, store: &impl MessageStore) 
     Ok(())
 }
 
-/// Protocol-based authorization for records::Delete messages.
+/// Protocol-based authorization for `records::Delete` messages.
 pub async fn permit_delete(
     owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
 ) -> Result<()> {
