@@ -90,7 +90,7 @@ pub(crate) async fn handle(
 
         entries.push(QueryReplyEntry { write, initial_write });
     }
-
+  
     let entries = if entries.is_empty() { None } else { Some(entries) };
 
     Ok(Reply {

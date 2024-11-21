@@ -65,6 +65,7 @@ impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
     async fn subscribe(
         &self, owner: &str, message_cid: &str, filters: SubscribeFilter,
+
     ) -> Result<Subscriber> {
         // set up subscriber
         let mut nats_subscriber = self.nats_client.subscribe("messages").await?;
