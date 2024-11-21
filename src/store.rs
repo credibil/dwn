@@ -1,7 +1,7 @@
 //! # Store
 
 use crate::records::RecordsFilter;
-use crate::{DateRange, Interface, Method, Quota};
+use crate::{Interface, Method, Quota};
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
@@ -12,8 +12,9 @@ pub struct RecordsQuery {
     pub recipient: Option<Quota<String>>,
     pub protocol: Option<String>,
     pub protocol_path: Option<String>,
-    pub date_created: Option<DateRange>,
+    // pub date_created: Option<DateRange>,
     pub hidden: Option<bool>,
+    pub method: Option<Method>,
     filter: Option<RecordsFilter>,
 }
 
@@ -21,15 +22,10 @@ impl RecordsQuery {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            method: Some(Method::Write),
             hidden: Some(false),
             ..Self::default()
         }
-    }
-
-    #[must_use]
-    pub fn hidden(mut self, hidden: Option<bool>) -> Self {
-        self.hidden = hidden;
-        self
     }
 
     #[must_use]
@@ -79,9 +75,21 @@ impl RecordsQuery {
         self
     }
 
+    // #[must_use]
+    // pub fn date_created(mut self, date_created: DateRange) -> Self {
+    //     self.date_created = Some(date_created);
+    //     self
+    // }
+
     #[must_use]
-    pub fn date_created(mut self, date_created: DateRange) -> Self {
-        self.date_created = Some(date_created);
+    pub fn method(mut self, method: Option<Method>) -> Self {
+        self.method = method;
+        self
+    }
+
+    #[must_use]
+    pub fn hidden(mut self, hidden: Option<bool>) -> Self {
+        self.hidden = hidden;
         self
     }
 
@@ -90,14 +98,16 @@ impl RecordsQuery {
             "
             SELECT * FROM message
             WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'
             ",
-            interface = Interface::Records,
-            method = Method::Write,
+            interface = Interface::Records
         );
 
         if let Some(hidden) = &self.hidden {
             sql.push_str(&format!("AND hidden = {hidden}\n"));
+        }
+
+        if let Some(method) = &self.method {
+            sql.push_str(&format!("AND descriptor.method = '{method}'\n"));
         }
 
         if let Some(record_id) = &self.record_id {
@@ -124,13 +134,13 @@ impl RecordsQuery {
             sql.push_str(&quota("descriptor.recipient", recipient));
         }
 
-        if let Some(date_created) = &self.date_created {
-            sql.push_str(&format!(
-                "AND descriptor.dateCreated BETWEEN {from} AND {to}'\n",
-                from = date_created.from,
-                to = date_created.to
-            ));
-        }
+        // if let Some(date_created) = &self.date_created {
+        //     sql.push_str(&format!(
+        //         "AND descriptor.dateCreated BETWEEN {from} AND {to}'\n",
+        //         from = date_created.from,
+        //         to = date_created.to
+        //     ));
+        // }
 
         if let Some(filter) = &self.filter {
             sql.push_str(&format!("{}\n", filter.to_sql()));

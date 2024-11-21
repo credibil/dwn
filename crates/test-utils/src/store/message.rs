@@ -19,13 +19,6 @@ impl MessageStore for ProviderImpl {
     async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Record>, Cursor)> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
-        let sql = if sql.contains("SELECT") {
-            sql.to_string()
-        } else {
-            format!("SELECT * FROM {TABLE} {sql}")
-        };
-        // let sql = format!("SELECT * FROM {TABLE} {sql}");
-
         let mut response = self.db.query(sql).await?;
         let messages: Vec<Record> = response.take(0)?;
 
