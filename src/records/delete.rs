@@ -33,11 +33,13 @@ pub(crate) async fn handle(
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
         AND recordId = '{record_id}'
         AND hidden = false
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
+        method = Method::Write,
         record_id = delete.descriptor.record_id,
     );
     let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
@@ -282,10 +284,12 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
+        AND descriptor.method = '{method}'
         AND recordId = '{record_id}'
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
+        method = Method::Write,
         record_id = delete.descriptor.record_id,
     );
 
@@ -347,10 +351,12 @@ async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provide
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}'
-        AND parentId = '{record_id}'
+        AND descriptor.method = '{method}'
+        AND descriptor.parentId = '{record_id}'
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
+        method = Method::Write,
     );
     let (children, _) = MessageStore::query(provider, owner, &sql).await?;
     if children.is_empty() {

@@ -19,8 +19,8 @@ use crate::event::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
-use crate::records::{SizeRange, Write};
-use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result};
+use crate::records::Write;
+use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result, SizeRange};
 
 /// Process query message.
 ///

@@ -26,11 +26,13 @@ pub(crate) async fn handle(
     let sql = format!(
         "
         WHERE descriptor.interface = '{interface}' 
+        AND descriptor.method = '{method}'
         {filter_sql}
         AND hidden = false
         ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
+        method = Method::Write,
         filter_sql = read.descriptor.filter.to_sql(),
     );
 

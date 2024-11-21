@@ -13,6 +13,7 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{protocol, Grant};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
+use crate::store::RecordsQuery;
 use crate::{forbidden, Cursor, Descriptor, Error, Interface, Method, Pagination, Quota, Result};
 
 /// Process `Query` message.
@@ -47,19 +48,8 @@ pub(crate) async fn handle(
     }
 
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}' 
-        AND descriptor.method = '{method}'
-        {filter_sql}
-        AND hidden = false
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-        filter_sql = filter.to_sql(),
-    );
-    let (records, _) = MessageStore::query(provider, owner, &sql).await?;
+    let query = RecordsQuery::from(filter);
+    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
 
     // build reply
     let mut entries = vec![];
@@ -67,20 +57,8 @@ pub(crate) async fn handle(
         let write: Write = record.try_into()?;
 
         let initial_write = if write.is_initial()? {
-            let sql = format!(
-                "
-                WHERE descriptor.interface = '{interface}' 
-                AND descriptor.method = '{method}'
-                AND recordId = '{record_id}'
-                ORDER BY descriptor.messageTimestamp DESC
-                ",
-                interface = Interface::Records,
-                method = Method::Write,
-                record_id = &write.record_id,
-                // AND hidden = false
-            );
-
-            let (records, _) = MessageStore::query(provider, owner, &sql).await?;
+            let query = RecordsQuery::new().record_id(&write.record_id).hidden(None);
+            let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
             let mut initial_write: Write = (&records[0]).try_into()?;
             initial_write.encoded_data = None;
             Some(initial_write)
@@ -90,7 +68,7 @@ pub(crate) async fn handle(
 
         entries.push(QueryReplyEntry { write, initial_write });
     }
-  
+
     let entries = if entries.is_empty() { None } else { Some(entries) };
 
     Ok(Reply {

@@ -318,7 +318,7 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
         AND descriptor.method = '{method}'
         AND descriptor.protocol = '{protocol}'
         AND recordId = '{parent_id}'
-        AND lastestBase = true
+        AND queryable = true
         ",
         interface = Interface::Records,
         method = Method::Write,
@@ -382,8 +382,8 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
         AND descriptor.method = '{method}'
         AND descriptor.protocol = '{protocol}'
         AND descriptor.protocolPath = '{protocol_path}'
-        AND recipient = '{recipient}'
-        AND lastestBase = true
+        AND descriptor.recipient = '{recipient}'
+        AND queryable = true
         {context}
         ",
         interface = Interface::Records,
@@ -453,11 +453,11 @@ async fn verify_invoked_role(
         "
         WHERE descriptor.interface = '{interface}'
         AND descriptor.method = '{method}'
-        AND protocol = '{protocol}'
-        AND protocolPath = '{protocol_role}'
-        AND recipient = '{author}'
+        AND descriptor.protocol = '{protocol}'
+        AND descriptor.protocolPath = '{protocol_role}'
+        AND descriptor.recipient = '{author}'
         {context_prefix}
-        AND lastestBase = true
+        AND queryable = true
         ",
         interface = Interface::Records,
         method = Method::Write,

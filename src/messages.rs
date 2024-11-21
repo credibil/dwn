@@ -43,7 +43,7 @@ impl MessagesFilter {
             sql.push_str(&format!("AND descriptor.method = '{method}'\n"));
         }
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND protocol = '{protocol}'\n"));
+            sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
         }
         if let Some(timestamp) = &self.message_timestamp {
             sql.push_str(&format!(

@@ -102,6 +102,19 @@ pub struct DateRange {
     pub to: String,
 }
 
+/// Size range.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeRange {
+    /// The minimum size.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<usize>,
+
+    /// The maximum size.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<usize>,
+}
+
 /// Pagination cursor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

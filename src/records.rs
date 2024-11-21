@@ -20,7 +20,7 @@ pub use self::write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
 };
 pub use crate::data::DataStream;
-use crate::{utils, DateRange, Quota, Result};
+use crate::{utils, DateRange, Quota, Result, SizeRange};
 
 // TODO: add builder for RecordsFilter
 
@@ -115,15 +115,15 @@ impl RecordsFilter {
     pub(crate) fn to_sql(&self) -> String {
         let mut sql = String::new();
 
-        // TODO! filter by these after query
-        if let Some(author) = &self.author {
-            sql.push_str(&one_or_many("author", author));
+        if let Some(record_id) = &self.record_id {
+            sql.push_str(&format!("AND recordId = '{record_id}'\n"));
         }
 
-        if let Some(attester) = &self.attester {
-            sql.push_str(&format!("AND attester = '{attester}'\n"));
+        if let Some(context_id) = &self.context_id {
+            sql.push_str(&format!("AND contextId = '{context_id}'\n"));
         }
 
+        // descriptor fields
         if let Some(recipient) = &self.recipient {
             sql.push_str(&one_or_many("descriptor.recipient", recipient));
         }
@@ -140,26 +140,12 @@ impl RecordsFilter {
             sql.push_str(&format!("AND descriptor.published = {published}\n"));
         }
 
-        if let Some(context_id) = &self.context_id {
-            sql.push_str(&format!("AND contextId = '{context_id}'\n"));
-        }
-
         if let Some(schema) = &self.schema {
             sql.push_str(&format!("AND descriptor.schema = '{schema}'\n"));
         }
 
-        if let Some(record_id) = &self.record_id {
-            sql.push_str(&format!("AND recordId = '{record_id}'\n"));
-        }
-
         if let Some(parent_id) = &self.parent_id {
             sql.push_str(&format!("AND descriptor.parentId = '{parent_id}'\n"));
-        }
-
-        if let Some(tags) = &self.tags {
-            for (property, filter) in tags {
-                sql.push_str(&format!("AND tags.{property} {}\n", filter.to_sql()));
-            }
         }
 
         if let Some(data_format) = &self.data_format {
@@ -194,9 +180,24 @@ impl RecordsFilter {
             ));
         }
 
+        // index fields
+        if let Some(author) = &self.author {
+            sql.push_str(&one_or_many("author", author));
+        }
+
+        if let Some(attester) = &self.attester {
+            sql.push_str(&format!("AND attester = '{attester}'\n"));
+        }
+
+        if let Some(tags) = &self.tags {
+            for (property, filter) in tags {
+                sql.push_str(&format!("AND tags.{property} {}\n", filter.to_sql()));
+            }
+        }
+
         if let Some(date_updated) = &self.date_updated {
             sql.push_str(&format!(
-                "AND descriptor.dateUpdated BETWEEN {from} AND {to}'\n",
+                "AND dateUpdated BETWEEN {from} AND {to}'\n",
                 from = date_updated.from,
                 to = date_updated.to
             ));
@@ -258,17 +259,4 @@ impl Default for TagFilter {
     fn default() -> Self {
         Self::Equal(Value::Null)
     }
-}
-
-/// Size range.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SizeRange {
-    /// The minimum size.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub min: Option<usize>,
-
-    /// The maximum size.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max: Option<usize>,
 }

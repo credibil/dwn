@@ -206,7 +206,7 @@ impl Grant {
             AND descriptor.method = '{method}'
             AND descriptor.parentId = '{parent_id}'
             AND descriptor.protocolPath = '{REVOCATION_PATH}'
-            AND lastestBase = true
+            AND queryable = true
             ORDER BY descriptor.messageTimestamp DESC
             ",
             interface = Interface::Records,
