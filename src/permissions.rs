@@ -63,8 +63,8 @@ pub enum ScopeType {
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
-    /// `MessageType` scope fields.
-    MessageType {
+    /// `RecordType` scope fields.
+    RecordType {
         /// The protocol the permission is applied to.
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,

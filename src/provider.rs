@@ -5,8 +5,8 @@ use async_trait::async_trait;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
-use crate::endpoint::Record;
 use crate::event::{Event, SubscribeFilter, Subscriber};
+use crate::store::Record;
 pub use crate::tasks::ResumableTask;
 use crate::Cursor;
 

@@ -14,12 +14,12 @@ use serde_json::{Map, Value};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::event::Event;
 use crate::permissions::protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
-use crate::store::RecordsQuery;
+use crate::store::{Record, RecordType, RecordsQuery};
 use crate::tasks::{self, Task, TaskType};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
@@ -108,7 +108,7 @@ impl TryFrom<Record> for Delete {
 
     fn try_from(record: Record) -> Result<Self> {
         match record.message {
-            MessageType::RecordsDelete(delete) => Ok(delete),
+            RecordType::Delete(delete) => Ok(delete),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }
@@ -119,7 +119,7 @@ impl TryFrom<&Record> for Delete {
 
     fn try_from(record: &Record) -> Result<Self> {
         match &record.message {
-            MessageType::RecordsDelete(delete) => Ok(delete.clone()),
+            RecordType::Delete(delete) => Ok(delete.clone()),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }
@@ -128,7 +128,7 @@ impl TryFrom<&Record> for Delete {
 impl From<&Delete> for Record {
     fn from(delete: &Delete) -> Self {
         let mut record = Self {
-            message: MessageType::RecordsDelete(delete.clone()),
+            message: RecordType::Delete(delete.clone()),
             indexes: Map::new(),
         };
 

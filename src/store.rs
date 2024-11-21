@@ -1,11 +1,108 @@
 //! # Store
 
+use std::ops::Deref;
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+
+use crate::endpoint::Message;
 use crate::records::RecordsFilter;
-use crate::{Interface, Method, Quota};
+use crate::{protocols, records, Descriptor, Interface, Method, Quota, Result};
+
+/// Wraps each message with a unifying type used in operations common to all
+/// messages. For example, storing and retrieving from the `MessageStore`.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Record {
+    /// The message type.
+    #[serde(flatten)]
+    pub message: RecordType,
+
+    /// Indexed message object fields, flattened for querying.
+    #[serde(flatten)]
+    #[serde(skip_deserializing)]
+    pub indexes: Map<String, Value>,
+}
+
+impl Record {
+    /// The message's CID.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub fn cid(&self) -> Result<String> {
+        match self.message {
+            RecordType::Write(ref write) => write.cid(),
+            RecordType::Delete(ref delete) => delete.cid(),
+            RecordType::Configure(ref configure) => configure.cid(),
+        }
+    }
+
+    /// The message's CID.
+    #[must_use]
+    pub fn descriptor(&self) -> &Descriptor {
+        match self.message {
+            RecordType::Write(ref write) => write.descriptor(),
+            RecordType::Delete(ref delete) => delete.descriptor(),
+            RecordType::Configure(ref configure) => configure.descriptor(),
+        }
+    }
+}
+
+impl Record {
+    /// Return the `RecordsWrite` message, if set.
+    #[must_use]
+    pub const fn as_write(&self) -> Option<&records::Write> {
+        match &self.message {
+            RecordType::Write(write) => Some(write),
+            _ => None,
+        }
+    }
+
+    /// Return the `RecordsDelete` message, if set.
+    #[must_use]
+    pub const fn as_delete(&self) -> Option<&records::Delete> {
+        match &self.message {
+            RecordType::Delete(delete) => Some(delete),
+            _ => None,
+        }
+    }
+
+    /// Return the `ProtocolsConfigure` message, if set.
+    #[must_use]
+    pub const fn as_configure(&self) -> Option<&protocols::Configure> {
+        match &self.message {
+            RecordType::Configure(configure) => Some(configure),
+            _ => None,
+        }
+    }
+}
+
+impl Deref for Record {
+    type Target = RecordType;
+
+    fn deref(&self) -> &Self::Target {
+        &self.message
+    }
+}
+
+/// Records read message payload
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "type")]
+#[allow(missing_docs)]
+pub enum RecordType {
+    Write(records::Write),
+    Delete(records::Delete),
+    Configure(protocols::Configure),
+}
+
+impl Default for RecordType {
+    fn default() -> Self {
+        Self::Write(records::Write::default())
+    }
+}
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub struct RecordsQuery {
+pub(crate) struct RecordsQuery {
     pub record_id: Option<String>,
     pub parent_id: Option<String>,
     pub context_id: Option<String>,
@@ -178,282 +275,3 @@ fn quota(field: &str, clause: &Quota<String>) -> String {
         }
     }
 }
-
-// let sql = format!("SELECT * FROM {TABLE} {sql}");
-// let sql = format!("SELECT * FROM {TABLE} {sql}");
-
-// ----------------------------------------------
-// permissions: fetch grant
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND recordId = '{grant_id}'
-//     AND hidden = false
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-// );
-
-// ----------------------------------------------
-// grant: grant revoked
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND descriptor.parentId = '{parent_id}'
-//     AND descriptor.protocolPath = '{REVOCATION_PATH}'
-//     AND queryable = true
-//     ORDER BY descriptor.messageTimestamp DESC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-//     parent_id = self.id
-// );
-
-// ----------------------------------------------
-// protocol: write parent (verify protocol path)
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND descriptor.protocol = '{protocol}'
-//     AND recordId = '{parent_id}'
-//     AND queryable = true
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-// );
-
-// ----------------------------------------------
-// protocol: verify write role integrity
-// ----------------------------------------------
-// context =
-//     format!("AND contextId BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
-
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND descriptor.protocol = '{protocol}'
-//     AND descriptor.protocolPath = '{protocol_path}'
-//     AND descriptor.recipient = '{recipient}'
-//     AND queryable = true
-//     {context}
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-// );
-
-// ----------------------------------------------
-// protocol: verify invoked role
-// ----------------------------------------------
-// `context_id` prefix filter
-// let context_prefix = if segment_count > 0 {
-//     // context_id segment count is never shorter than the role path count.
-//     let context_id = context_id.unwrap_or_default();
-//     let context_id_segments: Vec<&str> = context_id.split('/').collect();
-//     let prefix = context_id_segments[..segment_count].join("/");
-//     format!("AND contextId BETWEEN '{prefix}' AND '{prefix}\u{ffff}'")
-// } else {
-//     String::new()
-// };
-
-// // fetch the invoked role record
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND descriptor.protocol = '{protocol}'
-//     AND descriptor.protocolPath = '{protocol_role}'
-//     AND descriptor.recipient = '{author}'
-//     {context_prefix}
-//     AND queryable = true
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-// );
-
-// ----------------------------------------------
-// protocol: protocol definition
-// ----------------------------------------------
-// // fetch the corresponding protocol definition
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND descriptor.definition.protocol = '{protocol_uri}'
-//     ",
-//     interface = Interface::Protocols,
-//     method = Method::Configure,
-// );
-
-// ----------------------------------------------
-// protocols: query (fetch config)
-// ----------------------------------------------
-// if let Some(filter) = filter {
-//     let protocol_uri = utils::clean_url(&filter.protocol)?;
-//     protocol = format!("AND descriptor.definition.protocol = '{protocol_uri}'");
-// };
-
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND descriptor.definition.published = true
-//     {protocol}
-//     ",
-//     interface = Interface::Protocols,
-//     method = Method::Configure,
-// );
-
-// ----------------------------------------------
-// messages: query
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     {filter_sql}
-//     ORDER BY descriptor.messageTimestamp ASC
-//     "
-// );
-
-// ----------------------------------------------
-// records: delete > query
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND recordId = '{record_id}'
-//     AND hidden = false
-//     ORDER BY descriptor.messageTimestamp DESC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-//     record_id = delete.descriptor.record_id,
-// );
-
-// ----------------------------------------------
-// records: delete > check latest before delete
-// ----------------------------------------------
-// // get the latest active `RecordsWrite` and `RecordsDelete` messages
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND recordId = '{record_id}'
-//     ORDER BY descriptor.messageTimestamp DESC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-//     record_id = delete.descriptor.record_id,
-// );
-
-// ----------------------------------------------
-// records: delete > purge descendants
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND descriptor.parentId = '{record_id}'
-//     ORDER BY descriptor.messageTimestamp DESC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-
-// );
-
-// ----------------------------------------------
-// records: query
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     {filter_sql}
-//     AND hidden = false
-//     ORDER BY descriptor.messageTimestamp DESC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-//     filter_sql = filter.to_sql(),
-// );
-
-// ----------------------------------------------
-// records: query
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND recordId = '{record_id}'
-//     ORDER BY descriptor.messageTimestamp DESC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-//     record_id = &write.record_id,
-//     // AND hidden = false
-// );
-
-// ----------------------------------------------
-// records: read > query
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     {filter_sql}
-//     AND hidden = false
-//     ORDER BY descriptor.messageTimestamp DESC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-//     filter_sql = read.descriptor.filter.to_sql(),
-// );
-
-// ----------------------------------------------
-// records: read > initial write
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND recordId = '{record_id}'
-//     AND hidden = true
-//     ORDER BY descriptor.messageTimestamp ASC
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-//     record_id = write.record_id,
-// );
-
-// ----------------------------------------------
-// records: write > exiting entries
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND recordId = '{record_id}'
-//     ORDER BY descriptor.messageTimestamp ASC
-//     ",
-//     interface = Interface::Records,
-// );
-
-// ----------------------------------------------
-// records: write > revoke grants
-// ----------------------------------------------
-// let sql = format!(
-//     "
-//     WHERE descriptor.interface = '{interface}'
-//     AND descriptor.method = '{method}'
-//     AND recordId = '{grant_id}'
-//     AND dateCreated >= '{message_timestamp}
-//     AND hidden = false
-//     ",
-//     interface = Interface::Records,
-//     method = Method::Write,
-// );

@@ -13,7 +13,7 @@ pub mod protocols;
 pub mod provider;
 pub mod records;
 mod schema;
-mod store;
+pub mod store;
 mod tasks;
 mod utils;
 

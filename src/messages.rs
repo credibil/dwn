@@ -57,7 +57,7 @@ impl MessagesFilter {
     }
 }
 
-// /// MessageType sort.
+// /// RecordType sort.
 // #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 // #[serde(rename_all = "camelCase")]
 // pub struct Sort {

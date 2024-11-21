@@ -17,13 +17,13 @@ use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::event::Event;
 use crate::permissions::{self, protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
-use crate::store::RecordsQuery;
+use crate::store::{Record, RecordType, RecordsQuery};
 use crate::{data, unexpected, utils, DateRange, Descriptor, Error, Interface, Method, Result};
 
 /// Handle `RecordsWrite` messages.
@@ -212,7 +212,7 @@ impl From<&Write> for Record {
         save.encoded_data = None;
 
         let mut record = Self {
-            message: MessageType::RecordsWrite(save),
+            message: RecordType::Write(save),
             indexes: Map::new(),
         };
 
@@ -244,7 +244,7 @@ impl TryFrom<Record> for Write {
 
     fn try_from(record: Record) -> Result<Self> {
         match record.message {
-            MessageType::RecordsWrite(write) => Ok(write),
+            RecordType::Write(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
@@ -255,7 +255,7 @@ impl TryFrom<&Record> for Write {
 
     fn try_from(record: &Record) -> Result<Self> {
         match &record.message {
-            MessageType::RecordsWrite(write) => Ok(write.clone()),
+            RecordType::Write(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }

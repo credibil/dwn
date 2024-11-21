@@ -383,7 +383,7 @@ impl GrantBuilder {
 
         // add protocol tag
         let protocol = match &scope.scope_type {
-            ScopeType::Protocols { protocol } | ScopeType::MessageType { protocol } => {
+            ScopeType::Protocols { protocol } | ScopeType::RecordType { protocol } => {
                 protocol.as_ref()
             }
             ScopeType::Records { protocol, .. } => Some(protocol),

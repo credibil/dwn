@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use vercre_dwn::endpoint::Record;
 use vercre_dwn::provider::MessageStore;
+use vercre_dwn::store::Record;
 use vercre_dwn::Cursor;
 
 use super::ProviderImpl;

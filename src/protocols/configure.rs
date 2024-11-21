@@ -14,12 +14,13 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::event::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
+use crate::store::{Record, RecordType};
 use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result, SizeRange};
 
 /// Process query message.
@@ -130,7 +131,7 @@ pub struct ConfigureReply {
 impl From<Configure> for Record {
     fn from(configure: Configure) -> Self {
         Self {
-            message: MessageType::ProtocolsConfigure(configure),
+            message: RecordType::Configure(configure),
             indexes: Map::new(),
         }
     }
@@ -139,7 +140,7 @@ impl From<Configure> for Record {
 impl From<&Configure> for Record {
     fn from(configure: &Configure) -> Self {
         Self {
-            message: MessageType::ProtocolsConfigure(configure.clone()),
+            message: RecordType::Configure(configure.clone()),
             indexes: Map::new(),
         }
     }
@@ -150,7 +151,7 @@ impl TryFrom<Record> for Configure {
 
     fn try_from(record: Record) -> Result<Self> {
         match record.message {
-            MessageType::ProtocolsConfigure(configure) => Ok(configure),
+            RecordType::Configure(configure) => Ok(configure),
             _ => Err(unexpected!("expected `ProtocolsConfigure` message")),
         }
     }
