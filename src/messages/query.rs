@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use super::Filter;
+use super::MessagesFilter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
@@ -146,7 +146,7 @@ pub struct QueryDescriptor {
     pub base: Descriptor,
 
     /// Filters to apply when querying messages.
-    pub filters: Vec<Filter>,
+    pub filters: Vec<MessagesFilter>,
 
     /// The pagination cursor.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -157,7 +157,7 @@ pub struct QueryDescriptor {
 #[derive(Clone, Debug, Default)]
 pub struct QueryBuilder {
     message_timestamp: Option<DateTime<Utc>>,
-    filters: Option<Vec<Filter>>,
+    filters: Option<Vec<MessagesFilter>>,
     permission_grant_id: Option<String>,
 }
 
@@ -175,7 +175,7 @@ impl QueryBuilder {
 
     /// Specify a permission grant ID to use with the configuration.
     #[must_use]
-    pub fn add_filter(mut self, filter: Filter) -> Self {
+    pub fn add_filter(mut self, filter: MessagesFilter) -> Self {
         self.filters.get_or_insert_with(Vec::new).push(filter);
         self
     }

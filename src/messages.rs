@@ -14,7 +14,7 @@ use crate::{DateRange, Interface, Method};
 /// `Messages` filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Filter {
+pub struct MessagesFilter {
     /// The message interface.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interface: Option<Interface>,
@@ -32,7 +32,7 @@ pub struct Filter {
     pub message_timestamp: Option<DateRange>,
 }
 
-impl Filter {
+impl MessagesFilter {
     fn to_sql(&self) -> String {
         let mut sql = String::from("1=1\n");
 

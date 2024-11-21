@@ -3,6 +3,7 @@
 pub mod delete;
 pub mod query;
 pub mod read;
+pub mod subscribe;
 pub mod write;
 
 use std::collections::BTreeMap;
@@ -13,12 +14,15 @@ use serde_json::Value;
 pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
 pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder, ReadReply};
+pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub(crate) use self::write::{earliest_and_latest, existing_entries};
 pub use self::write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
 };
 pub use crate::data::DataStream;
 use crate::{utils, DateRange, Quota, Result};
+
+// TODO: add builder for RecordsFilter
 
 /// Records filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

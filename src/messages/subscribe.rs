@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::event::Subscriber;
-use crate::messages::Filter;
+use crate::event::{SubscribeFilter, Subscriber};
+use crate::messages::MessagesFilter;
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventStream, MessageStore, Provider, Signer};
 use crate::{schema, Descriptor, Error, Interface, Method, Result};
@@ -26,8 +26,10 @@ pub(crate) async fn handle(
     subscribe.authorize(owner, provider).await?;
 
     let message_cid = subscribe.cid()?;
+    let filters = subscribe.descriptor.filters.clone();
+
     let subscriber =
-        EventStream::subscribe(provider, owner, &message_cid, &subscribe.descriptor.filters)
+        EventStream::subscribe(provider, owner, &message_cid, SubscribeFilter::Messages(filters))
             .await?;
 
     Ok(Reply {
@@ -127,14 +129,14 @@ pub struct SubscribeDescriptor {
     pub base: Descriptor,
 
     /// Filters to apply when subscribing to messages.
-    pub filters: Vec<Filter>,
+    pub filters: Vec<MessagesFilter>,
 }
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct SubscribeBuilder {
     message_timestamp: Option<DateTime<Utc>>,
-    filters: Option<Vec<Filter>>,
+    filters: Option<Vec<MessagesFilter>>,
     permission_grant_id: Option<String>,
 }
 
@@ -152,7 +154,7 @@ impl SubscribeBuilder {
 
     /// Specify event filter to use when subscribing.
     #[must_use]
-    pub fn add_filter(mut self, filter: Filter) -> Self {
+    pub fn add_filter(mut self, filter: MessagesFilter) -> Self {
         self.filters.get_or_insert_with(Vec::new).push(filter);
         self
     }

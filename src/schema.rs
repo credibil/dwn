@@ -62,8 +62,16 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/records-write.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "records-query" => {
+            let schema = include_bytes!("../schemas/interface-methods/records-query.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
         "records-read" => {
             let schema = include_bytes!("../schemas/interface-methods/records-read.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
+        "records-subscribe" => {
+            let schema = include_bytes!("../schemas/interface-methods/records-subscribe.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-delete" => {
