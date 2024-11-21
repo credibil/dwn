@@ -40,6 +40,7 @@ impl RecordsQuery {
         self
     }
 
+    // TODO: support LT, GT, and BETWEEN for context
     #[must_use]
     pub fn context_id(mut self, context_id: impl Into<String>) -> Self {
         self.context_id = Some(context_id.into());
