@@ -2,52 +2,51 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
+use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
-use crate::provider::{DataStore, MessageStore, Provider, Signer};
-use crate::records::{DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::service::{Context, Message};
-use crate::{cid, unexpected, Descriptor, Error, Interface, Method, Result, Status};
+use crate::data::cid;
+use crate::endpoint::{Context, Message, Reply, Status};
+use crate::provider::{MessageStore, Provider, Signer};
+use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
+use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Read` message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<ReadReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&read, &mut ctx, provider).await?;
-
+pub(crate) async fn handle(
+    owner: &str, read: Read, provider: &impl Provider,
+) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let sql = format!(
         "
-        WHERE descriptor.interface = '{interface}'
+        WHERE descriptor.interface = '{interface}' 
         {filter_sql}
-        AND latestBase = true
-        ORDER BY descriptor.messageTimestamp ASC
+        AND hidden = false
+        ORDER BY descriptor.messageTimestamp DESC
         ",
         interface = Interface::Records,
         filter_sql = read.descriptor.filter.to_sql(),
     );
 
-    // println!("SQL: {}", read.descriptor.filter.to_sql());
-
-    let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
+    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
     if messages.is_empty() {
-        return Err(Error::NotFound("No matching records found".to_string()));
+        return Err(Error::NotFound("no matching records found".to_string()));
+    }
+    if messages.len() > 2 {
+        return Err(unexpected!("multiple messages exist"));
     }
 
-    if messages.len() > 1 {
-        return Err(unexpected!("multiple messages exist for the RecordsRead filter"));
-    }
-    let write = &messages[0];
-
-    // if the matched message is a RecordsDelete, mark as not-found and return
+    // if the matched message is a `RecordsDelete`, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
-    if write.descriptor().method == Method::Delete {
+    if messages[0].descriptor().method == Method::Delete {
+        // TODO: implement this
+
         //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
         //   if initial_write.is_none() {
         //     return Err(unexpected!("Initial write for deleted record not found"));
@@ -70,16 +69,20 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         // }
     }
 
-    // TODO: review against the original code — it should take a store provider
-    read.authorize(&ctx.owner, write)?;
+    let mut write = Write::try_from(&messages[0])?;
 
-    let data = if let Some(encoded) = &write.encoded_data {
-        let mut write = write.clone();
+    // TODO: review against the original code — it should take a store provider
+    read.authorize(owner, &write)?;
+
+    let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
-        Some(Base64UrlUnpadded::decode_vec(encoded)?)
+        let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
+        Some(DataStream::from(buffer))
     } else {
-        DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
+        DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
     };
+
+    write.encoded_data = None;
 
     // attach initial write if latest RecordsWrite is not initial write
     let initial_write = if write.is_initial()? {
@@ -90,7 +93,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             WHERE descriptor.interface = '{interface}'
             AND descriptor.method = '{method}'
             AND recordId = '{record_id}'
-            AND latestBase = false
+            AND hidden = true
             ORDER BY descriptor.messageTimestamp ASC
             ",
             interface = Interface::Records,
@@ -98,26 +101,32 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             record_id = write.record_id,
         );
 
-        let (messages, _) = MessageStore::query::<Write>(provider, &ctx.owner, &sql).await?;
+        let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
         if messages.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
-        let mut initial_write = messages[0].clone();
+
+        let Some(mut initial_write) = messages[0].as_write().cloned() else {
+            return Err(unexpected!("expected `RecordsWrite` message"));
+        };
+
         initial_write.encoded_data = None;
         Some(initial_write)
     };
 
-    Ok(ReadReply {
+    Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
-            detail: Some("OK".to_string()),
+            detail: None,
         },
-        entry: ReadReplyEntry {
-            records_write: Some(write.clone()),
-            records_delete: None,
-            initial_write,
-            data,
-        },
+        body: Some(ReadReply {
+            entry: ReadReplyEntry {
+                records_write: Some(write.clone()),
+                records_delete: None,
+                initial_write,
+                data,
+            },
+        }),
     })
 }
 
@@ -133,7 +142,10 @@ pub struct Read {
     pub authorization: Option<Authorization>,
 }
 
+#[async_trait]
 impl Message for Read {
+    type Reply = ReadReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -145,15 +157,16 @@ impl Message for Read {
     fn authorization(&self) -> Option<&Authorization> {
         self.authorization.as_ref()
     }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(&ctx.owner, self, provider).await
+    }
 }
 
 /// Read reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
     /// The read reply entry.
     pub entry: ReadReplyEntry,
 }
@@ -178,7 +191,7 @@ pub struct ReadReplyEntry {
 
     /// The data for the record.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<Vec<u8>>,
+    pub data: Option<DataStream>,
 }
 
 impl Read {
@@ -211,7 +224,7 @@ impl Read {
             return Ok(());
         }
 
-        Err(unexpected!("unauthorized"))
+        Err(Error::Forbidden("unauthorized".to_string()))
     }
 }
 
@@ -274,6 +287,13 @@ impl ReadBuilder {
 
     /// Specify a protocol role for the record.
     #[must_use]
+    pub const fn authorize(mut self, authorize: bool) -> Self {
+        self.authorize = Some(authorize);
+        self
+    }
+
+    /// Specify a protocol role for the record.
+    #[must_use]
     pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
         self.protocol_role = Some(protocol_role.into());
         self
@@ -301,12 +321,18 @@ impl ReadBuilder {
         };
 
         let authorization = if self.authorize.unwrap_or(true) {
-            let mut builder =
+            let mut auth_builder =
                 AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
             if let Some(id) = self.permission_grant_id {
-                builder = builder.permission_grant_id(id);
+                auth_builder = auth_builder.permission_grant_id(id);
             }
-            Some(builder.build(signer).await?)
+            if let Some(role) = self.protocol_role {
+                auth_builder = auth_builder.protocol_role(role);
+            }
+            if let Some(delegated_grant) = self.delegated_grant {
+                auth_builder = auth_builder.delegated_grant(delegated_grant);
+            }
+            Some(auth_builder.build(signer).await?)
         } else {
             None
         };

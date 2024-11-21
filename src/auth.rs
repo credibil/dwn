@@ -5,11 +5,12 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
 pub use vercre_did::{dereference, Resource};
-use vercre_infosec::jose::Type;
+use vercre_infosec::jose::JwsBuilder;
 use vercre_infosec::{Jws, Signer};
 
+use crate::data::cid;
 use crate::records::DelegatedGrant;
-use crate::{cid, unexpected, Result};
+use crate::{unexpected, Result};
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///
@@ -27,15 +28,15 @@ macro_rules! verify_key {
     ($resolver:expr) => {{
         // create local reference before moving into closure
         let resolver = $resolver;
-
-        move |kid: String| async move {
-            let resp = dereference(&kid, None, resolver)
-                .await
-                .map_err(|e| anyhow!("JWK not found: {e}"))?;
-            let Some(Resource::VerificationMethod(vm)) = resp.content_stream else {
-                return Err(anyhow!("Verification method not found"));
-            };
-            vm.method_type.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
+        move |kid: String| {
+            let local_resolver = resolver.clone();
+            async move {
+                let resp = dereference(&kid, None, local_resolver).await?;
+                let Some(Resource::VerificationMethod(vm)) = resp.content_stream else {
+                    return Err(anyhow!("Verification method not found"));
+                };
+                vm.method_type.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
+            }
         }
     }};
 }
@@ -110,18 +111,18 @@ pub struct Attestation {
 
 impl Authorization {
     /// Verify message signatures.
-    pub(crate) async fn authenticate(&self, resolver: &impl DidResolver) -> Result<()> {
-        let verifier = verify_key!(resolver);
-        self.signature.verify(verifier).await?;
+    pub async fn authenticate(&self, resolver: impl DidResolver) -> Result<()> {
+        // let verifier = verify_key!(resolver);
+        self.signature.verify(verify_key!(resolver.clone())).await?;
 
         if let Some(signature) = &self.owner_signature {
-            signature.verify(verifier).await?;
+            signature.verify(verify_key!(resolver.clone())).await?;
         }
         if let Some(grant) = &self.author_delegated_grant {
-            grant.authorization.signature.verify(verifier).await?;
+            grant.authorization.signature.verify(verify_key!(resolver.clone())).await?;
         }
         if let Some(grant) = &self.owner_delegated_grant {
-            grant.authorization.signature.verify(verifier).await?;
+            grant.authorization.signature.verify(verify_key!(resolver)).await?;
         }
 
         Ok(())
@@ -129,14 +130,14 @@ impl Authorization {
 
     // TODO: cache this value
     /// Get message author's DID.
-    pub(crate) fn author(&self) -> Result<String> {
+    pub fn author(&self) -> Result<String> {
         self.author_delegated_grant.as_ref().map_or_else(
             || signer_did(&self.signature),
             |grant| signer_did(&grant.authorization.signature),
         )
     }
 
-    pub(crate) fn owner(&self) -> Result<Option<String>> {
+    pub fn owner(&self) -> Result<Option<String>> {
         let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
             signer_did(&grant.authorization.signature)?
         } else {
@@ -149,18 +150,18 @@ impl Authorization {
     }
 
     /// Get message signer's DID from the message authorization.
-    pub(crate) fn signer(&self) -> Result<String> {
+    pub fn signer(&self) -> Result<String> {
         signer_did(&self.signature)
     }
 
-    pub(crate) fn owner_signer(&self) -> Result<String> {
+    pub fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
             return Err(unexpected!("owner delegated grant not found"));
         };
         signer_did(&grant.authorization.signature)
     }
 
-    pub(crate) fn jws_payload(&self) -> Result<JwsPayload> {
+    pub fn jws_payload(&self) -> Result<JwsPayload> {
         let base64 = &self.signature.payload;
         let decoded = Base64UrlUnpadded::decode_vec(base64)
             .map_err(|e| unexpected!("issue decoding header: {e}"))?;
@@ -170,7 +171,7 @@ impl Authorization {
 
 /// Gets the DID of the signer of the given message, returning an error if the
 /// message is not signed.
-pub(crate) fn signer_did(jws: &Jws) -> Result<String> {
+pub fn signer_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
         return Err(unexpected!("Invalid `kid`"));
     };
@@ -197,10 +198,17 @@ impl AuthorizationBuilder {
         Self::default()
     }
 
-    /// Set the `Descriptor`.
+    /// Set the `Descriptor` CID.
     #[must_use]
     pub fn descriptor_cid(mut self, descriptor_cid: impl Into<String>) -> Self {
         self.descriptor_cid = Some(descriptor_cid.into());
+        self
+    }
+
+    /// Set the `Descriptor`.
+    #[must_use]
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
+        self.delegated_grant = Some(delegated_grant);
         self
     }
 
@@ -237,7 +245,7 @@ impl AuthorizationBuilder {
             delegated_grant_id,
             protocol_role: self.protocol_role,
         };
-        let signature = Jws::new(Type::Jwt, &payload, signer).await?;
+        let signature = JwsBuilder::new().payload(payload).build(signer).await?;
 
         Ok(Authorization {
             signature,

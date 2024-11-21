@@ -1,60 +1,17 @@
 //! # Messages
-//!
-//! Decentralized Web Node messaging framework.
 
 pub mod query;
+pub mod read;
+pub mod subscribe;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::query::{Query, QueryReply};
-use crate::auth::Authorization;
+pub use self::query::{Query, QueryBuilder, QueryReply};
+pub use self::read::{Read, ReadBuilder, ReadReply};
+pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 use crate::{DateRange, Interface, Method};
 
-/// Messages Read payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Read {
-    /// The Read descriptor.
-    pub descriptor: ReadDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
-/// Read descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: crate::Descriptor,
-
-    /// Message CID.
-    pub message_cid: String,
-}
-
-/// Messages Subscribe payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Subscribe {
-    /// The Subscribe descriptor.
-    pub descriptor: SubscribeDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
-/// Suscribe descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubscribeDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: crate::Descriptor,
-
-    /// Message CID.
-    pub filters: Vec<Filter>,
-}
-
-/// Messages filter.
+/// `Messages` filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Filter {
@@ -75,28 +32,53 @@ pub struct Filter {
     pub message_timestamp: Option<DateRange>,
 }
 
-/// Messages sort.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Sort {
-    /// Sort by `date_created`.
-    pub date_created: Option<Direction>,
+impl Filter {
+    fn to_sql(&self) -> String {
+        let mut sql = String::from("1=1\n");
 
-    /// Sort by `date_published`.
-    pub date_published: Option<Direction>,
+        if let Some(interface) = &self.interface {
+            sql.push_str(&format!("AND descriptor.interface = '{interface}'\n"));
+        }
+        if let Some(method) = &self.method {
+            sql.push_str(&format!("AND descriptor.method = '{method}'\n"));
+        }
+        if let Some(protocol) = &self.protocol {
+            sql.push_str(&format!("AND protocol = '{protocol}'\n"));
+        }
+        if let Some(timestamp) = &self.message_timestamp {
+            sql.push_str(&format!(
+                "AND descriptor.messageTimestamp BETWEEN {from} AND {to}'\n",
+                from = timestamp.from,
+                to = timestamp.to
+            ));
+        }
 
-    /// Sort by `message_timestamp`.
-    pub message_timestamp: Option<Direction>,
+        sql
+    }
 }
 
-/// Sort direction.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Direction {
-    /// Sort ascending.
-    #[default]
-    Ascending = 1,
+// /// MessageType sort.
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Sort {
+//     /// Sort by `date_created`.
+//     pub date_created: Option<Direction>,
 
-    /// Sort descending.
-    Descending = -1,
-}
+//     /// Sort by `date_published`.
+//     pub date_published: Option<Direction>,
+
+//     /// Sort by `message_timestamp`.
+//     pub message_timestamp: Option<Direction>,
+// }
+
+// /// Sort direction.
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub enum Direction {
+//     /// Sort ascending.
+//     #[default]
+//     Ascending = 1,
+
+//     /// Sort descending.
+//     Descending = -1,
+// }

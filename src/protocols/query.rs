@@ -1,39 +1,40 @@
-//! # Messages
-//!
-//! Decentralized Web Node messaging framework.
+//! # Protocols Query
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::data::cid;
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::ScopeType;
 use crate::protocols::Configure;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::service::{Context, Message};
-use crate::{
-    cid, schema, unexpected, utils, Cursor, Descriptor, Interface, Method, Result, Status,
-};
+use crate::{schema, unexpected, utils, Cursor, Descriptor, Error, Interface, Method, Result};
+
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(owner: &str, query: Query, provider: impl Provider) -> Result<QueryReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&query, &mut ctx, &provider).await?;
-    query.authorize(&ctx)?;
+pub(crate) async fn handle(
+    ctx: &Context, query: Query, provider: &impl Provider,
+) -> Result<Reply<QueryReply>> {
+    query.authorize(ctx)?;
 
-    let entries = fetch_config(&ctx.owner, query.descriptor.filter, &provider).await?;
+    let entries = fetch_config(&ctx.owner, query.descriptor.filter, provider).await?;
 
     // TODO: pagination & sorting
     // TODO: return errors in Reply
 
-    Ok(QueryReply {
+    Ok(Reply {
         status: Status {
             code: 200,
             detail: Some("OK".to_string()),
         },
-        entries,
-        cursor: None,
+        body: Some(QueryReply {
+            entries,
+            cursor: None,
+        }),
     })
 }
 
@@ -50,7 +51,10 @@ pub struct Query {
     pub authorization: Authorization,
 }
 
+#[async_trait]
 impl Message for Query {
+    type Reply = QueryReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -62,19 +66,20 @@ impl Message for Query {
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.authorization)
     }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(ctx, self, provider).await
+    }
 }
 
-/// Messages Query reply
+/// Query reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
-    /// The Query descriptor.
+    /// `ProtocolsConfigure` entries matching the query.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<Configure>>,
 
-    /// The message authorization.
+    /// Pagination cursor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
 }
@@ -101,11 +106,19 @@ pub(crate) async fn fetch_config(
     );
 
     // execute query
-    let (messages, _) = store.query::<Configure>(owner, &sql).await?;
+    let (messages, _) = store.query(owner, &sql).await?;
     if messages.is_empty() {
         return Ok(None);
     }
-    Ok(Some(messages))
+
+    // unpack messages
+
+    let mut entries = vec![];
+    for message in messages {
+        entries.push(Configure::try_from(message)?);
+    }
+
+    Ok(Some(entries))
 }
 
 impl Query {
@@ -128,7 +141,7 @@ impl Query {
                 return Err(unexpected!("missing filter"));
             };
             if protocol != &filter.protocol {
-                return Err(unexpected!("unauthorized protocol"));
+                return Err(Error::Forbidden("unauthorized protocol".to_string()));
             }
         }
 

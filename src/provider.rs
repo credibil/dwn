@@ -1,20 +1,19 @@
 //! # Provider
 
-use std::io::Read;
-
 use anyhow::Result;
 use async_trait::async_trait;
-use serde_json::Value;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
-use crate::query::Filter;
-use crate::service::Message;
+use crate::endpoint::Record;
+use crate::event::{Event, Subscriber};
+use crate::messages::Filter;
+pub use crate::tasks::ResumableTask;
 use crate::Cursor;
 
 /// Issuer Provider trait.
 pub trait Provider:
-    MessageStore + DataStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver + Clone
+    MessageStore + BlockStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver + Clone
 {
 }
 
@@ -72,14 +71,14 @@ pub trait Keyring: Signer + Cipher + Send + Sync {}
 #[async_trait]
 pub trait MessageStore: Send + Sync {
     /// Store a message in the underlying store.
-    async fn put<T: Message>(&self, owner: &str, message: &T) -> Result<()>;
+    async fn put(&self, owner: &str, record: &Record) -> Result<()>;
+
+    /// Queries the underlying store for matches to the provided SQL WHERE clause.
+    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Record>, Cursor)>;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.
-    async fn get<T: Message>(&self, owner: &str, message_cid: &str) -> Result<Option<T>>;
-
-    /// Queries the underlying store for matches to the provided SQL WHERE clause.
-    async fn query<T: Message>(&self, owner: &str, sql: &str) -> Result<(Vec<T>, Cursor)>;
+    async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Record>>;
 
     /// Delete message associated with the specified id.
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;
@@ -88,23 +87,21 @@ pub trait MessageStore: Send + Sync {
     async fn purge(&self) -> Result<()>;
 }
 
-/// The `DataStore` trait is used by implementers to provide data storage
+/// The `BlockStore` trait is used by implementers to provide data storage
 /// capability.
 #[async_trait]
-pub trait DataStore: Send + Sync {
-    /// Store data in the underlying store.
-    async fn put(
-        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read + Send,
-    ) -> Result<usize>;
+pub trait BlockStore: Send + Sync {
+    /// Store a data block in the underlying block store.
+    async fn put(&self, owner: &str, cid: &str, block: &[u8]) -> Result<()>;
 
-    /// Fetches a single message by CID from the underlying store, returning
+    /// Fetches a single block by CID from the underlying store, returning
     /// `None` if no match was found.
-    async fn get(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<Option<Vec<u8>>>;
+    async fn get(&self, owner: &str, cid: &str) -> Result<Option<Vec<u8>>>;
 
-    /// Delete data associated with the specified id.
-    async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> Result<()>;
+    /// Delete the data block associated with the specified CID.
+    async fn delete(&self, owner: &str, cid: &str) -> Result<()>;
 
-    /// Purge all data from the store.
+    /// Purge all blocks from the store.
     async fn purge(&self) -> Result<()>;
 }
 
@@ -117,7 +114,7 @@ pub trait TaskStore: Send + Sync {
     ///
     /// If the task has timed out, a client will be able to grab it through the
     /// `grab()` method and resume the task.
-    async fn register(&self, task: &Value, timeout_secs: u64) -> Result<ResumableTask>;
+    async fn register(&self, owner: &str, task: &ResumableTask, timeout_secs: u64) -> Result<()>;
 
     /// Grabs `count` unhandled tasks from the store.
     ///
@@ -127,43 +124,27 @@ pub trait TaskStore: Send + Sync {
     /// N.B.: The implementation must make sure that once a task is grabbed by a client,
     /// tis timeout must be updated so that it is considered in-flight/under processing
     /// and cannot be grabbed by another client until it is timed-out.
-    async fn grab(count: u64) -> Result<Vec<ResumableTask>>;
+    async fn grab(&self, owner: &str, count: u64) -> Result<Vec<ResumableTask>>;
 
     /// Reads the task associated with the task ID provided regardless of whether
     /// it is in-flight/under processing or not.
     ///
     /// This is mainly introduced for testing purposes: ie. to check the status of
     /// a task for easy test verification.
-    async fn read(task_id: &str) -> Result<Option<ResumableTask>>;
+    async fn read(&self, owner: &str, task_id: &str) -> Result<Option<ResumableTask>>;
 
     /// Extends the timeout of the task associated with the task ID provided.
     ///
     /// No-op if the task is not found, as this implies that the task has already
     /// been completed. This allows the client that is executing the task to
     /// continue working on it before the task is considered timed out.
-    async fn extend(task_id: &str, timeout_secs: u64) -> Result<()>;
+    async fn extend(&self, owner: &str, task_id: &str, timeout_secs: u64) -> Result<()>;
 
     /// Delete data associated with the specified id.
-    async fn delete(&self, task_id: &str) -> Result<()>;
+    async fn delete(&self, owner: &str, task_id: &str) -> Result<()>;
 
     /// Purge all data from the store.
-    async fn purge(&self) -> Result<()>;
-}
-
-/// An managed resumable task model.
-pub struct ResumableTask {
-    /// Globally unique ID. Used to extend or delete the task.
-    pub id: String,
-
-    /// Task specific data. This is deliberately of type `any` because this store
-    /// should not have to be ware of its type.
-    pub task: Value,
-
-    /// Task timeout in Epoch Time.
-    pub timeout: u64,
-
-    /// Number of retries
-    pub retry_count: u64,
+    async fn purge(&self, owner: &str) -> Result<()>;
 }
 
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,
@@ -171,13 +152,13 @@ pub struct ResumableTask {
 #[async_trait]
 pub trait EventLog: Send + Sync {
     /// Adds a message event to a owner's event log.
-    async fn append<T: Message>(&self, owner: &str, message: &T) -> Result<()>;
+    async fn append(&self, owner: &str, event: &Event) -> Result<()>;
 
     /// Retrieves all of a owner's events that occurred after the cursor provided.
     /// If no cursor is provided, all events for a given owner will be returned.
     ///
     /// The cursor is a `message_cid`.
-    async fn events(&self, owner: &str, cursor: Option<Cursor>) -> Result<(Vec<String>, Cursor)>;
+    async fn events(&self, owner: &str, cursor: Option<Cursor>) -> Result<(Vec<Event>, Cursor)>;
 
     /// Retrieves a filtered set of events that occurred after a the cursor
     /// provided, accepts multiple filters. If no cursor is provided, all
@@ -185,9 +166,7 @@ pub trait EventLog: Send + Sync {
     /// is a `message_cid`.
     ///
     /// Returns an array of `message_cid`s that represent the events.
-    async fn query(
-        &self, owner: &str, filters: Vec<Filter>, cursor: Cursor,
-    ) -> Result<(Vec<String>, Cursor)>;
+    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Event>, Cursor)>;
 
     /// Deletes event for the specified `message_cid`.
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;
@@ -196,34 +175,22 @@ pub trait EventLog: Send + Sync {
     async fn purge(&self) -> Result<()>;
 }
 
-/// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,
+/// The `EventStream` trait is used by implementers to provide `Client`, `Issuer`,
 /// and `Server` metadata to the library.
 #[async_trait]
 pub trait EventStream: Send + Sync {
-    /// Specifies the type of the event stream subscriber.
-    type Subscriber: EventSubscription;
-
-    /// Subscribes to a owner's event stream.
-    async fn subscribe<T: Message>(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, T) + Send,
-    ) -> Result<(String, Self::Subscriber)>;
+    /// Subscribes to an owner's event stream.
+    async fn subscribe(
+        &self, owner: &str, message_cid: &str, filters: &[Filter],
+    ) -> Result<Subscriber>;
 
     /// Emits an event to a owner's event stream.
-    async fn emit<T: Message>(&self, owner: &str, event: &T) -> Result<()>;
+    async fn emit(&self, owner: &str, event: &Event) -> Result<()>;
 }
 
-/// `EventSubscription` is a subscription to an event stream.
-#[async_trait]
-pub trait EventSubscription: Send + Sync {
-    /// Close the subscription to the event stream.
-    async fn close(&self) -> Result<()>;
-}
-
-// pub struct Event {
-//     /// The message being emitted.
-//     pub message: Box<dyn Message>,
-
-//     /// The initial write of the `RecordsWrite` or `RecordsDelete` message.
-//     // #[serde(skip_serializing_if = "Option::is_none")]
-//     pub initial_entry: Box<dyn Message>,
+// /// `EventSubscriber` is a subscriber to an event stream.
+// #[async_trait]
+// pub trait EventSubscriber: Send + Sync {
+//     /// Close the subscription to the event stream.
+//     async fn close(&self) -> Result<()>;
 // }

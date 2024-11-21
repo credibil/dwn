@@ -1,39 +1,41 @@
-//! # Configure
+//! # Protocols Configure
 //!
 //! Decentralized Web Node messaging framework.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::data::cid;
+use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
+use crate::event::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::query::{self, Filter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::{SizeRange, Write};
-use crate::service::{Context, Message};
-use crate::{cid, schema, unexpected, utils, Descriptor, Interface, Method, Result, Status};
+use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(
-    owner: &str, configure: Configure, provider: impl Provider,
-) -> Result<ConfigureReply> {
-    let mut ctx = Context::new(owner);
-    Message::validate(&configure, &mut ctx, &provider).await?;
-    configure.authorize(&ctx, &provider).await?;
+pub(crate) async fn handle(
+    ctx: &Context, configure: Configure, provider: &impl Provider,
+) -> Result<Reply<ConfigureReply>> {
+    configure.authorize(ctx, provider).await?;
 
     // find any matching protocol entries
     let filter = Filter {
         protocol: configure.descriptor.definition.protocol.clone(),
     };
-    let results = query::fetch_config(&ctx.owner, Some(filter), &provider).await?;
+    let results = query::fetch_config(&ctx.owner, Some(filter), provider).await?;
 
     // determine if incoming message is the latest
     let is_latest = if let Some(existing) = &results {
@@ -53,8 +55,8 @@ pub async fn handle(
             let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
             if current_ts.cmp(&latest_ts) == Ordering::Less {
                 let cid = cid::from_value(&e)?;
-                MessageStore::delete(&provider, &ctx.owner, &cid).await?;
-                EventLog::delete(&provider, &ctx.owner, &cid).await?;
+                MessageStore::delete(provider, &ctx.owner, &cid).await?;
+                EventLog::delete(provider, &ctx.owner, &cid).await?;
             }
         }
         is_latest
@@ -67,17 +69,23 @@ pub async fn handle(
     }
 
     // save the incoming message
+    let message = Record::from(&configure);
+    MessageStore::put(provider, &ctx.owner, &message).await?;
 
-    MessageStore::put(&provider, &ctx.owner, &configure).await?;
-    EventLog::append(&provider, &ctx.owner, &configure).await?;
-    EventStream::emit(&provider, &ctx.owner, &configure).await?;
+    let event = Event {
+        message_cid: configure.cid()?,
+        base: configure.descriptor.base.clone(),
+        protocol: Some(configure.descriptor.definition.protocol.clone()),
+    };
+    EventLog::append(provider, &ctx.owner, &event).await?;
+    EventStream::emit(provider, &ctx.owner, &event).await?;
 
-    Ok(ConfigureReply {
+    Ok(Reply {
         status: Status {
-            code: 202,
-            detail: Some("OK".to_string()),
+            code: StatusCode::ACCEPTED.as_u16(),
+            detail: None,
         },
-        message: configure,
+        body: Some(ConfigureReply { message: configure }),
     })
 }
 
@@ -91,7 +99,10 @@ pub struct Configure {
     pub authorization: Authorization,
 }
 
+#[async_trait]
 impl Message for Configure {
+    type Reply = ConfigureReply;
+
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
     }
@@ -103,16 +114,46 @@ impl Message for Configure {
     fn authorization(&self) -> Option<&Authorization> {
         Some(&self.authorization)
     }
+
+    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(ctx, self, provider).await
+    }
 }
 
 /// Configure reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigureReply {
-    /// Status message to accompany the reply.
-    pub status: Status,
-
     #[serde(flatten)]
     message: Configure,
+}
+
+impl From<Configure> for Record {
+    fn from(configure: Configure) -> Self {
+        Self {
+            message: MessageType::ProtocolsConfigure(configure),
+            indexes: Map::new(),
+        }
+    }
+}
+
+impl From<&Configure> for Record {
+    fn from(configure: &Configure) -> Self {
+        Self {
+            message: MessageType::ProtocolsConfigure(configure.clone()),
+            indexes: Map::new(),
+        }
+    }
+}
+
+impl TryFrom<Record> for Configure {
+    type Error = crate::Error;
+
+    fn try_from(record: Record) -> Result<Self> {
+        match record.message {
+            MessageType::ProtocolsConfigure(configure) => Ok(configure),
+            _ => Err(unexpected!("expected `ProtocolsConfigure` message")),
+        }
+    }
 }
 
 impl Configure {
@@ -186,14 +227,23 @@ pub struct Definition {
     pub structure: BTreeMap<String, RuleSet>,
 }
 
+impl Default for Definition {
+    fn default() -> Self {
+        let bytes = include_bytes!("default_protocol.json");
+        serde_json::from_slice(bytes).expect("should deserialize")
+    }
+}
+
 /// Protocol type
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolType {
     /// The protocol schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
     /// Data formats supported by the protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data_formats: Option<Vec<String>>,
 }
 

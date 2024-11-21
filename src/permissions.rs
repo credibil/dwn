@@ -1,15 +1,13 @@
-//! # Grant
+//! # Permissions
 
 pub mod grant;
+pub(crate) mod protocol;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Grant, GrantBuilder};
-use crate::protocols::Definition;
 use crate::provider::MessageStore;
-use crate::records::Write;
 use crate::{unexpected, Interface, Method, Result};
 
 /// Fetch the grant specified by `grant_id`.
@@ -21,13 +19,16 @@ pub(crate) async fn fetch_grant(
         WHERE descriptor.interface = '{interface}'
         AND descriptor.method = '{method}'
         AND recordId = '{grant_id}'
+        AND hidden = false
         ",
         interface = Interface::Records,
         method = Method::Write,
-    ); // AND isLatestBaseState = true
-    let (messages, _) = store.query::<Write>(owner, &sql).await?;
+    );
+    let (messages, _) = store.query(owner, &sql).await?;
 
-    let write = &messages[0];
+    let Some(write) = messages[0].as_write() else {
+        return Err(unexpected!("grant not found"));
+    };
     let desc = &write.descriptor;
 
     // unpack message payload
@@ -35,7 +36,7 @@ pub(crate) async fn fetch_grant(
         return Err(unexpected!("missing grant data"));
     };
     let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc)?;
-    let grant: GrantData = serde_json::from_slice(&grant_bytes)?;
+    let grant: grant::GrantData = serde_json::from_slice(&grant_bytes)?;
 
     Ok(Grant {
         id: write.record_id.clone(),
@@ -44,79 +45,6 @@ pub(crate) async fn fetch_grant(
         date_granted: desc.date_created,
         data: grant,
     })
-}
-
-/// Protocol for managing web node permission grants.
-pub struct Protocol {
-    /// The URI of the web node Permissions protocol.
-    pub uri: String,
-
-    /// The protocol path of the `request` record.
-    pub request_path: String,
-
-    /// The protocol path of the `grant` record.
-    pub grant_path: String,
-
-    /// The protocol path of the `revocation` record.
-    pub revocation_path: String,
-
-    /// Permissions protocol definition.
-    pub definition: Definition,
-}
-
-/// Type for the data payload of a permission request message.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct RequestData {
-    /// If the grant is a delegated grant or not. If `true`, `granted_to` will
-    /// be able to act as the `granted_by` within the scope of this grant.
-    pub delegated: bool,
-
-    /// Optional string that communicates what the grant would be used for.
-    pub description: Option<String>,
-
-    /// The scope of the allowed access.
-    pub scope: Scope,
-
-    /// Optional conditions that must be met when the grant is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Conditions>,
-}
-
-/// Type for the data payload of a permission revocation message.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct RevocationData {
-    /// Optional string that communicates the details of the revocation.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-/// Permission grant message payload
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GrantData {
-    /// Describes intended grant use.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-
-    /// CID of permission request. Optional as grants may be given without
-    /// being requested.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub request_id: Option<String>,
-
-    /// Datetime when grant expires.
-    pub date_expires: DateTime<Utc>,
-
-    /// Whether grant is delegated or not. When `true`, the `granted_to` acts
-    /// as the `granted_to` within the scope of the grant.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delegated: Option<bool>,
-
-    /// The scope of the allowed access.
-    pub scope: Scope,
-
-    /// Optional conditions that must be met when the grant is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Conditions>,
 }
 
 /// Scope of the permission grant.
@@ -137,21 +65,19 @@ pub struct Scope {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ScopeType {
-    /// Protocols scope fields.
+    /// `Protocols` scope fields.
     Protocols {
         /// The protocol the permission is applied to.
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
-
-    /// Messages scope fields.
-    Messages {
+    /// `MessageType` scope fields.
+    MessageType {
         /// The protocol the permission is applied to.
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
-
-    /// Records scope fields.
+    /// `Records` scope fields.
     Records {
         /// The protocol the permission is applied to.
         protocol: String,

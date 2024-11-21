@@ -2,10 +2,14 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::StreamExt;
 use serde_json::Value;
-use vercre_dwn::provider::{EventLog, EventStream, EventSubscription};
-use vercre_dwn::query::Filter;
-use vercre_dwn::{Cursor, Message};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use vercre_dwn::event::{Event, Subscriber};
+use vercre_dwn::messages::Filter;
+use vercre_dwn::provider::{EventLog, EventStream};
+use vercre_dwn::Cursor;
 
 use super::ProviderImpl;
 use crate::store::NAMESPACE;
@@ -14,21 +18,24 @@ const TABLE: &str = "event_log";
 
 #[async_trait]
 impl EventLog for ProviderImpl {
-    async fn append<T: Message>(&self, owner: &str, message: &T) -> Result<()> {
+    async fn append(&self, owner: &str, event: &Event) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<BTreeMap<String, Value>> =
-            self.db.create((TABLE, message.cid()?)).content(message).await?;
+            self.db.create((TABLE, &event.message_cid)).content(event).await?;
         Ok(())
     }
 
-    async fn events(&self, owner: &str, cursor: Option<Cursor>) -> Result<(Vec<String>, Cursor)> {
+    async fn events(&self, owner: &str, cursor: Option<Cursor>) -> Result<(Vec<Event>, Cursor)> {
         todo!()
     }
 
-    async fn query(
-        &self, owner: &str, filters: Vec<Filter>, cursor: Cursor,
-    ) -> Result<(Vec<String>, Cursor)> {
-        todo!()
+    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Event>, Cursor)> {
+        let sql = format!("SELECT * FROM {TABLE} {sql}");
+        let mut response = self.db.query(&sql).await?;
+        let events: Vec<Event> = response.take(0)?;
+        Ok((events, Cursor::default()))
+
+        // TODO: sort and paginate
     }
 
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
@@ -42,29 +49,44 @@ impl EventLog for ProviderImpl {
     }
 }
 
-pub struct EventSubscriptionImpl;
+// pub struct SubscriberImpl {
+//     pub id: String,
+//     pub receiver: async_nats::Subscriber,
+// }
 
-#[async_trait]
-impl EventSubscription for EventSubscriptionImpl {
-    async fn close(&self) -> Result<()> {
-        todo!()
-    }
-}
+// #[async_trait]
+// impl EventSubscriber for SubscriberImpl {
+//     async fn close(&self) -> Result<()> {
+//         todo!()
+//     }
+// }
 
 #[async_trait]
 impl EventStream for ProviderImpl {
-    type Subscriber = EventSubscriptionImpl;
+    /// Subscribe to a owner's event stream.
+    async fn subscribe(
+        &self, owner: &str, message_cid: &str, filters: &[Filter],
+    ) -> Result<Subscriber> {
+        // set up subscriber
+        let mut nats_subscriber = self.nats_client.subscribe("messages").await?;
+        let (sender, receiver) = mpsc::channel::<Event>(100);
 
-    /// Subscribes to a owner's event stream.
-    async fn subscribe<T: Message>(
-        &self, owner: &str, id: &str, listener: impl Fn(&str, T) + Send,
-    ) -> Result<(String, Self::Subscriber)> {
-        Ok((String::new(), EventSubscriptionImpl {}))
+        // forward filtered messages from NATS to our subscriber
+        let task: JoinHandle<Result<()>> = tokio::spawn(async move {
+            while let Some(message) = nats_subscriber.next().await {
+                let event: Event = serde_json::from_slice(&message.payload)?;
+                sender.send(event).await?;
+            }
+            Ok(())
+        });
+
+        Ok(Subscriber::new(message_cid, receiver))
     }
 
     /// Emits an event to a owner's event stream.
-    async fn emit<T: Message>(&self, owner: &str, event: &T) -> Result<()> {
-        // todo!()
+    async fn emit(&self, owner: &str, event: &Event) -> Result<()> {
+        let bytes = serde_json::to_vec(event)?;
+        self.nats_client.publish("messages", bytes.into()).await?;
         Ok(())
     }
 }
