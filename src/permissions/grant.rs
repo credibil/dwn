@@ -11,6 +11,7 @@ use crate::provider::{Keyring, MessageStore};
 use crate::records::{
     self, Delete, Query, Subscribe, Write, WriteBuilder, WriteData, WriteProtocol,
 };
+use crate::store::RecordsQuery;
 use crate::{forbidden, utils, Descriptor, Interface, Method, Result};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -200,21 +201,8 @@ impl Grant {
         }
 
         // Check if grant has been revoked — using latest revocation message
-        let sql = format!(
-            "
-            WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'
-            AND descriptor.parentId = '{parent_id}'
-            AND descriptor.protocolPath = '{REVOCATION_PATH}'
-            AND queryable = true
-            ORDER BY descriptor.messageTimestamp DESC
-            ",
-            interface = Interface::Records,
-            method = Method::Write,
-            parent_id = self.id
-        );
-
-        let (messages, _) = store.query(grantor, &sql).await?;
+        let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH);
+        let (messages, _) = store.query(grantor, &query.to_sql()).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(forbidden!("grant has been revoked"));
         };

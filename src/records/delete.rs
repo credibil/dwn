@@ -19,6 +19,7 @@ use crate::event::Event;
 use crate::permissions::protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
+use crate::store::RecordsQuery;
 use crate::tasks::{self, Task, TaskType};
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
@@ -30,25 +31,15 @@ pub(crate) async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND recordId = '{record_id}'
-        AND hidden = false
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-        record_id = delete.descriptor.record_id,
-    );
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
-    if messages.is_empty() {
+
+    let query = RecordsQuery::new().record_id(&delete.descriptor.record_id);
+    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    if records.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
 
     // run checks when latest existing message is a `RecordsDelete`
-    let newest_existing = &messages[0];
+    let newest_existing = &records[0];
     if newest_existing.descriptor().method == Method::Delete {
         // cannot delete a `RecordsDelete` record
         if !delete.descriptor.prune {
@@ -64,7 +55,7 @@ pub(crate) async fn handle(
         }
     }
 
-    delete.authorize(owner, &Write::try_from(&messages[0])?, provider).await?;
+    delete.authorize(owner, &Write::try_from(&records[0])?, provider).await?;
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
     Ok(Reply {
@@ -281,26 +272,16 @@ impl DeleteBuilder {
 
 pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND recordId = '{record_id}'
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-        record_id = delete.descriptor.record_id,
-    );
-
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
-    if messages.is_empty() {
+    let query =
+        RecordsQuery::new().record_id(&delete.descriptor.record_id).method(None).hidden(None);
+    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    if records.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
-    if messages.len() > 2 {
+    if records.len() > 2 {
         return Err(unexpected!("multiple messages exist"));
     }
-    let newest_existing = &messages[0];
+    let newest_existing = &records[0];
 
     // TODO: merge this code with `RecordsWrite`
     // if the incoming message is not the newest, return Conflict
@@ -310,8 +291,8 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
 
-    let Some(earliest) = messages.last() else {
-        return Err(unexpected!("no messages found"));
+    let Some(earliest) = records.last() else {
+        return Err(unexpected!("no records found"));
     };
     let write = Write::try_from(earliest)?;
 
@@ -339,7 +320,7 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
     }
 
     // delete all messages except initial write and most recent
-    delete_older(owner, &Record::from(delete), &messages, provider).await?;
+    delete_older(owner, &Record::from(delete), &records, provider).await?;
 
     Ok(())
 }
@@ -348,17 +329,8 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
 #[async_recursion]
 async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
     // fetch child records
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.parentId = '{record_id}'
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-    let (children, _) = MessageStore::query(provider, owner, &sql).await?;
+    let query = RecordsQuery::new().parent_id(record_id);
+    let (children, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
     if children.is_empty() {
         return Ok(());
     }

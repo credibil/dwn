@@ -14,6 +14,7 @@ use crate::protocols::{
 };
 use crate::provider::MessageStore;
 use crate::records::{self, Delete, Query, Subscribe, Write};
+use crate::store::RecordsQuery;
 use crate::{forbidden, schema, utils, Interface, Method, Result};
 
 enum Record {
@@ -312,19 +313,8 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
         return Err(forbidden!("missing protocol"));
     };
 
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.protocol = '{protocol}'
-        AND recordId = '{parent_id}'
-        AND queryable = true
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-
-    let (records, _) = store.query(owner, &sql).await?;
+    let query = RecordsQuery::new().record_id(parent_id).protocol(protocol);
+    let (records, _) = store.query(owner, &query.to_sql()).await?;
     if records.is_empty() {
         return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
     }
@@ -376,21 +366,11 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
             format!("AND contextId BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
     };
 
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.protocol = '{protocol}'
-        AND descriptor.protocolPath = '{protocol_path}'
-        AND descriptor.recipient = '{recipient}'
-        AND queryable = true
-        {context}
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-
-    let (messages, _) = store.query(owner, &sql).await?;
+    let query = RecordsQuery::new()
+        .protocol(protocol)
+        .protocol_path(protocol_path)
+        .add_recipient(recipient);
+    let (messages, _) = store.query(owner, &query.to_sql()).await?;
     // if records.is_empty() {
     //     return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
     // }
@@ -449,20 +429,10 @@ async fn verify_invoked_role(
     };
 
     // fetch the invoked role record
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.protocol = '{protocol}'
-        AND descriptor.protocolPath = '{protocol_role}'
-        AND descriptor.recipient = '{author}'
-        {context_prefix}
-        AND queryable = true
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-    let (records, _) = store.query(owner, &sql).await?;
+    let query =
+        RecordsQuery::new().protocol(protocol).protocol_path(&protocol_role).add_recipient(author);
+    let (records, _) = store.query(owner, &query.to_sql()).await?;
+
     if records.is_empty() {
         return Err(forbidden!("unable to find records for {protocol_role}"));
     }
@@ -633,12 +603,12 @@ async fn protocol_definition(
         method = Method::Configure,
     );
 
-    let (messages, _) = store.query(owner, &sql).await?;
-    if messages.is_empty() {
+    let (protocols, _) = store.query(owner, &sql).await?;
+    if protocols.is_empty() {
         return Err(forbidden!("unable to find protocol definition for {protocol_uri}"));
     }
 
-    let Some(protocol) = messages[0].as_configure() else {
+    let Some(protocol) = protocols[0].as_configure() else {
         return Err(forbidden!("expected `ProtocolsConfigure` message"));
     };
     Ok(protocol.descriptor.definition.clone())

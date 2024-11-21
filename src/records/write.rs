@@ -23,7 +23,8 @@ use crate::permissions::{self, protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
-use crate::{data, unexpected, utils, Descriptor, Error, Interface, Method, Result};
+use crate::store::RecordsQuery;
+use crate::{data, unexpected, utils, DateRange, Descriptor, Error, Interface, Method, Result};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -1042,19 +1043,12 @@ pub(crate) async fn existing_entries(
 ) -> Result<Vec<Write>> {
     // N.B. only use `interface` in order to to get both `RecordsWrite` and
     //`RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND recordId = '{record_id}'
-        ORDER BY descriptor.messageTimestamp ASC
-        ",
-        interface = Interface::Records,
-    );
-    let (messages, _) = store.query(owner, &sql).await.unwrap();
+    let query = RecordsQuery::new().record_id(record_id).method(None);
+    let (records, _) = store.query(owner, &query.to_sql()).await.unwrap();
 
     let mut writes = Vec::new();
-    for message in messages {
-        writes.push(Write::try_from(message)?);
+    for record in records {
+        writes.push(Write::try_from(record)?);
     }
 
     Ok(writes)
@@ -1175,23 +1169,16 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     };
     let message_timestamp = write.descriptor.base.message_timestamp.unwrap_or_default();
 
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND recordId = '{grant_id}'
-        AND dateCreated >= '{message_timestamp}
-        AND hidden = false
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
+    let date_range = DateRange {
+        from: message_timestamp.to_rfc3339(),
+        to: "".to_string(),
+    };
+    let query = RecordsQuery::new().record_id(grant_id); //.date_created(date_range);
+    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
 
     // delete matching messages
-    for m in messages {
-        let message_cid = m.cid()?;
+    for record in records {
+        let message_cid = record.cid()?;
         MessageStore::delete(provider, owner, &message_cid).await?;
         EventLog::delete(provider, owner, &message_cid).await?;
     }
