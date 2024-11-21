@@ -6,8 +6,7 @@ use futures::StreamExt;
 use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use vercre_dwn::event::{Event, Subscriber};
-use vercre_dwn::messages::Filter;
+use vercre_dwn::event::{Event, SubscribeFilter, Subscriber};
 use vercre_dwn::provider::{EventLog, EventStream};
 use vercre_dwn::Cursor;
 
@@ -65,7 +64,8 @@ impl EventLog for ProviderImpl {
 impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
     async fn subscribe(
-        &self, owner: &str, message_cid: &str, filters: &[Filter],
+        &self, owner: &str, message_cid: &str, filters: SubscribeFilter,
+
     ) -> Result<Subscriber> {
         // set up subscriber
         let mut nats_subscriber = self.nats_client.subscribe("messages").await?;

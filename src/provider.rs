@@ -6,8 +6,7 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::endpoint::Record;
-use crate::event::{Event, Subscriber};
-use crate::messages::Filter;
+use crate::event::{Event, SubscribeFilter, Subscriber};
 pub use crate::tasks::ResumableTask;
 use crate::Cursor;
 
@@ -181,7 +180,7 @@ pub trait EventLog: Send + Sync {
 pub trait EventStream: Send + Sync {
     /// Subscribes to an owner's event stream.
     async fn subscribe(
-        &self, owner: &str, message_cid: &str, filters: &[Filter],
+        &self, owner: &str, message_cid: &str, filter: SubscribeFilter,
     ) -> Result<Subscriber>;
 
     /// Emits an event to a owner's event stream.

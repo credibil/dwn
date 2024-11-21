@@ -6,7 +6,7 @@ use test_utils::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{DeleteBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
+use vercre_dwn::records::{DeleteBuilder, QueryBuilder, RecordsFilter, WriteBuilder, WriteData};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
@@ -31,7 +31,6 @@ async fn delete_record() {
         .build(&alice_keyring)
         .await
         .expect("should create write");
-
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
@@ -42,10 +41,12 @@ async fn delete_record() {
         record_id: Some(write.record_id.clone()),
         ..RecordsFilter::default()
     };
-    let read =
-        ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should create write");
-
-    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should read");
+    let query = QueryBuilder::new()
+        .filter(filter)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     // --------------------------------------------------
@@ -63,9 +64,9 @@ async fn delete_record() {
     // --------------------------------------------------
     // Ensure record doesn't appear in query results.
     // --------------------------------------------------
-    // const reply2 = await dwn.processMessage(alice.did, queryData.message);
-    // expect(reply2.status.code).to.equal(200);
-    // expect(reply2.entries?.length).to.equal(0);
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.unwrap().entries.is_none());
 
     // --------------------------------------------------
     // Deleting the same record should fail.
@@ -75,7 +76,6 @@ async fn delete_record() {
         .build(&alice_keyring)
         .await
         .expect("should create delete");
-
     let err = endpoint::handle(ALICE_DID, delete, &provider).await.expect_err("should be 404");
     assert_eq!(
         err.to_json(),

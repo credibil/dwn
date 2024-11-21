@@ -7,6 +7,8 @@ use futures::Stream;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
+use crate::messages::MessagesFilter;
+use crate::records::RecordsFilter;
 use crate::Descriptor;
 
 /// Message event.
@@ -22,6 +24,28 @@ pub struct Event {
 
     /// The message's CID.
     pub message_cid: String,
+    //     /// The message the event has been triggered for.
+    //     #[serde(skip)]
+    //     pub message: EventMessage,
+}
+
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// enum EventMessage {
+//     Message(Message),
+//     Record(Record),
+// }
+
+// impl Default for EventMessage {
+//     fn default() -> Self {
+//         Self::Message(Default::default())
+//     }
+// }
+
+/// Filter to use when subscribing to events.
+#[allow(missing_docs)]
+pub enum SubscribeFilter {
+    Messages(Vec<MessagesFilter>),
+    Records(RecordsFilter),
 }
 
 /// Used by the client to handle events subscribed to.

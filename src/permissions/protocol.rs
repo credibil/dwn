@@ -13,12 +13,13 @@ use crate::protocols::{
     REVOCATION_PATH,
 };
 use crate::provider::MessageStore;
-use crate::records::{self, Delete, Query, Write};
+use crate::records::{self, Delete, Query, Subscribe, Write};
 use crate::{forbidden, schema, utils, Interface, Method, Result};
 
 enum Record {
     Write(Write),
     Query(Query),
+    Subscribe(Subscribe),
     Delete(Delete),
 }
 
@@ -29,6 +30,12 @@ impl Record {
             Self::Delete(delete) => delete.authorization.clone(),
             Self::Query(query) => {
                 let Some(authzn) = query.authorization.clone() else {
+                    return Authorization::default();
+                };
+                authzn
+            }
+            Self::Subscribe(subscribe) => {
+                let Some(authzn) = subscribe.authorization.clone() else {
                     return Authorization::default();
                 };
                 authzn
@@ -103,7 +110,7 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
     let messages = records::existing_entries(owner, &write.record_id, store).await?;
     let (initial, _) = records::earliest_and_latest(&messages).await?;
 
-    // build record chain 
+    // build record chain
     let record_chain = if initial.is_some() {
         record_chain(owner, &write.record_id, store).await?
     } else {
@@ -149,6 +156,33 @@ pub async fn permit_read(owner: &str, query: &Query, store: &impl MessageStore) 
     };
 
     verify_actions(owner, &Record::Query(query.clone()), &rule_set, &[], store).await?;
+
+    Ok(())
+}
+
+pub async fn permit_subscribe(
+    owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
+) -> Result<()> {
+    let filter = &subscribe.descriptor.filter;
+
+    // get permitted roles
+    let Some(protocol) = &filter.protocol else {
+        return Err(forbidden!("missing protocol"));
+    };
+    let definition = protocol_definition(owner, protocol, store).await?;
+
+    verify_invoked_role(owner, subscribe, protocol, filter.context_id.clone(), &definition, store)
+        .await?;
+
+    // get permitted actions
+    let Some(protocol_path) = &filter.protocol_path else {
+        return Err(forbidden!("missing protocol path"));
+    };
+    let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
+        return Err(forbidden!("no rule set defined for protocol path"));
+    };
+
+    verify_actions(owner, &Record::Subscribe(subscribe.clone()), &rule_set, &[], store).await?;
 
     Ok(())
 }
@@ -674,7 +708,7 @@ async fn allowed_actions(
         }
         Record::Query(_) => Ok(vec![Action::Query]),
         // Method::Read => Ok(vec![Action::Read]),
-        // Method::Subscribe => Ok(vec![Action::Subscribe]),
+        Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
         Record::Delete(delete) => {
             let messages =
                 records::existing_entries(owner, &delete.descriptor.record_id, store).await?;

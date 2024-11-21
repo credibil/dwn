@@ -8,7 +8,9 @@ use serde_json::Value;
 use super::{ConditionPublication, Conditions, RecordsOptions, Scope, ScopeType};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
-use crate::records::{self, Delete, Query, Write, WriteBuilder, WriteData, WriteProtocol};
+use crate::records::{
+    self, Delete, Query, Subscribe, Write, WriteBuilder, WriteData, WriteProtocol,
+};
 use crate::{forbidden, utils, Descriptor, Interface, Method, Result};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -124,6 +126,30 @@ impl Grant {
         &self, grantor: &str, grantee: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let descriptor = &query.descriptor;
+
+        self.verify(grantor, grantee, &descriptor.base, store).await?;
+
+        // verify protocols match
+        let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
+            return Ok(());
+        };
+
+        if &descriptor.filter.protocol != protocol {
+            return Err(forbidden!("grant protocol does not match query protocol",));
+        }
+
+        Ok(())
+    }
+
+    /// Verify the grant allows the requestor to access `records::Query` and
+    /// `records::Subscribe` records.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn permit_subscribe(
+        &self, grantor: &str, grantee: &str, subscribe: &Subscribe, store: &impl MessageStore,
+    ) -> Result<()> {
+        let descriptor = &subscribe.descriptor;
 
         self.verify(grantor, grantee, &descriptor.base, store).await?;
 

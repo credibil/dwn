@@ -1,6 +1,6 @@
-//! # Query
+//! # Subscribe
 //!
-//! `Query` is a message type used to query a record in the web node.
+//! `Subscribe` is a message type used to subscribe a record in the web node.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -10,107 +10,68 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
+use crate::event::{SubscribeFilter, Subscriber};
 use crate::permissions::{protocol, Grant};
-use crate::provider::{MessageStore, Provider, Signer};
+use crate::provider::{EventStream, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::{forbidden, Cursor, Descriptor, Error, Interface, Method, Pagination, Quota, Result};
+use crate::{forbidden, Descriptor, Error, Interface, Method, Quota, Result};
 
-/// Process `Query` message.
+/// Process `Subscribe` message.
 ///
 /// # Errors
 /// TODO: Add errors
 pub(crate) async fn handle(
-    owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply<QueryReply>> {
-    let mut filter = query.descriptor.filter.clone();
+    owner: &str, subscribe: Subscribe, provider: &impl Provider,
+) -> Result<Reply<SubscribeReply>> {
+    let filter = subscribe.descriptor.filter.clone();
 
-    // authorize messages querying for private records
+    // authorize messages subscribeing for private records
     if !filter.published.unwrap_or_default() {
-        query.authorize(owner, provider).await?;
+        subscribe.authorize(owner, provider).await?;
 
-        let Some(authzn) = &query.authorization else {
+        let Some(authzn) = &subscribe.authorization else {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
 
         // non-owner queries
         if author != owner {
-            // when query.author is in filter.author or filter.author is empty/None,
+            let mut filter = subscribe.descriptor.filter.clone();
+
+            // when subscribe.author is in filter.author or filter.author is empty/None,
             filter.author = Some(Quota::One(author.clone()));
 
-            // when query.author is in filter.recipient || filter.recipient is
-            // empty/None, set filter.recipient = query.author
+            // when subscribe.author is in filter.recipient || filter.recipient is
+            // empty/None, set filter.recipient = subscribe.author
             filter.recipient = Some(Quota::One(author));
 
             // when filter.protocol_role ??
         }
     }
 
-    // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}' 
-        AND descriptor.method = '{method}'
-        {filter_sql}
-        AND hidden = false
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-        filter_sql = filter.to_sql(),
-    );
-    let (records, _) = MessageStore::query(provider, owner, &sql).await?;
-
-    // build reply
-    let mut entries = vec![];
-    for record in records {
-        let write: Write = record.try_into()?;
-
-        let initial_write = if write.is_initial()? {
-            let sql = format!(
-                "
-                WHERE descriptor.interface = '{interface}' 
-                AND descriptor.method = '{method}'
-                AND recordId = '{record_id}'
-                ORDER BY descriptor.messageTimestamp DESC
-                ",
-                interface = Interface::Records,
-                method = Method::Write,
-                record_id = &write.record_id,
-                // AND hidden = false
-            );
-
-            let (records, _) = MessageStore::query(provider, owner, &sql).await?;
-            let mut initial_write: Write = (&records[0]).try_into()?;
-            initial_write.encoded_data = None;
-            Some(initial_write)
-        } else {
-            None
-        };
-
-        entries.push(QueryReplyEntry { write, initial_write });
-    }
-  
-    let entries = if entries.is_empty() { None } else { Some(entries) };
+    let message_cid = subscribe.cid()?;
+    let filter = subscribe.descriptor.filter.clone();
+    let subscriber =
+        EventStream::subscribe(provider, owner, &message_cid, SubscribeFilter::Records(filter))
+            .await?;
 
     Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        body: Some(QueryReply {
-            entries,
-            cursor: None,
+        body: Some(SubscribeReply {
+            subscription: subscriber,
         }),
     })
 }
 
-/// Records Query payload
+/// Records Subscribe payload
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Query {
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
+pub struct Subscribe {
+    /// The Subscribe descriptor.
+    pub descriptor: SubscribeDescriptor,
 
     /// The message authorization.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -118,8 +79,8 @@ pub struct Query {
 }
 
 #[async_trait]
-impl Message for Query {
-    type Reply = QueryReply;
+impl Message for Subscribe {
+    type Reply = SubscribeReply;
 
     fn cid(&self) -> Result<String> {
         cid::from_value(self)
@@ -138,23 +99,18 @@ impl Message for Query {
     }
 }
 
-/// Query reply.
+/// Subscribe reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QueryReply {
-    /// Query reply entries.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<QueryReplyEntry>>,
-
-    /// Pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
+pub struct SubscribeReply {
+    /// The subscription to the requested events.
+    pub subscription: Subscriber,
 }
 
-/// Query reply.
+/// Subscribe reply.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QueryReplyEntry {
+pub struct SubscribeReplyEntry {
     /// The `RecordsWrite` message of the record if record exists.
     #[serde(flatten)]
     pub write: Write,
@@ -165,7 +121,7 @@ pub struct QueryReplyEntry {
     pub initial_write: Option<Write>,
 }
 
-impl Query {
+impl Subscribe {
     async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         let Some(authzn) = &self.authorization else {
             return Err(Error::Unauthorized("missing authorization".to_string()));
@@ -179,36 +135,28 @@ impl Query {
         // verify grant
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant: Grant = delegated_grant.try_into()?;
-            grant.permit_read(&authzn.author()?, &authzn.signer()?, self, provider).await?;
+            grant.permit_subscribe(&authzn.author()?, &authzn.signer()?, self, provider).await?;
         }
 
         // verify protocol when request invokes a protocol role
         if authzn.jws_payload()?.protocol_role.is_some() {
-            protocol::permit_read(owner, self, provider).await?;
+            protocol::permit_subscribe(owner, self, provider).await?;
         }
 
         Ok(())
     }
 }
 
-/// Query descriptor.
+/// Subscribe descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
+pub struct SubscribeDescriptor {
     /// The base descriptor
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Filter Records for query.
+    /// Filter Records for subscribe.
     pub filter: RecordsFilter,
-
-    /// Specifies how dates should be sorted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_sort: Option<String>,
-
-    /// The pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pagination: Option<Pagination>,
 }
 
 // export enum DateSort {
@@ -220,7 +168,7 @@ pub struct QueryDescriptor {
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub struct QueryBuilder {
+pub struct SubscribeBuilder {
     filter: RecordsFilter,
     message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
@@ -229,8 +177,8 @@ pub struct QueryBuilder {
     authorize: Option<bool>,
 }
 
-impl QueryBuilder {
-    /// Returns a new [`QueryBuilder`]
+impl SubscribeBuilder {
+    /// Returns a new [`SubscribeBuilder`]
     #[must_use]
     pub fn new() -> Self {
         let now = Utc::now();
@@ -288,16 +236,14 @@ impl QueryBuilder {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
-        let descriptor = QueryDescriptor {
+    pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
+        let descriptor = SubscribeDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
-                method: Method::Query,
+                method: Method::Subscribe,
                 message_timestamp: self.message_timestamp,
             },
             filter: self.filter.normalize()?,
-            date_sort: None,
-            pagination: None,
         };
 
         let authorization = if self.authorize.unwrap_or(true) {
@@ -317,7 +263,7 @@ impl QueryBuilder {
             None
         };
 
-        Ok(Query {
+        Ok(Subscribe {
             descriptor,
             authorization,
         })
