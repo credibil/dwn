@@ -308,6 +308,7 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
     let initial = Record::from(&write);
     let mut record = Record::from(delete);
     record.indexes.extend(initial.indexes);
+
     MessageStore::put(provider, owner, &record).await?;
 
     let event = Event {

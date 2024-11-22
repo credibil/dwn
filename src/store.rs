@@ -141,6 +141,7 @@ impl Default for RecordType {
 }
 
 /// `Query` wraps supported queries.
+#[derive(Clone, Debug)]
 pub enum Query {
     /// Records query.
     Records(RecordsQuery),
@@ -276,7 +277,7 @@ impl RecordsQuery {
 
 impl From<RecordsFilter> for RecordsQuery {
     fn from(filter: RecordsFilter) -> Self {
-        let mut query = Self::new().method(None);
+        let mut query = Self::new();
         query.filter = Some(filter);
         query
     }

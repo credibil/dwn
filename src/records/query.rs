@@ -48,8 +48,10 @@ pub(crate) async fn handle(
     }
 
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(filter).build();
+    let query = RecordsQuery::from(filter).hidden(Some(false)).build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;
+
+    println!("records: {:?}", records);
 
     // build reply
     let mut entries = vec![];
