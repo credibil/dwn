@@ -41,17 +41,17 @@ pub trait QuerySerializer {
     fn serialize(&self) -> Self::Output;
 }
 
-/// Record wraps each message with a unifying type used for all stored messages
+/// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
 ///
-/// The `Record` type simplifies storage and retrieval aas well as providing a
+/// The `Entry` type simplifies storage and retrieval aas well as providing a
 /// a vehicle for persisting addtional data alongside the message (using the
 /// `indexes` property).
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Record {
+pub struct Entry {
     /// The message type to store.
     #[serde(flatten)]
-    pub message: RecordType,
+    pub message: EntryType,
 
     /// Indexes derived from the associated message object, flattened for
     /// ease of querying.
@@ -60,16 +60,16 @@ pub struct Record {
     pub indexes: Map<String, Value>,
 }
 
-impl Record {
+impl Entry {
     /// The message's CID.
     ///
     /// # Errors
     /// TODO: Add errors
     pub fn cid(&self) -> Result<String> {
         match self.message {
-            RecordType::Write(ref write) => write.cid(),
-            RecordType::Delete(ref delete) => delete.cid(),
-            RecordType::Configure(ref configure) => configure.cid(),
+            EntryType::Write(ref write) => write.cid(),
+            EntryType::Delete(ref delete) => delete.cid(),
+            EntryType::Configure(ref configure) => configure.cid(),
         }
     }
 
@@ -77,19 +77,19 @@ impl Record {
     #[must_use]
     pub fn descriptor(&self) -> &Descriptor {
         match self.message {
-            RecordType::Write(ref write) => write.descriptor(),
-            RecordType::Delete(ref delete) => delete.descriptor(),
-            RecordType::Configure(ref configure) => configure.descriptor(),
+            EntryType::Write(ref write) => write.descriptor(),
+            EntryType::Delete(ref delete) => delete.descriptor(),
+            EntryType::Configure(ref configure) => configure.descriptor(),
         }
     }
 }
 
-impl Record {
+impl Entry {
     /// Return the `RecordsWrite` message, if set.
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
         match &self.message {
-            RecordType::Write(write) => Some(write),
+            EntryType::Write(write) => Some(write),
             _ => None,
         }
     }
@@ -98,7 +98,7 @@ impl Record {
     #[must_use]
     pub const fn as_delete(&self) -> Option<&records::Delete> {
         match &self.message {
-            RecordType::Delete(delete) => Some(delete),
+            EntryType::Delete(delete) => Some(delete),
             _ => None,
         }
     }
@@ -107,24 +107,24 @@ impl Record {
     #[must_use]
     pub const fn as_configure(&self) -> Option<&protocols::Configure> {
         match &self.message {
-            RecordType::Configure(configure) => Some(configure),
+            EntryType::Configure(configure) => Some(configure),
             _ => None,
         }
     }
 }
 
-impl Deref for Record {
-    type Target = RecordType;
+impl Deref for Entry {
+    type Target = EntryType;
 
     fn deref(&self) -> &Self::Target {
         &self.message
     }
 }
 
-/// `RecordType` holds the read message payload.
+/// `EntryType` holds the read message payload.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
-pub enum RecordType {
+pub enum EntryType {
     /// `RecordsWrite` message.
     Write(records::Write),
 
@@ -135,7 +135,7 @@ pub enum RecordType {
     Configure(protocols::Configure),
 }
 
-impl Default for RecordType {
+impl Default for EntryType {
     fn default() -> Self {
         Self::Write(records::Write::default())
     }
@@ -190,8 +190,8 @@ pub struct RecordsQuery {
     /// Filter records by `date_created`.
     pub date_created: Option<Range<String>>,
 
-    /// Filter records by `hidden`.
-    pub hidden: Option<bool>,
+    /// Filter records by `archived`.
+    pub archived: Option<bool>,
 
     /// Sort filter results.
     pub sort: Option<Sort>,
@@ -208,7 +208,7 @@ impl RecordsQuery {
         };
         Self {
             method: Some(Method::Write),
-            hidden: Some(false),
+            archived: Some(false),
             sort: Some(sort),
             ..Self::default()
         }
@@ -274,8 +274,8 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) const fn hidden(mut self, hidden: Option<bool>) -> Self {
-        self.hidden = hidden;
+    pub(crate) const fn archived(mut self, archived: Option<bool>) -> Self {
+        self.archived = archived;
         self
     }
 
@@ -311,8 +311,8 @@ impl QuerySerializer for RecordsQuery {
             interface = Interface::Records
         );
 
-        if let Some(hidden) = &self.hidden {
-            sql.push_str(&format!("AND hidden = {hidden}\n"));
+        if let Some(archived) = &self.archived {
+            sql.push_str(&format!("AND archived = {archived}\n"));
         }
 
         if let Some(method) = &self.method {
@@ -462,7 +462,7 @@ fn quota(field: &str, clause: &Quota<String>) -> String {
     }
 }
 
-/// RecordType sort.
+/// `EntryType` sort.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sort {
@@ -494,8 +494,8 @@ pub enum Direction {
 impl Display for Direction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Direction::Ascending => write!(f, "ASC"),
-            Direction::Descending => write!(f, "DESC"),
+            Self::Ascending => write!(f, "ASC"),
+            Self::Descending => write!(f, "DESC"),
         }
     }
 }

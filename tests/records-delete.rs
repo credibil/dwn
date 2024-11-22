@@ -41,11 +41,8 @@ async fn delete_record() {
         record_id: Some(write.record_id.clone()),
         ..RecordsFilter::default()
     };
-    let query = QueryBuilder::new()
-        .filter(filter)
-        .build(&alice_keyring)
-        .await
-        .expect("should find write");
+    let query =
+        QueryBuilder::new().filter(filter).build(&alice_keyring).await.expect("should find write");
     let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 

@@ -32,7 +32,7 @@ pub struct Event {
 // #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 // enum EventMessage {
 //     Message(Message),
-//     Record(Record),
+//     Entry(Entry),
 // }
 
 // impl Default for EventMessage {

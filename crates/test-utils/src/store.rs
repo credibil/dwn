@@ -61,7 +61,7 @@ impl ProviderImpl {
 }
 
 #[derive(Debug, Deserialize)]
-struct Record {
+struct Entry {
     #[allow(dead_code)]
     id: RecordId,
 }

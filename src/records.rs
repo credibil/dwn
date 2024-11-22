@@ -41,11 +41,11 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipient: Option<Quota<String>>,
 
-    /// Record matching the specified protocol.
+    /// Entry matching the specified protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
 
-    /// Record protocol path.
+    /// Entry protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol_path: Option<String>,
 

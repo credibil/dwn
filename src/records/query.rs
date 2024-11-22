@@ -47,15 +47,15 @@ pub(crate) async fn handle(
         }
     }
 
-    // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let mut db_query = RecordsQuery::from(filter).hidden(Some(false)).method(None);
+    // get the latest active `RecordsWrite` records
+    let mut db_query = RecordsQuery::from(filter).archived(Some(false));
     if let Some(sort) = &query.descriptor.date_sort {
         db_query = db_query.sort(sort.clone());
     }
     let (records, _) = MessageStore::query(provider, owner, &db_query.build()).await?;
 
     // short-circuit when no records found
-    if records.is_empty() || records[0].as_delete().is_some() {
+    if records.is_empty() {
         return Ok(Reply {
             status: Status {
                 code: StatusCode::OK.as_u16(),
@@ -71,7 +71,7 @@ pub(crate) async fn handle(
         let write: Write = record.try_into()?;
 
         let initial_write = if write.is_initial()? {
-            let query = RecordsQuery::new().record_id(&write.record_id).hidden(None).build();
+            let query = RecordsQuery::new().record_id(&write.record_id).archived(None).build();
             let (records, _) = MessageStore::query(provider, owner, &query).await?;
             let mut initial_write: Write = (&records[0]).try_into()?;
             initial_write.encoded_data = None;

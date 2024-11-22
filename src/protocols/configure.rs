@@ -20,7 +20,7 @@ use crate::permissions::ScopeType;
 use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
-use crate::store::{Record, RecordType};
+use crate::store::{Entry, EntryType};
 use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Range, Result};
 
 /// Process query message.
@@ -70,7 +70,7 @@ pub(crate) async fn handle(
     }
 
     // save the incoming message
-    let message = Record::from(&configure);
+    let message = Entry::from(&configure);
     MessageStore::put(provider, &ctx.owner, &message).await?;
 
     let event = Event {
@@ -128,30 +128,30 @@ pub struct ConfigureReply {
     message: Configure,
 }
 
-impl From<Configure> for Record {
+impl From<Configure> for Entry {
     fn from(configure: Configure) -> Self {
         Self {
-            message: RecordType::Configure(configure),
+            message: EntryType::Configure(configure),
             indexes: Map::new(),
         }
     }
 }
 
-impl From<&Configure> for Record {
+impl From<&Configure> for Entry {
     fn from(configure: &Configure) -> Self {
         Self {
-            message: RecordType::Configure(configure.clone()),
+            message: EntryType::Configure(configure.clone()),
             indexes: Map::new(),
         }
     }
 }
 
-impl TryFrom<Record> for Configure {
+impl TryFrom<Entry> for Configure {
     type Error = crate::Error;
 
-    fn try_from(record: Record) -> Result<Self> {
+    fn try_from(record: Entry) -> Result<Self> {
         match record.message {
-            RecordType::Configure(configure) => Ok(configure),
+            EntryType::Configure(configure) => Ok(configure),
             _ => Err(unexpected!("expected `ProtocolsConfigure` message")),
         }
     }
@@ -261,7 +261,7 @@ pub struct RuleSet {
     #[serde(rename = "$actions")]
     pub actions: Option<Vec<ActionRule>>,
 
-    /// Record is a role record.
+    /// Entry is a role record.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$role")]
     pub role: Option<bool>,
@@ -635,7 +635,7 @@ fn verify_rule_set(
 fn role_paths(protocol_path: &str, rule_set: &RuleSet, roles: Vec<String>) -> Result<Vec<String>> {
     // restrict to max depth of 10 levels
     if protocol_path.split('/').count() > 10 {
-        return Err(unexpected!("Record nesting depth exceeded 10 levels."));
+        return Err(unexpected!("Entry nesting depth exceeded 10 levels."));
     }
 
     for (rule_name, rule_set) in &rule_set.structure {

@@ -23,7 +23,7 @@ use crate::permissions::{self, protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
-use crate::store::{Record, RecordType, RecordsQuery};
+use crate::store::{Entry, EntryType, RecordsQuery};
 use crate::{data, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result};
 
 /// Handle `RecordsWrite` messages.
@@ -64,7 +64,7 @@ pub(crate) async fn handle(
     // ----------------------------------------------------------------
     // TODO: Hidden
     // ----------------------------------------------------------------
-    // **`hidden` is set to true when the 'intial write' HAS NO data**
+    // **`archived` is set to true when the 'intial write' HAS NO data**
     //
     // It prevents querying of initial writes without data, thus preventing users
     // from accessing private data they wouldn't ordinarily be able to access.
@@ -85,8 +85,8 @@ pub(crate) async fn handle(
         (write, StatusCode::NO_CONTENT)
     };
 
-    let mut record = Record::from(&write);
-    record.indexes.insert("hidden".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
+    let mut record = Entry::from(&write);
+    record.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &record).await?;
@@ -146,18 +146,18 @@ pub struct Write {
     /// The message authorization.
     pub authorization: Authorization,
 
-    /// Record CID
+    /// Entry CID
     pub record_id: String,
 
-    /// Record context.
+    /// Entry context.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_id: Option<String>,
 
-    /// Record attestation.
+    /// Entry attestation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attestation: Option<Jws>,
 
-    /// Record encryption.
+    /// Entry encryption.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encryption: Option<EncryptionProperty>,
 
@@ -206,13 +206,13 @@ impl Message for Write {
 #[allow(clippy::module_name_repetitions)]
 pub struct WriteReply;
 
-impl From<&Write> for Record {
+impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         let mut save = write.clone();
         save.encoded_data = None;
 
         let mut record = Self {
-            message: RecordType::Write(save),
+            message: EntryType::Write(save),
             indexes: Map::new(),
         };
 
@@ -239,23 +239,23 @@ impl From<&Write> for Record {
     }
 }
 
-impl TryFrom<Record> for Write {
+impl TryFrom<Entry> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: Record) -> Result<Self> {
+    fn try_from(record: Entry) -> Result<Self> {
         match record.message {
-            RecordType::Write(write) => Ok(write),
+            EntryType::Write(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
 }
 
-impl TryFrom<&Record> for Write {
+impl TryFrom<&Entry> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: &Record) -> Result<Self> {
+    fn try_from(record: &Entry) -> Result<Self> {
         match &record.message {
-            RecordType::Write(write) => Ok(write.clone()),
+            EntryType::Write(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
@@ -620,7 +620,7 @@ pub struct WriteDescriptor {
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Record's protocol.
+    /// Entry's protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
 
@@ -693,14 +693,14 @@ pub struct WriteBuilder {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteProtocol {
-    /// Record protocol.
+    /// Entry protocol.
     pub protocol: String,
 
     /// Protocol path.
     pub protocol_path: String,
 }
 
-/// Record data can be raw bytes or CID.
+/// Entry data can be raw bytes or CID.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum WriteData {
@@ -842,7 +842,7 @@ impl WriteBuilder {
         self
     }
 
-    /// Record data as a CID or raw bytes.
+    /// Entry data as a CID or raw bytes.
     #[must_use]
     pub fn data(mut self, data: WriteData) -> Self {
         self.data = data;

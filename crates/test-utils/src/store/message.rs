@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use vercre_dwn::provider::{MessageStore, Query, Record};
+use vercre_dwn::provider::{Entry, MessageStore, Query};
 use vercre_dwn::store::{Cursor, QuerySerializer};
 
 use super::ProviderImpl;
@@ -9,25 +9,25 @@ pub(crate) const TABLE: &str = "message";
 
 #[async_trait]
 impl MessageStore for ProviderImpl {
-    async fn put(&self, owner: &str, record: &Record) -> Result<()> {
+    async fn put(&self, owner: &str, record: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<Record> = self.db.create((TABLE, record.cid()?)).content(record).await?;
+        let _: Option<Entry> = self.db.create((TABLE, record.cid()?)).content(record).await?;
         Ok(())
     }
 
-    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Record>, Cursor)> {
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Cursor)> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
         let sql = query.serialize();
         let mut response = self.db.query(sql).await?;
-        let messages: Vec<Record> = response.take(0)?;
+        let messages: Vec<Entry> = response.take(0)?;
 
         Ok((messages, Cursor::default()))
 
         // TODO: sort and paginate
     }
 
-    async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Record>> {
+    async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Entry>> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         Ok(self.db.select((TABLE, message_cid)).await?)
     }

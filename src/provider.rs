@@ -7,7 +7,7 @@ pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::event::{Event, SubscribeFilter, Subscriber};
 use crate::store::Cursor;
-pub use crate::store::{Query, Record};
+pub use crate::store::{Entry, Query};
 pub use crate::tasks::ResumableTask;
 
 /// Issuer Provider trait.
@@ -70,14 +70,14 @@ pub trait Keyring: Signer + Cipher + Send + Sync {}
 #[async_trait]
 pub trait MessageStore: Send + Sync {
     /// Store a message in the underlying store.
-    async fn put(&self, owner: &str, record: &Record) -> Result<()>;
+    async fn put(&self, owner: &str, record: &Entry) -> Result<()>;
 
     /// Queries the underlying store for matches to the provided SQL WHERE clause.
-    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Record>, Cursor)>;
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Cursor)>;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.
-    async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Record>>;
+    async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Entry>>;
 
     /// Delete message associated with the specified id.
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;

@@ -17,14 +17,14 @@ use crate::records::{self, Delete, Query, Subscribe, Write};
 use crate::store::{ProtocolsQuery, RecordsQuery};
 use crate::{forbidden, schema, utils, Range, Result};
 
-enum Record {
+enum Entry {
     Write(Write),
     Query(Query),
     Subscribe(Subscribe),
     Delete(Delete),
 }
 
-impl Record {
+impl Entry {
     fn authorization(&self) -> Authorization {
         match self {
             Self::Write(write) => write.authorization.clone(),
@@ -127,7 +127,7 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
         return Err(forbidden!("no rule set defined for protocol path"));
     };
 
-    verify_actions(owner, &Record::Write(write.clone()), &rule_set, &record_chain, store).await?;
+    verify_actions(owner, &Entry::Write(write.clone()), &rule_set, &record_chain, store).await?;
 
     Ok(())
 }
@@ -154,7 +154,7 @@ pub async fn permit_read(owner: &str, query: &Query, store: &impl MessageStore) 
         return Err(forbidden!("no rule set defined for protocol path"));
     };
 
-    verify_actions(owner, &Record::Query(query.clone()), &rule_set, &[], store).await?;
+    verify_actions(owner, &Entry::Query(query.clone()), &rule_set, &[], store).await?;
 
     Ok(())
 }
@@ -181,7 +181,7 @@ pub async fn permit_subscribe(
         return Err(forbidden!("no rule set defined for protocol path"));
     };
 
-    verify_actions(owner, &Record::Subscribe(subscribe.clone()), &rule_set, &[], store).await?;
+    verify_actions(owner, &Entry::Subscribe(subscribe.clone()), &rule_set, &[], store).await?;
 
     Ok(())
 }
@@ -208,7 +208,7 @@ pub async fn permit_delete(
     };
     let record_chain = record_chain(owner, &delete.descriptor.record_id, store).await?;
 
-    verify_actions(owner, &Record::Delete(delete.clone()), &rule_set, &record_chain, store).await?;
+    verify_actions(owner, &Entry::Delete(delete.clone()), &rule_set, &record_chain, store).await?;
 
     Ok(())
 }
@@ -314,7 +314,7 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
     let query = RecordsQuery::new().record_id(parent_id).protocol(protocol).build();
     let (records, _) = store.query(owner, &query).await?;
     if records.is_empty() {
-        return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
+        return Err(forbidden!("unable to find Write Entry for parent_id {parent_id}"));
     }
 
     let Some(parent) = &records[0].as_write() else {
@@ -372,7 +372,7 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
 
     let (messages, _) = store.query(owner, &query.build()).await?;
     // if records.is_empty() {
-    //     return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
+    //     return Err(forbidden!("unable to find Write Entry for parent_id {parent_id}"));
     // }
 
     for message in messages {
@@ -488,7 +488,7 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
 
 // Verifies the given message is authorized by one of the action rules in the given protocol rule set.
 async fn verify_actions(
-    owner: &str, record: &Record, rule_set: &RuleSet, record_chain: &[Write],
+    owner: &str, record: &Entry, rule_set: &RuleSet, record_chain: &[Write],
     store: &impl MessageStore,
 ) -> Result<()> {
     let author = record.authorization().author()?;
@@ -527,7 +527,7 @@ async fn verify_actions(
 
         // actor validation
         if rule.who == Some(Actor::Recipient) && rule.of.is_none() {
-            let message = if let Record::Write(write) = &record {
+            let message = if let Entry::Write(write) = &record {
                 write
             } else {
                 // the incoming message must be a `RecordsDelete` because only
@@ -647,10 +647,10 @@ async fn record_chain(
 //
 // N.B. keep in mind an author's 'write' access may be revoked.
 async fn allowed_actions(
-    owner: &str, record: &Record, store: &impl MessageStore,
+    owner: &str, record: &Entry, store: &impl MessageStore,
 ) -> Result<Vec<Action>> {
     match record {
-        Record::Write(write) => {
+        Entry::Write(write) => {
             if write.is_initial()? {
                 return Ok(vec![Action::Create]);
             }
@@ -667,10 +667,10 @@ async fn allowed_actions(
 
             Ok(vec![Action::CoUpdate])
         }
-        Record::Query(_) => Ok(vec![Action::Query]),
+        Entry::Query(_) => Ok(vec![Action::Query]),
         // Method::Read => Ok(vec![Action::Read]),
-        Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
-        Record::Delete(delete) => {
+        Entry::Subscribe(_) => Ok(vec![Action::Subscribe]),
+        Entry::Delete(delete) => {
             let messages =
                 records::existing_entries(owner, &delete.descriptor.record_id, store).await?;
             let (initial, _) = records::earliest_and_latest(&messages).await?;

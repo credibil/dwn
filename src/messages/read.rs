@@ -15,7 +15,7 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::DataStream;
-use crate::store::RecordType;
+use crate::store::EntryType;
 use crate::{schema, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Handle a read message.
@@ -35,7 +35,7 @@ pub(crate) async fn handle(
     let mut message = (*record).clone();
 
     // include data with RecordsWrite messages
-    let data = if let RecordType::Write(ref mut write) = message {
+    let data = if let EntryType::Write(ref mut write) = message {
         //     // return embedded `encoded_data` as entry data stream.
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
@@ -141,7 +141,7 @@ pub struct ReadReplyEntry {
     pub message_cid: String,
 
     /// The message.
-    pub message: RecordType,
+    pub message: EntryType,
 
     /// The data associated with the message.
     #[serde(skip_serializing_if = "Option::is_none")]
