@@ -342,7 +342,7 @@ impl QuerySerializer for RecordsQuery {
             sql.push_str(&format!("{}\n", filter.to_sql()));
         }
 
-        sql.push_str("ORDER BY descriptor.messageTimestamp DESC");
+        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE DESC;");
         sql
     }
 }

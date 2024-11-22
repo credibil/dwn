@@ -32,7 +32,7 @@ pub(crate) async fn handle(
 ) -> Result<Reply<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
 
-    let query = RecordsQuery::new().record_id(&delete.descriptor.record_id).build();
+    let query = RecordsQuery::new().record_id(&delete.descriptor.record_id).method(None).build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;
     if records.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));

@@ -19,8 +19,6 @@ impl MessageStore for ProviderImpl {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
         let sql = query.serialize();
-        println!("{sql}");
-
         let mut response = self.db.query(sql).await?;
         let messages: Vec<Record> = response.take(0)?;
 

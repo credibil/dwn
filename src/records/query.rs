@@ -48,10 +48,19 @@ pub(crate) async fn handle(
     }
 
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(filter).hidden(Some(false)).build();
+    let query = RecordsQuery::from(filter).hidden(Some(false)).method(None).build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;
 
-    println!("records: {:?}", records);
+    // short-circuit when no records found
+    if records.is_empty() || records[0].as_delete().is_some() {
+        return Ok(Reply {
+            status: Status {
+                code: StatusCode::OK.as_u16(),
+                detail: None,
+            },
+            body: None,
+        });
+    }
 
     // build reply
     let mut entries = vec![];
@@ -71,15 +80,13 @@ pub(crate) async fn handle(
         entries.push(QueryReplyEntry { write, initial_write });
     }
 
-    let entries = if entries.is_empty() { None } else { Some(entries) };
-
     Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
         body: Some(QueryReply {
-            entries,
+            entries: Some(entries),
             cursor: None,
         }),
     })

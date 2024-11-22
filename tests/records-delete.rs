@@ -66,7 +66,7 @@ async fn delete_record() {
     // --------------------------------------------------
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.unwrap().entries.is_none());
+    assert!(reply.body.is_none());
 
     // --------------------------------------------------
     // Deleting the same record should fail.
