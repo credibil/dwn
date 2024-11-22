@@ -1,5 +1,6 @@
 //! # Store
 
+use std::fmt::Display;
 use std::ops::Deref;
 
 use chrono::{DateTime, Utc};
@@ -187,10 +188,13 @@ pub struct RecordsQuery {
     pub protocol_path: Option<String>,
 
     /// Filter records by `date_created`.
-    date_created: Option<Range<String>>,
+    pub date_created: Option<Range<String>>,
 
     /// Filter records by `hidden`.
     pub hidden: Option<bool>,
+
+    /// Sort filter results.
+    pub sort: Option<Sort>,
 
     filter: Option<RecordsFilter>,
 }
@@ -198,9 +202,14 @@ pub struct RecordsQuery {
 impl RecordsQuery {
     #[must_use]
     pub(crate) fn new() -> Self {
+        let sort = Sort {
+            message_timestamp: Some(Direction::Descending),
+            ..Sort::default()
+        };
         Self {
             method: Some(Method::Write),
             hidden: Some(false),
+            sort: Some(sort),
             ..Self::default()
         }
     }
@@ -267,6 +276,13 @@ impl RecordsQuery {
     #[must_use]
     pub(crate) const fn hidden(mut self, hidden: Option<bool>) -> Self {
         self.hidden = hidden;
+        self
+    }
+
+    #[must_use]
+    #[allow(dead_code)]
+    pub(crate) const fn sort(mut self, sort: Sort) -> Self {
+        self.sort = Some(sort);
         self
     }
 
@@ -338,11 +354,26 @@ impl QuerySerializer for RecordsQuery {
             sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
         }
 
+        // include `RecordsFilter` sql
         if let Some(filter) = &self.filter {
             sql.push_str(&format!("{}\n", filter.to_sql()));
         }
 
-        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE DESC;");
+        // sorting
+        if let Some(sort) = &self.sort {
+            let mut fields = vec![];
+            if let Some(dir) = &sort.date_created {
+                fields.push(format!("descriptor.dateCreated COLLATE {dir}"));
+            }
+            if let Some(dir) = &sort.date_published {
+                fields.push(format!("descriptor.datePublished COLLATE {dir}"));
+            }
+            if let Some(dir) = &sort.message_timestamp {
+                fields.push(format!("descriptor.messageTimestamp COLLATE {dir}"));
+            }
+            sql.push_str(&format!("ORDER BY {sort}", sort = fields.join(",")));
+        }
+
         sql
     }
 }
@@ -392,11 +423,9 @@ impl QuerySerializer for ProtocolsQuery {
 
     fn serialize(&self) -> Self::Output {
         let mut sql = format!(
-            "
-            SELECT * FROM message
+            "SELECT * FROM message
             WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'
-            ",
+            AND descriptor.method = '{method}'\n",
             interface = Interface::Protocols,
             method = Method::Configure
         );
@@ -409,7 +438,7 @@ impl QuerySerializer for ProtocolsQuery {
             sql.push_str(&format!("AND descriptor.definition.published = {published}\n"));
         }
 
-        sql.push_str("ORDER BY descriptor.messageTimestamp DESC");
+        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE DESC");
         sql
     }
 }
@@ -433,31 +462,40 @@ fn quota(field: &str, clause: &Quota<String>) -> String {
     }
 }
 
-// /// RecordType sort.
-// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct Sort {
-//     /// Sort by `date_created`.
-//     pub date_created: Option<Direction>,
+/// RecordType sort.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sort {
+    /// Sort by `date_created`.
+    pub date_created: Option<Direction>,
 
-//     /// Sort by `date_published`.
-//     pub date_published: Option<Direction>,
+    /// Sort by `date_published`.
+    pub date_published: Option<Direction>,
 
-//     /// Sort by `message_timestamp`.
-//     pub message_timestamp: Option<Direction>,
-// }
+    /// Sort by `message_timestamp`.
+    pub message_timestamp: Option<Direction>,
+}
 
-// /// Sort direction.
-// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-// #[serde(rename_all = "camelCase")]
-// pub enum Direction {
-//     /// Sort ascending.
-//     #[default]
-//     Ascending = 1,
+/// Sort direction.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Direction {
+    /// Sort ascending.
+    Ascending,
 
-//     /// Sort descending.
-//     Descending = -1,
-// }
+    /// Sort descending.
+    #[default]
+    Descending,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Direction::Ascending => write!(f, "ASC"),
+            Direction::Descending => write!(f, "DESC"),
+        }
+    }
+}
 
 /// Pagination cursor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
