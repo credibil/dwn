@@ -467,12 +467,15 @@ fn quota(field: &str, clause: &Quota<String>) -> String {
 #[serde(rename_all = "camelCase")]
 pub struct Sort {
     /// Sort by `date_created`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub date_created: Option<Direction>,
 
     /// Sort by `date_published`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<Direction>,
 
     /// Sort by `message_timestamp`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message_timestamp: Option<Direction>,
 }
 
@@ -508,13 +511,17 @@ pub struct Pagination {
     /// The number of messages to return.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
+    // offset: Option<u64>,
 }
 
 /// Pagination cursor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Cursor {
-    /// CID of message to start from.
+    /// Message CID ensures result cursor compatibility irrespective of DWN
+    /// implementation. Thus, query with the same cursor will yield identical
+    /// results, which means any DWN node can return subsequent pages of results
+    /// without data loss.
     pub message_cid: String,
 
     /// The number of messages to return.

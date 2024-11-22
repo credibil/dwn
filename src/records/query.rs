@@ -13,7 +13,7 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{protocol, Grant};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::store::{Cursor, Pagination, RecordsQuery};
+use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
 use crate::{forbidden, Descriptor, Error, Interface, Method, Quota, Result};
 
 /// Process `Query` message.
@@ -48,8 +48,11 @@ pub(crate) async fn handle(
     }
 
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(filter).hidden(Some(false)).method(None).build();
-    let (records, _) = MessageStore::query(provider, owner, &query).await?;
+    let mut db_query = RecordsQuery::from(filter).hidden(Some(false)).method(None);
+    if let Some(sort) = &query.descriptor.date_sort {
+        db_query = db_query.sort(sort.clone());
+    }
+    let (records, _) = MessageStore::query(provider, owner, &db_query.build()).await?;
 
     // short-circuit when no records found
     if records.is_empty() || records[0].as_delete().is_some() {
@@ -191,7 +194,7 @@ pub struct QueryDescriptor {
 
     /// Specifies how dates should be sorted.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_sort: Option<String>,
+    pub date_sort: Option<Sort>,
 
     /// The pagination cursor.
     #[serde(skip_serializing_if = "Option::is_none")]
