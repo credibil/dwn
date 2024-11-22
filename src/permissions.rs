@@ -15,8 +15,8 @@ use crate::{unexpected, Interface, Method, Result};
 pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
-    let query = RecordsQuery::new().record_id(grant_id);
-    let (records, _) = store.query(owner, &query.to_sql()).await?;
+    let query = RecordsQuery::new().record_id(grant_id).build();
+    let (records, _) = store.query(owner, &query).await?;
 
     let Some(write) = records[0].as_write() else {
         return Err(unexpected!("grant not found"));

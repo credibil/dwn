@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use vercre_dwn::provider::MessageStore;
-use vercre_dwn::store::Record;
+use vercre_dwn::provider::{MessageStore, Query, Record};
+use vercre_dwn::store::QuerySerializer;
 use vercre_dwn::Cursor;
 
 use super::ProviderImpl;
@@ -16,9 +16,10 @@ impl MessageStore for ProviderImpl {
         Ok(())
     }
 
-    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Record>, Cursor)> {
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Record>, Cursor)> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
+        let sql = query.serialize();
         let mut response = self.db.query(sql).await?;
         let messages: Vec<Record> = response.take(0)?;
 

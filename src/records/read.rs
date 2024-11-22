@@ -24,8 +24,8 @@ pub(crate) async fn handle(
     owner: &str, read: Read, provider: &impl Provider,
 ) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(read.descriptor.filter.clone());
-    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    let query = RecordsQuery::from(read.descriptor.filter.clone()).build();
+    let (records, _) = MessageStore::query(provider, owner, &query).await?;
     if records.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
@@ -79,8 +79,8 @@ pub(crate) async fn handle(
     let initial_write = if write.is_initial()? {
         None
     } else {
-        let query = RecordsQuery::new().record_id(&write.record_id).hidden(None);
-        let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+        let query = RecordsQuery::new().record_id(&write.record_id).hidden(None).build();
+        let (records, _) = MessageStore::query(provider, owner, &query).await?;
         if records.is_empty() {
             return Err(unexpected!("initial write not found"));
         }

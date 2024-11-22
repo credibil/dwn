@@ -201,8 +201,8 @@ impl Grant {
         }
 
         // Check if grant has been revoked — using latest revocation message
-        let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH);
-        let (messages, _) = store.query(grantor, &query.to_sql()).await?;
+        let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH).build();
+        let (messages, _) = store.query(grantor, &query).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(forbidden!("grant has been revoked"));
         };

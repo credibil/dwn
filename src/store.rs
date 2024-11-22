@@ -6,18 +6,53 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::endpoint::Message;
-use crate::records::RecordsFilter;
-use crate::{protocols, records, Descriptor, Interface, Method, Quota, Result};
+use crate::protocols::{self, ProtocolsFilter};
+use crate::records::{self, RecordsFilter};
+use crate::{Descriptor, Interface, Method, Quota, Result};
 
-/// Wraps each message with a unifying type used in operations common to all
-/// messages. For example, storing and retrieving from the `MessageStore`.
+/// `QuerySerializer` is used to provide overridable query serialization.
+///
+/// The default implementation serializes the query to a SQL string, but can be
+/// overridden by implementers to provide custom serialization. For example, a
+/// BSON query for MongoDB.
+///
+/// # Example
+///
+/// ```rust
+/// use vercre_dwn::store::{Query,QuerySerializer};
+///
+/// struct CustomSerializer(Query);
+///
+/// QuerySerializer for CustomSerializer {
+///    type Output = String;
+///
+///    fn serialize(&self) -> Self::Output {
+///        format!("SELECT * FROM message WHERE protocol={}", self.0.protocol)
+///    }
+/// }
+/// ```
+pub trait QuerySerializer {
+    /// The output type of the serialization.
+    type Output;
+
+    /// Serialize the query to the output type.
+    fn serialize(&self) -> Self::Output;
+}
+
+/// Record wraps each message with a unifying type used for all stored messages
+/// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
+///
+/// The `Record` type simplifies storage and retrieval aas well as providing a
+/// a vehicle for persisting addtional data alongside the message (using the
+/// `indexes` property).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Record {
-    /// The message type.
+    /// The message type to store.
     #[serde(flatten)]
     pub message: RecordType,
 
-    /// Indexed message object fields, flattened for querying.
+    /// Indexes derived from the associated message object, flattened for
+    /// ease of querying.
     #[serde(flatten)]
     #[serde(skip_deserializing)]
     pub indexes: Map<String, Value>,
@@ -84,13 +119,17 @@ impl Deref for Record {
     }
 }
 
-/// Records read message payload
+/// `RecordType` holds the read message payload.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
-#[allow(missing_docs)]
 pub enum RecordType {
+    /// `RecordsWrite` message.
     Write(records::Write),
+
+    /// `RecordsDelete` message.
     Delete(records::Delete),
+
+    /// `ProtocolsConfigure` message.
     Configure(protocols::Configure),
 }
 
@@ -100,24 +139,62 @@ impl Default for RecordType {
     }
 }
 
-/// Options to use when creating a permission grant.
+/// `Query` wraps supported queries.
+pub enum Query {
+    /// Records query.
+    Records(RecordsQuery),
+
+    /// Protocols query.
+    Protocols(ProtocolsQuery),
+}
+
+impl QuerySerializer for Query {
+    type Output = String;
+
+    fn serialize(&self) -> Self::Output {
+        match self {
+            Self::Records(query) => query.serialize(),
+            Self::Protocols(query) => query.serialize(),
+        }
+    }
+}
+
+/// `RecordsQuery` use a builder to simplify the process of creating
+/// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct RecordsQuery {
-    pub record_id: Option<String>,
-    pub parent_id: Option<String>,
-    pub context_id: Option<String>,
-    pub recipient: Option<Quota<String>>,
-    pub protocol: Option<String>,
-    pub protocol_path: Option<String>,
-    // pub date_created: Option<DateRange>,
-    pub hidden: Option<bool>,
+pub struct RecordsQuery {
+    /// Filter records by `method`.
     pub method: Option<Method>,
+
+    /// Filter records by `record_id`.
+    pub record_id: Option<String>,
+
+    /// Filter records by `parent_id`.
+    pub parent_id: Option<String>,
+
+    /// Filter records by `context_id`.
+    pub context_id: Option<String>,
+
+    /// Filter records by or more `recipient`s.
+    pub recipient: Option<Quota<String>>,
+
+    /// Filter records by `protocol`.
+    pub protocol: Option<String>,
+
+    /// Filter records by `protocol_path`.
+    pub protocol_path: Option<String>,
+
+    // /// Filter records by `date_created`.
+    //  date_created: Option<DateRange>,
+    /// Filter records by `hidden`.
+    pub hidden: Option<bool>,
+
     filter: Option<RecordsFilter>,
 }
 
 impl RecordsQuery {
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             method: Some(Method::Write),
             hidden: Some(false),
@@ -126,26 +203,26 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub fn record_id(mut self, record_id: impl Into<String>) -> Self {
+    pub(crate) fn record_id(mut self, record_id: impl Into<String>) -> Self {
         self.record_id = Some(record_id.into());
         self
     }
 
     #[must_use]
-    pub fn parent_id(mut self, parent_id: impl Into<String>) -> Self {
+    pub(crate) fn parent_id(mut self, parent_id: impl Into<String>) -> Self {
         self.parent_id = Some(parent_id.into());
         self
     }
 
     // TODO: support LT, GT, and BETWEEN for context
     #[must_use]
-    pub fn context_id(mut self, context_id: impl Into<String>) -> Self {
+    pub(crate) fn context_id(mut self, context_id: impl Into<String>) -> Self {
         self.context_id = Some(context_id.into());
         self
     }
 
     #[must_use]
-    pub fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
+    pub(crate) fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
         match self.recipient {
             Some(Quota::One(value)) => {
                 self.recipient = Some(Quota::Many(vec![value, recipient.into()]));
@@ -162,13 +239,13 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
+    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
         self.protocol = Some(protocol.into());
         self
     }
 
     #[must_use]
-    pub fn protocol_path(mut self, protocol_path: impl Into<String>) -> Self {
+    pub(crate) fn protocol_path(mut self, protocol_path: impl Into<String>) -> Self {
         self.protocol_path = Some(protocol_path.into());
         self
     }
@@ -180,18 +257,34 @@ impl RecordsQuery {
     // }
 
     #[must_use]
-    pub fn method(mut self, method: Option<Method>) -> Self {
+    pub(crate) const fn method(mut self, method: Option<Method>) -> Self {
         self.method = method;
         self
     }
 
     #[must_use]
-    pub fn hidden(mut self, hidden: Option<bool>) -> Self {
+    pub(crate) const fn hidden(mut self, hidden: Option<bool>) -> Self {
         self.hidden = hidden;
         self
     }
 
-    pub fn to_sql(self) -> String {
+    pub(crate) fn build(&self) -> Query {
+        Query::Records(self.clone())
+    }
+}
+
+impl From<RecordsFilter> for RecordsQuery {
+    fn from(filter: RecordsFilter) -> Self {
+        let mut query = Self::new();
+        query.filter = Some(filter);
+        query
+    }
+}
+
+impl QuerySerializer for RecordsQuery {
+    type Output = String;
+
+    fn serialize(&self) -> Self::Output {
         let mut sql = format!(
             "
             SELECT * FROM message
@@ -249,10 +342,69 @@ impl RecordsQuery {
     }
 }
 
-impl From<RecordsFilter> for RecordsQuery {
-    fn from(filter: RecordsFilter) -> Self {
-        let mut sql = Self::new();
-        sql.filter = Some(filter);
+/// `RecordsQuery` use a builder to simplify the process of creating
+/// `MessageStore` queries.
+#[derive(Clone, Debug, Default)]
+pub struct ProtocolsQuery {
+    /// Filter records by `protocol`.
+    pub protocol: Option<String>,
+
+    /// Filter records by by their `published` status.
+    pub published: Option<bool>,
+}
+
+impl ProtocolsQuery {
+    #[must_use]
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    #[must_use]
+    pub(crate) const fn published(mut self, published: bool) -> Self {
+        self.published = Some(published);
+        self
+    }
+
+    pub(crate) fn build(&self) -> Query {
+        Query::Protocols(self.clone())
+    }
+}
+
+impl From<ProtocolsFilter> for ProtocolsQuery {
+    fn from(filter: ProtocolsFilter) -> Self {
+        Self::new().protocol(filter.protocol)
+    }
+}
+
+impl QuerySerializer for ProtocolsQuery {
+    type Output = String;
+
+    fn serialize(&self) -> Self::Output {
+        let mut sql = format!(
+            "
+            SELECT * FROM message
+            WHERE descriptor.interface = '{interface}'
+            AND descriptor.method = '{method}'
+            ",
+            interface = Interface::Protocols,
+            method = Method::Configure
+        );
+
+        if let Some(protocol) = &self.protocol {
+            sql.push_str(&format!("AND descriptor.definition.protocol = '{protocol}'\n"));
+        }
+
+        if let Some(published) = &self.published {
+            sql.push_str(&format!("AND descriptor.definition.published = '{published}'\n"));
+        }
+
+        sql.push_str("ORDER BY descriptor.messageTimestamp DESC");
         sql
     }
 }

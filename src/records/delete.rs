@@ -32,8 +32,8 @@ pub(crate) async fn handle(
 ) -> Result<Reply<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
 
-    let query = RecordsQuery::new().record_id(&delete.descriptor.record_id);
-    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    let query = RecordsQuery::new().record_id(&delete.descriptor.record_id).build();
+    let (records, _) = MessageStore::query(provider, owner, &query).await?;
     if records.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
@@ -272,9 +272,12 @@ impl DeleteBuilder {
 
 pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query =
-        RecordsQuery::new().record_id(&delete.descriptor.record_id).method(None).hidden(None);
-    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    let query = RecordsQuery::new()
+        .record_id(&delete.descriptor.record_id)
+        .method(None)
+        .hidden(None)
+        .build();
+    let (records, _) = MessageStore::query(provider, owner, &query).await?;
     if records.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
@@ -329,8 +332,8 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
 #[async_recursion]
 async fn purge_descendants(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
     // fetch child records
-    let query = RecordsQuery::new().parent_id(record_id);
-    let (children, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    let query = RecordsQuery::new().parent_id(record_id).build();
+    let (children, _) = MessageStore::query(provider, owner, &query).await?;
     if children.is_empty() {
         return Ok(());
     }

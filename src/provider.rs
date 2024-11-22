@@ -6,7 +6,7 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::event::{Event, SubscribeFilter, Subscriber};
-use crate::store::Record;
+pub use crate::store::{Query, Record};
 pub use crate::tasks::ResumableTask;
 use crate::Cursor;
 
@@ -73,7 +73,7 @@ pub trait MessageStore: Send + Sync {
     async fn put(&self, owner: &str, record: &Record) -> Result<()>;
 
     /// Queries the underlying store for matches to the provided SQL WHERE clause.
-    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Record>, Cursor)>;
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Record>, Cursor)>;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.

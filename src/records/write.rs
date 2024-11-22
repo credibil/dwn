@@ -1043,8 +1043,8 @@ pub(crate) async fn existing_entries(
 ) -> Result<Vec<Write>> {
     // N.B. only use `interface` in order to to get both `RecordsWrite` and
     //`RecordsDelete` messages
-    let query = RecordsQuery::new().record_id(record_id).method(None);
-    let (records, _) = store.query(owner, &query.to_sql()).await.unwrap();
+    let query = RecordsQuery::new().record_id(record_id).method(None).build();
+    let (records, _) = store.query(owner, &query).await.unwrap();
 
     let mut writes = Vec::new();
     for record in records {
@@ -1173,8 +1173,8 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         from: message_timestamp.to_rfc3339(),
         to: "".to_string(),
     };
-    let query = RecordsQuery::new().record_id(grant_id); //.date_created(date_range);
-    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    let query = RecordsQuery::new().record_id(grant_id).build(); //.date_created(date_range);
+    let (records, _) = MessageStore::query(provider, owner, &query).await?;
 
     // delete matching messages
     for record in records {

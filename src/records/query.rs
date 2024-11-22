@@ -48,8 +48,8 @@ pub(crate) async fn handle(
     }
 
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(filter);
-    let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+    let query = RecordsQuery::from(filter).build();
+    let (records, _) = MessageStore::query(provider, owner, &query).await?;
 
     // build reply
     let mut entries = vec![];
@@ -57,8 +57,8 @@ pub(crate) async fn handle(
         let write: Write = record.try_into()?;
 
         let initial_write = if write.is_initial()? {
-            let query = RecordsQuery::new().record_id(&write.record_id).hidden(None);
-            let (records, _) = MessageStore::query(provider, owner, &query.to_sql()).await?;
+            let query = RecordsQuery::new().record_id(&write.record_id).hidden(None).build();
+            let (records, _) = MessageStore::query(provider, owner, &query).await?;
             let mut initial_write: Write = (&records[0]).try_into()?;
             initial_write.encoded_data = None;
             Some(initial_write)

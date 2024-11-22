@@ -17,7 +17,7 @@ use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::event::Event;
 use crate::permissions::ScopeType;
-use crate::protocols::query::{self, Filter};
+use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::store::{Record, RecordType};
@@ -33,7 +33,7 @@ pub(crate) async fn handle(
     configure.authorize(ctx, provider).await?;
 
     // find any matching protocol entries
-    let filter = Filter {
+    let filter = ProtocolsFilter {
         protocol: configure.descriptor.definition.protocol.clone(),
     };
     let results = query::fetch_config(&ctx.owner, Some(filter), provider).await?;
