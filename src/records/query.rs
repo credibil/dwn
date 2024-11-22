@@ -13,8 +13,8 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{protocol, Grant};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::store::RecordsQuery;
-use crate::{forbidden, Cursor, Descriptor, Error, Interface, Method, Pagination, Quota, Result};
+use crate::store::{Cursor, Pagination, RecordsQuery};
+use crate::{forbidden, Descriptor, Error, Interface, Method, Quota, Result};
 
 /// Process `Query` message.
 ///

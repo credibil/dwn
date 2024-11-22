@@ -91,50 +91,19 @@ impl<T: Default> Default for Quota<T> {
     }
 }
 
-/// Date range filter.
+/// Range filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DateRange {
-    /// Match messages with `message_timestamp` on or after.
-    pub from: String,
+pub struct Range<T> {
+    /// The minimum value.
+    pub min: Option<T>,
 
-    /// Match messages with `message_timestamp` on or before.
-    pub to: String,
+    /// The maximum value.
+    pub max: Option<T>,
 }
 
-/// Size range.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SizeRange {
-    /// The minimum size.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub min: Option<usize>,
-
-    /// The maximum size.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max: Option<usize>,
-}
-
-/// Pagination cursor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Pagination {
-    /// CID of message to start from.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
-
-    /// The number of messages to return.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<u64>,
-}
-
-/// Pagination cursor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Cursor {
-    /// CID of message to start from.
-    pub message_cid: String,
-
-    /// The number of messages to return.
-    pub value: u64,
+impl<T> Range<T> {
+    /// Create a new range filter.
+    pub const fn new(min: Option<T>, max: Option<T>) -> Self {
+        Self { min, max }
+    }
 }

@@ -10,8 +10,8 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::ScopeType;
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::store::ProtocolsQuery;
-use crate::{schema, unexpected, utils, Cursor, Descriptor, Error, Interface, Method, Result};
+use crate::store::{Cursor, ProtocolsQuery};
+use crate::{schema, unexpected, utils, Descriptor, Error, Interface, Method, Result};
 
 /// Process query message.
 ///

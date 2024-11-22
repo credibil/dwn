@@ -8,6 +8,7 @@ pub mod write;
 
 use std::collections::BTreeMap;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -20,7 +21,7 @@ pub use self::write::{
     DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
 };
 pub use crate::data::DataStream;
-use crate::{utils, DateRange, Quota, Result, SizeRange};
+use crate::{utils, Quota, Range, Result};
 
 // TODO: add builder for RecordsFilter
 
@@ -78,7 +79,7 @@ pub struct RecordsFilter {
 
     /// Records with a size within the range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_size: Option<SizeRange>,
+    pub data_size: Option<Range<usize>>,
 
     /// CID of the data.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,15 +87,15 @@ pub struct RecordsFilter {
 
     /// Filter messages created within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<DateRange>,
+    pub date_created: Option<Range<String>>,
 
     /// Filter messages published within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<DateRange>,
+    pub date_published: Option<Range<String>>,
 
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_updated: Option<DateRange>,
+    pub date_updated: Option<Range<String>>,
 }
 
 impl RecordsFilter {
@@ -113,6 +114,9 @@ impl RecordsFilter {
     }
 
     pub(crate) fn to_sql(&self) -> String {
+        let min_date = &DateTime::<Utc>::MIN_UTC.to_rfc3339();
+        let max_date = &Utc::now().to_rfc3339();
+
         let mut sql = String::new();
 
         if let Some(record_id) = &self.record_id {
@@ -165,19 +169,15 @@ impl RecordsFilter {
         }
 
         if let Some(date_created) = &self.date_created {
-            sql.push_str(&format!(
-                "AND descriptor.dateCreated BETWEEN {from} AND {to}'\n",
-                from = date_created.from,
-                to = date_created.to
-            ));
+            let from = date_created.min.as_ref().unwrap_or(min_date);
+            let to = date_created.max.as_ref().unwrap_or(max_date);
+            sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
         }
 
         if let Some(date_published) = &self.date_published {
-            sql.push_str(&format!(
-                "AND descriptor.datePublished BETWEEN {from} AND {to}'\n",
-                from = date_published.from,
-                to = date_published.to
-            ));
+            let from = date_published.min.as_ref().unwrap_or(min_date);
+            let to = date_published.max.as_ref().unwrap_or(max_date);
+            sql.push_str(&format!("AND descriptor.datePublished BETWEEN '{from}' AND '{to}'\n"));
         }
 
         // index fields
@@ -196,11 +196,9 @@ impl RecordsFilter {
         }
 
         if let Some(date_updated) = &self.date_updated {
-            sql.push_str(&format!(
-                "AND dateUpdated BETWEEN {from} AND {to}'\n",
-                from = date_updated.from,
-                to = date_updated.to
-            ));
+            let from = date_updated.min.as_ref().unwrap_or(min_date);
+            let to = date_updated.max.as_ref().unwrap_or(max_date);
+            sql.push_str(&format!("AND dateUpdated BETWEEN '{from}' AND '{to}'\n"));
         }
 
         sql.pop(); // remove trailing newline
@@ -235,7 +233,7 @@ pub enum TagFilter {
     StartsWith(String),
 
     /// Filter tags by range.
-    Range(SizeRange),
+    Range(Range<usize>),
 
     /// Filter by a specific value.
     Equal(Value),

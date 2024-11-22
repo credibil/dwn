@@ -15,7 +15,7 @@ use crate::protocols::{
 use crate::provider::MessageStore;
 use crate::records::{self, Delete, Query, Subscribe, Write};
 use crate::store::{ProtocolsQuery, RecordsQuery};
-use crate::{forbidden, schema, utils, Result};
+use crate::{forbidden, schema, utils, Range, Result};
 
 enum Record {
     Write(Write),
@@ -356,20 +356,21 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
     };
 
     // if this is not the root record, add a prefix filter to the query
-    let mut context = String::new();
+    let mut query = RecordsQuery::new()
+        .protocol(protocol)
+        .protocol_path(protocol_path)
+        .add_recipient(recipient);
+
     if let Some(parent_context) =
         write.context_id.as_ref().and_then(|context_id| context_id.rsplit_once('/').map(|x| x.0))
     {
-        context =
-            format!("AND contextId BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
+        query = query.context_id(Range::new(
+            Some(parent_context.to_string()),
+            Some(format!("{parent_context}\u{ffff}")),
+        ));
     };
 
-    let query = RecordsQuery::new()
-        .protocol(protocol)
-        .protocol_path(protocol_path)
-        .add_recipient(recipient)
-        .build();
-    let (messages, _) = store.query(owner, &query).await?;
+    let (messages, _) = store.query(owner, &query.build()).await?;
     // if records.is_empty() {
     //     return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
     // }
@@ -416,24 +417,21 @@ async fn verify_invoked_role(
         return Err(forbidden!("unable verify role without `context_id`"));
     }
 
+    let mut query =
+        RecordsQuery::new().protocol(protocol).protocol_path(&protocol_role).add_recipient(author);
+
     // `context_id` prefix filter
-    let context_prefix = if segment_count > 0 {
+    if segment_count > 0 {
         // context_id segment count is never shorter than the role path count.
         let context_id = context_id.unwrap_or_default();
         let context_id_segments: Vec<&str> = context_id.split('/').collect();
         let prefix = context_id_segments[..segment_count].join("/");
-        format!("AND contextId BETWEEN '{prefix}' AND '{prefix}\u{ffff}'")
-    } else {
-        String::new()
-    };
 
+        query = query
+            .context_id(Range::new(Some(prefix.to_string()), Some(format!("{prefix}\u{ffff}"))));
+    }
     // fetch the invoked role record
-    let query = RecordsQuery::new()
-        .protocol(protocol)
-        .protocol_path(&protocol_role)
-        .add_recipient(author)
-        .build();
-    let (records, _) = store.query(owner, &query).await?;
+    let (records, _) = store.query(owner, &query.build()).await?;
 
     if records.is_empty() {
         return Err(forbidden!("unable to find records for {protocol_role}"));

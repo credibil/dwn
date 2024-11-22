@@ -6,9 +6,9 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
 use crate::event::{Event, SubscribeFilter, Subscriber};
+use crate::store::Cursor;
 pub use crate::store::{Query, Record};
 pub use crate::tasks::ResumableTask;
-use crate::Cursor;
 
 /// Issuer Provider trait.
 pub trait Provider:

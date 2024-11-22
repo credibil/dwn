@@ -2,19 +2,20 @@
 
 use std::ops::Deref;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::endpoint::Message;
 use crate::protocols::{self, ProtocolsFilter};
 use crate::records::{self, RecordsFilter};
-use crate::{Descriptor, Interface, Method, Quota, Result};
+use crate::{Descriptor, Interface, Method, Quota, Range, Result};
 
 /// `QuerySerializer` is used to provide overridable query serialization.
 ///
 /// The default implementation serializes the query to a SQL string, but can be
 /// overridden by implementers to provide custom serialization. For example, a
-/// BSON query for MongoDB.
+/// BSON query for `MongoDB`.
 ///
 /// # Example
 ///
@@ -173,7 +174,7 @@ pub struct RecordsQuery {
     pub parent_id: Option<String>,
 
     /// Filter records by `context_id`.
-    pub context_id: Option<String>,
+    pub context_id: Option<Range<String>>,
 
     /// Filter records by or more `recipient`s.
     pub recipient: Option<Quota<String>>,
@@ -184,8 +185,9 @@ pub struct RecordsQuery {
     /// Filter records by `protocol_path`.
     pub protocol_path: Option<String>,
 
-    // /// Filter records by `date_created`.
-    //  date_created: Option<DateRange>,
+    /// Filter records by `date_created`.
+    date_created: Option<Range<String>>,
+
     /// Filter records by `hidden`.
     pub hidden: Option<bool>,
 
@@ -214,10 +216,9 @@ impl RecordsQuery {
         self
     }
 
-    // TODO: support LT, GT, and BETWEEN for context
     #[must_use]
-    pub(crate) fn context_id(mut self, context_id: impl Into<String>) -> Self {
-        self.context_id = Some(context_id.into());
+    pub(crate) fn context_id(mut self, context_id: Range<String>) -> Self {
+        self.context_id = Some(context_id);
         self
     }
 
@@ -250,11 +251,11 @@ impl RecordsQuery {
         self
     }
 
-    // #[must_use]
-    // pub fn date_created(mut self, date_created: DateRange) -> Self {
-    //     self.date_created = Some(date_created);
-    //     self
-    // }
+    #[must_use]
+    pub(crate) fn date_created(mut self, date_created: Range<String>) -> Self {
+        self.date_created = Some(date_created);
+        self
+    }
 
     #[must_use]
     pub(crate) const fn method(mut self, method: Option<Method>) -> Self {
@@ -275,7 +276,7 @@ impl RecordsQuery {
 
 impl From<RecordsFilter> for RecordsQuery {
     fn from(filter: RecordsFilter) -> Self {
-        let mut query = Self::new();
+        let mut query = Self::new().method(None);
         query.filter = Some(filter);
         query
     }
@@ -285,11 +286,11 @@ impl QuerySerializer for RecordsQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
+        let min_date = &DateTime::<Utc>::MIN_UTC.to_rfc3339();
+        let max_date = &Utc::now().to_rfc3339();
+
         let mut sql = format!(
-            "
-            SELECT * FROM message
-            WHERE descriptor.interface = '{interface}'
-            ",
+            "SELECT * FROM message\n WHERE descriptor.interface = '{interface}'\n",
             interface = Interface::Records
         );
 
@@ -310,7 +311,12 @@ impl QuerySerializer for RecordsQuery {
         }
 
         if let Some(context_id) = &self.context_id {
-            sql.push_str(&format!("AND contextId = '{context_id}'\n"));
+            let min_ctx = &"\u{0000}".to_string();
+            let max_ctx = &"\u{ffff}".to_string();
+
+            let min = context_id.min.as_ref().unwrap_or(min_ctx);
+            let max = context_id.max.as_ref().unwrap_or(max_ctx);
+            sql.push_str(&format!("AND contextId BETWEEN '{min}' AND '{max}'\n"));
         }
 
         if let Some(protocol) = &self.protocol {
@@ -325,13 +331,11 @@ impl QuerySerializer for RecordsQuery {
             sql.push_str(&quota("descriptor.recipient", recipient));
         }
 
-        // if let Some(date_created) = &self.date_created {
-        //     sql.push_str(&format!(
-        //         "AND descriptor.dateCreated BETWEEN {from} AND {to}'\n",
-        //         from = date_created.from,
-        //         to = date_created.to
-        //     ));
-        // }
+        if let Some(date_created) = &self.date_created {
+            let from = date_created.min.as_ref().unwrap_or(min_date);
+            let to = date_created.max.as_ref().unwrap_or(max_date);
+            sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
+        }
 
         if let Some(filter) = &self.filter {
             sql.push_str(&format!("{}\n", filter.to_sql()));
@@ -401,7 +405,7 @@ impl QuerySerializer for ProtocolsQuery {
         }
 
         if let Some(published) = &self.published {
-            sql.push_str(&format!("AND descriptor.definition.published = '{published}'\n"));
+            sql.push_str(&format!("AND descriptor.definition.published = {published}\n"));
         }
 
         sql.push_str("ORDER BY descriptor.messageTimestamp DESC");
@@ -426,4 +430,54 @@ fn quota(field: &str, clause: &Quota<String>) -> String {
             sql
         }
     }
+}
+
+// /// RecordType sort.
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Sort {
+//     /// Sort by `date_created`.
+//     pub date_created: Option<Direction>,
+
+//     /// Sort by `date_published`.
+//     pub date_published: Option<Direction>,
+
+//     /// Sort by `message_timestamp`.
+//     pub message_timestamp: Option<Direction>,
+// }
+
+// /// Sort direction.
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub enum Direction {
+//     /// Sort ascending.
+//     #[default]
+//     Ascending = 1,
+
+//     /// Sort descending.
+//     Descending = -1,
+// }
+
+/// Pagination cursor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pagination {
+    /// CID of message to start from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
+
+    /// The number of messages to return.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
+}
+
+/// Pagination cursor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Cursor {
+    /// CID of message to start from.
+    pub message_cid: String,
+
+    /// The number of messages to return.
+    pub value: u64,
 }

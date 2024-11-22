@@ -24,7 +24,7 @@ use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
 use crate::store::{Record, RecordType, RecordsQuery};
-use crate::{data, unexpected, utils, DateRange, Descriptor, Error, Interface, Method, Result};
+use crate::{data, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -1169,11 +1169,11 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     };
     let message_timestamp = write.descriptor.base.message_timestamp.unwrap_or_default();
 
-    let date_range = DateRange {
-        from: message_timestamp.to_rfc3339(),
-        to: "".to_string(),
+    let date_range = Range::<String> {
+        min: Some(message_timestamp.to_rfc3339()),
+        max: None,
     };
-    let query = RecordsQuery::new().record_id(grant_id).build(); //.date_created(date_range);
+    let query = RecordsQuery::new().record_id(grant_id).date_created(date_range).build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;
 
     // delete matching messages

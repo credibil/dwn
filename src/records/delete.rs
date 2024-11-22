@@ -284,6 +284,7 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
     if records.len() > 2 {
         return Err(unexpected!("multiple messages exist"));
     }
+
     let newest_existing = &records[0];
 
     // TODO: merge this code with `RecordsWrite`
@@ -404,7 +405,7 @@ async fn purge_records(owner: &str, records: &[Record], provider: &impl Provider
 async fn delete_older(
     owner: &str, newest: &Record, existing: &[Record], provider: &impl Provider,
 ) -> Result<()> {
-    // NOTE: under normal circumstances, there will only be, at most, two existing
+    // N.B. under normal circumstances, there will only be, at most, two existing
     // records per `record_id` (initial + a potential subsequent write/delete),
     for message in existing {
         let ts_message = message.descriptor().message_timestamp.unwrap_or_default();
@@ -420,7 +421,7 @@ async fn delete_older(
                 && write.is_initial()?
             {
                 let mut record = Record::from(write);
-                record.indexes.insert("hidden".to_string(), Value::Bool(true));
+                record.indexes.insert("hidden".to_string(), Value::Bool(false));
                 MessageStore::put(provider, owner, &record).await?;
             } else {
                 EventLog::delete(provider, owner, &message.cid()?).await?;

@@ -1,8 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use vercre_dwn::provider::{MessageStore, Query, Record};
-use vercre_dwn::store::QuerySerializer;
-use vercre_dwn::Cursor;
+use vercre_dwn::store::{Cursor, QuerySerializer};
 
 use super::ProviderImpl;
 use crate::store::NAMESPACE;
@@ -20,6 +19,8 @@ impl MessageStore for ProviderImpl {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
         let sql = query.serialize();
+        println!("{sql}");
+
         let mut response = self.db.query(sql).await?;
         let messages: Vec<Record> = response.take(0)?;
 

@@ -21,7 +21,7 @@ use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::store::{Record, RecordType};
-use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Result, SizeRange};
+use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Range, Result};
 
 /// Process query message.
 ///
@@ -269,7 +269,7 @@ pub struct RuleSet {
     /// If $size is set, the record size in bytes must be within the limits.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$size")]
-    pub size: Option<SizeRange>,
+    pub size: Option<Range<usize>>,
 
     /// Tags for this protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]
