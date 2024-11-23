@@ -17,9 +17,7 @@ pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub(crate) use self::write::{earliest_and_latest, existing_entries};
-pub use self::write::{
-    DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol,
-};
+pub use self::write::{DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol};
 pub use crate::data::DataStream;
 use crate::store::QuerySerializer;
 use crate::{utils, Quota, Range, Result};

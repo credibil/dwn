@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::endpoint::Message;
+use crate::messages::{self, MessagesFilter};
 use crate::protocols::{self, ProtocolsFilter};
 use crate::records::{self, RecordsFilter};
 use crate::{Descriptor, Interface, Method, Quota, Range, Result};
@@ -149,6 +150,9 @@ pub enum Query {
 
     /// Protocols query.
     Protocols(ProtocolsQuery),
+
+    /// Messages query.
+    Messages(MessagesQuery),
 }
 
 impl QuerySerializer for Query {
@@ -158,7 +162,73 @@ impl QuerySerializer for Query {
         match self {
             Self::Records(query) => query.serialize(),
             Self::Protocols(query) => query.serialize(),
+            Self::Messages(query) => query.serialize(),
         }
+    }
+}
+
+/// `ProtocolsQuery` use a builder to simplify the process of creating
+/// `MessageStore` queries.
+#[derive(Clone, Debug, Default)]
+pub struct ProtocolsQuery {
+    /// Filter records by `protocol`.
+    pub protocol: Option<String>,
+
+    /// Filter records by by their `published` status.
+    pub published: Option<bool>,
+}
+
+impl ProtocolsQuery {
+    #[must_use]
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    #[must_use]
+    pub(crate) const fn published(mut self, published: bool) -> Self {
+        self.published = Some(published);
+        self
+    }
+
+    pub(crate) fn build(&self) -> Query {
+        Query::Protocols(self.clone())
+    }
+}
+
+impl From<ProtocolsFilter> for ProtocolsQuery {
+    fn from(filter: ProtocolsFilter) -> Self {
+        Self::new().protocol(filter.protocol)
+    }
+}
+
+impl QuerySerializer for ProtocolsQuery {
+    type Output = String;
+
+    fn serialize(&self) -> Self::Output {
+        let mut sql = format!(
+            "SELECT * FROM message
+            WHERE descriptor.interface = '{interface}'
+            AND descriptor.method = '{method}'\n",
+            interface = Interface::Protocols,
+            method = Method::Configure
+        );
+
+        if let Some(protocol) = &self.protocol {
+            sql.push_str(&format!("AND descriptor.definition.protocol = '{protocol}'\n"));
+        }
+
+        if let Some(published) = &self.published {
+            sql.push_str(&format!("AND descriptor.definition.published = {published}\n"));
+        }
+
+        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE DESC");
+        sql
     }
 }
 
@@ -209,7 +279,7 @@ impl Default for RecordsQuery {
             method: Some(Method::Write),
             archived: Some(false),
             sort: Some(sort),
-            
+
             record_id: None,
             parent_id: None,
             context_id: None,
@@ -415,67 +485,48 @@ impl QuerySerializer for RecordsQuery {
     }
 }
 
-/// `RecordsQuery` use a builder to simplify the process of creating
-/// `MessageStore` queries.
+/// `MessagesQuery` use a builder to simplify the process of creating
+/// `EventStore` queries.
 #[derive(Clone, Debug, Default)]
-pub struct ProtocolsQuery {
-    /// Filter records by `protocol`.
-    pub protocol: Option<String>,
-
-    /// Filter records by by their `published` status.
-    pub published: Option<bool>,
+pub struct MessagesQuery {
+    filters: Vec<MessagesFilter>,
 }
 
-impl ProtocolsQuery {
+impl MessagesQuery {
     #[must_use]
     pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    #[must_use]
-    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
-        self.protocol = Some(protocol.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) const fn published(mut self, published: bool) -> Self {
-        self.published = Some(published);
-        self
-    }
-
     pub(crate) fn build(&self) -> Query {
-        Query::Protocols(self.clone())
+        Query::Messages(self.clone())
     }
 }
 
-impl From<ProtocolsFilter> for ProtocolsQuery {
-    fn from(filter: ProtocolsFilter) -> Self {
-        Self::new().protocol(filter.protocol)
+impl From<messages::Query> for MessagesQuery {
+    fn from(query: messages::Query) -> Self {
+        let mut mq = Self::new();
+        mq.filters = query.descriptor.filters;
+        mq
     }
 }
 
-impl QuerySerializer for ProtocolsQuery {
+impl QuerySerializer for MessagesQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let mut sql = format!(
-            "SELECT * FROM message
-            WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'\n",
-            interface = Interface::Protocols,
-            method = Method::Configure
-        );
+        let mut sql = "SELECT * FROM event_log ".to_string();
 
-        if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.definition.protocol = '{protocol}'\n"));
+        for filter in &self.filters {
+            if sql.is_empty() {
+                sql.push_str("WHERE\n");
+            } else {
+                sql.push_str("OR\n");
+            }
+            sql.push_str(&format!("({filter})", filter = QuerySerializer::serialize(filter)));
         }
 
-        if let Some(published) = &self.published {
-            sql.push_str(&format!("AND descriptor.definition.published = {published}\n"));
-        }
-
-        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE DESC");
+        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE ASC");
         sql
     }
 }

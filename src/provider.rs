@@ -165,7 +165,7 @@ pub trait EventLog: Send + Sync {
     /// is a `message_cid`.
     ///
     /// Returns an array of `message_cid`s that represent the events.
-    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Event>, Cursor)>;
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Cursor)>;
 
     /// Deletes event for the specified `message_cid`.
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()>;

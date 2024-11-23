@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use vercre_dwn::event::{Event, SubscribeFilter, Subscriber};
 use vercre_dwn::provider::{EventLog, EventStream};
-use vercre_dwn::store::Cursor;
+use vercre_dwn::store::{Cursor, Query, QuerySerializer};
 
 use super::ProviderImpl;
 use crate::store::NAMESPACE;
@@ -28,8 +28,8 @@ impl EventLog for ProviderImpl {
         todo!()
     }
 
-    async fn query(&self, owner: &str, sql: &str) -> Result<(Vec<Event>, Cursor)> {
-        let sql = format!("SELECT * FROM {TABLE} {sql}");
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Cursor)> {
+        let sql = query.serialize();
         let mut response = self.db.query(&sql).await?;
         let events: Vec<Event> = response.take(0)?;
         Ok((events, Cursor::default()))

@@ -21,11 +21,7 @@ pub(crate) async fn handle(
     ctx: &Context, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     query.authorize(ctx)?;
-
     let entries = fetch_config(&ctx.owner, query.descriptor.filter, provider).await?;
-
-    // TODO: pagination & sorting
-    // TODO: return errors in Reply
 
     Ok(Reply {
         status: Status {

@@ -233,7 +233,7 @@ impl QueryBuilder {
 
     /// Determines which date to use when sorting query results.
     #[must_use]
-    pub fn date_sort(mut self, date_sort: Sort) -> Self {
+    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
         self.date_sort = Some(date_sort);
         self
     }

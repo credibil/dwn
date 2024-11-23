@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub use self::query::{Query, QueryBuilder, QueryReply};
 pub use self::read::{Read, ReadBuilder, ReadReply};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
+use crate::store::QuerySerializer;
 use crate::{Interface, Method, Range};
 
 /// `Messages` filter.
@@ -33,8 +34,10 @@ pub struct MessagesFilter {
     pub message_timestamp: Option<Range<String>>,
 }
 
-impl MessagesFilter {
-    fn to_sql(&self) -> String {
+impl QuerySerializer for MessagesFilter {
+    type Output = String;
+
+    fn serialize(&self) -> Self::Output {
         let mut sql = String::from("1=1\n");
 
         if let Some(interface) = &self.interface {
