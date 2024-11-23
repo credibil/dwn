@@ -8,6 +8,7 @@ use vercre_dwn::{Interface, Method, Quota};
 
 use crate::QuerySerializer;
 
+/// Serialize a supported DWN query to Surreal SQL.
 impl QuerySerializer for Query {
     type Output = String;
 
@@ -20,6 +21,7 @@ impl QuerySerializer for Query {
     }
 }
 
+/// Serialize `MessagesQuery` to Surreal SQL.
 impl QuerySerializer for MessagesQuery {
     type Output = String;
 
@@ -40,6 +42,7 @@ impl QuerySerializer for MessagesQuery {
     }
 }
 
+/// Serialize `MessagesFilter` to Surreal SQL.
 impl QuerySerializer for MessagesFilter {
     type Output = String;
 
@@ -68,6 +71,7 @@ impl QuerySerializer for MessagesFilter {
     }
 }
 
+/// Serialize `ProtocolsQuery` to Surreal SQL.
 impl QuerySerializer for ProtocolsQuery {
     type Output = String;
 
@@ -93,6 +97,7 @@ impl QuerySerializer for ProtocolsQuery {
     }
 }
 
+/// Serialize `RecordsQuery` to Surreal SQL.
 impl QuerySerializer for RecordsQuery {
     type Output = String;
 
@@ -182,6 +187,7 @@ impl QuerySerializer for RecordsQuery {
     }
 }
 
+/// Serialize `RecordsFilter` to Surreal SQL.
 impl QuerySerializer for RecordsFilter {
     type Output = String;
 
@@ -278,6 +284,23 @@ impl QuerySerializer for RecordsFilter {
     }
 }
 
+/// Serialize `TagFilter` to Surreal SQL.
+impl QuerySerializer for TagFilter {
+    type Output = String;
+
+    fn serialize(&self) -> Self::Output {
+        match self {
+            Self::StartsWith(value) => format!("LIKE '{value}%'"),
+            Self::Range(range) => {
+                let min = range.min.unwrap_or(0);
+                let max = range.max.unwrap_or(usize::MAX);
+                format!("BETWEEN {min} AND {max}")
+            }
+            Self::Equal(value) => format!("= '{value}'"),
+        }
+    }
+}
+
 fn one_or_many(field: &str, clause: &Quota<String>) -> String {
     match clause {
         Quota::One(value) => {
@@ -312,22 +335,6 @@ fn quota(field: &str, clause: &Quota<String>) -> String {
             sql.push_str(")\n");
 
             sql
-        }
-    }
-}
-
-impl QuerySerializer for TagFilter {
-    type Output = String;
-
-    fn serialize(&self) -> Self::Output {
-        match self {
-            Self::StartsWith(value) => format!("LIKE '{value}%'"),
-            Self::Range(range) => {
-                let min = range.min.unwrap_or(0);
-                let max = range.max.unwrap_or(usize::MAX);
-                format!("BETWEEN {min} AND {max}")
-            }
-            Self::Equal(value) => format!("= '{value}'"),
         }
     }
 }
