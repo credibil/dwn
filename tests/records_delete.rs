@@ -7,6 +7,7 @@ use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{DeleteBuilder, QueryBuilder, RecordsFilter, WriteBuilder, WriteData};
+use vercre_dwn::store::Pagination;
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
@@ -41,8 +42,17 @@ async fn delete_record() {
         record_id: Some(write.record_id.clone()),
         ..RecordsFilter::default()
     };
-    let query =
-        QueryBuilder::new().filter(filter).build(&alice_keyring).await.expect("should find write");
+    let pagination = Pagination {
+        limit: Some(1),
+        offset: Some(0),
+        cursor: None,
+    };
+    let query = QueryBuilder::new()
+        .filter(filter)
+        .pagination(pagination)
+        .build(&alice_keyring)
+        .await
+        .expect("should find write");
     let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 

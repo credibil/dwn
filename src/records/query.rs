@@ -48,11 +48,8 @@ pub(crate) async fn handle(
     }
 
     // get the latest active `RecordsWrite` records
-    let mut db_query = RecordsQuery::from(filter).archived(Some(false));
-    if let Some(sort) = &query.descriptor.date_sort {
-        db_query = db_query.sort(sort.clone());
-    }
-    let (records, _) = MessageStore::query(provider, owner, &db_query.build()).await?;
+    let rq = RecordsQuery::from(query).build();
+    let (records, _) = MessageStore::query(provider, owner, &rq).await?;
 
     // short-circuit when no records found
     if records.is_empty() {
@@ -201,17 +198,12 @@ pub struct QueryDescriptor {
     pub pagination: Option<Pagination>,
 }
 
-// export enum DateSort {
-//   CreatedAscending = 'createdAscending',
-//   CreatedDescending = 'createdDescending',
-//   PublishedAscending = 'publishedAscending',
-//   PublishedDescending = 'publishedDescending'
-// }
-
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct QueryBuilder {
     filter: RecordsFilter,
+    date_sort: Option<Sort>,
+    pagination: Option<Pagination>,
     message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
@@ -236,6 +228,20 @@ impl QueryBuilder {
     #[must_use]
     pub fn filter(mut self, filter: RecordsFilter) -> Self {
         self.filter = filter;
+        self
+    }
+
+    /// Determines which date to use when sorting query results.
+    #[must_use]
+    pub fn date_sort(mut self, date_sort: Sort) -> Self {
+        self.date_sort = Some(date_sort);
+        self
+    }
+
+    /// Sets the limit (size) and offset of the resultset pagination cursor.
+    #[must_use]
+    pub fn pagination(mut self, pagination: Pagination) -> Self {
+        self.pagination = Some(pagination);
         self
     }
 
@@ -286,8 +292,8 @@ impl QueryBuilder {
                 message_timestamp: self.message_timestamp,
             },
             filter: self.filter.normalize()?,
-            date_sort: None,
-            pagination: None,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
         };
 
         let authorization = if self.authorize.unwrap_or(true) {

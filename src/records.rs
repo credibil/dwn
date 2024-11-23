@@ -12,15 +12,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
+pub use self::delete::{Delete, DeleteBuilder};
 pub use self::query::{Query, QueryBuilder};
-pub use self::read::{Read, ReadBuilder, ReadReply};
+pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub(crate) use self::write::{earliest_and_latest, existing_entries};
 pub use self::write::{
-    DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
+    DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol,
 };
 pub use crate::data::DataStream;
+use crate::store::QuerySerializer;
 use crate::{utils, Quota, Range, Result};
 
 // TODO: add builder for RecordsFilter
@@ -112,8 +113,12 @@ impl RecordsFilter {
 
         Ok(filter)
     }
+}
 
-    pub(crate) fn to_sql(&self) -> String {
+impl QuerySerializer for RecordsFilter {
+    type Output = String;
+
+    fn serialize(&self) -> Self::Output {
         let min_date = &DateTime::<Utc>::MIN_UTC.to_rfc3339();
         let max_date = &Utc::now().to_rfc3339();
 

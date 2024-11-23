@@ -164,7 +164,7 @@ impl QuerySerializer for Query {
 
 /// `RecordsQuery` use a builder to simplify the process of creating
 /// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RecordsQuery {
     /// Filter records by `method`.
     pub method: Option<Method>,
@@ -193,25 +193,40 @@ pub struct RecordsQuery {
     /// Filter records by `archived`.
     pub archived: Option<bool>,
 
-    /// Sort filter results.
-    pub sort: Option<Sort>,
-
     filter: Option<RecordsFilter>,
+    sort: Option<Sort>,
+    pagination: Option<Pagination>,
+}
+
+impl Default for RecordsQuery {
+    fn default() -> Self {
+        let sort = Sort {
+            message_timestamp: Some(Direction::Descending),
+            ..Sort::default()
+        };
+
+        Self {
+            method: Some(Method::Write),
+            archived: Some(false),
+            sort: Some(sort),
+            
+            record_id: None,
+            parent_id: None,
+            context_id: None,
+            recipient: None,
+            protocol: None,
+            protocol_path: None,
+            date_created: None,
+            filter: None,
+            pagination: None,
+        }
+    }
 }
 
 impl RecordsQuery {
     #[must_use]
     pub(crate) fn new() -> Self {
-        let sort = Sort {
-            message_timestamp: Some(Direction::Descending),
-            ..Sort::default()
-        };
-        Self {
-            method: Some(Method::Write),
-            archived: Some(false),
-            sort: Some(sort),
-            ..Self::default()
-        }
+        Self::default()
     }
 
     #[must_use]
@@ -291,11 +306,23 @@ impl RecordsQuery {
     }
 }
 
-impl From<RecordsFilter> for RecordsQuery {
-    fn from(filter: RecordsFilter) -> Self {
-        let mut query = Self::new();
-        query.filter = Some(filter);
-        query
+impl From<records::Query> for RecordsQuery {
+    fn from(query: records::Query) -> Self {
+        Self {
+            filter: Some(query.descriptor.filter),
+            sort: query.descriptor.date_sort,
+            pagination: query.descriptor.pagination,
+            ..Self::default()
+        }
+    }
+}
+
+impl From<records::Read> for RecordsQuery {
+    fn from(read: records::Read) -> Self {
+        Self {
+            filter: Some(read.descriptor.filter),
+            ..Self::default()
+        }
     }
 }
 
@@ -356,7 +383,7 @@ impl QuerySerializer for RecordsQuery {
 
         // include `RecordsFilter` sql
         if let Some(filter) = &self.filter {
-            sql.push_str(&format!("{}\n", filter.to_sql()));
+            sql.push_str(&format!("{}\n", QuerySerializer::serialize(filter)));
         }
 
         // sorting
@@ -371,7 +398,17 @@ impl QuerySerializer for RecordsQuery {
             if let Some(dir) = &sort.message_timestamp {
                 fields.push(format!("descriptor.messageTimestamp COLLATE {dir}"));
             }
-            sql.push_str(&format!("ORDER BY {sort}", sort = fields.join(",")));
+            sql.push_str(&format!("ORDER BY {sort}\n", sort = fields.join(",")));
+        }
+
+        if let Some(pagination) = &self.pagination {
+            if let Some(limit) = pagination.limit {
+                sql.push_str(&format!("LIMIT {limit} "));
+            }
+
+            if let Some(offset) = pagination.offset {
+                sql.push_str(&format!("START {offset}\n"));
+            }
         }
 
         sql
@@ -504,26 +541,34 @@ impl Display for Direction {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pagination {
-    /// CID of message to start from.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
-
     /// The number of messages to return.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<u64>,
-    // offset: Option<u64>,
+    pub limit: Option<usize>,
+
+    /// The offset from the start of the result set from which to start when
+    /// determining the page of results to return.
+    #[serde(skip)]
+    pub offset: Option<usize>,
+
+    /// Cursor created form the previous page of results.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
 }
 
-/// Pagination cursor.
+/// Pagination cursor containing data from the last entry returned in the
+/// previous page of results.
+///
+/// Message CID ensures result cursor compatibility irrespective of DWN
+/// implementation. Meaning querying with the same cursor yields identical
+/// results regardless of DWN queried.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Cursor {
-    /// Message CID ensures result cursor compatibility irrespective of DWN
-    /// implementation. Thus, query with the same cursor will yield identical
-    /// results, which means any DWN node can return subsequent pages of results
-    /// without data loss.
+    /// Message CID from the last entry in the previous page of results.
     pub message_cid: String,
 
-    /// The number of messages to return.
-    pub value: u64,
+    /// The value from the sort field of the last entry in the previous
+    /// page of results.
+    #[serde(rename = "value")]
+    pub sort_value: String,
 }

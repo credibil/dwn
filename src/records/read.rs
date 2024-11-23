@@ -13,7 +13,7 @@ use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
-use crate::store::{QuerySerializer, RecordsQuery};
+use crate::store::RecordsQuery;
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Read` message.
@@ -24,8 +24,7 @@ pub(crate) async fn handle(
     owner: &str, read: Read, provider: &impl Provider,
 ) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(read.descriptor.filter.clone()).build();
-    
+    let query = RecordsQuery::from(read.clone()).build();
     let (entries, _) = MessageStore::query(provider, owner, &query).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));

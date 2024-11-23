@@ -23,7 +23,7 @@ use crate::{forbidden, Descriptor, Error, Interface, Method, Quota, Result};
 pub(crate) async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
-    let filter = subscribe.descriptor.filter.clone();
+    let mut filter = subscribe.descriptor.filter.clone();
 
     // authorize messages subscribeing for private records
     if !filter.published.unwrap_or_default() {
@@ -36,21 +36,17 @@ pub(crate) async fn handle(
 
         // non-owner queries
         if author != owner {
-            let mut filter = subscribe.descriptor.filter.clone();
-
-            // when subscribe.author is in filter.author or filter.author is empty/None,
             filter.author = Some(Quota::One(author.clone()));
-
-            // when subscribe.author is in filter.recipient || filter.recipient is
-            // empty/None, set filter.recipient = subscribe.author
             filter.recipient = Some(Quota::One(author));
+        }
 
-            // when filter.protocol_role ??
+        // when filter.protocol_role is set, set method to be RecordsWrite or RecordsDelete
+        if subscribe.authorization.as_ref().unwrap().jws_payload()?.protocol_role.is_some() {
+            // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
         }
     }
 
     let message_cid = subscribe.cid()?;
-    let filter = subscribe.descriptor.filter.clone();
     let subscriber =
         EventStream::subscribe(provider, owner, &message_cid, SubscribeFilter::Records(filter))
             .await?;
