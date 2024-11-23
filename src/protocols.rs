@@ -3,6 +3,8 @@
 pub mod configure;
 pub mod query;
 
+use serde::{Deserialize, Serialize};
+
 pub use self::configure::{
     Action, ActionRule, Actor, Configure, ConfigureBuilder, ConfigureReply, Definition,
     ProtocolType, RuleSet,
@@ -20,3 +22,11 @@ pub const GRANT_PATH: &str = "grant";
 
 ///The protocol path of the `revocation` record.
 pub const REVOCATION_PATH: &str = "grant/revocation";
+
+/// Protocol filter.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolsFilter {
+    /// Protocol matching the specified protocol.
+    pub protocol: String,
+}

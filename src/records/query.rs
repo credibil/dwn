@@ -13,7 +13,8 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{protocol, Grant};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::{forbidden, Cursor, Descriptor, Error, Interface, Method, Pagination, Quota, Result};
+use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
+use crate::{forbidden, Descriptor, Error, Interface, Method, Quota, Result};
 
 /// Process `Query` message.
 ///
@@ -46,20 +47,20 @@ pub(crate) async fn handle(
         }
     }
 
-    // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}' 
-        AND descriptor.method = '{method}'
-        {filter_sql}
-        AND hidden = false
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-        filter_sql = filter.to_sql(),
-    );
-    let (records, _) = MessageStore::query(provider, owner, &sql).await?;
+    // get the latest active `RecordsWrite` records
+    let rq = RecordsQuery::from(query).build();
+    let (records, _) = MessageStore::query(provider, owner, &rq).await?;
+
+    // short-circuit when no records found
+    if records.is_empty() {
+        return Ok(Reply {
+            status: Status {
+                code: StatusCode::OK.as_u16(),
+                detail: None,
+            },
+            body: None,
+        });
+    }
 
     // build reply
     let mut entries = vec![];
@@ -67,20 +68,8 @@ pub(crate) async fn handle(
         let write: Write = record.try_into()?;
 
         let initial_write = if write.is_initial()? {
-            let sql = format!(
-                "
-                WHERE descriptor.interface = '{interface}' 
-                AND descriptor.method = '{method}'
-                AND recordId = '{record_id}'
-                ORDER BY descriptor.messageTimestamp DESC
-                ",
-                interface = Interface::Records,
-                method = Method::Write,
-                record_id = &write.record_id,
-                // AND hidden = false
-            );
-
-            let (records, _) = MessageStore::query(provider, owner, &sql).await?;
+            let query = RecordsQuery::new().record_id(&write.record_id).archived(None).build();
+            let (records, _) = MessageStore::query(provider, owner, &query).await?;
             let mut initial_write: Write = (&records[0]).try_into()?;
             initial_write.encoded_data = None;
             Some(initial_write)
@@ -90,8 +79,6 @@ pub(crate) async fn handle(
 
         entries.push(QueryReplyEntry { write, initial_write });
     }
-  
-    let entries = if entries.is_empty() { None } else { Some(entries) };
 
     Ok(Reply {
         status: Status {
@@ -99,7 +86,7 @@ pub(crate) async fn handle(
             detail: None,
         },
         body: Some(QueryReply {
-            entries,
+            entries: Some(entries),
             cursor: None,
         }),
     })
@@ -204,24 +191,19 @@ pub struct QueryDescriptor {
 
     /// Specifies how dates should be sorted.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_sort: Option<String>,
+    pub date_sort: Option<Sort>,
 
     /// The pagination cursor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pagination: Option<Pagination>,
 }
 
-// export enum DateSort {
-//   CreatedAscending = 'createdAscending',
-//   CreatedDescending = 'createdDescending',
-//   PublishedAscending = 'publishedAscending',
-//   PublishedDescending = 'publishedDescending'
-// }
-
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct QueryBuilder {
     filter: RecordsFilter,
+    date_sort: Option<Sort>,
+    pagination: Option<Pagination>,
     message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
@@ -246,6 +228,20 @@ impl QueryBuilder {
     #[must_use]
     pub fn filter(mut self, filter: RecordsFilter) -> Self {
         self.filter = filter;
+        self
+    }
+
+    /// Determines which date to use when sorting query results.
+    #[must_use]
+    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
+        self.date_sort = Some(date_sort);
+        self
+    }
+
+    /// Sets the limit (size) and offset of the resultset pagination cursor.
+    #[must_use]
+    pub fn pagination(mut self, pagination: Pagination) -> Self {
+        self.pagination = Some(pagination);
         self
     }
 
@@ -296,8 +292,8 @@ impl QueryBuilder {
                 message_timestamp: self.message_timestamp,
             },
             filter: self.filter.normalize()?,
-            date_sort: None,
-            pagination: None,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
         };
 
         let authorization = if self.authorize.unwrap_or(true) {

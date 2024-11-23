@@ -11,7 +11,8 @@ use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
-use crate::{schema, Cursor, Descriptor, Error, Interface, Method, Result};
+use crate::store::{Cursor, MessagesQuery};
+use crate::{schema, Descriptor, Error, Interface, Method, Result};
 
 /// Handle a query message.
 ///
@@ -22,25 +23,10 @@ pub(crate) async fn handle(
 ) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;
 
-    let mut filter_sql = String::new();
-    for filter in query.descriptor.filters {
-        if filter_sql.is_empty() {
-            filter_sql.push_str("WHERE\n");
-        } else {
-            filter_sql.push_str("OR\n");
-        }
-        filter_sql.push_str(&format!("({filter})", filter = filter.to_sql()));
-    }
-
-    let sql = format!(
-        "
-        {filter_sql}
-        ORDER BY descriptor.messageTimestamp ASC
-        "
-    );
-
     // TODO: use pagination cursor
-    let (events, _) = EventLog::query(provider, owner, &sql).await?;
+    let query = MessagesQuery::from(query).build();
+    let (events, _) = EventLog::query(provider, owner, &query).await?;
+
     let events = events.iter().map(|e| e.message_cid.clone()).collect::<Vec<String>>();
     let entries = if events.is_empty() { None } else { Some(events) };
 

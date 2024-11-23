@@ -14,16 +14,17 @@ use crate::protocols::{
 };
 use crate::provider::MessageStore;
 use crate::records::{self, Delete, Query, Subscribe, Write};
-use crate::{forbidden, schema, utils, Interface, Method, Result};
+use crate::store::{ProtocolsQuery, RecordsQuery};
+use crate::{forbidden, schema, utils, Range, Result};
 
-enum Record {
+enum Entry {
     Write(Write),
     Query(Query),
     Subscribe(Subscribe),
     Delete(Delete),
 }
 
-impl Record {
+impl Entry {
     fn authorization(&self) -> Authorization {
         match self {
             Self::Write(write) => write.authorization.clone(),
@@ -113,12 +114,10 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
     // build record chain
     let record_chain = if initial.is_some() {
         record_chain(owner, &write.record_id, store).await?
+    } else if let Some(parent_id) = &write.descriptor.parent_id {
+        record_chain(owner, parent_id, store).await?
     } else {
-        if let Some(parent_id) = &write.descriptor.parent_id {
-            record_chain(owner, parent_id, store).await?
-        } else {
-            vec![]
-        }
+        vec![]
     };
 
     let Some(protocol_path) = &write.descriptor.protocol_path else {
@@ -128,7 +127,7 @@ pub async fn permit_write(owner: &str, write: &Write, store: &impl MessageStore)
         return Err(forbidden!("no rule set defined for protocol path"));
     };
 
-    verify_actions(owner, &Record::Write(write.clone()), &rule_set, &record_chain, store).await?;
+    verify_actions(owner, &Entry::Write(write.clone()), &rule_set, &record_chain, store).await?;
 
     Ok(())
 }
@@ -155,7 +154,7 @@ pub async fn permit_read(owner: &str, query: &Query, store: &impl MessageStore) 
         return Err(forbidden!("no rule set defined for protocol path"));
     };
 
-    verify_actions(owner, &Record::Query(query.clone()), &rule_set, &[], store).await?;
+    verify_actions(owner, &Entry::Query(query.clone()), &rule_set, &[], store).await?;
 
     Ok(())
 }
@@ -182,7 +181,7 @@ pub async fn permit_subscribe(
         return Err(forbidden!("no rule set defined for protocol path"));
     };
 
-    verify_actions(owner, &Record::Subscribe(subscribe.clone()), &rule_set, &[], store).await?;
+    verify_actions(owner, &Entry::Subscribe(subscribe.clone()), &rule_set, &[], store).await?;
 
     Ok(())
 }
@@ -209,7 +208,7 @@ pub async fn permit_delete(
     };
     let record_chain = record_chain(owner, &delete.descriptor.record_id, store).await?;
 
-    verify_actions(owner, &Record::Delete(delete.clone()), &rule_set, &record_chain, store).await?;
+    verify_actions(owner, &Entry::Delete(delete.clone()), &rule_set, &record_chain, store).await?;
 
     Ok(())
 }
@@ -312,21 +311,10 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
         return Err(forbidden!("missing protocol"));
     };
 
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.protocol = '{protocol}'
-        AND recordId = '{parent_id}'
-        AND lastestBase = true
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-
-    let (records, _) = store.query(owner, &sql).await?;
+    let query = RecordsQuery::new().record_id(parent_id).protocol(protocol).build();
+    let (records, _) = store.query(owner, &query).await?;
     if records.is_empty() {
-        return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
+        return Err(forbidden!("unable to find Write Entry for parent_id {parent_id}"));
     }
 
     let Some(parent) = &records[0].as_write() else {
@@ -368,31 +356,23 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
     };
 
     // if this is not the root record, add a prefix filter to the query
-    let mut context = String::new();
+    let mut query = RecordsQuery::new()
+        .protocol(protocol)
+        .protocol_path(protocol_path)
+        .add_recipient(recipient);
+
     if let Some(parent_context) =
         write.context_id.as_ref().and_then(|context_id| context_id.rsplit_once('/').map(|x| x.0))
     {
-        context =
-            format!("AND contextId BETWEEN '{parent_context}' AND '{parent_context}\u{ffff}'");
+        query = query.context_id(Range::new(
+            Some(parent_context.to_string()),
+            Some(format!("{parent_context}\u{ffff}")),
+        ));
     };
 
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.protocol = '{protocol}'
-        AND descriptor.protocolPath = '{protocol_path}'
-        AND recipient = '{recipient}'
-        AND lastestBase = true
-        {context}
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-
-    let (messages, _) = store.query(owner, &sql).await?;
+    let (messages, _) = store.query(owner, &query.build()).await?;
     // if records.is_empty() {
-    //     return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
+    //     return Err(forbidden!("unable to find Write Entry for parent_id {parent_id}"));
     // }
 
     for message in messages {
@@ -437,32 +417,22 @@ async fn verify_invoked_role(
         return Err(forbidden!("unable verify role without `context_id`"));
     }
 
+    let mut query =
+        RecordsQuery::new().protocol(protocol).protocol_path(&protocol_role).add_recipient(author);
+
     // `context_id` prefix filter
-    let context_prefix = if segment_count > 0 {
+    if segment_count > 0 {
         // context_id segment count is never shorter than the role path count.
         let context_id = context_id.unwrap_or_default();
         let context_id_segments: Vec<&str> = context_id.split('/').collect();
         let prefix = context_id_segments[..segment_count].join("/");
-        format!("AND contextId BETWEEN '{prefix}' AND '{prefix}\u{ffff}'")
-    } else {
-        String::new()
-    };
 
+        query = query
+            .context_id(Range::new(Some(prefix.to_string()), Some(format!("{prefix}\u{ffff}"))));
+    }
     // fetch the invoked role record
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND protocol = '{protocol}'
-        AND protocolPath = '{protocol_role}'
-        AND recipient = '{author}'
-        {context_prefix}
-        AND lastestBase = true
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-    let (records, _) = store.query(owner, &sql).await?;
+    let (records, _) = store.query(owner, &query.build()).await?;
+
     if records.is_empty() {
         return Err(forbidden!("unable to find records for {protocol_role}"));
     }
@@ -518,7 +488,7 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
 
 // Verifies the given message is authorized by one of the action rules in the given protocol rule set.
 async fn verify_actions(
-    owner: &str, record: &Record, rule_set: &RuleSet, record_chain: &[Write],
+    owner: &str, record: &Entry, rule_set: &RuleSet, record_chain: &[Write],
     store: &impl MessageStore,
 ) -> Result<()> {
     let author = record.authorization().author()?;
@@ -557,7 +527,7 @@ async fn verify_actions(
 
         // actor validation
         if rule.who == Some(Actor::Recipient) && rule.of.is_none() {
-            let message = if let Record::Write(write) = &record {
+            let message = if let Entry::Write(write) = &record {
                 write
             } else {
                 // the incoming message must be a `RecordsDelete` because only
@@ -623,22 +593,13 @@ async fn protocol_definition(
     }
 
     // fetch the corresponding protocol definition
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.definition.protocol = '{protocol_uri}'
-        ",
-        interface = Interface::Protocols,
-        method = Method::Configure,
-    );
-
-    let (messages, _) = store.query(owner, &sql).await?;
-    if messages.is_empty() {
+    let query = ProtocolsQuery::new().protocol(&protocol_uri).build();
+    let (protocols, _) = store.query(owner, &query).await?;
+    if protocols.is_empty() {
         return Err(forbidden!("unable to find protocol definition for {protocol_uri}"));
     }
 
-    let Some(protocol) = messages[0].as_configure() else {
+    let Some(protocol) = protocols[0].as_configure() else {
         return Err(forbidden!("expected `ProtocolsConfigure` message"));
     };
     Ok(protocol.descriptor.definition.clone())
@@ -686,10 +647,10 @@ async fn record_chain(
 //
 // N.B. keep in mind an author's 'write' access may be revoked.
 async fn allowed_actions(
-    owner: &str, record: &Record, store: &impl MessageStore,
+    owner: &str, record: &Entry, store: &impl MessageStore,
 ) -> Result<Vec<Action>> {
     match record {
-        Record::Write(write) => {
+        Entry::Write(write) => {
             if write.is_initial()? {
                 return Ok(vec![Action::Create]);
             }
@@ -706,10 +667,10 @@ async fn allowed_actions(
 
             Ok(vec![Action::CoUpdate])
         }
-        Record::Query(_) => Ok(vec![Action::Query]),
+        Entry::Query(_) => Ok(vec![Action::Query]),
         // Method::Read => Ok(vec![Action::Read]),
-        Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
-        Record::Delete(delete) => {
+        Entry::Subscribe(_) => Ok(vec![Action::Subscribe]),
+        Entry::Delete(delete) => {
             let messages =
                 records::existing_entries(owner, &delete.descriptor.record_id, store).await?;
             let (initial, _) = records::earliest_and_latest(&messages).await?;

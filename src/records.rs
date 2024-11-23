@@ -11,16 +11,14 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
+pub use self::delete::{Delete, DeleteBuilder};
 pub use self::query::{Query, QueryBuilder};
-pub use self::read::{Read, ReadBuilder, ReadReply};
+pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub(crate) use self::write::{earliest_and_latest, existing_entries};
-pub use self::write::{
-    DelegatedGrant, Write, WriteBuilder, WriteData, WriteDescriptor, WriteProtocol,
-};
+pub use self::write::{DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol};
 pub use crate::data::DataStream;
-use crate::{utils, DateRange, Quota, Result};
+use crate::{utils, Quota, Range, Result};
 
 // TODO: add builder for RecordsFilter
 
@@ -40,11 +38,11 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipient: Option<Quota<String>>,
 
-    /// Record matching the specified protocol.
+    /// Entry matching the specified protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
 
-    /// Record protocol path.
+    /// Entry protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol_path: Option<String>,
 
@@ -78,7 +76,7 @@ pub struct RecordsFilter {
 
     /// Records with a size within the range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_size: Option<SizeRange>,
+    pub data_size: Option<Range<usize>>,
 
     /// CID of the data.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,15 +84,15 @@ pub struct RecordsFilter {
 
     /// Filter messages created within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<DateRange>,
+    pub date_created: Option<Range<String>>,
 
     /// Filter messages published within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<DateRange>,
+    pub date_published: Option<Range<String>>,
 
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_updated: Option<DateRange>,
+    pub date_updated: Option<Range<String>>,
 }
 
 impl RecordsFilter {
@@ -111,119 +109,6 @@ impl RecordsFilter {
 
         Ok(filter)
     }
-
-    pub(crate) fn to_sql(&self) -> String {
-        let mut sql = String::new();
-
-        // TODO! filter by these after query
-        if let Some(author) = &self.author {
-            sql.push_str(&one_or_many("author", author));
-        }
-
-        if let Some(attester) = &self.attester {
-            sql.push_str(&format!("AND attester = '{attester}'\n"));
-        }
-
-        if let Some(recipient) = &self.recipient {
-            sql.push_str(&one_or_many("descriptor.recipient", recipient));
-        }
-
-        if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
-        }
-
-        if let Some(protocol_path) = &self.protocol_path {
-            sql.push_str(&format!("AND descriptor.protocolPath = '{protocol_path}'\n"));
-        }
-
-        if let Some(published) = &self.published {
-            sql.push_str(&format!("AND descriptor.published = {published}\n"));
-        }
-
-        if let Some(context_id) = &self.context_id {
-            sql.push_str(&format!("AND contextId = '{context_id}'\n"));
-        }
-
-        if let Some(schema) = &self.schema {
-            sql.push_str(&format!("AND descriptor.schema = '{schema}'\n"));
-        }
-
-        if let Some(record_id) = &self.record_id {
-            sql.push_str(&format!("AND recordId = '{record_id}'\n"));
-        }
-
-        if let Some(parent_id) = &self.parent_id {
-            sql.push_str(&format!("AND descriptor.parentId = '{parent_id}'\n"));
-        }
-
-        if let Some(tags) = &self.tags {
-            for (property, filter) in tags {
-                sql.push_str(&format!("AND tags.{property} {}\n", filter.to_sql()));
-            }
-        }
-
-        if let Some(data_format) = &self.data_format {
-            sql.push_str(&format!("AND descriptor.dataFormat = '{data_format}'\n"));
-        }
-
-        if let Some(data_size) = &self.data_size {
-            sql.push_str(&format!(
-                "descriptor.dataSize BETWEEN {min} AND {max}\n",
-                min = data_size.min.unwrap_or(0),
-                max = data_size.max.unwrap_or(usize::MAX)
-            ));
-        }
-
-        if let Some(data_cid) = &self.data_cid {
-            sql.push_str(&format!("AND descriptor.dataCid = '{data_cid}'\n"));
-        }
-
-        if let Some(date_created) = &self.date_created {
-            sql.push_str(&format!(
-                "AND descriptor.dateCreated BETWEEN {from} AND {to}'\n",
-                from = date_created.from,
-                to = date_created.to
-            ));
-        }
-
-        if let Some(date_published) = &self.date_published {
-            sql.push_str(&format!(
-                "AND descriptor.datePublished BETWEEN {from} AND {to}'\n",
-                from = date_published.from,
-                to = date_published.to
-            ));
-        }
-
-        if let Some(date_updated) = &self.date_updated {
-            sql.push_str(&format!(
-                "AND descriptor.dateUpdated BETWEEN {from} AND {to}'\n",
-                from = date_updated.from,
-                to = date_updated.to
-            ));
-        }
-
-        sql.pop(); // remove trailing newline
-        sql
-    }
-}
-
-fn one_or_many(field: &str, clause: &Quota<String>) -> String {
-    match clause {
-        Quota::One(value) => {
-            format!("AND {field} = '{value}'\n")
-        }
-        Quota::Many(values) => {
-            let mut sql = String::new();
-            sql.push_str(&format!("{field}  IN ("));
-            for value in values {
-                sql.push_str(&format!("'{value}',"));
-            }
-            sql.pop(); // remove trailing comma
-            sql.push_str(")\n");
-
-            sql
-        }
-    }
 }
 
 /// Tag filter.
@@ -234,24 +119,10 @@ pub enum TagFilter {
     StartsWith(String),
 
     /// Filter tags by range.
-    Range(SizeRange),
+    Range(Range<usize>),
 
     /// Filter by a specific value.
     Equal(Value),
-}
-
-impl TagFilter {
-    pub(crate) fn to_sql(&self) -> String {
-        match self {
-            Self::StartsWith(value) => format!("LIKE '{value}%'"),
-            Self::Range(range) => {
-                let min = range.min.unwrap_or(0);
-                let max = range.max.unwrap_or(usize::MAX);
-                format!("BETWEEN {min} AND {max}")
-            }
-            Self::Equal(value) => format!("= '{value}'"),
-        }
-    }
 }
 
 impl Default for TagFilter {
@@ -260,15 +131,159 @@ impl Default for TagFilter {
     }
 }
 
-/// Size range.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SizeRange {
-    /// The minimum size.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub min: Option<usize>,
+/// Implement  builder-like behaviour.
+impl RecordsFilter {
+    /// Returns a new [`RecordsFilter`]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    /// The maximum size.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max: Option<usize>,
+    /// Add one or more authors to the filter.
+    #[must_use]
+    pub fn add_author(mut self, author: impl Into<String>) -> Self {
+        match &mut self.author {
+            Some(Quota::Many(existing)) => {
+                existing.push(author.into());
+            }
+            Some(Quota::One(existing)) => {
+                self.author = Some(Quota::Many(vec![existing.clone(), author.into()]));
+            }
+            None => {
+                self.author = Some(Quota::One(author.into()));
+            }
+        }
+        self
+    }
+
+    /// Add an attester to the filter.
+    #[must_use]
+    pub fn attester(mut self, attester: impl Into<String>) -> Self {
+        self.attester = Some(attester.into());
+        self
+    }
+
+    /// Add one or more recipients to the filter.
+    #[must_use]
+    pub fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
+        match &mut self.recipient {
+            Some(Quota::Many(existing)) => {
+                existing.push(recipient.into());
+            }
+            Some(Quota::One(existing)) => {
+                self.recipient = Some(Quota::Many(vec![existing.clone(), recipient.into()]));
+            }
+            None => {
+                self.recipient = Some(Quota::One(recipient.into()));
+            }
+        }
+        self
+    }
+
+    /// Add a protocol to the filter.
+    #[must_use]
+    pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    /// Add a protocol path to the filter.
+    #[must_use]
+    pub fn protocol_path(mut self, protocol_path: impl Into<String>) -> Self {
+        self.protocol_path = Some(protocol_path.into());
+        self
+    }
+
+    /// Add a published flag to the filter.
+    #[must_use]
+    pub fn published(mut self, published: bool) -> Self {
+        self.published = Some(published);
+        self
+    }
+
+    /// Add a context ID to the filter.
+    #[must_use]
+    pub fn context_id(mut self, context_id: impl Into<String>) -> Self {
+        self.context_id = Some(context_id.into());
+        self
+    }
+
+    /// Add a schema to the filter.
+    #[must_use]
+    pub fn schema(mut self, schema: impl Into<String>) -> Self {
+        self.schema = Some(schema.into());
+        self
+    }
+
+    /// Add a record ID to the filter.
+    #[must_use]
+    pub fn record_id(mut self, record_id: impl Into<String>) -> Self {
+        self.record_id = Some(record_id.into());
+        self
+    }
+
+    /// Add a parent ID to the filter.
+    #[must_use]
+    pub fn parent_id(mut self, parent_id: impl Into<String>) -> Self {
+        self.parent_id = Some(parent_id.into());
+        self
+    }
+
+    /// Add a tag to the filter.
+    #[must_use]
+    pub fn add_tag(mut self, key: impl Into<String>, value: TagFilter) -> Self {
+        match &mut self.tags {
+            Some(existing) => {
+                existing.insert(key.into(), value);
+            }
+            None => {
+                let mut tags = BTreeMap::new();
+                tags.insert(key.into(), value);
+                self.tags = Some(tags);
+            }
+        }
+        self
+    }
+
+    /// Add a data format to the filter.
+    #[must_use]
+    pub fn data_format(mut self, data_format: impl Into<String>) -> Self {
+        self.data_format = Some(data_format.into());
+        self
+    }
+
+    /// Add a data size to the filter.
+    #[must_use]
+    pub fn data_size(mut self, data_size: Range<usize>) -> Self {
+        self.data_size = Some(data_size);
+        self
+    }
+
+    /// Add a data CID to the filter.
+    #[must_use]
+    pub fn data_cid(mut self, data_cid: impl Into<String>) -> Self {
+        self.data_cid = Some(data_cid.into());
+        self
+    }
+
+    /// Add a date created to the filter.
+    #[must_use]
+    pub fn date_created(mut self, date_created: Range<String>) -> Self {
+        self.date_created = Some(date_created);
+        self
+    }
+
+    /// Add a date published to the filter.
+    #[must_use]
+    pub fn date_published(mut self, date_published: Range<String>) -> Self {
+        self.date_published = Some(date_published);
+        self
+    }
+
+    /// Add a date updated to the filter.
+    #[must_use]
+    pub fn date_updated(mut self, date_updated: Range<String>) -> Self {
+        self.date_updated = Some(date_updated);
+        self
+    }
 }

@@ -11,6 +11,7 @@ use crate::provider::{Keyring, MessageStore};
 use crate::records::{
     self, Delete, Query, Subscribe, Write, WriteBuilder, WriteData, WriteProtocol,
 };
+use crate::store::RecordsQuery;
 use crate::{forbidden, utils, Descriptor, Interface, Method, Result};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -200,21 +201,8 @@ impl Grant {
         }
 
         // Check if grant has been revoked — using latest revocation message
-        let sql = format!(
-            "
-            WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'
-            AND descriptor.parentId = '{parent_id}'
-            AND descriptor.protocolPath = '{REVOCATION_PATH}'
-            AND lastestBase = true
-            ORDER BY descriptor.messageTimestamp DESC
-            ",
-            interface = Interface::Records,
-            method = Method::Write,
-            parent_id = self.id
-        );
-
-        let (messages, _) = store.query(grantor, &sql).await?;
+        let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH).build();
+        let (messages, _) = store.query(grantor, &query).await?;
         let Some(oldest) = messages.first().cloned() else {
             return Err(forbidden!("grant has been revoked"));
         };
@@ -395,7 +383,7 @@ impl GrantBuilder {
 
         // add protocol tag
         let protocol = match &scope.scope_type {
-            ScopeType::Protocols { protocol } | ScopeType::MessageType { protocol } => {
+            ScopeType::Protocols { protocol } | ScopeType::EntryType { protocol } => {
                 protocol.as_ref()
             }
             ScopeType::Records { protocol, .. } => Some(protocol),

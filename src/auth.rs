@@ -76,7 +76,7 @@ pub struct JwsPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permission_grant_id: Option<String>,
 
-    /// Record ID of a permission grant web node `RecordsWrite` with `delegated` set to `true`.
+    /// Entry ID of a permission grant web node `RecordsWrite` with `delegated` set to `true`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_grant_id: Option<String>,
 

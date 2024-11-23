@@ -17,13 +17,14 @@ use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, MessageType, Record, Reply, Status};
+use crate::endpoint::{Context, Message, Reply, Status};
 use crate::event::Event;
 use crate::permissions::{self, protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
-use crate::{data, unexpected, utils, Descriptor, Error, Interface, Method, Result};
+use crate::store::{Entry, EntryType, RecordsQuery};
+use crate::{data, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -63,7 +64,7 @@ pub(crate) async fn handle(
     // ----------------------------------------------------------------
     // TODO: Hidden
     // ----------------------------------------------------------------
-    // **`hidden` is set to true when the 'intial write' HAS NO data**
+    // **`archived` is set to true when the 'intial write' HAS NO data**
     //
     // It prevents querying of initial writes without data, thus preventing users
     // from accessing private data they wouldn't ordinarily be able to access.
@@ -84,8 +85,8 @@ pub(crate) async fn handle(
         (write, StatusCode::NO_CONTENT)
     };
 
-    let mut record = Record::from(&write);
-    record.indexes.insert("hidden".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
+    let mut record = Entry::from(&write);
+    record.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &record).await?;
@@ -145,18 +146,18 @@ pub struct Write {
     /// The message authorization.
     pub authorization: Authorization,
 
-    /// Record CID
+    /// Entry CID
     pub record_id: String,
 
-    /// Record context.
+    /// Entry context.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_id: Option<String>,
 
-    /// Record attestation.
+    /// Entry attestation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attestation: Option<Jws>,
 
-    /// Record encryption.
+    /// Entry encryption.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encryption: Option<EncryptionProperty>,
 
@@ -205,13 +206,13 @@ impl Message for Write {
 #[allow(clippy::module_name_repetitions)]
 pub struct WriteReply;
 
-impl From<&Write> for Record {
+impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         let mut save = write.clone();
         save.encoded_data = None;
 
         let mut record = Self {
-            message: MessageType::RecordsWrite(save),
+            message: EntryType::Write(save),
             indexes: Map::new(),
         };
 
@@ -238,23 +239,23 @@ impl From<&Write> for Record {
     }
 }
 
-impl TryFrom<Record> for Write {
+impl TryFrom<Entry> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: Record) -> Result<Self> {
+    fn try_from(record: Entry) -> Result<Self> {
         match record.message {
-            MessageType::RecordsWrite(write) => Ok(write),
+            EntryType::Write(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
 }
 
-impl TryFrom<&Record> for Write {
+impl TryFrom<&Entry> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: &Record) -> Result<Self> {
+    fn try_from(record: &Entry) -> Result<Self> {
         match &record.message {
-            MessageType::RecordsWrite(write) => Ok(write.clone()),
+            EntryType::Write(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
@@ -619,7 +620,7 @@ pub struct WriteDescriptor {
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Record's protocol.
+    /// Entry's protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
 
@@ -692,14 +693,14 @@ pub struct WriteBuilder {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteProtocol {
-    /// Record protocol.
+    /// Entry protocol.
     pub protocol: String,
 
     /// Protocol path.
     pub protocol_path: String,
 }
 
-/// Record data can be raw bytes or CID.
+/// Entry data can be raw bytes or CID.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum WriteData {
@@ -841,7 +842,7 @@ impl WriteBuilder {
         self
     }
 
-    /// Record data as a CID or raw bytes.
+    /// Entry data as a CID or raw bytes.
     #[must_use]
     pub fn data(mut self, data: WriteData) -> Self {
         self.data = data;
@@ -1042,19 +1043,12 @@ pub(crate) async fn existing_entries(
 ) -> Result<Vec<Write>> {
     // N.B. only use `interface` in order to to get both `RecordsWrite` and
     //`RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND recordId = '{record_id}'
-        ORDER BY descriptor.messageTimestamp ASC
-        ",
-        interface = Interface::Records,
-    );
-    let (messages, _) = store.query(owner, &sql).await.unwrap();
+    let query = RecordsQuery::new().record_id(record_id).method(None).build();
+    let (records, _) = store.query(owner, &query).await.unwrap();
 
     let mut writes = Vec::new();
-    for message in messages {
-        writes.push(Write::try_from(message)?);
+    for record in records {
+        writes.push(Write::try_from(record)?);
     }
 
     Ok(writes)
@@ -1175,23 +1169,16 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     };
     let message_timestamp = write.descriptor.base.message_timestamp.unwrap_or_default();
 
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND recordId = '{grant_id}'
-        AND dateCreated >= '{message_timestamp}
-        AND hidden = false
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
+    let date_range = Range::<String> {
+        min: Some(message_timestamp.to_rfc3339()),
+        max: None,
+    };
+    let query = RecordsQuery::new().record_id(grant_id).date_created(date_range).build();
+    let (records, _) = MessageStore::query(provider, owner, &query).await?;
 
     // delete matching messages
-    for m in messages {
-        let message_cid = m.cid()?;
+    for record in records {
+        let message_cid = record.cid()?;
         MessageStore::delete(provider, owner, &message_cid).await?;
         EventLog::delete(provider, owner, &message_cid).await?;
     }

@@ -8,25 +8,17 @@ use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Grant, GrantBuilder};
 use crate::provider::MessageStore;
+use crate::store::RecordsQuery;
 use crate::{unexpected, Interface, Method, Result};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND recordId = '{grant_id}'
-        AND hidden = false
-        ",
-        interface = Interface::Records,
-        method = Method::Write,
-    );
-    let (messages, _) = store.query(owner, &sql).await?;
+    let query = RecordsQuery::new().record_id(grant_id).build();
+    let (records, _) = store.query(owner, &query).await?;
 
-    let Some(write) = messages[0].as_write() else {
+    let Some(write) = records[0].as_write() else {
         return Err(unexpected!("grant not found"));
     };
     let desc = &write.descriptor;
@@ -71,8 +63,8 @@ pub enum ScopeType {
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
-    /// `MessageType` scope fields.
-    MessageType {
+    /// `EntryType` scope fields.
+    EntryType {
         /// The protocol the permission is applied to.
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,

@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 pub mod keystore;
 pub mod store;
 

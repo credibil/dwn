@@ -13,6 +13,7 @@ use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
+use crate::store::RecordsQuery;
 use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Read` message.
@@ -23,28 +24,18 @@ pub(crate) async fn handle(
     owner: &str, read: Read, provider: &impl Provider,
 ) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}' 
-        {filter_sql}
-        AND hidden = false
-        ORDER BY descriptor.messageTimestamp DESC
-        ",
-        interface = Interface::Records,
-        filter_sql = read.descriptor.filter.to_sql(),
-    );
-
-    let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
-    if messages.is_empty() {
+    let query = RecordsQuery::from(read.clone()).build();
+    let (entries, _) = MessageStore::query(provider, owner, &query).await?;
+    if entries.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
-    if messages.len() > 2 {
+    if entries.len() > 1 {
         return Err(unexpected!("multiple messages exist"));
     }
 
     // if the matched message is a `RecordsDelete`, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
-    if messages[0].descriptor().method == Method::Delete {
+    if entries[0].descriptor().method == Method::Delete {
         // TODO: implement this
 
         //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
@@ -69,7 +60,7 @@ pub(crate) async fn handle(
         // }
     }
 
-    let mut write = Write::try_from(&messages[0])?;
+    let mut write = Write::try_from(&entries[0])?;
 
     // TODO: review against the original code — it should take a store provider
     read.authorize(owner, &write)?;
@@ -88,25 +79,13 @@ pub(crate) async fn handle(
     let initial_write = if write.is_initial()? {
         None
     } else {
-        let sql = format!(
-            "
-            WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'
-            AND recordId = '{record_id}'
-            AND hidden = true
-            ORDER BY descriptor.messageTimestamp ASC
-            ",
-            interface = Interface::Records,
-            method = Method::Write,
-            record_id = write.record_id,
-        );
-
-        let (messages, _) = MessageStore::query(provider, owner, &sql).await?;
-        if messages.is_empty() {
+        let query = RecordsQuery::new().record_id(&write.record_id).archived(None).build();
+        let (records, _) = MessageStore::query(provider, owner, &query).await?;
+        if records.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
 
-        let Some(mut initial_write) = messages[0].as_write().cloned() else {
+        let Some(mut initial_write) = records[0].as_write().cloned() else {
             return Err(unexpected!("expected `RecordsWrite` message"));
         };
 

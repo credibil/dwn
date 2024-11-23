@@ -8,9 +8,10 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::ScopeType;
-use crate::protocols::Configure;
+use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::{schema, unexpected, utils, Cursor, Descriptor, Error, Interface, Method, Result};
+use crate::store::{Cursor, ProtocolsQuery};
+use crate::{schema, unexpected, utils, Descriptor, Error, Interface, Method, Result};
 
 /// Process query message.
 ///
@@ -20,11 +21,7 @@ pub(crate) async fn handle(
     ctx: &Context, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     query.authorize(ctx)?;
-
     let entries = fetch_config(&ctx.owner, query.descriptor.filter, provider).await?;
-
-    // TODO: pagination & sorting
-    // TODO: return errors in Reply
 
     Ok(Reply {
         status: Status {
@@ -86,27 +83,17 @@ pub struct QueryReply {
 
 /// Fetch published `protocols::Configure` matching the query
 pub(crate) async fn fetch_config(
-    owner: &str, filter: Option<Filter>, store: &impl MessageStore,
+    owner: &str, filter: Option<ProtocolsFilter>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
-    let mut protocol = String::new();
+    // let mut protocol = String::new();
+    let mut query = ProtocolsQuery::new().published(true);
     if let Some(filter) = filter {
         let protocol_uri = utils::clean_url(&filter.protocol)?;
-        protocol = format!("AND descriptor.definition.protocol = '{protocol_uri}'");
+        query = query.protocol(&protocol_uri);
     };
 
-    let sql = format!(
-        "
-        WHERE descriptor.interface = '{interface}'
-        AND descriptor.method = '{method}'
-        AND descriptor.definition.published = true
-        {protocol}
-        ",
-        interface = Interface::Protocols,
-        method = Method::Configure,
-    );
-
     // execute query
-    let (messages, _) = store.query(owner, &sql).await?;
+    let (messages, _) = store.query(owner, &query.build()).await?;
     if messages.is_empty() {
         return Ok(None);
     }
@@ -159,22 +146,14 @@ pub struct QueryDescriptor {
     pub base: Descriptor,
 
     /// Filter Records for query.
-    pub filter: Option<Filter>,
-}
-
-/// Protocol filter.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Filter {
-    /// Protocol matching the specified protocol.
-    pub protocol: String,
+    pub filter: Option<ProtocolsFilter>,
 }
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct QueryBuilder {
     message_timestamp: Option<DateTime<Utc>>,
-    filter: Option<Filter>,
+    filter: Option<ProtocolsFilter>,
     permission_grant_id: Option<String>,
 }
 
@@ -193,7 +172,7 @@ impl QueryBuilder {
     /// Specify a permission grant ID to use with the configuration.
     #[must_use]
     pub fn filter(mut self, protocol: impl Into<String>) -> Self {
-        self.filter = Some(Filter {
+        self.filter = Some(ProtocolsFilter {
             protocol: protocol.into(),
         });
         self
