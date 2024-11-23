@@ -73,6 +73,6 @@ async fn owner_events() {
     // The subscriber should have a matching write event.
     // --------------------------------------------------
     if let Some(event) = subscribe_reply.subscription.next().await {
-        assert_eq!(event.message_cid, message_cid);
+        assert_eq!(event.cid().unwrap(), message_cid);
     }
 }

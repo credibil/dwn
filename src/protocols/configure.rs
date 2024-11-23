@@ -15,7 +15,6 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::event::Event;
 use crate::permissions::ScopeType;
 use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
@@ -70,16 +69,10 @@ pub(crate) async fn handle(
     }
 
     // save the incoming message
-    let message = Entry::from(&configure);
-    MessageStore::put(provider, &ctx.owner, &message).await?;
-
-    let event = Event {
-        message_cid: configure.cid()?,
-        base: configure.descriptor.base.clone(),
-        protocol: Some(configure.descriptor.definition.protocol.clone()),
-    };
-    EventLog::append(provider, &ctx.owner, &event).await?;
-    EventStream::emit(provider, &ctx.owner, &event).await?;
+    let entry = Entry::from(&configure);
+    MessageStore::put(provider, &ctx.owner, &entry).await?;
+    EventLog::append(provider, &ctx.owner, &entry).await?;
+    EventStream::emit(provider, &ctx.owner, &entry).await?;
 
     Ok(Reply {
         status: Status {

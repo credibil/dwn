@@ -15,7 +15,6 @@ use serde_json::{Map, Value};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::event::Event;
 use crate::permissions::protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
@@ -306,17 +305,11 @@ pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provide
 
     // save the delete message using same indexes as the initial write
     let initial = Entry::from(&write);
-    let mut record = Entry::from(delete);
-    record.indexes.extend(initial.indexes);
-    MessageStore::put(provider, owner, &record).await?;
-
-    let event = Event {
-        message_cid: delete.cid()?,
-        base: delete.descriptor.base.clone(),
-        protocol: write.descriptor.protocol.clone(),
-    };
-    EventLog::append(provider, owner, &event).await?;
-    EventStream::emit(provider, owner, &event).await?;
+    let mut entry = Entry::from(delete);
+    entry.indexes.extend(initial.indexes);
+    MessageStore::put(provider, owner, &entry).await?;
+    EventLog::append(provider, owner, &entry).await?;
+    EventStream::emit(provider, owner, &entry).await?;
 
     // purge/hard-delete all descendent records
     if delete.descriptor.prune {

@@ -9,37 +9,11 @@ use tokio::sync::mpsc;
 
 use crate::messages::MessagesFilter;
 use crate::records::RecordsFilter;
-use crate::Descriptor;
+use crate::store::Entry;
 
-/// Message event.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Event {
-    /// Event descriptor.
-    #[serde(flatten)]
-    pub base: Descriptor,
 
-    /// Message protocol.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol: Option<String>,
-
-    /// The message's CID.
-    pub message_cid: String,
-    //     /// The message the event has been triggered for.
-    //     #[serde(skip)]
-    //     pub message: EventMessage,
-}
-
-// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-// enum EventMessage {
-//     Message(Message),
-//     Entry(Entry),
-// }
-
-// impl Default for EventMessage {
-//     fn default() -> Self {
-//         Self::Message(Default::default())
-//     }
-// }
+/// Unifying type for all events (which happens to be identical to `Entry`).
+pub type Event = Entry;
 
 /// Filter to use when subscribing to events.
 #[allow(missing_docs)]
