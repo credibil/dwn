@@ -130,3 +130,160 @@ impl Default for TagFilter {
         Self::Equal(Value::Null)
     }
 }
+
+/// Implement  builder-like behaviour.
+impl RecordsFilter {
+    /// Returns a new [`RecordsFilter`]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add one or more authors to the filter.
+    #[must_use]
+    pub fn add_author(mut self, author: impl Into<String>) -> Self {
+        match &mut self.author {
+            Some(Quota::Many(existing)) => {
+                existing.push(author.into());
+            }
+            Some(Quota::One(existing)) => {
+                self.author = Some(Quota::Many(vec![existing.clone(), author.into()]));
+            }
+            None => {
+                self.author = Some(Quota::One(author.into()));
+            }
+        }
+        self
+    }
+
+    /// Add an attester to the filter.
+    #[must_use]
+    pub fn attester(mut self, attester: impl Into<String>) -> Self {
+        self.attester = Some(attester.into());
+        self
+    }
+
+    /// Add one or more recipients to the filter.
+    #[must_use]
+    pub fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
+        match &mut self.recipient {
+            Some(Quota::Many(existing)) => {
+                existing.push(recipient.into());
+            }
+            Some(Quota::One(existing)) => {
+                self.recipient = Some(Quota::Many(vec![existing.clone(), recipient.into()]));
+            }
+            None => {
+                self.recipient = Some(Quota::One(recipient.into()));
+            }
+        }
+        self
+    }
+
+    /// Add a protocol to the filter.
+    #[must_use]
+    pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    /// Add a protocol path to the filter.
+    #[must_use]
+    pub fn protocol_path(mut self, protocol_path: impl Into<String>) -> Self {
+        self.protocol_path = Some(protocol_path.into());
+        self
+    }
+
+    /// Add a published flag to the filter.
+    #[must_use]
+    pub fn published(mut self, published: bool) -> Self {
+        self.published = Some(published);
+        self
+    }
+
+    /// Add a context ID to the filter.
+    #[must_use]
+    pub fn context_id(mut self, context_id: impl Into<String>) -> Self {
+        self.context_id = Some(context_id.into());
+        self
+    }
+
+    /// Add a schema to the filter.
+    #[must_use]
+    pub fn schema(mut self, schema: impl Into<String>) -> Self {
+        self.schema = Some(schema.into());
+        self
+    }
+
+    /// Add a record ID to the filter.
+    #[must_use]
+    pub fn record_id(mut self, record_id: impl Into<String>) -> Self {
+        self.record_id = Some(record_id.into());
+        self
+    }
+
+    /// Add a parent ID to the filter.
+    #[must_use]
+    pub fn parent_id(mut self, parent_id: impl Into<String>) -> Self {
+        self.parent_id = Some(parent_id.into());
+        self
+    }
+
+    /// Add a tag to the filter.
+    #[must_use]
+    pub fn add_tag(mut self, key: impl Into<String>, value: TagFilter) -> Self {
+        match &mut self.tags {
+            Some(existing) => {
+                existing.insert(key.into(), value);
+            }
+            None => {
+                let mut tags = BTreeMap::new();
+                tags.insert(key.into(), value);
+                self.tags = Some(tags);
+            }
+        }
+        self
+    }
+
+    /// Add a data format to the filter.
+    #[must_use]
+    pub fn data_format(mut self, data_format: impl Into<String>) -> Self {
+        self.data_format = Some(data_format.into());
+        self
+    }
+
+    /// Add a data size to the filter.
+    #[must_use]
+    pub fn data_size(mut self, data_size: Range<usize>) -> Self {
+        self.data_size = Some(data_size);
+        self
+    }
+
+    /// Add a data CID to the filter.
+    #[must_use]
+    pub fn data_cid(mut self, data_cid: impl Into<String>) -> Self {
+        self.data_cid = Some(data_cid.into());
+        self
+    }
+
+    /// Add a date created to the filter.
+    #[must_use]
+    pub fn date_created(mut self, date_created: Range<String>) -> Self {
+        self.date_created = Some(date_created);
+        self
+    }
+
+    /// Add a date published to the filter.
+    #[must_use]
+    pub fn date_published(mut self, date_published: Range<String>) -> Self {
+        self.date_published = Some(date_published);
+        self
+    }
+
+    /// Add a date updated to the filter.
+    #[must_use]
+    pub fn date_updated(mut self, date_updated: Range<String>) -> Self {
+        self.date_updated = Some(date_updated);
+        self
+    }
+}

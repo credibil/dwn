@@ -38,10 +38,7 @@ async fn delete_record() {
     // --------------------------------------------------
     // Ensure the record was written.
     // --------------------------------------------------
-    let filter = RecordsFilter {
-        record_id: Some(write.record_id.clone()),
-        ..RecordsFilter::default()
-    };
+    let filter = RecordsFilter::new().record_id(&write.record_id);
     let pagination = Pagination {
         limit: Some(1),
         offset: Some(0),

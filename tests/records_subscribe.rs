@@ -7,7 +7,7 @@ use test_utils::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Message, Quota};
+use vercre_dwn::{endpoint, Message};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
@@ -20,11 +20,7 @@ async fn owner_events() {
     // --------------------------------------------------
     // Alice subscribes to own event stream.
     // --------------------------------------------------
-    let filter = RecordsFilter {
-        author: Some(Quota::One(ALICE_DID.to_string())),
-        ..RecordsFilter::default()
-    };
-
+    let filter = RecordsFilter::new().add_author(ALICE_DID);
     let subscribe =
         SubscribeBuilder::new().filter(filter).build(&alice_keyring).await.expect("should build");
     let reply =
@@ -59,11 +55,7 @@ async fn owner_events() {
     // --------------------------------------------------
     // Ensure the RecordsWrite event exists.
     // --------------------------------------------------
-    let filter = RecordsFilter {
-        record_id: Some(write.record_id.clone()),
-        ..RecordsFilter::default()
-    };
-
+    let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
         .build(&alice_keyring)

@@ -48,10 +48,7 @@ async fn flat_space() {
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
     // --------------------------------------------------
-    let filter = RecordsFilter {
-        record_id: Some(bob_msg.record_id),
-        ..RecordsFilter::default()
-    };
+    let filter = RecordsFilter::new().record_id(bob_msg.record_id);
     let alice_read =
         ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should create write");
 
