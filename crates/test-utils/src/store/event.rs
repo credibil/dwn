@@ -31,7 +31,7 @@ impl EventLog for ProviderImpl {
 
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Cursor)> {
         let sql = query.serialize();
-        let mut response = self.db.query(&sql).await?;
+        let mut response = self.db.query(&sql).bind(("table", TABLE)).await?;
         let events: Vec<Event> = response.take(0)?;
         Ok((events, Cursor::default()))
 

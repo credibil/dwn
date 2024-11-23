@@ -26,7 +26,7 @@ impl QuerySerializer for MessagesQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let mut sql = "SELECT * FROM event_log ".to_string();
+        let mut sql = "SELECT * FROM type::table($table) ".to_string();
 
         for filter in &self.filters {
             if sql.is_empty() {
@@ -77,7 +77,7 @@ impl QuerySerializer for ProtocolsQuery {
 
     fn serialize(&self) -> Self::Output {
         let mut sql = format!(
-            "SELECT * FROM message
+            "SELECT * FROM type::table($table)
             WHERE descriptor.interface = '{interface}'
             AND descriptor.method = '{method}'\n",
             interface = Interface::Protocols,
@@ -106,7 +106,7 @@ impl QuerySerializer for RecordsQuery {
         let max_date = &Utc::now().to_rfc3339();
 
         let mut sql = format!(
-            "SELECT * FROM message\n WHERE descriptor.interface = '{interface}'\n",
+            "SELECT * FROM type::table($table)\n WHERE descriptor.interface = '{interface}'\n",
             interface = Interface::Records
         );
 

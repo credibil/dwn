@@ -1,4 +1,4 @@
-//! # Serializers
+//! # Serialize
 
 pub mod surreal;
 

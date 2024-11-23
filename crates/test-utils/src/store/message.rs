@@ -21,7 +21,7 @@ impl MessageStore for ProviderImpl {
 
         let sql = QuerySerializer::serialize(query);
         // let sql = query.serialize();
-        let mut response = self.db.query(sql).await?;
+        let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         let entries: Vec<Entry> = response.take(0)?;
 
         // let pagination = Some(Pagination::default());
