@@ -8,7 +8,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use vercre_dwn::event::{Event, SubscribeFilter, Subscriber};
 use vercre_dwn::provider::{EventLog, EventStream};
-use vercre_dwn::store::{Cursor, Query, QuerySerializer};
+use vercre_dwn::store::{Cursor, Query};
+use vercre_serialize::QuerySerializer;
 
 use super::ProviderImpl;
 use crate::store::NAMESPACE;

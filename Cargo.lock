@@ -4655,6 +4655,7 @@ dependencies = [
  "tokio",
  "vercre-dwn",
  "vercre-infosec",
+ "vercre-serialize",
 ]
 
 [[package]]
@@ -5224,6 +5225,14 @@ dependencies = [
  "serde_json",
  "tracing",
  "x25519-dalek",
+]
+
+[[package]]
+name = "vercre-serialize"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "chrono",
+ "vercre-dwn",
 ]
 
 [[package]]

@@ -3,44 +3,14 @@
 use std::fmt::Display;
 use std::ops::Deref;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::endpoint::Message;
-use crate::messages::{self, MessagesFilter};
-use crate::protocols::{self, ProtocolsFilter};
-use crate::records::{self, RecordsFilter};
-use crate::{Descriptor, Interface, Method, Quota, Range, Result};
-
-/// `QuerySerializer` is used to provide overridable query serialization.
-///
-/// The default implementation serializes the query to a SQL string, but can be
-/// overridden by implementers to provide custom serialization. For example, a
-/// BSON query for `MongoDB`.
-///
-/// # Example
-///
-/// ```rust
-/// use vercre_dwn::store::{Query,QuerySerializer};
-///
-/// struct CustomSerializer(Query);
-///
-/// QuerySerializer for CustomSerializer {
-///    type Output = String;
-///
-///    fn serialize(&self) -> Self::Output {
-///        format!("SELECT * FROM message WHERE protocol={}", self.0.protocol)
-///    }
-/// }
-/// ```
-pub trait QuerySerializer {
-    /// The output type of the serialization.
-    type Output;
-
-    /// Serialize the query to the output type.
-    fn serialize(&self) -> Self::Output;
-}
+pub use crate::messages::{self, MessagesFilter};
+pub use crate::protocols::{self, ProtocolsFilter};
+pub use crate::records::{self, RecordsFilter, TagFilter};
+use crate::{Descriptor, Method, Quota, Range, Result};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -155,18 +125,6 @@ pub enum Query {
     Messages(MessagesQuery),
 }
 
-impl QuerySerializer for Query {
-    type Output = String;
-
-    fn serialize(&self) -> Self::Output {
-        match self {
-            Self::Records(query) => query.serialize(),
-            Self::Protocols(query) => query.serialize(),
-            Self::Messages(query) => query.serialize(),
-        }
-    }
-}
-
 /// `ProtocolsQuery` use a builder to simplify the process of creating
 /// `MessageStore` queries.
 #[derive(Clone, Debug, Default)]
@@ -207,31 +165,6 @@ impl From<ProtocolsFilter> for ProtocolsQuery {
     }
 }
 
-impl QuerySerializer for ProtocolsQuery {
-    type Output = String;
-
-    fn serialize(&self) -> Self::Output {
-        let mut sql = format!(
-            "SELECT * FROM message
-            WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'\n",
-            interface = Interface::Protocols,
-            method = Method::Configure
-        );
-
-        if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.definition.protocol = '{protocol}'\n"));
-        }
-
-        if let Some(published) = &self.published {
-            sql.push_str(&format!("AND descriptor.definition.published = {published}\n"));
-        }
-
-        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE DESC");
-        sql
-    }
-}
-
 /// `RecordsQuery` use a builder to simplify the process of creating
 /// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
 #[derive(Clone, Debug)]
@@ -263,9 +196,14 @@ pub struct RecordsQuery {
     /// Filter records by `archived`.
     pub archived: Option<bool>,
 
-    filter: Option<RecordsFilter>,
-    sort: Option<Sort>,
-    pagination: Option<Pagination>,
+    /// Filter records by `filter`.
+    pub filter: Option<RecordsFilter>,
+
+    /// Sort options.
+    pub sort: Option<Sort>,
+
+    /// Pagination options.
+    pub pagination: Option<Pagination>,
 }
 
 impl Default for RecordsQuery {
@@ -396,100 +334,12 @@ impl From<records::Read> for RecordsQuery {
     }
 }
 
-impl QuerySerializer for RecordsQuery {
-    type Output = String;
-
-    fn serialize(&self) -> Self::Output {
-        let min_date = &DateTime::<Utc>::MIN_UTC.to_rfc3339();
-        let max_date = &Utc::now().to_rfc3339();
-
-        let mut sql = format!(
-            "SELECT * FROM message\n WHERE descriptor.interface = '{interface}'\n",
-            interface = Interface::Records
-        );
-
-        if let Some(archived) = &self.archived {
-            sql.push_str(&format!("AND archived = {archived}\n"));
-        }
-
-        if let Some(method) = &self.method {
-            sql.push_str(&format!("AND descriptor.method = '{method}'\n"));
-        }
-
-        if let Some(record_id) = &self.record_id {
-            sql.push_str(&format!("AND recordId = '{record_id}'\n"));
-        }
-
-        if let Some(parent_id) = &self.parent_id {
-            sql.push_str(&format!("AND descriptor.parentId = '{parent_id}'\n"));
-        }
-
-        if let Some(context_id) = &self.context_id {
-            let min_ctx = &"\u{0000}".to_string();
-            let max_ctx = &"\u{ffff}".to_string();
-
-            let min = context_id.min.as_ref().unwrap_or(min_ctx);
-            let max = context_id.max.as_ref().unwrap_or(max_ctx);
-            sql.push_str(&format!("AND contextId BETWEEN '{min}' AND '{max}'\n"));
-        }
-
-        if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
-        }
-
-        if let Some(protocol_path) = &self.protocol_path {
-            sql.push_str(&format!("AND descriptor.protocolPath = '{protocol_path}'\n"));
-        }
-
-        if let Some(recipient) = &self.recipient {
-            sql.push_str(&quota("descriptor.recipient", recipient));
-        }
-
-        if let Some(date_created) = &self.date_created {
-            let from = date_created.min.as_ref().unwrap_or(min_date);
-            let to = date_created.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
-        }
-
-        // include `RecordsFilter` sql
-        if let Some(filter) = &self.filter {
-            sql.push_str(&format!("{}\n", QuerySerializer::serialize(filter)));
-        }
-
-        // sorting
-        if let Some(sort) = &self.sort {
-            let mut fields = vec![];
-            if let Some(dir) = &sort.date_created {
-                fields.push(format!("descriptor.dateCreated COLLATE {dir}"));
-            }
-            if let Some(dir) = &sort.date_published {
-                fields.push(format!("descriptor.datePublished COLLATE {dir}"));
-            }
-            if let Some(dir) = &sort.message_timestamp {
-                fields.push(format!("descriptor.messageTimestamp COLLATE {dir}"));
-            }
-            sql.push_str(&format!("ORDER BY {sort}\n", sort = fields.join(",")));
-        }
-
-        if let Some(pagination) = &self.pagination {
-            if let Some(limit) = pagination.limit {
-                sql.push_str(&format!("LIMIT {limit} "));
-            }
-
-            if let Some(offset) = pagination.offset {
-                sql.push_str(&format!("START {offset}\n"));
-            }
-        }
-
-        sql
-    }
-}
-
 /// `MessagesQuery` use a builder to simplify the process of creating
 /// `EventStore` queries.
 #[derive(Clone, Debug, Default)]
 pub struct MessagesQuery {
-    filters: Vec<MessagesFilter>,
+    /// Message filters.
+    pub filters: Vec<MessagesFilter>,
 }
 
 impl MessagesQuery {
@@ -508,45 +358,6 @@ impl From<messages::Query> for MessagesQuery {
         let mut mq = Self::new();
         mq.filters = query.descriptor.filters;
         mq
-    }
-}
-
-impl QuerySerializer for MessagesQuery {
-    type Output = String;
-
-    fn serialize(&self) -> Self::Output {
-        let mut sql = "SELECT * FROM event_log ".to_string();
-
-        for filter in &self.filters {
-            if sql.is_empty() {
-                sql.push_str("WHERE\n");
-            } else {
-                sql.push_str("OR\n");
-            }
-            sql.push_str(&format!("({filter})", filter = QuerySerializer::serialize(filter)));
-        }
-
-        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE ASC");
-        sql
-    }
-}
-
-fn quota(field: &str, clause: &Quota<String>) -> String {
-    match clause {
-        Quota::One(value) => {
-            format!("AND {field} = '{value}'\n")
-        }
-        Quota::Many(values) => {
-            let mut sql = String::new();
-            sql.push_str(&format!("{field}  IN ("));
-            for value in values {
-                sql.push_str(&format!("'{value}',"));
-            }
-            sql.pop(); // remove trailing comma
-            sql.push_str(")\n");
-
-            sql
-        }
     }
 }
 
