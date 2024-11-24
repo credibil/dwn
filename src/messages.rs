@@ -64,7 +64,7 @@ impl MessagesFilter {
 
     /// Add message timestamp to the filter.
     #[must_use]
-    pub fn message_timestamp(mut self, message_timestamp: Range<DateTime<Utc>>) -> Self {
+    pub const fn message_timestamp(mut self, message_timestamp: Range<DateTime<Utc>>) -> Self {
         self.message_timestamp = Some(message_timestamp);
         self
     }

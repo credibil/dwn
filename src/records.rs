@@ -266,21 +266,21 @@ impl RecordsFilter {
 
     /// Add a date created to the filter.
     #[must_use]
-    pub fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
+    pub const fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
         self.date_created = Some(date_created);
         self
     }
 
     /// Add a date published to the filter.
     #[must_use]
-    pub fn date_published(mut self, date_published: Range<DateTime<Utc>>) -> Self {
+    pub const fn date_published(mut self, date_published: Range<DateTime<Utc>>) -> Self {
         self.date_published = Some(date_published);
         self
     }
 
     /// Add a date updated to the filter.
     #[must_use]
-    pub fn date_updated(mut self, date_updated: Range<DateTime<Utc>>) -> Self {
+    pub const fn date_updated(mut self, date_updated: Range<DateTime<Utc>>) -> Self {
         self.date_updated = Some(date_updated);
         self
     }

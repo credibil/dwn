@@ -4,7 +4,6 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use chrono::{DateTime, Utc};
-use ciborium::tag;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -91,6 +90,7 @@ impl SubscribeFilter {
 }
 
 impl RecordsFilter {
+    #[allow(clippy::too_many_lines)]
     fn is_match(&self, entry: &Entry) -> bool {
         let EntryType::Write(write) = &entry.message else {
             return false;
@@ -215,7 +215,7 @@ impl TagFilter {
             }
             Self::Range(range) => {
                 let tag = tag.as_u64().unwrap_or_default();
-                range.contains(&(tag as usize))
+                range.contains(&usize::try_from(tag).unwrap_or_default())
             }
             Self::Equal(value) => tag == value,
         }
