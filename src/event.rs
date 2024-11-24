@@ -4,13 +4,14 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use chrono::{DateTime, Utc};
+use ciborium::tag;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc;
 
 use crate::messages::MessagesFilter;
-use crate::records::RecordsFilter;
+use crate::records::{RecordsFilter, TagFilter};
 use crate::store::{Entry, EntryType};
 
 /// Unifying type for all events (which happens to be identical to `Entry`).
@@ -148,13 +149,17 @@ impl RecordsFilter {
                 return false;
             }
         }
-
-        // if let Some(tags) = &self.tags {
-        //     if Some(tags) != descriptor.tags.as_ref() {
-        //         return false;
-        //     }
-        // }
-
+        if let Some(tags) = &self.tags {
+            for (property, filter) in tags {
+                let Some(tags) = &descriptor.tags else {
+                    return false;
+                };
+                let value = tags.get(property).unwrap_or(&Value::Null);
+                if !filter.is_match(value) {
+                    return false;
+                }
+            }
+        }
         if let Some(data_format) = &self.data_format {
             if data_format != &descriptor.data_format {
                 return false;
@@ -198,6 +203,22 @@ impl RecordsFilter {
         }
 
         true
+    }
+}
+
+impl TagFilter {
+    fn is_match(&self, tag: &Value) -> bool {
+        match self {
+            Self::StartsWith(value) => {
+                let tag = tag.as_str().unwrap_or_default();
+                tag.starts_with(value)
+            }
+            Self::Range(range) => {
+                let tag = tag.as_u64().unwrap_or_default();
+                range.contains(&(tag as usize))
+            }
+            Self::Equal(value) => tag == value,
+        }
     }
 }
 
