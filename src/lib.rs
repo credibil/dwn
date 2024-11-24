@@ -91,6 +91,16 @@ impl<T: Default> Default for Quota<T> {
     }
 }
 
+impl<T: Clone> Quota<T> {
+    /// Convert the quota to a vector.
+    pub fn to_vec(&self) -> Vec<T> {
+        match self {
+            Self::One(value) => vec![value.clone()],
+            Self::Many(values) => values.clone(),
+        }
+    }
+}
+
 /// Range filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Range<T> {

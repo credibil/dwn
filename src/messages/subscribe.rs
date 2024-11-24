@@ -25,12 +25,9 @@ pub(crate) async fn handle(
 ) -> Result<Reply<SubscribeReply>> {
     subscribe.authorize(owner, provider).await?;
 
-    let message_cid = subscribe.cid()?;
-    let filters = subscribe.descriptor.filters.clone();
-
+    let filters = subscribe.descriptor.filters;
     let subscriber =
-        EventStream::subscribe(provider, owner, &message_cid, SubscribeFilter::Messages(filters))
-            .await?;
+        EventStream::subscribe(provider, owner, SubscribeFilter::Messages(filters)).await?;
 
     Ok(Reply {
         status: Status {

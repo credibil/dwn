@@ -5,10 +5,10 @@ use http::StatusCode;
 use serde_json::json;
 use test_utils::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
-use vercre_dwn::messages::{QueryBuilder, SubscribeBuilder};
+use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Message};
+use vercre_dwn::{endpoint, Interface, Message};
 
 const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
@@ -21,7 +21,12 @@ async fn owner_events() {
     // --------------------------------------------------
     // Alice subscribes to own event stream.
     // --------------------------------------------------
-    let subscribe = SubscribeBuilder::new().build(&alice_keyring).await.expect("should build");
+    let filter = MessagesFilter::new().interface(Interface::Records);
+    let subscribe = SubscribeBuilder::new()
+        .add_filter(filter)
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
     let reply =
         endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
@@ -66,7 +71,6 @@ async fn owner_events() {
     // --------------------------------------------------
     // The subscriber should have a matching write event.
     // --------------------------------------------------
-
     if let Some(event) = subscribe_reply.subscription.next().await {
         assert_eq!(event.cid().unwrap(), message_cid);
     }

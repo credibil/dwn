@@ -196,7 +196,7 @@ impl RecordsFilter {
 
     /// Add a published flag to the filter.
     #[must_use]
-    pub fn published(mut self, published: bool) -> Self {
+    pub const fn published(mut self, published: bool) -> Self {
         self.published = Some(published);
         self
     }
@@ -232,15 +232,12 @@ impl RecordsFilter {
     /// Add a tag to the filter.
     #[must_use]
     pub fn add_tag(mut self, key: impl Into<String>, value: TagFilter) -> Self {
-        match &mut self.tags {
-            Some(existing) => {
-                existing.insert(key.into(), value);
-            }
-            None => {
-                let mut tags = BTreeMap::new();
-                tags.insert(key.into(), value);
-                self.tags = Some(tags);
-            }
+        if let Some(existing) = &mut self.tags {
+            existing.insert(key.into(), value);
+        } else {
+            let mut tags = BTreeMap::new();
+            tags.insert(key.into(), value);
+            self.tags = Some(tags);
         }
         self
     }
@@ -254,7 +251,7 @@ impl RecordsFilter {
 
     /// Add a data size to the filter.
     #[must_use]
-    pub fn data_size(mut self, data_size: Range<usize>) -> Self {
+    pub const fn data_size(mut self, data_size: Range<usize>) -> Self {
         self.data_size = Some(data_size);
         self
     }

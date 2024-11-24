@@ -27,13 +27,8 @@ pub(crate) async fn handle(
     let query = MessagesQuery::from(query).build();
     let (events, _) = EventLog::query(provider, owner, &query).await?;
 
-    let events = events
-        .iter()
-        .map(|e| match e.cid() {
-            Ok(cid) => cid,
-            Err(_) => "".to_string(),
-        })
-        .collect::<Vec<String>>();
+    let events =
+        events.iter().map(|e| e.cid().unwrap_or_else(|_| String::new())).collect::<Vec<String>>();
     let entries = if events.is_empty() { None } else { Some(events) };
 
     Ok(Reply {

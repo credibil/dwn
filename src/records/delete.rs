@@ -131,7 +131,7 @@ impl From<&Delete> for Entry {
             indexes: Map::new(),
         };
 
-        // indexes
+        // flatten record_id so it queries correctly
         record
             .indexes
             .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));

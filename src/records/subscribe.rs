@@ -45,11 +45,8 @@ pub(crate) async fn handle(
             // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
         }
     }
-
-    let message_cid = subscribe.cid()?;
     let subscriber =
-        EventStream::subscribe(provider, owner, &message_cid, SubscribeFilter::Records(filter))
-            .await?;
+        EventStream::subscribe(provider, owner, SubscribeFilter::Records(filter)).await?;
 
     Ok(Reply {
         status: Status {
