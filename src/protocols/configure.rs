@@ -516,7 +516,7 @@ fn verify_rule_set(
 ) -> Result<()> {
     // validate $size
     if let Some(size) = &rule_set.size {
-        if size.min > size.max {
+        if size.start > size.end {
             return Err(unexpected!("invalid size range at '{protocol_path}'"));
         }
     }

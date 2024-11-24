@@ -3,6 +3,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use chrono::{DateTime, Utc};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -63,7 +64,6 @@ impl Stream for Subscriber {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let event = self.receiver.as_mut().unwrap().poll_recv(cx);
-
         if let Poll::Ready(Some(entry)) = &event {
             if self.filter.is_match(entry) {
                 return Poll::Ready(Some(entry.clone()));
@@ -154,36 +154,48 @@ impl RecordsFilter {
         //         return false;
         //     }
         // }
+
         if let Some(data_format) = &self.data_format {
             if data_format != &descriptor.data_format {
                 return false;
             }
         }
-        // if let Some(data_size) = &self.data_size {
-        //     if data_size != descriptor.data_size {
-        //         return false;
-        //     }
-        // }
+        if let Some(data_size) = &self.data_size {
+            if !data_size.contains(&descriptor.data_size) {
+                return false;
+            }
+        }
         if let Some(data_cid) = &self.data_cid {
             if data_cid != &descriptor.data_cid {
                 return false;
             }
         }
-        // if let Some(date_created) = &self.date_created {
-        //     if Some(date_created) != descriptor.date_created.as_ref() {
-        //         return false;
-        //     }
-        // }
-        // if let Some(date_published) = &self.date_published {
-        //     if Some(date_published) != descriptor.date_published.as_ref() {
-        //         return false;
-        //     }
-        // }
-        // if let Some(date_updated) = &self.date_updated {
-        //     if Some(date_updated) != descriptor.date_updated.as_ref() {
-        //         return false;
-        //     }
-        // }
+        if let Some(date_created) = &self.date_created {
+            if !date_created.contains(&descriptor.date_created) {
+                return false;
+            }
+        }
+        if let Some(date_published) = &self.date_published {
+            if !date_published.contains(&descriptor.date_published.unwrap_or_default()) {
+                return false;
+            }
+        }
+
+        // `date_updated` is found in indexes
+        if let Some(date_updated) = &self.date_updated {
+            let Some(updated) = indexes.get("dateUpdated") else {
+                return false;
+            };
+            let Some(updated) = updated.as_str() else {
+                return false;
+            };
+            let Some(date) = updated.parse::<DateTime<Utc>>().ok() else {
+                return false;
+            };
+            if !date_updated.contains(&date) {
+                return false;
+            }
+        }
 
         true
     }
@@ -220,12 +232,11 @@ impl MessagesFilter {
                 }
             }
         }
-
-        // if let Some(message_timestamp) = &self.message_timestamp {
-        //     if Some(message_timestamp) != descriptor.message_timestamp.as_ref() {
-        //         return false;
-        //     }
-        // }
+        if let Some(message_timestamp) = &self.message_timestamp {
+            if !message_timestamp.contains(&descriptor.message_timestamp.unwrap_or_default()) {
+                return false;
+            }
+        }
 
         true
     }

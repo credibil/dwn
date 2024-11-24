@@ -105,15 +105,55 @@ impl<T: Clone> Quota<T> {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Range<T> {
     /// The minimum value.
-    pub min: Option<T>,
+    pub start: Option<T>,
 
     /// The maximum value.
-    pub max: Option<T>,
+    pub end: Option<T>,
 }
 
 impl<T> Range<T> {
     /// Create a new range filter.
-    pub const fn new(min: Option<T>, max: Option<T>) -> Self {
-        Self { min, max }
+    pub const fn new(start: Option<T>, end: Option<T>) -> Self {
+        Self { start, end }
+    }
+
+    /// Check if the range contains the value.
+    pub fn contains(&self, value: &T) -> bool
+    where
+        T: PartialOrd,
+    {
+        if let Some(start) = &self.start
+            && value < start
+        {
+            return false;
+        }
+        if let Some(end) = &self.end
+            && value > end
+        {
+            return false;
+        }
+
+        true
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use std::ops::Range;
+
+//     use super::{DateTime, Utc};
+
+//     #[test]
+//     fn test_range() {
+//         let min_date = DateTime::<Utc>::MIN_UTC;
+//         let max_date = Utc::now();
+
+//         let range = Range {
+//             start: Some(min_date),
+//             end: Some(max_date),
+//         };
+
+//         let betw = Utc::now() - chrono::Duration::days(1);
+//         println!("{:?}", range.contains(&Some(betw)));
+//     }
+// }
