@@ -1,9 +1,10 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_test::keystore::{Keystore, OWNER_DID};
+use dwn_test::keystore::ALICE_DID;
 use dwn_test::store::ProviderImpl;
 use serde_json::json;
 use vercre_dwn::endpoint;
 use vercre_dwn::protocols::Query;
+use vercre_dwn::provider::{KeyStore, Signer};
 
 #[tokio::main]
 async fn main() {
@@ -17,8 +18,10 @@ async fn main() {
     let protected = Base64UrlUnpadded::encode_string(
         br#"{"alg":"EdDSA","typ":"jwt","kid":"did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"}"#
     );
+
+    let keyring = KeyStore::keyring(&provider, ALICE_DID).expect("should get keyring");
     let sig_bytes =
-        Keystore::try_sign(format!("{protected}.{payload}").as_bytes()).expect("should sign");
+        keyring.try_sign(format!("{protected}.{payload}").as_bytes()).await.expect("should sign");
     let signature = Base64UrlUnpadded::encode_string(&sig_bytes);
 
     // Query message
@@ -42,7 +45,7 @@ async fn main() {
     });
 
     let query: Query = serde_json::from_value(query_json).expect("should deserialize");
-    let reply = endpoint::handle(OWNER_DID, query, &provider).await.expect("should send message");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should send message");
 
     println!("{:?}", reply);
 }

@@ -4,6 +4,7 @@
 //! an app to perform an action on their behalf. In this case, Alice
 //! grants App X the ability to post as her for the `chat` protocol.
 
+use dwn_test::keystore::{ALICE_DID, APP_DID, BOB_DID};
 use dwn_test::store::ProviderImpl;
 use rand::RngCore;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
@@ -11,22 +12,18 @@ use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{DelegatedGrant, WriteBuilder, WriteData};
 use vercre_dwn::{Interface, Method};
 
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-const APPX_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-
 #[tokio::test]
 async fn configure() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bobs's keyring");
-    let appx_keyring = provider.keyring(APPX_DID).expect("should get AppX's keyring");
+    let appx_keyring = provider.keyring(APP_DID).expect("should get AppX's keyring");
 
     // --------------------------------------------------
     // Alice grants App X to write as her for the `chat` protocol
     // --------------------------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(APPX_DID)
+        .granted_to(APP_DID)
         .request_id("grant_id_1")
         .description("allow App X to write as me in chat protocol")
         .delegated(true)

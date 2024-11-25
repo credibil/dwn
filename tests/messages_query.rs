@@ -3,6 +3,7 @@
 //! This test demonstrates how a web node owner create differnt types of
 //! messages and subsequently query for them.
 
+use dwn_test::keystore::ALICE_DID;
 use dwn_test::store::ProviderImpl;
 use http::StatusCode;
 // use insta::assert_yaml_snapshot as assert_snapshot;
@@ -13,8 +14,6 @@ use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
 use vercre_dwn::{endpoint, Message};
-
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]

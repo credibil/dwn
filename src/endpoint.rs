@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::Authorization;
 use crate::permissions::{self, Grant};
 use crate::provider::Provider;
-use crate::{schema, unexpected, Descriptor, Error, Result};
+use crate::{forbidden, schema, Descriptor, Error, Result};
 
 /// Handle incoming messages.
 ///
@@ -73,7 +73,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
         // verify the permission grant
         let payload = authzn.jws_payload()?;
         let Some(grant_id) = &payload.permission_grant_id else {
-            return Err(unexpected!("`permission_grant_id` not found in signature payload",));
+            return Err(forbidden!("`permission_grant_id` not found in signature payload",));
         };
         let grant = permissions::fetch_grant(&ctx.owner, grant_id, provider).await?;
         grant.verify(&author, &authzn.signer()?, self.descriptor(), provider).await?;

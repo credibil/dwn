@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use dwn_test::keystore::ALICE_DID;
 use dwn_test::store::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
@@ -11,8 +12,6 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
 use vercre_dwn::{endpoint, Interface, Message};
-
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
 // The owner should be able to to subscribe their own event stream
 #[tokio::test]
