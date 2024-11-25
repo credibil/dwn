@@ -3,10 +3,10 @@
 //! This test demonstrates how a web node owner create differnt types of
 //! messages and subsequently query for them.
 
+use dwn_test::store::ProviderImpl;
 use http::StatusCode;
 // use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
-use dwn_test::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};

@@ -1,8 +1,8 @@
 //! Records Delete
 
+use dwn_test::store::ProviderImpl;
 use http::StatusCode;
 use serde_json::json;
-use dwn_test::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;

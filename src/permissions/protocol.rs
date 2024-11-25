@@ -8,16 +8,14 @@ use crate::store::RecordsQuery;
 use crate::{forbidden, Range, Result};
 
 /// Protocol-based authorization.
-pub struct Protocol {
-    protocol: String,
+pub struct Protocol<'a> {
+    _protocol: &'a str,
 }
 
-impl Protocol {
+impl<'a> Protocol<'a> {
     /// Create a new `Protocol` instance.
-    pub fn new(protocol: impl Into<String>) -> Self {
-        Self {
-            protocol: protocol.into(),
-        }
+    pub fn new(protocol: &'a str) -> Self {
+        Self { _protocol: protocol }
     }
 
     // pub async fn permit(&self, record: Record) -> Result<()> {
@@ -62,7 +60,7 @@ impl From<&Delete> for Record {
 }
 
 impl Record {
-    fn authorization(&self) -> Option<&Authorization> {
+    const fn authorization(&self) -> Option<&Authorization> {
         match self {
             Self::Write(write) => Some(&write.authorization),
             Self::Delete(delete) => Some(&delete.authorization),
@@ -70,117 +68,120 @@ impl Record {
             Self::Subscribe(subscribe) => subscribe.authorization.as_ref(),
         }
     }
-}
 
-impl Protocol {
-    /// Protocol-based authorization for `records::Write` messages.
-    pub async fn permit_write(
-        &self, owner: &str, write: &Write, store: &impl MessageStore,
-    ) -> Result<()> {
-        // get permitted roles
-        let Some(protocol) = &write.descriptor.protocol else {
+    fn protocol(&self) -> Result<&str> {
+        let protocol = match self {
+            Self::Write(write) => &write.descriptor.protocol,
+            Self::Query(query) => &query.descriptor.filter.protocol,
+            Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol,
+            Self::Delete(_) => {
+                unimplemented!("delete's protocol is provided by initial write record");
+            }
+        };
+
+        let Some(protocol) = protocol else {
             return Err(forbidden!("missing protocol"));
         };
+        Ok(protocol)
+    }
+
+    async fn rule_set(&self, owner: &str, store: &impl MessageStore) -> Result<RuleSet> {
+        let protocol_path = match self {
+            Self::Write(write) => &write.descriptor.protocol_path,
+            Self::Query(query) => &query.descriptor.filter.protocol_path,
+            Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol_path,
+            Self::Delete(_) => {
+                unimplemented!("delete's protocol is provided by initial write record");
+            }
+        };
+
+        let protocol = self.protocol()?;
         let definition = integrity::protocol_definition(owner, protocol, store).await?;
 
-        // get permitted actions
-        let Some(protocol_path) = &write.descriptor.protocol_path else {
+        let Some(protocol_path) = &protocol_path else {
             return Err(forbidden!("missing protocol"));
         };
         let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
             return Err(forbidden!("no rule set defined for protocol path"));
         };
 
-        verify_role(owner, &write.into(), &rule_set, protocol, write.context_id.clone(), store)
-            .await?;
-        verify_action(owner, &write.into(), &rule_set, store).await?;
+        Ok(rule_set)
+    }
+}
+
+impl<'a> Protocol<'a> {
+    /// Protocol-based authorization for `records::Write` messages.
+    ///
+    /// # Errors
+    /// TODO: Document errors
+    pub async fn permit_write(
+        &self, owner: &str, write: &Write, store: &impl MessageStore,
+    ) -> Result<()> {
+        // get permitted roles
+        let record: Record = write.into();
+        let protocol = record.protocol()?;
+        let rule_set = record.rule_set(owner, store).await?;
+
+        verify_role(owner, &record, &rule_set, protocol, write.context_id.clone(), store).await?;
+        verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
     }
 
     /// Protocol-based authorization for `records::Query` and `records::Subscribe`
     /// messages.
+    ///
+    /// # Errors
+    /// TODO: Document errors
     pub async fn permit_read(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
+        let record: Record = query.into();
+        let protocol = record.protocol()?;
+        let rule_set = record.rule_set(owner, store).await?;
+
         let filter = &query.descriptor.filter;
 
-        // get permitted roles
-        let Some(protocol) = &filter.protocol else {
-            return Err(forbidden!("missing protocol"));
-        };
-        let definition = integrity::protocol_definition(owner, protocol, store).await?;
-
-        // get permitted actions
-        let Some(protocol_path) = &filter.protocol_path else {
-            return Err(forbidden!("missing protocol path"));
-        };
-        let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
-            return Err(forbidden!("no rule set defined for protocol path"));
-        };
-
-        verify_role(owner, &query.into(), &rule_set, protocol, filter.context_id.clone(), store)
-            .await?;
-        verify_action(owner, &query.into(), &rule_set, store).await?;
+        verify_role(owner, &record, &rule_set, protocol, filter.context_id.clone(), store).await?;
+        verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
     }
 
     /// Protocol-based authorization for `records::Subscribe` messages.
+    ///
+    /// # Errors
+    /// TODO: Document errors
     pub async fn permit_subscribe(
         &self, owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
+        let record: Record = subscribe.into();
+        let protocol = record.protocol()?;
+        let rule_set = record.rule_set(owner, store).await?;
+
         let filter = &subscribe.descriptor.filter;
 
-        // get permitted roles
-        let Some(protocol) = &filter.protocol else {
-            return Err(forbidden!("missing protocol"));
-        };
-        let definition = integrity::protocol_definition(owner, protocol, store).await?;
-
-        // get permitted actions
-        let Some(protocol_path) = &filter.protocol_path else {
-            return Err(forbidden!("missing protocol path"));
-        };
-        let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
-            return Err(forbidden!("no rule set defined for protocol path"));
-        };
-
-        verify_role(
-            owner,
-            &subscribe.into(),
-            &rule_set,
-            protocol,
-            filter.context_id.clone(),
-            store,
-        )
-        .await?;
-        verify_action(owner, &subscribe.into(), &rule_set, store).await?;
+        verify_role(owner, &record, &rule_set, protocol, filter.context_id.clone(), store).await?;
+        verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
     }
 
     /// Protocol-based authorization for `records::Delete` messages.
+    ///
+    /// # Errors
+    /// TODO: Document errors
     pub async fn permit_delete(
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
-        // get permitted roles
-        let Some(protocol) = &write.descriptor.protocol else {
-            return Err(forbidden!("missing protocol"));
-        };
-        let definition = integrity::protocol_definition(owner, protocol, store).await?;
+        let record: Record = write.into();
+        let protocol = record.protocol()?;
+        let rule_set = record.rule_set(owner, store).await?;
 
-        // get permitted actions
-        let Some(protocol_path) = &write.descriptor.protocol_path else {
-            return Err(forbidden!("missing protocol"));
-        };
-        let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
-            return Err(forbidden!("no rule set defined for protocol path"));
-        };
+        let delete: Record = delete.into();
 
-        verify_role(owner, &delete.into(), &rule_set, protocol, write.context_id.clone(), store)
-            .await?;
-        verify_action(owner, &delete.into(), &rule_set, store).await?;
+        verify_role(owner, &delete, &rule_set, protocol, write.context_id.clone(), store).await?;
+        verify_action(owner, &delete, &rule_set, store).await?;
 
         Ok(())
     }

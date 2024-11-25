@@ -6,10 +6,10 @@
 
 use std::io::Read;
 
+use dwn_test::store::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{json, Value};
-use dwn_test::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;

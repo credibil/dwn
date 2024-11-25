@@ -336,9 +336,7 @@ pub async fn protocol_definition(
     Ok(protocol.descriptor.definition.clone())
 }
 
-pub fn rule_set(
-    protocol_path: &str, structure: &BTreeMap<String, RuleSet>,
-) -> Option<RuleSet> {
+pub fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {
     let Some((type_name, protocol_path)) = protocol_path.split_once('/') else {
         return structure.get(protocol_path).cloned();
     };
