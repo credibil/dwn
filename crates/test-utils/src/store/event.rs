@@ -21,7 +21,7 @@ impl EventLog for ProviderImpl {
     async fn append(&self, owner: &str, event: &Event) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<BTreeMap<String, Value>> =
-            self.db.create((TABLE, &event.message_cid)).content(event).await?;
+            self.db.create((TABLE, &event.cid()?)).content(event).await?;
         Ok(())
     }
 
@@ -49,44 +49,31 @@ impl EventLog for ProviderImpl {
     }
 }
 
-// pub struct SubscriberImpl {
-//     pub id: String,
-//     pub receiver: async_nats::Subscriber,
-// }
-
-// #[async_trait]
-// impl EventSubscriber for SubscriberImpl {
-//     async fn close(&self) -> Result<()> {
-//         todo!()
-//     }
-// }
+// const SUBJECT: &str = "events";
 
 #[async_trait]
 impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
-    async fn subscribe(
-        &self, owner: &str, message_cid: &str, filters: SubscribeFilter,
-    ) -> Result<Subscriber> {
-        // set up subscriber
-        let mut nats_subscriber = self.nats_client.subscribe("messages").await?;
+    async fn subscribe(&self, owner: &str, filter: SubscribeFilter) -> Result<Subscriber> {
+        let mut subscriber = self.nats_client.subscribe("events").await?;
         let (sender, receiver) = mpsc::channel::<Event>(100);
 
         // forward filtered messages from NATS to our subscriber
         let task: JoinHandle<Result<()>> = tokio::spawn(async move {
-            while let Some(message) = nats_subscriber.next().await {
+            while let Some(message) = subscriber.next().await {
                 let event: Event = serde_json::from_slice(&message.payload)?;
                 sender.send(event).await?;
             }
             Ok(())
         });
 
-        Ok(Subscriber::new(message_cid, receiver))
+        Ok(Subscriber::new(filter, receiver))
     }
 
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()> {
         let bytes = serde_json::to_vec(event)?;
-        self.nats_client.publish("messages", bytes.into()).await?;
+        self.nats_client.publish("events", bytes.into()).await?;
         Ok(())
     }
 }

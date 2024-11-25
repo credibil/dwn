@@ -179,9 +179,7 @@ pub trait EventLog: Send + Sync {
 #[async_trait]
 pub trait EventStream: Send + Sync {
     /// Subscribes to an owner's event stream.
-    async fn subscribe(
-        &self, owner: &str, message_cid: &str, filter: SubscribeFilter,
-    ) -> Result<Subscriber>;
+    async fn subscribe(&self, owner: &str, filter: SubscribeFilter) -> Result<Subscriber>;
 
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()>;

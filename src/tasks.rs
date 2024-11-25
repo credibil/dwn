@@ -19,7 +19,10 @@ const EXTEND_SECS: u64 = 30;
 /// Runs a resumable task with automatic timeout extension.
 pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Result<()> {
     // register the task
-    let timeout = (Utc::now() + Duration::from_secs(EXTEND_SECS * 2)).timestamp() as u64;
+    let timeout = (Utc::now() + Duration::from_secs(EXTEND_SECS * 2)).timestamp();
+    let timeout =
+        u64::try_from(timeout).map_err(|e| unexpected!("issue converting timeout: {e}"))?;
+
     let resumable = ResumableTask {
         task_id: task.cid()?,
         task: task.clone(),

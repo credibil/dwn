@@ -8,6 +8,7 @@ pub mod write;
 
 use std::collections::BTreeMap;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -84,15 +85,15 @@ pub struct RecordsFilter {
 
     /// Filter messages created within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<Range<String>>,
+    pub date_created: Option<Range<DateTime<Utc>>>,
 
     /// Filter messages published within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<Range<String>>,
+    pub date_published: Option<Range<DateTime<Utc>>>,
 
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_updated: Option<Range<String>>,
+    pub date_updated: Option<Range<DateTime<Utc>>>,
 }
 
 impl RecordsFilter {
@@ -196,7 +197,7 @@ impl RecordsFilter {
 
     /// Add a published flag to the filter.
     #[must_use]
-    pub fn published(mut self, published: bool) -> Self {
+    pub const fn published(mut self, published: bool) -> Self {
         self.published = Some(published);
         self
     }
@@ -232,15 +233,12 @@ impl RecordsFilter {
     /// Add a tag to the filter.
     #[must_use]
     pub fn add_tag(mut self, key: impl Into<String>, value: TagFilter) -> Self {
-        match &mut self.tags {
-            Some(existing) => {
-                existing.insert(key.into(), value);
-            }
-            None => {
-                let mut tags = BTreeMap::new();
-                tags.insert(key.into(), value);
-                self.tags = Some(tags);
-            }
+        if let Some(existing) = &mut self.tags {
+            existing.insert(key.into(), value);
+        } else {
+            let mut tags = BTreeMap::new();
+            tags.insert(key.into(), value);
+            self.tags = Some(tags);
         }
         self
     }
@@ -254,7 +252,7 @@ impl RecordsFilter {
 
     /// Add a data size to the filter.
     #[must_use]
-    pub fn data_size(mut self, data_size: Range<usize>) -> Self {
+    pub const fn data_size(mut self, data_size: Range<usize>) -> Self {
         self.data_size = Some(data_size);
         self
     }
@@ -268,21 +266,21 @@ impl RecordsFilter {
 
     /// Add a date created to the filter.
     #[must_use]
-    pub fn date_created(mut self, date_created: Range<String>) -> Self {
+    pub const fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
         self.date_created = Some(date_created);
         self
     }
 
     /// Add a date published to the filter.
     #[must_use]
-    pub fn date_published(mut self, date_published: Range<String>) -> Self {
+    pub const fn date_published(mut self, date_published: Range<DateTime<Utc>>) -> Self {
         self.date_published = Some(date_published);
         self
     }
 
     /// Add a date updated to the filter.
     #[must_use]
-    pub fn date_updated(mut self, date_updated: Range<String>) -> Self {
+    pub const fn date_updated(mut self, date_updated: Range<DateTime<Utc>>) -> Self {
         self.date_updated = Some(date_updated);
         self
     }

@@ -18,7 +18,6 @@ use vercre_infosec::{Cipher, Signer};
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::event::Event;
 use crate::permissions::{self, protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
@@ -85,22 +84,16 @@ pub(crate) async fn handle(
         (write, StatusCode::NO_CONTENT)
     };
 
-    let mut record = Entry::from(&write);
-    record.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
+    let mut entry = Entry::from(&write);
+    entry.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
 
     // save the message and log the event
-    MessageStore::put(provider, owner, &record).await?;
-
-    let event = Event {
-        message_cid: write.cid()?,
-        base: write.descriptor.base.clone(),
-        protocol: write.descriptor.protocol.clone(),
-    };
-    EventLog::append(provider, owner, &event).await?;
+    MessageStore::put(provider, owner, &entry).await?;
+    EventLog::append(provider, owner, &entry).await?;
 
     // only emit an event when the message is the latest base state
     if newest_existing.is_none() {
-        EventStream::emit(provider, owner, &event).await?;
+        EventStream::emit(provider, owner, &entry).await?;
     }
 
     // delete any previous messages with the same `record_id` EXCEPT initial write
@@ -1170,8 +1163,8 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     let message_timestamp = write.descriptor.base.message_timestamp.unwrap_or_default();
 
     let date_range = Range::<String> {
-        min: Some(message_timestamp.to_rfc3339()),
-        max: None,
+        start: Some(message_timestamp.to_rfc3339()),
+        end: None,
     };
     let query = RecordsQuery::new().record_id(grant_id).date_created(date_range).build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;

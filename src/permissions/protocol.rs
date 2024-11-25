@@ -446,13 +446,13 @@ fn verify_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
         return Ok(());
     };
 
-    if let Some(min) = range.min {
-        if data_size < min {
+    if let Some(start) = range.start {
+        if data_size < start {
             return Err(forbidden!("data size is less than allowed"));
         }
     }
-    if let Some(max) = range.max {
-        if data_size > max {
+    if let Some(end) = range.end {
+        if data_size > end {
             return Err(forbidden!("data size is greater than allowed"));
         }
     }
