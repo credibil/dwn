@@ -15,12 +15,12 @@ use serde_json::{Map, Value};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::protocol;
+use crate::permissions::Protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::store::{Entry, EntryType, RecordsQuery};
 use crate::tasks::{self, Task, TaskType};
-use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Delete` message.
 ///
@@ -163,11 +163,12 @@ impl Delete {
             return Ok(());
         }
 
-        if write.descriptor.protocol.is_some() {
-            return protocol::permit_delete(owner, self, write, store).await;
+        if let Some(protocol) = &write.descriptor.protocol {
+            let protocol = Protocol::new(protocol).context_id(write.context_id.as_ref());
+            return protocol.permit_delete(owner, self, write, store).await;
         }
 
-        Err(Error::Unauthorized("`RecordsDelete` message failed authorization".to_string()))
+        Err(forbidden!("`RecordsDelete` message failed authorization"))
     }
 }
 

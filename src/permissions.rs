@@ -7,6 +7,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Grant, GrantBuilder};
+pub use self::protocol::Protocol;
 use crate::provider::MessageStore;
 use crate::store::RecordsQuery;
 use crate::{unexpected, Interface, Method, Result};

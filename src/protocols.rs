@@ -1,6 +1,7 @@
 //! # Protocols
 
 pub mod configure;
+pub(crate) mod integrity;
 pub mod query;
 
 use serde::{Deserialize, Serialize};

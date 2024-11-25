@@ -14,7 +14,7 @@ use crate::event::{SubscribeFilter, Subscriber};
 use crate::messages::MessagesFilter;
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventStream, MessageStore, Provider, Signer};
-use crate::{schema, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, schema, Descriptor, Interface, Method, Result};
 
 /// Handle a subscribe message.
 ///
@@ -90,7 +90,7 @@ impl Subscribe {
 
         // ensure subscribe filters include scoped protocol
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(Error::Unauthorized("missing protocol scope".to_string()));
+            return Err(forbidden!("missing protocol scope"));
         };
 
         if protocol.is_none() {
@@ -99,9 +99,7 @@ impl Subscribe {
 
         for filter in &self.descriptor.filters {
             if &filter.protocol != protocol {
-                return Err(Error::Unauthorized(
-                    "filter protocol does not match scoped protocol".to_string(),
-                ));
+                return Err(forbidden!("filter protocol does not match scoped protocol",));
             }
         }
 

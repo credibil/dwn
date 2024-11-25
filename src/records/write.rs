@@ -18,12 +18,14 @@ use vercre_infosec::{Cipher, Signer};
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{self, protocol};
-use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
+use crate::permissions::{self, Protocol};
+use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
 use crate::store::{Entry, EntryType, RecordsQuery};
-use crate::{data, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result};
+use crate::{
+    data, forbidden, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result,
+};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -36,7 +38,7 @@ pub(crate) async fn handle(
 
     // verify integrity of messages with protocol
     if write.descriptor.protocol.is_some() {
-        protocol::verify(owner, &write, provider).await?;
+        integrity::verify(owner, &write, provider).await?;
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
@@ -266,7 +268,7 @@ impl Write {
 
         // if owner signature is set, it must be the same as the tenant DID
         if record_owner.as_ref().is_some_and(|ro| ro != owner) {
-            return Err(unexpected!("record owner is not web node owner"));
+            return Err(forbidden!("record owner is not web node owner"));
         };
 
         let author = authzn.author()?;
@@ -281,7 +283,7 @@ impl Write {
         // authorize owner delegate
         if let Some(delegated_grant) = &authzn.owner_delegated_grant {
             let Some(owner) = &record_owner else {
-                return Err(unexpected!("owner is required to authorize owner delegate"));
+                return Err(forbidden!("owner is required to authorize owner delegate"));
             };
             let signer = authzn.owner_signer()?;
             let grant = delegated_grant.to_grant()?;
@@ -309,11 +311,12 @@ impl Write {
         };
 
         // protocol-specific authorization
-        if self.descriptor.protocol.is_some() {
-            return protocol::permit_write(owner, self, store).await;
+        if let Some(protocol) = &self.descriptor.protocol {
+            let protocol = Protocol::new(protocol).context_id(self.context_id.as_ref());
+            return protocol.permit_write(owner, self, store).await;
         }
 
-        Err(unexpected!("message failed authorization"))
+        Err(forbidden!("message failed authorization"))
     }
 
     /// Signs the Write message body. The signer is either the author or a delegate.
@@ -591,15 +594,15 @@ impl DelegatedGrant {
 impl TryFrom<&DelegatedGrant> for permissions::Grant {
     type Error = crate::Error;
 
-    fn try_from(value: &DelegatedGrant) -> Result<Self> {
-        let bytes = Base64UrlUnpadded::decode_vec(&value.encoded_data)?;
+    fn try_from(delegated: &DelegatedGrant) -> Result<Self> {
+        let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)?;
         let mut grant: Self = serde_json::from_slice(&bytes)
             .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
 
-        grant.id.clone_from(&value.record_id);
-        grant.grantor = value.authorization.signer()?;
-        grant.grantee = value.descriptor.recipient.clone().unwrap_or_default();
-        grant.date_granted.clone_from(&value.descriptor.date_created);
+        grant.id.clone_from(&delegated.record_id);
+        grant.grantor = delegated.authorization.signer()?;
+        grant.grantee = delegated.descriptor.recipient.clone().unwrap_or_default();
+        grant.date_granted.clone_from(&delegated.descriptor.date_created);
 
         Ok(grant)
     }
@@ -1093,7 +1096,7 @@ async fn process_stream(
             return Err(unexpected!("actual data size does not match descriptor `data_size`"));
         }
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            protocol::verify_schema(&write, &data_bytes)?;
+            integrity::verify_schema(&write, &data_bytes)?;
         }
 
         write.descriptor.data_cid = data_cid;

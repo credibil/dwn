@@ -11,7 +11,7 @@ use crate::permissions::ScopeType;
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::store::{Cursor, ProtocolsQuery};
-use crate::{schema, unexpected, utils, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, schema, utils, Descriptor, Interface, Method, Result};
 
 /// Process query message.
 ///
@@ -121,14 +121,14 @@ impl Query {
 
         // if set, query and grant protocols need to match
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(unexpected!("missing protocol in grant scope"));
+            return Err(forbidden!("missing protocol in grant scope"));
         };
         if let Some(protocol) = &protocol {
             let Some(filter) = &self.descriptor.filter else {
-                return Err(unexpected!("missing filter"));
+                return Err(forbidden!("missing filter"));
             };
             if protocol != &filter.protocol {
-                return Err(Error::Forbidden("unauthorized protocol".to_string()));
+                return Err(forbidden!("unauthorized protocol"));
             }
         }
 

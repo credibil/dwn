@@ -2,10 +2,10 @@
 
 use std::time::Duration;
 
+use dwn_test::store::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use serde_json::json;
-use test_utils::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::provider::KeyStore;
@@ -80,7 +80,7 @@ async fn owner_events() {
             }
         }
     });
-    if let Err(_) = tokio::time::timeout(Duration::from_secs(2), find_event).await {
+    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found event");
     }
 }

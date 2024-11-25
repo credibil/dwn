@@ -10,11 +10,11 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{protocol, Grant};
+use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{forbidden, Descriptor, Error, Interface, Method, Quota, Result};
+use crate::{forbidden, Descriptor, Interface, Method, Quota, Result};
 
 /// Process `Query` message.
 ///
@@ -155,12 +155,12 @@ pub struct QueryReplyEntry {
 impl Query {
     async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         let Some(authzn) = &self.authorization else {
-            return Err(Error::Unauthorized("missing authorization".to_string()));
+            return Err(forbidden!("missing authorization"));
         };
 
         // authenticate the message
         if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(Error::Unauthorized(format!("failed to authenticate: {e}")));
+            return Err(forbidden!("failed to authenticate: {e}"));
         }
 
         // verify grant
@@ -170,8 +170,10 @@ impl Query {
         }
 
         // verify protocol when request invokes a protocol role
-        if authzn.jws_payload()?.protocol_role.is_some() {
-            protocol::permit_read(owner, self, provider).await?;
+        if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
+            let protocol =
+                Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
+            return protocol.permit_read(owner, self, provider).await;
         }
 
         Ok(())

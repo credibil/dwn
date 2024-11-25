@@ -134,9 +134,8 @@ impl Grant {
         let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
             return Ok(());
         };
-
         if &descriptor.filter.protocol != protocol {
-            return Err(forbidden!("grant protocol does not match query protocol",));
+            return Err(forbidden!("grant and query protocols do not match",));
         }
 
         Ok(())
@@ -158,7 +157,6 @@ impl Grant {
         let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
             return Ok(());
         };
-
         if &descriptor.filter.protocol != protocol {
             return Err(forbidden!("grant protocol does not match query protocol",));
         }
@@ -179,7 +177,7 @@ impl Grant {
         // must be deleting a record with the same protocol
         if let ScopeType::Protocols { protocol } = &self.data.scope.scope_type {
             if protocol != &write.descriptor.protocol {
-                return Err(forbidden!("grant and record to delete protocol do not match",));
+                return Err(forbidden!("grant protocol does not match delete protocol",));
             }
         };
 

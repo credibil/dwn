@@ -20,7 +20,7 @@ use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::store::{Entry, EntryType};
-use crate::{schema, unexpected, utils, Descriptor, Interface, Method, Range, Result};
+use crate::{forbidden, schema, unexpected, utils, Descriptor, Interface, Method, Range, Result};
 
 /// Process query message.
 ///
@@ -173,18 +173,18 @@ impl Configure {
             return Ok(());
         }
 
-        let grant = ctx.grant.as_ref().ok_or_else(|| unexpected!("missing grant"))?;
+        let grant = ctx.grant.as_ref().ok_or_else(|| forbidden!("missing grant"))?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(unexpected!("missing protocol in grant scope"));
+            return Err(forbidden!("missing protocol in grant scope"));
         };
         let Some(protocol) = &protocol else {
             return Ok(());
         };
 
         if protocol != &self.descriptor.definition.protocol {
-            return Err(unexpected!(" message protocol does not match grant protocol"));
+            return Err(forbidden!(" message and grant protocols do not match"));
         }
 
         Ok(())
