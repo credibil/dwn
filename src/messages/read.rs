@@ -16,7 +16,7 @@ use crate::permissions::{self, ScopeType};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::DataStream;
 use crate::store::EntryType;
-use crate::{schema, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, schema, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Handle a read message.
 ///
@@ -113,7 +113,7 @@ impl Read {
 
         // ensure read filters include scoped protocol
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(unexpected!("missing protocol scope",));
+            return Err(forbidden!("missing protocol scope",));
         };
 
         if protocol.is_none() {

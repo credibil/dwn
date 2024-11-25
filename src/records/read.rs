@@ -14,7 +14,7 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::store::RecordsQuery;
-use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Read` message.
 ///
@@ -203,7 +203,7 @@ impl Read {
             return Ok(());
         }
 
-        Err(Error::Forbidden("unauthorized".to_string()))
+        Err(forbidden!("read cannot be authorized"))
     }
 }
 

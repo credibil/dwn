@@ -20,7 +20,7 @@ use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider,
 use crate::records::Write;
 use crate::store::{Entry, EntryType, RecordsQuery};
 use crate::tasks::{self, Task, TaskType};
-use crate::{unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Delete` message.
 ///
@@ -167,7 +167,7 @@ impl Delete {
             return protocol::permit_delete(owner, self, write, store).await;
         }
 
-        Err(Error::Unauthorized("`RecordsDelete` message failed authorization".to_string()))
+        Err(forbidden!("`RecordsDelete` message failed authorization"))
     }
 }
 
