@@ -133,7 +133,8 @@ impl Subscribe {
 
         // verify protocol when request invokes a protocol role
         if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
-            let protocol = Protocol::new(protocol);
+            let protocol =
+                Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
             return protocol.permit_subscribe(owner, self, provider).await;
         }
 

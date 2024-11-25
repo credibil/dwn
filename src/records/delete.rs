@@ -164,7 +164,7 @@ impl Delete {
         }
 
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = Protocol::new(protocol);
+            let protocol = Protocol::new(protocol).context_id(write.context_id.as_ref());
             return protocol.permit_delete(owner, self, write, store).await;
         }
 

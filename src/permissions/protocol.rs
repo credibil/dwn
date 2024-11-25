@@ -10,23 +10,25 @@ use crate::{forbidden, Range, Result};
 /// Protocol-based authorization.
 pub struct Protocol<'a> {
     protocol: &'a str,
+    context_id: Option<&'a String>,
 }
 
 impl<'a> Protocol<'a> {
     /// Create a new `Protocol` instance.
     #[must_use]
-    pub fn new(protocol: &'a str) -> Self {
-        Self { protocol }
+    pub const fn new(protocol: &'a str) -> Self {
+        Self {
+            protocol,
+            context_id: None,
+        }
     }
 
-    // pub async fn permit(&self, record: Record) -> Result<()> {
-    //     match record {
-    //         Record::Write(write) => permit_write(&self.owner, &write, &self.store).await,
-    //         Record::Query(query) => permit_read(&self.owner, &query, &self.store).await,
-    //         Record::Subscribe(subscribe) => permit_subscribe(&self.owner, &subscribe, &self.store).await,
-    //         Record::Delete(delete) => permit_delete(&self.owner, &delete, &delete, &self.store).await,
-    //     }
-    // }
+    /// Context ID to use when verifying role.
+    #[must_use]
+    pub const fn context_id(mut self, context_id: Option<&'a String>) -> Self {
+        self.context_id = context_id;
+        self
+    }
 }
 
 enum Record {
@@ -110,7 +112,7 @@ impl Record {
     }
 }
 
-impl<'a> Protocol<'a> {
+impl Protocol<'_> {
     /// Protocol-based authorization for `records::Write` messages.
     ///
     /// # Errors
@@ -121,9 +123,8 @@ impl<'a> Protocol<'a> {
         // get permitted roles
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
-        let context_id = &write.context_id;
 
-        self.verify_role(owner, &record, &rule_set,context_id.as_ref(), store).await?;
+        self.verify_role(owner, &record, &rule_set, store).await?;
         self.verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -139,9 +140,8 @@ impl<'a> Protocol<'a> {
     ) -> Result<()> {
         let record: Record = query.into();
         let rule_set = record.rule_set(owner, store).await?;
-        let context_id = &query.descriptor.filter.context_id;
 
-        self.verify_role(owner, &record, &rule_set,  context_id.as_ref(), store).await?;
+        self.verify_role(owner, &record, &rule_set, store).await?;
         self.verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -156,9 +156,8 @@ impl<'a> Protocol<'a> {
     ) -> Result<()> {
         let record: Record = subscribe.into();
         let rule_set = record.rule_set(owner, store).await?;
-        let context_id = &subscribe.descriptor.filter.context_id;
 
-        self.verify_role(owner, &record, &rule_set,  context_id.as_ref(), store).await?;
+        self.verify_role(owner, &record, &rule_set, store).await?;
         self.verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -173,11 +172,10 @@ impl<'a> Protocol<'a> {
     ) -> Result<()> {
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
-        let context_id = &write.context_id;
 
         let delete: Record = delete.into();
 
-        self.verify_role(owner, &delete, &rule_set,  context_id.as_ref(), store).await?;
+        self.verify_role(owner, &delete, &rule_set, store).await?;
         self.verify_action(owner, &delete, &rule_set, store).await?;
 
         Ok(())
@@ -185,8 +183,7 @@ impl<'a> Protocol<'a> {
 
     // Check if the incoming message is invoking a role. If so, validate the invoked role.
     async fn verify_role(
-        &self, owner: &str, record: &Record, rule_set: &RuleSet, 
-        context_id: Option<&String>, store: &impl MessageStore,
+        &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
     ) -> Result<()> {
         let Some(authzn) = record.authorization() else {
             return Err(forbidden!("missing authorization"));
@@ -203,7 +200,7 @@ impl<'a> Protocol<'a> {
         }
 
         let segment_count = protocol_role.split('/').count();
-        if context_id.is_none() && segment_count > 1 {
+        if self.context_id.is_none() && segment_count > 1 {
             return Err(forbidden!("unable verify role without `context_id`"));
         }
 
@@ -216,7 +213,7 @@ impl<'a> Protocol<'a> {
         if segment_count > 0 {
             // context_id segment count is never shorter than the role path count.
             let default = String::new();
-            let context_id = context_id.unwrap_or(&default);
+            let context_id = self.context_id.unwrap_or(&default);
             let context_id_segments: Vec<&str> = context_id.split('/').collect();
             let prefix = context_id_segments[..segment_count].join("/");
 
@@ -304,7 +301,7 @@ impl<'a> Protocol<'a> {
             }
 
             // is actor allowed by the current action rule?
-            if self.check_actor(&author, rule, &record_chain)? {
+            if check_actor(&author, rule, &record_chain)? {
                 return Ok(());
             }
         }
@@ -398,22 +395,20 @@ impl<'a> Protocol<'a> {
             } // Method::Configure => Err(forbidden!("configure method not allowed")),
         }
     }
+}
 
-    // Checks for a match with the `who` rule in record chain.
-    fn check_actor(
-        &self, author: &str, action_rule: &ActionRule, record_chain: &[Write],
-    ) -> Result<bool> {
-        // find a message with matching protocolPath
-        let ancestor =
-            record_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
-        let Some(ancestor) = ancestor else {
-            // reaching this block means there is an issue with the protocol definition
-            // this check should happen `protocols::Configure`
-            return Ok(false);
-        };
-        if action_rule.who == Some(Actor::Recipient) {
-            return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
-        }
-        Ok(author == ancestor.authorization.author()?)
+// Checks for a match with the `who` rule in record chain.
+fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -> Result<bool> {
+    // find a message with matching protocolPath
+    let ancestor =
+        record_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
+    let Some(ancestor) = ancestor else {
+        // reaching this block means there is an issue with the protocol definition
+        // this check should happen `protocols::Configure`
+        return Ok(false);
+    };
+    if action_rule.who == Some(Actor::Recipient) {
+        return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
     }
+    Ok(author == ancestor.authorization.author()?)
 }
