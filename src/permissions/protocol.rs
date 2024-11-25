@@ -124,8 +124,8 @@ impl Protocol<'_> {
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.verify_role(owner, &record, &rule_set, store).await?;
-        self.verify_action(owner, &record, &rule_set, store).await?;
+        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
     }
@@ -141,8 +141,8 @@ impl Protocol<'_> {
         let record: Record = query.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.verify_role(owner, &record, &rule_set, store).await?;
-        self.verify_action(owner, &record, &rule_set, store).await?;
+        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
     }
@@ -157,8 +157,8 @@ impl Protocol<'_> {
         let record: Record = subscribe.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.verify_role(owner, &record, &rule_set, store).await?;
-        self.verify_action(owner, &record, &rule_set, store).await?;
+        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
     }
@@ -175,14 +175,14 @@ impl Protocol<'_> {
 
         let delete: Record = delete.into();
 
-        self.verify_role(owner, &delete, &rule_set, store).await?;
-        self.verify_action(owner, &delete, &rule_set, store).await?;
+        self.allow_role(owner, &delete, &rule_set, store).await?;
+        self.allow_action(owner, &delete, &rule_set, store).await?;
 
         Ok(())
     }
 
     // Check if the incoming message is invoking a role. If so, validate the invoked role.
-    async fn verify_role(
+    async fn allow_role(
         &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
     ) -> Result<()> {
         let Some(authzn) = record.authorization() else {
@@ -234,7 +234,7 @@ impl Protocol<'_> {
 
     // Verifies the given message is authorized by one of the action rules in the
     // given protocol rule set.
-    async fn verify_action(
+    async fn allow_action(
         &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
     ) -> Result<()> {
         // build record chain

@@ -53,20 +53,45 @@ pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Re
         return Err(forbidden!("no rule set defined for protocol path"));
     };
 
-    verify_type(write, &definition.types)?;
-    verify_protocol_path(owner, write, store).await?;
+    check_type(write, &definition.types)?;
+    check_protocol_path(owner, write, store).await?;
     if rule_set.role.is_some() {
-        verify_role_record(owner, write, store).await?;
+        check_role_record(owner, write, store).await?;
     }
-    verify_size_limit(write.descriptor.data_size, &rule_set)?;
-    verify_tags(write.descriptor.tags.as_ref(), &rule_set)?;
-    verify_revoke(owner, write, store).await?;
+    check_size_limit(write.descriptor.data_size, &rule_set)?;
+    check_tags(write.descriptor.tags.as_ref(), &rule_set)?;
+    check_revoke(owner, write, store).await?;
 
     Ok(())
 }
 
+// Verifies the given `RecordsWrite` protocol.
+pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(forbidden!("missing protocol path"));
+    };
+
+    match protocol_path.as_str() {
+        REQUEST_PATH => {
+            let request_data: RequestData = serde_json::from_slice(data)?;
+            schema::validate_value("PermissionRequestData", &request_data)?;
+            check_scope(write, &request_data.scope.scope_type)
+        }
+        GRANT_PATH => {
+            let grant_data: RequestData = serde_json::from_slice(data)?;
+            schema::validate_value("PermissionGrantData", &grant_data)?;
+            check_scope(write, &grant_data.scope.scope_type)
+        }
+        REVOCATION_PATH => {
+            let revocation_data: RevocationData = serde_json::from_slice(data)?;
+            schema::validate_value("PermissionGrantData", &revocation_data)
+        }
+        _ => Err(forbidden!("unexpected permission record: {protocol_path}")),
+    }
+}
+
 /// Verifies the `data_format` and `schema` parameters .
-fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<()> {
+fn check_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(forbidden!("missing protocol path"));
     };
@@ -90,33 +115,8 @@ fn verify_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<
     Ok(())
 }
 
-// Verifies the given `RecordsWrite` protocol.
-pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
-    let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(forbidden!("missing protocol path"));
-    };
-
-    match protocol_path.as_str() {
-        REQUEST_PATH => {
-            let request_data: RequestData = serde_json::from_slice(data)?;
-            schema::validate_value("PermissionRequestData", &request_data)?;
-            verify_scope(write, &request_data.scope.scope_type)
-        }
-        GRANT_PATH => {
-            let grant_data: RequestData = serde_json::from_slice(data)?;
-            schema::validate_value("PermissionGrantData", &grant_data)?;
-            verify_scope(write, &grant_data.scope.scope_type)
-        }
-        REVOCATION_PATH => {
-            let revocation_data: RevocationData = serde_json::from_slice(data)?;
-            schema::validate_value("PermissionGrantData", &revocation_data)
-        }
-        _ => Err(forbidden!("unexpected permission record: {protocol_path}")),
-    }
-}
-
 /// Validate tags include a protocol tag matching the scoped protocol.
-fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
+fn check_scope(write: &Write, scope: &ScopeType) -> Result<()> {
     // validation difficult to do using JSON schema
     let scope_protocol = match scope {
         ScopeType::Records { protocol, .. } => {
@@ -144,7 +144,7 @@ fn verify_scope(write: &Write, scope: &ScopeType) -> Result<()> {
 }
 
 // Verify the `protocol_path` matches the path of actual record chain.
-async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(forbidden!("missing protocol path"));
     };
@@ -196,7 +196,7 @@ async fn verify_protocol_path(owner: &str, write: &Write, store: &impl MessageSt
 }
 
 /// Verify the integrity of the `records::Write` as a role record.
-async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(recipient) = &write.descriptor.recipient else {
         return Err(forbidden!("role record is missing recipient"));
     };
@@ -236,7 +236,7 @@ async fn verify_role_record(owner: &str, write: &Write, store: &impl MessageStor
 }
 
 // Verify write record adheres to the $size constraints.
-fn verify_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
+fn check_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
     let Some(range) = &rule_set.size else {
         return Ok(());
     };
@@ -255,7 +255,7 @@ fn verify_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
     Ok(())
 }
 
-fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<()> {
+fn check_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<()> {
     let Some(rule_set_tags) = &rule_set.tags else {
         return Ok(());
     };
@@ -283,7 +283,7 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
 
 // Performs additional validation before storing the RecordsWrite if it is
 // a core RecordsWrite that needs additional processing.
-async fn verify_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
+async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     // Ensure the protocol tag of a permission revocation RecordsWrite and
     // the parent grant's scoped protocol match.
     if write.descriptor.protocol == Some(protocols::PROTOCOL_URI.to_owned())
