@@ -134,9 +134,8 @@ impl Grant {
         let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
             return Ok(());
         };
-
         if &descriptor.filter.protocol != protocol {
-            return Err(forbidden!("grant protocol does not match query protocol",));
+            return Err(forbidden!("grant and query protocols do not match",));
         }
 
         Ok(())
@@ -158,7 +157,6 @@ impl Grant {
         let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
             return Ok(());
         };
-
         if &descriptor.filter.protocol != protocol {
             return Err(forbidden!("grant protocol does not match query protocol",));
         }

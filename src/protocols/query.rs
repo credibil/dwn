@@ -11,7 +11,7 @@ use crate::permissions::ScopeType;
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::store::{Cursor, ProtocolsQuery};
-use crate::{forbidden, schema, utils, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, schema, utils, Descriptor, Interface, Method, Result};
 
 /// Process query message.
 ///

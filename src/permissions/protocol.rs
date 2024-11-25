@@ -486,7 +486,8 @@ fn verify_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<
     Ok(())
 }
 
-// Verifies the given message is authorized by one of the action rules in the given protocol rule set.
+// Verifies the given message is authorized by one of the action rules in the 
+// given protocol rule set.
 async fn verify_actions(
     owner: &str, record: &Entry, rule_set: &RuleSet, record_chain: &[Write],
     store: &impl MessageStore,
