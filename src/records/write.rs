@@ -19,7 +19,7 @@ use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::{self, protocol};
-use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
+use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
 use crate::store::{Entry, EntryType, RecordsQuery};
@@ -38,7 +38,7 @@ pub(crate) async fn handle(
 
     // verify integrity of messages with protocol
     if write.descriptor.protocol.is_some() {
-        protocol::verify(owner, &write, provider).await?;
+        integrity::verify(owner, &write, provider).await?;
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
@@ -1095,7 +1095,7 @@ async fn process_stream(
             return Err(unexpected!("actual data size does not match descriptor `data_size`"));
         }
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            protocol::verify_schema(&write, &data_bytes)?;
+            integrity::verify_schema(&write, &data_bytes)?;
         }
 
         write.descriptor.data_cid = data_cid;

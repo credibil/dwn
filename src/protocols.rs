@@ -2,6 +2,7 @@
 
 pub mod configure;
 pub mod query;
+pub(crate) mod integrity;
 
 use serde::{Deserialize, Serialize};
 
