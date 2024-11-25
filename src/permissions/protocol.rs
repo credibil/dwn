@@ -14,6 +14,7 @@ pub struct Protocol<'a> {
 
 impl<'a> Protocol<'a> {
     /// Create a new `Protocol` instance.
+    #[must_use]
     pub fn new(protocol: &'a str) -> Self {
         Self { _protocol: protocol }
     }
@@ -121,8 +122,9 @@ impl<'a> Protocol<'a> {
         let record: Record = write.into();
         let protocol = record.protocol()?;
         let rule_set = record.rule_set(owner, store).await?;
+        let context_id = &write.context_id;
 
-        verify_role(owner, &record, &rule_set, protocol, write.context_id.clone(), store).await?;
+        verify_role(owner, &record, &rule_set, protocol, context_id.as_ref(), store).await?;
         verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -139,10 +141,9 @@ impl<'a> Protocol<'a> {
         let record: Record = query.into();
         let protocol = record.protocol()?;
         let rule_set = record.rule_set(owner, store).await?;
+        let context_id = &query.descriptor.filter.context_id;
 
-        let filter = &query.descriptor.filter;
-
-        verify_role(owner, &record, &rule_set, protocol, filter.context_id.clone(), store).await?;
+        verify_role(owner, &record, &rule_set, protocol, context_id.as_ref(), store).await?;
         verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -158,10 +159,9 @@ impl<'a> Protocol<'a> {
         let record: Record = subscribe.into();
         let protocol = record.protocol()?;
         let rule_set = record.rule_set(owner, store).await?;
+        let context_id = &subscribe.descriptor.filter.context_id;
 
-        let filter = &subscribe.descriptor.filter;
-
-        verify_role(owner, &record, &rule_set, protocol, filter.context_id.clone(), store).await?;
+        verify_role(owner, &record, &rule_set, protocol, context_id.as_ref(), store).await?;
         verify_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -177,10 +177,11 @@ impl<'a> Protocol<'a> {
         let record: Record = write.into();
         let protocol = record.protocol()?;
         let rule_set = record.rule_set(owner, store).await?;
+        let context_id = &write.context_id;
 
         let delete: Record = delete.into();
 
-        verify_role(owner, &delete, &rule_set, protocol, write.context_id.clone(), store).await?;
+        verify_role(owner, &delete, &rule_set, protocol, context_id.as_ref(), store).await?;
         verify_action(owner, &delete, &rule_set, store).await?;
 
         Ok(())
@@ -189,7 +190,7 @@ impl<'a> Protocol<'a> {
 
 // Check if the incoming message is invoking a role. If so, validate the invoked role.
 async fn verify_role(
-    owner: &str, record: &Record, rule_set: &RuleSet, protocol: &str, context_id: Option<String>,
+    owner: &str, record: &Record, rule_set: &RuleSet, protocol: &str, context_id: Option<&String>,
     store: &impl MessageStore,
 ) -> Result<()> {
     let Some(authzn) = record.authorization() else {
@@ -215,7 +216,8 @@ async fn verify_role(
     // `context_id` prefix filter
     if segment_count > 0 {
         // context_id segment count is never shorter than the role path count.
-        let context_id = context_id.unwrap_or_default();
+        let default = String::new();
+        let context_id = context_id.unwrap_or(&default);
         let context_id_segments: Vec<&str> = context_id.split('/').collect();
         let prefix = context_id_segments[..segment_count].join("/");
 
