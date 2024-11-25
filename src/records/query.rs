@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{protocol, Grant};
+use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
@@ -170,8 +170,9 @@ impl Query {
         }
 
         // verify protocol when request invokes a protocol role
-        if authzn.jws_payload()?.protocol_role.is_some() {
-            protocol::permit_read(owner, self, provider).await?;
+        if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
+            let protocol = Protocol::new(protocol);
+            return protocol.permit_read(owner, self, provider).await;
         }
 
         Ok(())

@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::protocol;
+use crate::permissions::Protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
 use crate::store::{Entry, EntryType, RecordsQuery};
@@ -163,8 +163,9 @@ impl Delete {
             return Ok(());
         }
 
-        if write.descriptor.protocol.is_some() {
-            return protocol::permit_delete(owner, self, write, store).await;
+        if let Some(protocol) = &write.descriptor.protocol {
+            let protocol = Protocol::new(protocol);
+            return protocol.permit_delete(owner, self, write, store).await;
         }
 
         Err(forbidden!("`RecordsDelete` message failed authorization"))

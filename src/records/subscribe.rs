@@ -11,7 +11,7 @@ use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
-use crate::permissions::{protocol, Grant};
+use crate::permissions::{Protocol, Grant};
 use crate::provider::{EventStream, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::{forbidden, Descriptor, Interface, Method, Quota, Result};
@@ -132,8 +132,9 @@ impl Subscribe {
         }
 
         // verify protocol when request invokes a protocol role
-        if authzn.jws_payload()?.protocol_role.is_some() {
-            protocol::permit_subscribe(owner, self, provider).await?;
+                if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
+            let protocol = Protocol::new(protocol);
+            return protocol.permit_subscribe(owner, self, provider).await;
         }
 
         Ok(())

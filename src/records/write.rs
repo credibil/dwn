@@ -18,7 +18,7 @@ use vercre_infosec::{Cipher, Signer};
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{self, protocol};
+use crate::permissions::{self, Protocol};
 use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
@@ -311,8 +311,9 @@ impl Write {
         };
 
         // protocol-specific authorization
-        if self.descriptor.protocol.is_some() {
-            return protocol::permit_write(owner, self, store).await;
+        if let Some(protocol) = &self.descriptor.protocol {
+            let protocol = Protocol::new(protocol);
+            return protocol.permit_write(owner, self, store).await;
         }
 
         Err(forbidden!("message failed authorization"))
