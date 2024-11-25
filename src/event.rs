@@ -13,8 +13,11 @@ use crate::messages::MessagesFilter;
 use crate::records::{RecordsFilter, TagFilter};
 use crate::store::{Entry, EntryType};
 
-/// Unifying type for all events (which happens to be identical to `Entry`).
+/// Alias for `store::Entry` used for event-related functionality.
 pub type Event = Entry;
+
+/// Alias for `store::EventType` to be used as the type of the event.
+pub type EventType = EntryType;
 
 /// Filter to use when subscribing to events.
 #[derive(Debug, Deserialize, Serialize)]
@@ -64,38 +67,47 @@ impl Stream for Subscriber {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let event = self.receiver.as_mut().unwrap().poll_recv(cx);
-        if let Poll::Ready(Some(entry)) = &event {
-            if self.filter.is_match(entry) {
-                return Poll::Ready(Some(entry.clone()));
+
+        if let Poll::Ready(Some(event)) = &event {
+            if self.filter.is_match(event) {
+                return Poll::Ready(Some(event.clone()));
             }
+            return Poll::Pending;
         }
+
         event
     }
 }
 
 impl SubscribeFilter {
-    fn is_match(&self, entry: &Entry) -> bool {
+    fn is_match(&self, event: &Event) -> bool {
         match self {
             Self::Messages(filters) => {
                 for filter in filters {
-                    if filter.is_match(entry) {
+                    if filter.is_match(event) {
                         return true;
                     }
                 }
                 false
             }
-            Self::Records(filter) => filter.is_match(entry),
+            Self::Records(filter) => {
+                // when filter is record filter, check event is a record
+                if let EventType::Configure(_) = event.message {
+                    return false;
+                }
+                filter.is_match(event)
+            }
         }
     }
 }
 
 impl RecordsFilter {
     #[allow(clippy::too_many_lines)]
-    fn is_match(&self, entry: &Entry) -> bool {
-        let EntryType::Write(write) = &entry.message else {
+    fn is_match(&self, event: &Entry) -> bool {
+        let EventType::Write(write) = &event.message else {
             return false;
         };
-        let indexes = &entry.indexes;
+        let indexes = &event.indexes;
         let descriptor = &write.descriptor;
 
         if let Some(author) = &self.author {
@@ -223,8 +235,8 @@ impl TagFilter {
 }
 
 impl MessagesFilter {
-    fn is_match(&self, entry: &Entry) -> bool {
-        let descriptor = &entry.descriptor();
+    fn is_match(&self, event: &Entry) -> bool {
+        let descriptor = &event.descriptor();
 
         if let Some(interface) = &self.interface {
             if interface != &descriptor.interface {
@@ -237,16 +249,16 @@ impl MessagesFilter {
             }
         }
         if let Some(protocol) = &self.protocol {
-            match entry.message {
-                EntryType::Write(ref write) => {
+            match event.message {
+                EventType::Write(ref write) => {
                     if Some(protocol) != write.descriptor.protocol.as_ref() {
                         return false;
                     }
                 }
-                EntryType::Delete(_) => {
+                EventType::Delete(_) => {
                     return false;
                 }
-                EntryType::Configure(ref configure) => {
+                EventType::Configure(ref configure) => {
                     if protocol != &configure.descriptor.definition.protocol {
                         return false;
                     }

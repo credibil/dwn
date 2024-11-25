@@ -72,7 +72,17 @@ async fn owner_events() {
     // --------------------------------------------------
     // The subscriber should have a matching write event.
     // --------------------------------------------------
-    if let Some(event) = subscribe_reply.subscription.next().await {
-        assert_eq!(event.cid().unwrap(), message_cid);
+    // if let Some(event) = subscribe_reply.subscription.next().await {
+    //     assert_eq!(message_cid, event.cid().unwrap());
+    // }
+
+    let mut found = false;
+    while let Some(event) = subscribe_reply.subscription.next().await {
+        println!("{}",event.cid().unwrap());
+        if message_cid == event.cid().unwrap() {
+            found = true;
+            break;
+        }
     }
+    assert!(found);
 }

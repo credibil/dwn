@@ -49,13 +49,13 @@ impl EventLog for ProviderImpl {
     }
 }
 
-const SUBJECT: &str = "events";
+// const SUBJECT: &str = "events";
 
 #[async_trait]
 impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
     async fn subscribe(&self, owner: &str, filter: SubscribeFilter) -> Result<Subscriber> {
-        let mut subscriber = self.nats_client.subscribe(SUBJECT).await?;
+        let mut subscriber = self.nats_client.subscribe("events").await?;
         let (sender, receiver) = mpsc::channel::<Event>(100);
 
         // forward filtered messages from NATS to our subscriber
@@ -73,7 +73,7 @@ impl EventStream for ProviderImpl {
     /// Emits an event to a owner's event stream.
     async fn emit(&self, owner: &str, event: &Event) -> Result<()> {
         let bytes = serde_json::to_vec(event)?;
-        self.nats_client.publish(SUBJECT, bytes.into()).await?;
+        self.nats_client.publish("events", bytes.into()).await?;
         Ok(())
     }
 }
