@@ -68,6 +68,7 @@ impl Stream for Subscriber {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let event = self.receiver.as_mut().unwrap().poll_recv(cx);
 
+        // check 'ready' events match the stream filter before surfacing it
         if let Poll::Ready(Some(event)) = &event {
             if self.filter.is_match(event) {
                 return Poll::Ready(Some(event.clone()));
