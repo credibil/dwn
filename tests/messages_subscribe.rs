@@ -1,5 +1,7 @@
 //! Messages Subscribe
 
+use std::time::Duration;
+
 use futures::StreamExt;
 use http::StatusCode;
 use serde_json::json;
@@ -71,17 +73,14 @@ async fn owner_events() {
     // --------------------------------------------------
     // The subscriber should have a matching write event.
     // --------------------------------------------------
-    // if let Some(event) = subscribe_reply.subscription.next().await {
-    //     assert_eq!(message_cid, event.cid().unwrap());
-    // }
-
-    let mut found = false;
-    while let Some(event) = subscribe_reply.subscription.next().await {
-        println!("{}", event.cid().unwrap());
-        if message_cid == event.cid().unwrap() {
-            found = true;
-            break;
+    let find_event = tokio::spawn(async move {
+        while let Some(event) = subscribe_reply.subscription.next().await {
+            if message_cid == event.cid().unwrap() {
+                break;
+            }
         }
+    });
+    if let Err(_) = tokio::time::timeout(Duration::from_secs(2), find_event).await {
+        panic!("should have found event");
     }
-    assert!(found);
 }
