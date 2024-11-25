@@ -8,8 +8,8 @@ publish = false
 
 [dependencies]
 base64ct.workspace = true
+dwn-test.workspace = true
 serde_json.workspace = true
-test-utils.workspace = true
 tokio.workspace = true
 vercre-dwn = { path = "../.." }
 

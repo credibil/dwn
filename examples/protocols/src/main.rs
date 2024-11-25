@@ -1,7 +1,7 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
+use dwn_test::keystore::{Keystore, OWNER_DID};
+use dwn_test::store::ProviderImpl;
 use serde_json::json;
-use test_utils::keystore::{Keystore, OWNER_DID};
-use test_utils::store::ProviderImpl;
 use vercre_dwn::endpoint;
 use vercre_dwn::protocols::Query;
 

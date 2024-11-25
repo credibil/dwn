@@ -6,7 +6,7 @@
 
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use test_utils::store::ProviderImpl;
+use dwn_test::store::ProviderImpl;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;

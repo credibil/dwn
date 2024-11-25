@@ -2,10 +2,10 @@
 
 use std::time::Duration;
 
+use dwn_test::store::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use serde_json::json;
-use test_utils::store::ProviderImpl;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::provider::KeyStore;

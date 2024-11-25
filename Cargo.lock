@@ -1154,6 +1154,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
+name = "dwn-test"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "async-trait",
+ "base64ct",
+ "blockstore",
+ "cid 0.11.1",
+ "ed25519-dalek",
+ "futures",
+ "insta",
+ "multibase",
+ "serde",
+ "serde_json",
+ "surrealdb",
+ "tokio",
+ "vercre-dwn",
+ "vercre-infosec",
+ "vercre-serialize",
+]
+
+[[package]]
 name = "earcutr"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3368,8 +3391,8 @@ name = "records"
 version = "0.0.0"
 dependencies = [
  "base64ct",
+ "dwn-test",
  "serde_json",
- "test-utils",
  "tokio",
  "vercre-dwn",
 ]
@@ -4636,29 +4659,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-utils"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-nats",
- "async-trait",
- "base64ct",
- "blockstore",
- "cid 0.11.1",
- "ed25519-dalek",
- "futures",
- "insta",
- "multibase",
- "serde",
- "serde_json",
- "surrealdb",
- "tokio",
- "vercre-dwn",
- "vercre-infosec",
- "vercre-serialize",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5192,6 +5192,7 @@ dependencies = [
  "ciborium",
  "cid 0.11.1",
  "derive_more",
+ "dwn-test",
  "futures",
  "http 1.1.0",
  "insta",
@@ -5201,7 +5202,6 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "test-utils",
  "thiserror 2.0.3",
  "tokio",
  "vercre-did",

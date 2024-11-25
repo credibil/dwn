@@ -41,9 +41,9 @@ vercre-did.workspace = true
 vercre-infosec.workspace = true
 
 [dev-dependencies]
+dwn-test.workspace = true
 insta.workspace = true
 rand.workspace = true
-test-utils.workspace = true
 tokio.workspace = true
 
 [workspace]
@@ -84,6 +84,7 @@ base64ct = { version = "1.6.0", features = ["std"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 cid = "0.11.1"
 derive_more = "1.0.0"
+dwn-test = { path = "crates/dwn-test" }
 futures = "0.3.31"
 http = "1.1.0"
 insta = { version = "1.41.1", features = ["redactions", "yaml"] }
@@ -93,7 +94,6 @@ rand = "0.8.5"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = { version = "1.0.133", features = ["alloc"] }
 sha2 = "0.10.8"
-test-utils = { path = "crates/test-utils" }
 tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
