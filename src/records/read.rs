@@ -11,11 +11,11 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::Scope;
+use crate::permissions::{self, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::store::RecordsQuery;
-use crate::{forbidden, permissions, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result};
 
 /// Process `Read` message.
 ///
@@ -182,28 +182,30 @@ impl Read {
         };
         let author = authzn.author()?;
 
+        // authorization not required for published data
+        if write.descriptor.published.unwrap_or_default() {
+            return Ok(());
+        }
+
         // authorize delegate
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = delegated_grant.to_grant()?;
             grant.verify_scope(write)?;
         }
 
-        // if author is owner, directly grant access
+        // owner can read records they authored
         if author == owner {
             return Ok(());
         }
 
-        // authorization not required for published data
-        if write.descriptor.published.unwrap_or_default() {
-            return Ok(());
-        }
-
-        // message recipient or author can  read it
+        // recipient can read
         if let Some(recipient) = &write.descriptor.recipient {
             if &author == recipient {
                 return Ok(());
             }
         }
+
+        // author can read
         if author == write.authorization.author()? {
             return Ok(());
         }
@@ -211,52 +213,19 @@ impl Read {
         // verify grant
         if let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id {
             let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-            grant.verify(owner, &author, self.descriptor(), store).await?;
-            verify_scope(write, &grant.data.scope)?;
+            grant.permit_read(owner, &author, self, write, store).await?;
             return Ok(());
         }
 
-        if write.descriptor.protocol.is_some() {
-            // ProtocolAuthorization.authorizeRead(tenant, recordsRead, matchedRecordsWrite, messageStore);
+        // verify protocol role and action
+        if let Some(protocol) = &write.descriptor.protocol {
+            let protocol = Protocol::new(protocol);
+            protocol.permit_read(owner, self, store).await?;
+            return Ok(());
         }
 
         Err(forbidden!("read cannot be authorized"))
     }
-}
-fn verify_scope(write: &Write, scope: &Scope) -> Result<()> {
-    // ensure read filters include scoped protocol
-    let Some(protocol) = scope.protocol() else {
-        return Err(forbidden!("missing protocol scope",));
-    };
-
-    // // The record's protocol must match the protocol specified in the record
-    if write.descriptor.protocol.as_deref() != scope.protocol() {
-        return Err(forbidden!("grant and record scopes do not match"));
-    }
-
-    let Some(options) = scope.options() else {
-        return Ok(());
-    };
-
-    // when grant specifies a context_id, check that record falls under it
-    if let Some(grant_context_id) = options.context_id() {
-        let Some(write_context_id) = write.context_id.as_deref() else {
-            return Err(forbidden!("grant specifies contextId but record does not"));
-        };
-        if !write_context_id.starts_with(grant_context_id) {
-            return Err(forbidden!("grant and record `contextId`s do not match"));
-        }
-    }
-
-    // when grant specifies protocol_path, check that record is at it
-    if options.protocol_path().is_none() {
-        return Ok(());
-    }
-    if write.descriptor.protocol_path.as_deref() != options.protocol_path() {
-        return Err(forbidden!("grant and record `protocolPath`s do not match"));
-    }
-
-    Ok(())
 }
 
 /// Reads read descriptor.

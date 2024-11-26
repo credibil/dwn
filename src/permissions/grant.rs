@@ -9,7 +9,8 @@ use super::{ConditionPublication, Conditions, RecordsOptions, Scope, ScopeType};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
-    self, DelegatedGrant, Delete, Query, Subscribe, Write, WriteBuilder, WriteData, WriteProtocol,
+    self, DelegatedGrant, Delete, Query, Read, Subscribe, Write, WriteBuilder, WriteData,
+    WriteProtocol,
 };
 use crate::store::RecordsQuery;
 use crate::{forbidden, unexpected, utils, Descriptor, Interface, Method, Result};
@@ -160,6 +161,19 @@ impl Grant {
     /// # Errors
     /// TODO: Add errors
     pub async fn permit_read(
+        &self, grantor: &str, grantee: &str, read: &Read, write: &Write, store: &impl MessageStore,
+    ) -> Result<()> {
+        self.verify(grantor, grantee, &read.descriptor.base, store).await?;
+        self.verify_scope(write)?;
+        Ok(())
+    }
+
+    /// Verify the grant allows the requestor to access `records::Query` and
+    /// `records::Subscribe` records.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn permit_query(
         &self, grantor: &str, grantee: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let descriptor = &query.descriptor;
@@ -264,12 +278,12 @@ impl Grant {
         match option {
             RecordsOptions::ContextId(context_id) => {
                 if Some(context_id) != write.context_id.as_ref() {
-                    return Err(forbidden!("incorrect scope `context_id`"));
+                    return Err(forbidden!("grant and record `contextId`s do not match"));
                 }
             }
             RecordsOptions::ProtocolPath(protocol_path) => {
                 if Some(protocol_path) != write.descriptor.protocol_path.as_ref() {
-                    return Err(forbidden!("incorrect scope `protocol_path`"));
+                    return Err(forbidden!("grant and record `protocolPath`s do not match"));
                 }
             }
         }

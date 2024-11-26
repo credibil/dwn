@@ -166,14 +166,14 @@ impl Query {
         // verify grant
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant: Grant = delegated_grant.try_into()?;
-            grant.permit_read(&authzn.author()?, &authzn.signer()?, self, provider).await?;
+            grant.permit_query(&authzn.author()?, &authzn.signer()?, self, provider).await?;
         }
 
         // verify protocol when request invokes a protocol role
         if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
             let protocol =
                 Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
-            return protocol.permit_read(owner, self, provider).await;
+            return protocol.permit_query(owner, self, provider).await;
         }
 
         Ok(())

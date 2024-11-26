@@ -6,7 +6,7 @@ use crate::protocols::{
     integrity, Action, ActionRule, Actor, RuleSet, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH,
 };
 use crate::provider::MessageStore;
-use crate::records::{self, Delete, Query, Subscribe, Write};
+use crate::records::{self, Delete, Query, Read, Subscribe, Write};
 use crate::store::RecordsQuery;
 use crate::{forbidden, Range, Result};
 
@@ -36,6 +36,7 @@ impl<'a> Protocol<'a> {
 
 enum Record {
     Write(Write),
+    Read(Read),
     Query(Query),
     Subscribe(Subscribe),
     Delete(Delete),
@@ -44,6 +45,12 @@ enum Record {
 impl From<&Write> for Record {
     fn from(write: &Write) -> Self {
         Self::Write(write.clone())
+    }
+}
+
+impl From<&Read> for Record {
+    fn from(read: &Read) -> Self {
+        Self::Read(read.clone())
     }
 }
 
@@ -69,6 +76,7 @@ impl Record {
     const fn authorization(&self) -> Option<&Authorization> {
         match self {
             Self::Write(write) => Some(&write.authorization),
+            Self::Read(read) => read.authorization.as_ref(),
             Self::Delete(delete) => Some(&delete.authorization),
             Self::Query(query) => query.authorization.as_ref(),
             Self::Subscribe(subscribe) => subscribe.authorization.as_ref(),
@@ -78,6 +86,7 @@ impl Record {
     fn protocol(&self) -> Result<&str> {
         let protocol = match self {
             Self::Write(write) => &write.descriptor.protocol,
+            Self::Read(read) => &read.descriptor.filter.protocol,
             Self::Query(query) => &query.descriptor.filter.protocol,
             Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol,
             Self::Delete(_) => {
@@ -94,6 +103,7 @@ impl Record {
     async fn rule_set(&self, owner: &str, store: &impl MessageStore) -> Result<RuleSet> {
         let protocol_path = match self {
             Self::Write(write) => &write.descriptor.protocol_path,
+            Self::Read(read) => &read.descriptor.filter.protocol_path,
             Self::Query(query) => &query.descriptor.filter.protocol_path,
             Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol_path,
             Self::Delete(_) => {
@@ -139,6 +149,23 @@ impl Protocol<'_> {
     /// # Errors
     /// TODO: Document errors
     pub async fn permit_read(
+        &self, owner: &str, read: &Read, store: &impl MessageStore,
+    ) -> Result<()> {
+        let record: Record = read.into();
+        let rule_set = record.rule_set(owner, store).await?;
+
+        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await?;
+
+        Ok(())
+    }
+
+    /// Protocol-based authorization for `records::Query` and `records::Subscribe`
+    /// messages.
+    ///
+    /// # Errors
+    /// TODO: Document errors
+    pub async fn permit_query(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let record: Record = query.into();
@@ -254,7 +281,7 @@ impl Protocol<'_> {
                     vec![]
                 }
             }
-            Record::Query(_) | Record::Subscribe(_) => Vec::new(),
+            Record::Query(_) | Record::Subscribe(_) | Record::Read(_) => Vec::new(),
             Record::Delete(delete) => {
                 self.record_chain(owner, &delete.descriptor.record_id, store).await?
             }
@@ -367,6 +394,7 @@ impl Protocol<'_> {
 
                 Ok(vec![Action::CoUpdate])
             }
+            Record::Read(_) => Ok(vec![Action::Read]),
             Record::Query(_) => Ok(vec![Action::Query]),
             // Method::Read => Ok(vec![Action::Read]),
             Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
