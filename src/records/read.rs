@@ -63,7 +63,8 @@ pub(crate) async fn handle(
     let mut write = Write::try_from(&entries[0])?;
 
     // TODO: review against the original code — it should take a store provider
-    read.authorize(owner, &write)?;
+    // verify the fetched message can be safely returned to the requestor
+    read.authorize(owner, &write, provider)?;
 
     let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
@@ -174,7 +175,7 @@ pub struct ReadReplyEntry {
 }
 
 impl Read {
-    fn authorize(&self, owner: &str, write: &Write) -> Result<()> {
+    fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
         let Some(authzn) = &self.authorization else {
             return Ok(());
         };
