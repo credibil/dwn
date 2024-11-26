@@ -16,12 +16,13 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, ScopeType};
 use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::DelegatedGrant;
 use crate::store::{Entry, EntryType};
-use crate::{forbidden, schema, unexpected, utils, Descriptor, Interface, Method, Range, Result};
+use crate::{
+    forbidden, permissions, schema, unexpected, utils, Descriptor, Interface, Method, Range, Result,
+};
 
 /// Process query message.
 ///
@@ -179,13 +180,10 @@ impl Configure {
         let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol in grant scope"));
-        };
-        let Some(protocol) = &protocol else {
+        let Some(protocol) = grant.data.scope.protocol() else {
             return Ok(());
+            // return Err(forbidden!("missing protocol in grant scope"));
         };
-
         if protocol != &self.descriptor.definition.protocol {
             return Err(forbidden!(" message and grant protocols do not match"));
         }

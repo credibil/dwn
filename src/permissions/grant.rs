@@ -9,10 +9,10 @@ use super::{ConditionPublication, Conditions, RecordsOptions, Scope, ScopeType};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
-    self, Delete, Query, Subscribe, Write, WriteBuilder, WriteData, WriteProtocol,
+    self, DelegatedGrant, Delete, Query, Subscribe, Write, WriteBuilder, WriteData, WriteProtocol,
 };
 use crate::store::RecordsQuery;
-use crate::{forbidden, utils, Descriptor, Interface, Method, Result};
+use crate::{forbidden, unexpected, utils, Descriptor, Interface, Method, Result};
 
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -34,6 +34,42 @@ pub struct Grant {
     /// The grant's descriptor.
     #[serde(flatten)]
     pub data: GrantData,
+}
+
+impl TryFrom<&Write> for Grant {
+    type Error = crate::Error;
+
+    fn try_from(write: &Write) -> Result<Self> {
+        let permission_grant = write.encoded_data.clone().unwrap_or_default();
+        let grant_data = serde_json::from_str(&permission_grant)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: write.record_id.clone(),
+            grantor: write.authorization.signer().unwrap_or_default(),
+            grantee: write.descriptor.recipient.clone().unwrap_or_default(),
+            date_granted: write.descriptor.date_created,
+            data: grant_data,
+        })
+    }
+}
+
+impl TryFrom<&DelegatedGrant> for Grant {
+    type Error = crate::Error;
+
+    fn try_from(delegated: &DelegatedGrant) -> Result<Self> {
+        let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)?;
+        let grant_data = serde_json::from_slice(&bytes)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: delegated.record_id.clone(),
+            grantor: delegated.authorization.signer()?,
+            grantee: delegated.descriptor.recipient.clone().unwrap_or_default(),
+            date_granted: delegated.descriptor.date_created,
+            data: grant_data,
+        })
+    }
 }
 
 /// Permission grant message payload
@@ -131,10 +167,10 @@ impl Grant {
         self.verify(grantor, grantee, &descriptor.base, store).await?;
 
         // verify protocols match
-        let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
+        if self.data.scope.protocol().is_none() {
             return Ok(());
-        };
-        if &descriptor.filter.protocol != protocol {
+        }
+        if descriptor.filter.protocol.as_deref() != self.data.scope.protocol() {
             return Err(forbidden!("grant and query protocols do not match",));
         }
 
@@ -154,10 +190,10 @@ impl Grant {
         self.verify(grantor, grantee, &descriptor.base, store).await?;
 
         // verify protocols match
-        let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
+        if self.data.scope.protocol().is_none() {
             return Ok(());
         };
-        if &descriptor.filter.protocol != protocol {
+        if descriptor.filter.protocol.as_deref() != self.data.scope.protocol() {
             return Err(forbidden!("grant protocol does not match query protocol",));
         }
 
@@ -175,11 +211,12 @@ impl Grant {
         self.verify(grantor, grantee, &delete.descriptor.base, store).await?;
 
         // must be deleting a record with the same protocol
-        if let ScopeType::Protocols { protocol } = &self.data.scope.scope_type {
-            if protocol != &write.descriptor.protocol {
-                return Err(forbidden!("grant protocol does not match delete protocol",));
-            }
+        if self.data.scope.protocol().is_none() {
+            return Ok(());
         };
+        if write.descriptor.protocol.as_deref() != self.data.scope.protocol() {
+            return Err(forbidden!("grant protocol does not match delete protocol",));
+        }
 
         Ok(())
     }

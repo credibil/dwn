@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 use crate::endpoint::Message;
 pub use crate::messages::{self, MessagesFilter};
 pub use crate::protocols::{self, ProtocolsFilter};
-pub use crate::records::{self, RecordsFilter, TagFilter};
+pub use crate::records::{self, RecordsFilter, TagFilter, Write};
 use crate::{Descriptor, Method, Quota, Range, Result};
 
 /// Entry wraps each message with a unifying type used for all stored messages
@@ -53,9 +53,7 @@ impl Entry {
             EntryType::Configure(ref configure) => configure.descriptor(),
         }
     }
-}
 
-impl Entry {
     /// Return the `RecordsWrite` message, if set.
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
@@ -89,6 +87,39 @@ impl Deref for Entry {
 
     fn deref(&self) -> &Self::Target {
         &self.message
+    }
+}
+
+impl From<&Write> for Entry {
+    fn from(write: &Write) -> Self {
+        let mut save = write.clone();
+        save.encoded_data = None;
+
+        let mut record = Self {
+            message: EntryType::Write(save),
+            indexes: Map::new(),
+        };
+
+        record.indexes.insert(
+            "author".to_string(),
+            Value::String(write.authorization.author().unwrap_or_default()),
+        );
+        record.indexes.insert(
+            "dateUpdated".to_string(),
+            Value::String(write.descriptor.base.message_timestamp.unwrap_or_default().to_rfc3339()),
+        );
+        if let Some(tags) = &write.descriptor.tags {
+            let mut tag_map = Map::new();
+            for (k, v) in tags {
+                tag_map.insert(format!("tag.{k}"), v.clone());
+            }
+            record.indexes.insert("tags".to_string(), Value::Object(tag_map));
+        }
+
+        // TODO: add fields
+        // attester: None,
+
+        record
     }
 }
 

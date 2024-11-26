@@ -9,10 +9,9 @@ use super::MessagesFilter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::store::{Cursor, MessagesQuery};
-use crate::{forbidden, schema, Descriptor, Interface, Method, Result};
+use crate::{forbidden, permissions, schema, Descriptor, Interface, Method, Result};
 
 /// Handle a query message.
 ///
@@ -90,16 +89,14 @@ impl Query {
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
 
-        // ensure query filters include scoped protocol
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol scope"));
-        };
-        if protocol.is_none() {
+        // verify filter protocol
+        if grant.data.scope.protocol().is_none() {
             return Ok(());
-        }
+        };
 
+        let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
-            if &filter.protocol != protocol {
+            if filter.protocol.as_deref() != protocol {
                 return Err(forbidden!("filter protocol does not match scoped protocol",));
             }
         }

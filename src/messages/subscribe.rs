@@ -12,9 +12,8 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
 use crate::messages::MessagesFilter;
-use crate::permissions::{self, ScopeType};
 use crate::provider::{EventStream, MessageStore, Provider, Signer};
-use crate::{forbidden, schema, Descriptor, Interface, Method, Result};
+use crate::{forbidden, permissions, schema, Descriptor, Interface, Method, Result};
 
 /// Handle a subscribe message.
 ///
@@ -88,15 +87,13 @@ impl Subscribe {
         grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
 
         // ensure subscribe filters include scoped protocol
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol scope"));
-        };
-        if protocol.is_none() {
+        if grant.data.scope.protocol().is_none() {
             return Ok(());
-        }
+        };
 
+        let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
-            if &filter.protocol != protocol {
+            if filter.protocol.as_deref() != protocol {
                 return Err(forbidden!("filter protocol does not match scoped protocol",));
             }
         }

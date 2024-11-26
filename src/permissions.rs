@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub use self::grant::{Grant, GrantBuilder, GrantData};
 pub use self::protocol::Protocol;
 use crate::provider::MessageStore;
+use crate::records::Write;
 use crate::store::RecordsQuery;
 use crate::{unexpected, Interface, Method, Result};
 
@@ -53,6 +54,25 @@ pub struct Scope {
     /// Variant scope fields.
     #[serde(flatten)]
     pub scope_type: ScopeType,
+}
+
+impl Scope {
+    /// Get the scope protocol.
+    pub fn protocol(&self) -> Option<&str> {
+        match &self.scope_type {
+            ScopeType::Protocols { protocol } => protocol.as_deref(),
+            ScopeType::EntryType { protocol } => protocol.as_deref(),
+            ScopeType::Records { protocol, .. } => Some(protocol),
+        }
+    }
+
+    /// Get records scope options.
+    pub fn options(&self) -> Option<&RecordsOptions> {
+        match &self.scope_type {
+            ScopeType::Records { option, .. } => option.as_ref(),
+            _ => None,
+        }
+    }
 }
 
 /// Scope type variants.
@@ -106,6 +126,24 @@ impl Default for RecordsOptions {
     }
 }
 
+impl RecordsOptions {
+    /// Get the context ID.
+    pub fn context_id(&self) -> Option<&str> {
+        match self {
+            Self::ContextId(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// Get the protocol path.
+    pub fn protocol_path(&self) -> Option<&str> {
+        match self {
+            Self::ProtocolPath(path) => Some(path),
+            _ => None,
+        }
+    }
+}
+
 /// Conditions that must be met when the grant is used.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -148,4 +186,23 @@ pub struct Request {
 
     /// Optional conditions that must be met when the requested grant is used.
     pub conditions: Option<Conditions>,
+}
+
+impl TryFrom<&Write> for Request {
+    type Error = crate::Error;
+
+    fn try_from(write: &Write) -> Result<Self> {
+        let permission_grant = write.encoded_data.clone().unwrap_or_default();
+        let grant_data: GrantData = serde_json::from_str(&permission_grant)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: write.record_id.clone(),
+            requestor: write.authorization.signer().unwrap_or_default(),
+            description: grant_data.description,
+            delegated: grant_data.delegated,
+            scope: grant_data.scope,
+            conditions: grant_data.conditions,
+        })
+    }
 }

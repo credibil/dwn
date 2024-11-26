@@ -18,7 +18,7 @@ use vercre_infosec::{Cipher, Signer};
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, Grant, GrantData, Protocol, Request};
+use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
@@ -200,39 +200,6 @@ impl Message for Write {
 // #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct WriteReply;
-
-impl From<&Write> for Entry {
-    fn from(write: &Write) -> Self {
-        let mut save = write.clone();
-        save.encoded_data = None;
-
-        let mut record = Self {
-            message: EntryType::Write(save),
-            indexes: Map::new(),
-        };
-
-        record.indexes.insert(
-            "author".to_string(),
-            Value::String(write.authorization.author().unwrap_or_default()),
-        );
-        record.indexes.insert(
-            "dateUpdated".to_string(),
-            Value::String(write.descriptor.base.message_timestamp.unwrap_or_default().to_rfc3339()),
-        );
-        if let Some(tags) = &write.descriptor.tags {
-            let mut tag_map = Map::new();
-            for (k, v) in tags {
-                tag_map.insert(format!("tag.{k}"), v.clone());
-            }
-            record.indexes.insert("tags".to_string(), Value::Object(tag_map));
-        }
-
-        // TODO: add fields
-        // attester: None,
-
-        record
-    }
-}
 
 impl TryFrom<Entry> for Write {
     type Error = crate::Error;
@@ -599,61 +566,6 @@ impl From<Write> for DelegatedGrant {
             context_id: write.context_id,
             encoded_data: write.encoded_data.unwrap_or_default(),
         }
-    }
-}
-
-impl TryFrom<&Write> for Request {
-    type Error = crate::Error;
-
-    fn try_from(write: &Write) -> Result<Self> {
-        let permission_grant = write.encoded_data.clone().unwrap_or_default();
-        let grant_data: GrantData = serde_json::from_str(&permission_grant)
-            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
-
-        Ok(Self {
-            id: write.record_id.clone(),
-            requestor: write.authorization.signer().unwrap_or_default(),
-            description: grant_data.description,
-            delegated: grant_data.delegated,
-            scope: grant_data.scope,
-            conditions: grant_data.conditions,
-        })
-    }
-}
-
-impl TryFrom<&Write> for Grant {
-    type Error = crate::Error;
-
-    fn try_from(write: &Write) -> Result<Self> {
-        let permission_grant = write.encoded_data.clone().unwrap_or_default();
-        let grant_data = serde_json::from_str(&permission_grant)
-            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
-
-        Ok(Self {
-            id: write.record_id.clone(),
-            grantor: write.authorization.signer().unwrap_or_default(),
-            grantee: write.descriptor.recipient.clone().unwrap_or_default(),
-            date_granted: write.descriptor.date_created,
-            data: grant_data,
-        })
-    }
-}
-
-impl TryFrom<&DelegatedGrant> for Grant {
-    type Error = crate::Error;
-
-    fn try_from(delegated: &DelegatedGrant) -> Result<Self> {
-        let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)?;
-        let grant_data = serde_json::from_slice(&bytes)
-            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
-
-        Ok(Self {
-            id: delegated.record_id.clone(),
-            grantor: delegated.authorization.signer()?,
-            grantee: delegated.descriptor.recipient.clone().unwrap_or_default(),
-            date_granted: delegated.descriptor.date_created,
-            data: grant_data,
-        })
     }
 }
 

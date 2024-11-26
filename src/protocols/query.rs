@@ -8,11 +8,10 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, ScopeType};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::store::{Cursor, ProtocolsQuery};
-use crate::{forbidden, schema, utils, Descriptor, Interface, Method, Result};
+use crate::{forbidden, permissions, schema, utils, Descriptor, Interface, Method, Result};
 
 /// Process query message.
 ///
@@ -127,16 +126,14 @@ impl Query {
         let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
 
         // if set, query and grant protocols need to match
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol in grant scope"));
+        let Some(protocol) = grant.data.scope.protocol() else {
+            return Ok(());
         };
-        if let Some(protocol) = &protocol {
-            let Some(filter) = &self.descriptor.filter else {
-                return Err(forbidden!("missing filter"));
-            };
-            if protocol != &filter.protocol {
-                return Err(forbidden!("unauthorized protocol"));
-            }
+        let Some(filter) = &self.descriptor.filter else {
+            return Err(forbidden!("missing filter"));
+        };
+        if protocol != &filter.protocol {
+            return Err(forbidden!("unauthorized protocol"));
         }
 
         Ok(())
