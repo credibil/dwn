@@ -18,7 +18,7 @@ use vercre_infosec::{Cipher, Signer};
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{self, Protocol};
+use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
@@ -586,25 +586,38 @@ impl DelegatedGrant {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub fn to_grant(&self) -> Result<permissions::Grant> {
+    pub fn to_grant(&self) -> Result<Grant> {
         self.try_into()
     }
 }
 
-impl TryFrom<&DelegatedGrant> for permissions::Grant {
+impl From<Write> for DelegatedGrant {
+    fn from(write: Write) -> Self {
+        Self {
+            descriptor: write.descriptor,
+            authorization: Box::new(write.authorization),
+            record_id: write.record_id,
+            context_id: write.context_id,
+            encoded_data: write.encoded_data.unwrap_or_default(),
+        }
+    }
+}
+
+impl TryFrom<&DelegatedGrant> for Grant {
     type Error = crate::Error;
 
     fn try_from(delegated: &DelegatedGrant) -> Result<Self> {
         let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)?;
-        let mut grant: Self = serde_json::from_slice(&bytes)
+        let grant_data = serde_json::from_slice(&bytes)
             .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
 
-        grant.id.clone_from(&delegated.record_id);
-        grant.grantor = delegated.authorization.signer()?;
-        grant.grantee = delegated.descriptor.recipient.clone().unwrap_or_default();
-        grant.date_granted.clone_from(&delegated.descriptor.date_created);
-
-        Ok(grant)
+        Ok(Self {
+            id: delegated.record_id.clone(),
+            grantor: delegated.authorization.signer()?,
+            grantee: delegated.descriptor.recipient.clone().unwrap_or_default(),
+            date_granted: delegated.descriptor.date_created,
+            data: grant_data,
+        })
     }
 }
 

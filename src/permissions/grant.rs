@@ -198,17 +198,16 @@ impl Grant {
             return Err(forbidden!("grant has expired"));
         }
 
-        // Check if grant has been revoked — using latest revocation message
+        // check if grant has been revoked — using latest revocation message
         let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH).build();
-        let (messages, _) = store.query(grantor, &query).await?;
-        let Some(oldest) = messages.first().cloned() else {
-            return Err(forbidden!("grant has been revoked"));
-        };
-        let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
-            return Err(forbidden!("missing message timestamp"));
-        };
-        if message_timestamp.lt(timestamp) {
-            return Err(forbidden!("grant with CID {} has been revoked", self.id));
+        let (entries, _) = store.query(grantor, &query).await?;
+        if let Some(oldest) = entries.first().cloned() {
+            let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
+                return Err(forbidden!("missing message timestamp"));
+            };
+            if message_timestamp.lt(timestamp) {
+                return Err(forbidden!("grant with CID {} has been revoked", self.id));
+            }
         }
 
         Ok(())

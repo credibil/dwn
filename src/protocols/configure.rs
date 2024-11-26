@@ -18,7 +18,7 @@ use crate::endpoint::{Context, Message, Reply, Status};
 use crate::permissions::ScopeType;
 use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
-use crate::records::Write;
+use crate::records::DelegatedGrant;
 use crate::store::{Entry, EntryType};
 use crate::{forbidden, schema, unexpected, utils, Descriptor, Interface, Method, Range, Result};
 
@@ -415,7 +415,7 @@ pub struct Tags {
 pub struct ConfigureBuilder {
     message_timestamp: Option<DateTime<Utc>>,
     definition: Option<Definition>,
-    delegated_grant: Option<Write>,
+    delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
 }
 
@@ -441,7 +441,7 @@ impl ConfigureBuilder {
     /// The delegated grant invoked to sign on behalf of the logical author,
     /// who is the grantor of the delegated grant.
     #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: Write) -> Self {
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
         self.delegated_grant = Some(delegated_grant);
         self
     }
@@ -481,8 +481,11 @@ impl ConfigureBuilder {
 
         // authorization
         let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(id);
+        if let Some(permission_grant_id) = self.permission_grant_id {
+            builder = builder.permission_grant_id(permission_grant_id);
+        }
+        if let Some(delegated_grant) = self.delegated_grant {
+            builder = builder.delegated_grant(delegated_grant);
         }
         let authorization = builder.build(signer).await?;
 

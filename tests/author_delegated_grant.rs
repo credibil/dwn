@@ -30,7 +30,7 @@ async fn configure_any() {
         .delegated(true)
         .scope(Interface::Protocols, Method::Configure, ScopeType::Protocols { protocol: None });
 
-    let grant_to_bob = builder.build(&alice_keyring).await.expect("should create grant");
+    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
@@ -38,9 +38,21 @@ async fn configure_any() {
     let email = include_bytes!("protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
 
+    // let definition = Definition {
+    //     protocol: "https://example.org/protocol/configure-any".to_string(),
+    //     types: BTreeMap::from([(
+    //         "schema".to_string(),
+    //         ProtocolType {
+    //             schema: Some("test-object".to_string()),
+    //             data_formats: Some(vec!["text/plain".to_string()]),
+    //         },
+    //     )]),
+    //     ..Definition::default()
+    // };
+
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .delegated_grant(grant_to_bob)
+        .delegated_grant(bob_grant.try_into().expect("should convert"))
         .build(&bob_keyring)
         .await
         .expect("should build");
@@ -50,9 +62,15 @@ async fn configure_any() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     assert_snapshot!("configure", reply, {
-        ".descriptor.messageTimestamp" => "[messageTimestamp]",
-        ".authorization.signature.payload" => "[payload]",
-        ".authorization.signature.signatures[0].signature" => "[signature]",
+        ".**.messageTimestamp" => "[messageTimestamp]",
+        ".**.signature.payload" => "[payload]",
+        ".**.signature.signatures[0].signature" => "[signature]",
+
+        ".*.authorDelegatedGrant.descriptor.dateCreated" => "[dateCreated]",
+        ".*.authorDelegatedGrant.descriptor.dataCid" => "[dataCid]",
+        ".*.authorDelegatedGrant.recordId" => "[recordId]",
+        ".*.authorDelegatedGrant.contextId" => "[contextId]",
+        ".*.authorDelegatedGrant.encodedData" => "[encodedData]",
     });
 
     // --------------------------------------------------
@@ -68,9 +86,15 @@ async fn configure_any() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     assert_snapshot!("query", reply, {
-        ".entries[].descriptor.messageTimestamp" => "[messageTimestamp]",
-        ".entries[].authorization.signature.payload" => "[payload]",
-        ".entries[].authorization.signature.signatures[0].signature" => "[signature]",
+        ".**.messageTimestamp" => "[messageTimestamp]",
+        ".**.signature.payload" => "[payload]",
+        ".**.signature.signatures[0].signature" => "[signature]",
+
+        ".**.authorDelegatedGrant.descriptor.dateCreated" => "[dateCreated]",
+        ".**.authorDelegatedGrant.descriptor.dataCid" => "[dataCid]",
+        ".**.authorDelegatedGrant.recordId" => "[recordId]",
+        ".**.authorDelegatedGrant.contextId" => "[contextId]",
+        ".**.authorDelegatedGrant.encodedData" => "[encodedData]",
     });
 }
 
