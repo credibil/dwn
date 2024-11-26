@@ -54,14 +54,14 @@ async fn flat_space() {
         endpoint::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
     assert_snapshot!("alice_read", reply, {
-        ".entry.recordsWrite.recordId" => "[recordId]",
-        ".entry.recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
-        ".entry.recordsWrite.descriptor.dateCreated" => "[dateCreated]",
-        ".entry.recordsWrite.descriptor.datePublished" => "[datePublished]",
-        ".entry.recordsWrite.authorization.signature.payload" => "[payload]",
-        ".entry.recordsWrite.authorization.signature.signatures[0].signature" => "[signature]",
-        ".entry.recordsWrite.attestation.payload" => "[payload]",
-        ".entry.recordsWrite.attestation.signatures[0].signature" => "[signature]",
+        ".**.recordId" => "[recordId]",
+        ".**.messageTimestamp" => "[messageTimestamp]",
+        ".**.dateCreated" => "[dateCreated]",
+        ".**.datePublished" => "[datePublished]",
+        ".**.signature.payload" => "[payload]",
+        ".**.signature.signatures[0].signature" => "[signature]",
+        ".**.attestation.payload" => "[payload]",
+        ".**.attestation.signatures[0].signature" => "[signature]",
         ".entry.data" => "[data]",
     });
 

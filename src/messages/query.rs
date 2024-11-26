@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::MessagesFilter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
+use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, ScopeType};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::store::{Cursor, MessagesQuery};
@@ -69,8 +69,8 @@ impl Message for Query {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -83,11 +83,10 @@ impl Query {
             return Ok(());
         }
 
+        // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
             return Ok(());
         };
-
-        // verify grant
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
 
@@ -95,7 +94,6 @@ impl Query {
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
             return Err(forbidden!("missing protocol scope"));
         };
-
         if protocol.is_none() {
             return Ok(());
         }

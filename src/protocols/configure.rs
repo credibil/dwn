@@ -6,16 +6,17 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::ScopeType;
+use crate::endpoint::{Message, Reply, Status};
+use crate::permissions::{self, ScopeType};
 use crate::protocols::{query, ProtocolsFilter};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::DelegatedGrant;
@@ -27,15 +28,15 @@ use crate::{forbidden, schema, unexpected, utils, Descriptor, Interface, Method,
 /// # Errors
 /// TODO: Add errors
 pub(crate) async fn handle(
-    ctx: &Context, configure: Configure, provider: &impl Provider,
+    owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
-    configure.authorize(ctx, provider).await?;
+    configure.authorize(owner, provider).await?;
 
     // find any matching protocol entries
     let filter = ProtocolsFilter {
         protocol: configure.descriptor.definition.protocol.clone(),
     };
-    let results = query::fetch_config(&ctx.owner, Some(filter), provider).await?;
+    let results = query::fetch_config(owner, Some(filter), provider).await?;
 
     // determine if incoming message is the latest
     let is_latest = if let Some(existing) = &results {
@@ -55,8 +56,8 @@ pub(crate) async fn handle(
             let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
             if current_ts.cmp(&latest_ts) == Ordering::Less {
                 let cid = cid::from_value(&e)?;
-                MessageStore::delete(provider, &ctx.owner, &cid).await?;
-                EventLog::delete(provider, &ctx.owner, &cid).await?;
+                MessageStore::delete(provider, owner, &cid).await?;
+                EventLog::delete(provider, owner, &cid).await?;
             }
         }
         is_latest
@@ -70,9 +71,9 @@ pub(crate) async fn handle(
 
     // save the incoming message
     let entry = Entry::from(&configure);
-    MessageStore::put(provider, &ctx.owner, &entry).await?;
-    EventLog::append(provider, &ctx.owner, &entry).await?;
-    EventStream::emit(provider, &ctx.owner, &entry).await?;
+    MessageStore::put(provider, owner, &entry).await?;
+    EventLog::append(provider, owner, &entry).await?;
+    EventStream::emit(provider, owner, &entry).await?;
 
     Ok(Reply {
         status: Status {
@@ -109,8 +110,8 @@ impl Message for Configure {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(ctx, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -155,25 +156,27 @@ impl Configure {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn authorize(&self, ctx: &Context, provider: &impl Provider) -> Result<()> {
+    pub async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let authzn = &self.authorization;
+        let author = authzn.author()?;
+
         // authorize the author-delegate who signed the message
-        if let Some(delegated) = &self.authorization.author_delegated_grant {
+        if let Some(delegated) = &authzn.author_delegated_grant {
             let grant = delegated.to_grant()?;
-            grant
-                .verify(
-                    &self.authorization.author()?,
-                    &self.authorization.signer()?,
-                    &self.descriptor.base,
-                    provider,
-                )
-                .await?;
+            grant.verify(&author, &authzn.signer()?, &self.descriptor.base, store).await?;
         }
 
-        if self.authorization.author()? == ctx.owner {
+        if self.authorization.author()? == owner {
             return Ok(());
         }
 
-        let grant = ctx.grant.as_ref().ok_or_else(|| forbidden!("missing grant"))?;
+        // permission grant
+        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
+        let payload: JwsPayload = serde_json::from_slice(&decoded)?;
+        let Some(permission_grant_id) = &payload.permission_grant_id else {
+            return Err(forbidden!("missing permission grant ID"));
+        };
+        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
+use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
 use crate::messages::MessagesFilter;
 use crate::permissions::{self, ScopeType};
@@ -66,8 +66,8 @@ impl Message for Subscribe {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -80,11 +80,10 @@ impl Subscribe {
             return Ok(());
         }
 
+        // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
             return Ok(());
         };
-
-        // verify grant
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
 
@@ -92,7 +91,6 @@ impl Subscribe {
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
             return Err(forbidden!("missing protocol scope"));
         };
-
         if protocol.is_none() {
             return Ok(());
         }

@@ -1,13 +1,14 @@
 //! # Protocols Query
 
 use async_trait::async_trait;
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::ScopeType;
+use crate::endpoint::{Message, Reply, Status};
+use crate::permissions::{self, ScopeType};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::store::{Cursor, ProtocolsQuery};
@@ -18,10 +19,10 @@ use crate::{forbidden, schema, utils, Descriptor, Interface, Method, Result};
 /// # Errors
 /// TODO: Add errors
 pub(crate) async fn handle(
-    ctx: &Context, query: Query, provider: &impl Provider,
+    owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
-    query.authorize(ctx)?;
-    let entries = fetch_config(&ctx.owner, query.descriptor.filter, provider).await?;
+    query.authorize(owner, provider).await?;
+    let entries = fetch_config(owner, query.descriptor.filter, provider).await?;
 
     Ok(Reply {
         status: Status {
@@ -64,8 +65,8 @@ impl Message for Query {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(ctx, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -113,11 +114,17 @@ impl Query {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub fn authorize(&self, ctx: &Context) -> Result<()> {
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let authzn = &self.authorization;
+
         // no grant -> author == owner
-        let Some(grant) = &ctx.grant else {
+        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
+        let payload: JwsPayload = serde_json::from_slice(&decoded)?;
+        let Some(permission_grant_id) = &payload.permission_grant_id else {
+            // return Err(forbidden!("missing permission grant ID"));
             return Ok(());
         };
+        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
 
         // if set, query and grant protocols need to match
         let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {

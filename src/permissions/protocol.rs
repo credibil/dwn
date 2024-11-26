@@ -1,7 +1,10 @@
 //! # Protocol Permissions
 
 use crate::auth::Authorization;
-use crate::protocols::{integrity, Action, ActionRule, Actor, RuleSet};
+use crate::permissions::{self, Grant, Request, Scope};
+use crate::protocols::{
+    integrity, Action, ActionRule, Actor, RuleSet, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH,
+};
 use crate::provider::MessageStore;
 use crate::records::{self, Delete, Query, Subscribe, Write};
 use crate::store::RecordsQuery;
@@ -411,4 +414,26 @@ fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -
         return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
     }
     Ok(author == ancestor.authorization.author()?)
+}
+
+/// Get the scope for a permission record. If the record is a revocation, the
+/// scope is fetched from the grant that is being revoked.
+pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) -> Result<Scope> {
+    //Result<Scope>
+    if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+        return Err(forbidden!("unexpected protocol for permission record"));
+    }
+    if write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string()) {
+        let Some(parent_id) = &write.descriptor.parent_id else {
+            return Err(forbidden!("missing parent ID for revocation record"));
+        };
+        let grant = permissions::fetch_grant(owner, parent_id, store).await?;
+        return Ok(grant.data.scope);
+    } else if write.descriptor.protocol_path == Some(GRANT_PATH.to_string()) {
+        let grant = Grant::try_from(write)?;
+        return Ok(grant.data.scope);
+    }
+
+    let request = Request::try_from(write)?;
+    Ok(request.scope)
 }

@@ -17,8 +17,8 @@ use vercre_infosec::{Cipher, Signer};
 
 use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{self, Grant, Protocol};
+use crate::endpoint::{Message, Reply, Status};
+use crate::permissions::{self, Grant, GrantData, Protocol, Request};
 use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
@@ -191,8 +191,8 @@ impl Message for Write {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -304,7 +304,6 @@ impl Write {
         // permission grant
         let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
         let payload: WriteSignaturePayload = serde_json::from_slice(&decoded)?;
-
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
@@ -600,6 +599,43 @@ impl From<Write> for DelegatedGrant {
             context_id: write.context_id,
             encoded_data: write.encoded_data.unwrap_or_default(),
         }
+    }
+}
+
+impl TryFrom<&Write> for Request {
+    type Error = crate::Error;
+
+    fn try_from(write: &Write) -> Result<Self> {
+        let permission_grant = write.encoded_data.clone().unwrap_or_default();
+        let grant_data: GrantData = serde_json::from_str(&permission_grant)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: write.record_id.clone(),
+            requestor: write.authorization.signer().unwrap_or_default(),
+            description: grant_data.description,
+            delegated: grant_data.delegated,
+            scope: grant_data.scope,
+            conditions: grant_data.conditions,
+        })
+    }
+}
+
+impl TryFrom<&Write> for Grant {
+    type Error = crate::Error;
+
+    fn try_from(write: &Write) -> Result<Self> {
+        let permission_grant = write.encoded_data.clone().unwrap_or_default();
+        let grant_data = serde_json::from_str(&permission_grant)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: write.record_id.clone(),
+            grantor: write.authorization.signer().unwrap_or_default(),
+            grantee: write.descriptor.recipient.clone().unwrap_or_default(),
+            date_granted: write.descriptor.date_created,
+            data: grant_data,
+        })
     }
 }
 

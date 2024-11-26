@@ -2,6 +2,7 @@
 
 pub mod grant;
 pub(crate) mod protocol;
+pub(crate) mod request;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
@@ -124,4 +125,27 @@ pub enum ConditionPublication {
 
     /// The message may be marked as public.
     Prohibited,
+}
+
+/// A permission request.
+pub struct Request {
+    /// The ID of the permission request — the record ID DWN message.
+    pub id: String,
+
+    /// The requester of the permission.
+    pub requestor: String,
+
+    ///used to describe what the requested grant is to be used for.
+    pub description: Option<String>,
+
+    /// Whether the requested grant is delegated or not. If `true`, the
+    /// `requestor` will be able to act as the grantor of the permission
+    /// within the scope of the requested grant.
+    pub delegated: Option<bool>,
+
+    /// The scope of the allowed access.
+    pub scope: Scope,
+
+    /// Optional conditions that must be met when the requested grant is used.
+    pub conditions: Option<Conditions>,
 }
