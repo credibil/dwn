@@ -31,7 +31,7 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, write: Write, provider: &impl Provider,
 ) -> Result<Reply<WriteReply>> {
     write.authorize(owner, provider).await?;
@@ -42,7 +42,7 @@ pub(crate) async fn handle(
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
-    let (initial_write, newest_existing) = earliest_and_latest(&existing).await?;
+    let (initial_write, newest_existing) = earliest_and_latest(&existing)?;
 
     // when message is not the initial write, verify 'immutable' properties
     if let Some(initial_write) = &initial_write {
@@ -961,6 +961,7 @@ pub struct EncryptionProperty {
 /// Encrypted key.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names)]
 pub struct EncryptedKey {
     /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
     /// of the root public key used to encrypt the symmetric encryption key.
@@ -995,7 +996,7 @@ pub enum DerivationScheme {
 }
 
 // Computes the deterministic Entry ID of the message.
-pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
+pub fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
     #[derive(Serialize)]
     struct EntryId {
         #[serde(flatten)]
@@ -1006,7 +1007,7 @@ pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<St
 }
 
 // Fetch previous entries for this record, ordered from earliest to latest.
-pub(crate) async fn existing_entries(
+async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Write>> {
     // N.B. only use `interface` in order to to get both `RecordsWrite` and
@@ -1024,7 +1025,7 @@ pub(crate) async fn existing_entries(
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-pub(crate) async fn initial_entry(
+pub async fn initial_entry(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Option<Write>> {
     let entries = existing_entries(owner, record_id, store).await?;
@@ -1040,20 +1041,9 @@ pub(crate) async fn initial_entry(
     }
 }
 
-// // Fetches the first and last `records::Write` messages associated for the
-// // `record_id`.
-// pub(crate) async fn latest_entry(
-//     owner: &str, record_id: &str, store: &impl MessageStore,
-// ) -> Result<Option<Write>> {
-//     let entries = existing_entries(owner, record_id, store).await?;
-//     Ok(entries.as_slice().last().cloned())
-// }
-
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-pub(crate) async fn earliest_and_latest(
-    entries: &[Write],
-) -> Result<(Option<Write>, Option<Write>)> {
+fn earliest_and_latest(entries: &[Write]) -> Result<(Option<Write>, Option<Write>)> {
     // check initial write is found
     if let Some(first) = entries.first() {
         if !first.is_initial()? {

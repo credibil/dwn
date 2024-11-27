@@ -21,7 +21,7 @@ use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result}
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, read: Read, provider: &impl Provider,
 ) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages

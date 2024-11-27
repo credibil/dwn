@@ -28,7 +28,7 @@ use crate::{
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
@@ -395,6 +395,7 @@ pub enum Action {
 /// Protocol tags
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names)]
 pub struct Tags {
     /// Tags required for this protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]

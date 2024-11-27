@@ -19,7 +19,7 @@ use crate::{forbidden, permissions, schema, Descriptor, Interface, Method, Resul
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
     subscribe.authorize(owner, provider).await?;

@@ -17,7 +17,7 @@ use crate::{forbidden, permissions, schema, Descriptor, Interface, Method, Resul
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;

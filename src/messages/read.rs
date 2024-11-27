@@ -23,7 +23,7 @@ use crate::{forbidden, schema, unexpected, Descriptor, Error, Interface, Method,
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, read: Read, provider: &impl Provider,
 ) -> Result<Reply<ReadReply>> {
     let Some(entry) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
@@ -159,7 +159,7 @@ async fn verify_scope(
 
         // check if the protocol is the internal permissions protocol
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            let permission_scope = permissions::protocol::fetch_scope(owner, &write, store).await?;
+            let permission_scope = permissions::fetch_scope(owner, &write, store).await?;
             if permission_scope.protocol() == Some(protocol) {
                 return Ok(());
             }

@@ -1,14 +1,14 @@
 //! # Permissions
 
-pub mod grant;
-pub(crate) mod protocol;
-pub(crate) mod request;
+mod grant;
+mod protocol;
+mod request;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Grant, GrantBuilder, GrantData};
-pub use self::protocol::Protocol;
+pub(crate) use self::protocol::{fetch_scope, Protocol};
 use crate::provider::MessageStore;
 use crate::records::Write;
 use crate::store::RecordsQuery;

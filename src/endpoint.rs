@@ -49,35 +49,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
         // if !tenant_gate.active(owner)? {
         //     return Err(Error::Unauthorized("tenant not active"));
         // }
-
-        schema::validate(self)?;
-
-        // // message has no authorization
-        // let Some(authzn) = self.authorization() else {
-        //     return Ok(());
-        // };
-
-        // // authenticate the message
-        // if let Err(e) = authzn.authenticate(provider.clone()).await {
-        //     return Err(Error::Unauthorized(format!("failed to authenticate message: {e}")));
-        // }
-
-        // // no checks needed when message author is web node owner
-        // let author = authzn.author()?;
-        // if author == ctx.owner {
-        //     return Ok(());
-        // }
-
-        // // verify the permission grant
-        // let payload = authzn.jws_payload()?;
-        // let Some(grant_id) = &payload.permission_grant_id else {
-        //     return Err(forbidden!("`permission_grant_id` not found in signature payload",));
-        // };
-        // let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
-        // grant.verify(&author, &authzn.signer()?, self.descriptor(), provider).await?;
-        // ctx.grant = Some(grant);
-
-        Ok(())
+        schema::validate(self)
     }
 }
 

@@ -26,7 +26,7 @@ use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result}
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
@@ -270,7 +270,7 @@ impl DeleteBuilder {
     }
 }
 
-pub(crate) async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
+ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = RecordsQuery::new()
         .record_id(&delete.descriptor.record_id)

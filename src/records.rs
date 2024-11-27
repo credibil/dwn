@@ -1,10 +1,10 @@
 //! # Records
 
-pub mod delete;
-pub mod query;
-pub mod read;
-pub mod subscribe;
-pub mod write;
+mod delete;
+mod query;
+mod read;
+mod subscribe;
+pub(crate) mod write;
 
 use std::collections::BTreeMap;
 
@@ -16,7 +16,6 @@ pub use self::delete::{Delete, DeleteBuilder};
 pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
-pub(crate) use self::write::{earliest_and_latest, existing_entries};
 pub use self::write::{DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol};
 pub use crate::data::DataStream;
 use crate::{utils, Quota, Range, Result};

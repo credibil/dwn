@@ -17,7 +17,7 @@ use crate::{forbidden, permissions, schema, utils, Descriptor, Interface, Method
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;
@@ -82,7 +82,7 @@ pub struct QueryReply {
 }
 
 /// Fetch published `protocols::Configure` matching the query
-pub(crate) async fn fetch_config(
+pub async fn fetch_config(
     owner: &str, filter: Option<ProtocolsFilter>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
     // let mut protocol = String::new();

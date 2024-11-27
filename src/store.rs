@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::endpoint::Message;
-pub use crate::messages::{self, MessagesFilter};
-pub use crate::protocols::{self, ProtocolsFilter};
-pub use crate::records::{self, RecordsFilter, TagFilter, Write};
-use crate::{Descriptor, Method, Quota, Range, Result};
+pub use crate::messages::MessagesFilter;
+pub use crate::protocols::ProtocolsFilter;
+use crate::records::{self, Write};
+pub use crate::records::{RecordsFilter, TagFilter};
+use crate::{messages, protocols, Descriptor, Method, Quota, Range, Result};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).

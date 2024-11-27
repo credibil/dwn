@@ -20,7 +20,7 @@ use crate::{forbidden, Descriptor, Interface, Method, Quota, Result};
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
     let mut filter = subscribe.descriptor.filter.clone();

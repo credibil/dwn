@@ -19,7 +19,7 @@ pub const MAX_ENCODED_SIZE: usize = 5; //30000;
 const CHUNK_SIZE: usize = 16;
 
 /// Compuet CID from a data value or stream.
-pub mod cid {
+pub(crate) mod cid {
 
     use cid::Cid;
     use multihash_codetable::MultihashDigest;
@@ -33,7 +33,7 @@ pub mod cid {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub(crate) fn from_value<T: Serialize>(payload: &T) -> Result<String> {
+    pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();
         ciborium::into_writer(payload, &mut buf)?;
         let hash = multihash_codetable::Code::Sha2_256.digest(&buf);
