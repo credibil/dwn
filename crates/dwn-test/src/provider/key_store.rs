@@ -25,7 +25,7 @@ const APP_SECRET_KEY: &str = "fAe8yt4xBaDpyuPKY9_1NBxmiFMCfVnnryMXD-oLyVk";
 // const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
 
 #[derive(Default, Clone, Debug)]
-pub struct KeystoreImpl {
+pub struct KeyStoreImpl {
     keyrings: HashMap<String, KeyringImpl>,
 }
 
@@ -36,7 +36,7 @@ pub struct KeyringImpl {
     pub secret_key: String,
 }
 
-impl KeystoreImpl {
+impl KeyStoreImpl {
     // Populate the keystore with test keyrings
     pub fn new() -> Self {
         let mut keyrings = HashMap::new();

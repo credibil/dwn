@@ -1,5 +1,5 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_test::keystore::ALICE_DID;
+use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use serde_json::json;
 use vercre_dwn::endpoint;

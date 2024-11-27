@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use dwn_test::keystore::ALICE_DID;
+use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;

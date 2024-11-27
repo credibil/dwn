@@ -4,7 +4,7 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
-use dwn_test::keystore::{ALICE_DID, BOB_DID};
+use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;

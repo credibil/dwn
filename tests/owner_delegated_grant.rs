@@ -4,7 +4,7 @@
 //! an app to perform an action on their behalf. In this case, Alice
 //! grants App X the ability to post as her for the `chat` protocol.
 
-use dwn_test::keystore::{ALICE_DID, APP_DID, BOB_DID};
+use dwn_test::key_store::{ALICE_DID, APP_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use rand::RngCore;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};

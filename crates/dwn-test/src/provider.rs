@@ -8,7 +8,7 @@
 pub mod block_store;
 pub mod event_log;
 mod event_stream;
-pub mod keystore;
+pub mod key_store;
 pub mod message_store;
 pub mod task_store;
 
@@ -19,7 +19,7 @@ use surrealdb::Surreal;
 use vercre_dwn::protocols::Configure;
 use vercre_dwn::provider::{DidResolver, Document, MessageStore, Provider};
 
-use self::keystore::{KeystoreImpl, ALICE_DID, BOB_DID};
+use self::key_store::{KeyStoreImpl, ALICE_DID, BOB_DID};
 
 const NAMESPACE: &str = "integration-test";
 
@@ -28,7 +28,7 @@ pub struct ProviderImpl {
     db: Surreal<Db>,
     blockstore: InMemoryBlockstore<64>,
     pub nats_client: async_nats::Client,
-    pub keystore: KeystoreImpl,
+    pub keystore: KeyStoreImpl,
 }
 
 impl Provider for ProviderImpl {}
@@ -44,7 +44,7 @@ impl ProviderImpl {
             db,
             blockstore,
             nats_client,
-            keystore: KeystoreImpl::new(),
+            keystore: KeyStoreImpl::new(),
         };
 
         // load base protocol configuration for Alice and Bob
