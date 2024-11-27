@@ -409,7 +409,7 @@ impl Write {
     }
 
     /// Encrypt message
-    async fn encrypt(
+    fn encrypt(
         &self, input: &EncryptionInput, _encryptor: &impl Cipher,
     ) -> Result<EncryptionProperty> {
         // encrypt the data encryption key once per encryption input
@@ -939,7 +939,7 @@ impl WriteBuilder {
 
         // TODO: encryption
         if let Some(ecryption_input) = &self.encryption_input {
-            write.encrypt(ecryption_input, keyring).await?;
+            write.encrypt(ecryption_input, keyring)?;
         }
 
         // sign message
