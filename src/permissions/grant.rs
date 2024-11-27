@@ -271,21 +271,19 @@ impl Grant {
         if Some(protocol) != write.descriptor.protocol.as_ref() {
             return Err(forbidden!("incorrect scope `protocol`"));
         }
-        let Some(option) = option else {
-            return Ok(());
-        };
 
         match option {
-            RecordsOptions::ContextId(context_id) => {
+            Some(RecordsOptions::ContextId(context_id)) => {
                 if Some(context_id) != write.context_id.as_ref() {
                     return Err(forbidden!("grant and record `contextId`s do not match"));
                 }
             }
-            RecordsOptions::ProtocolPath(protocol_path) => {
+            Some(RecordsOptions::ProtocolPath(protocol_path)) => {
                 if Some(protocol_path) != write.descriptor.protocol_path.as_ref() {
                     return Err(forbidden!("grant and record `protocolPath`s do not match"));
                 }
             }
+            None => {}
         }
 
         Ok(())

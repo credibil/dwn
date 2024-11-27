@@ -140,11 +140,9 @@ async fn verify_scope(
         let write = match &requested.message {
             EntryType::Write(write) => write.clone(),
             EntryType::Delete(delete) => {
-                // TODO: implement fetchNewestRecordsWrite
-                // await RecordsWrite.fetchNewestRecordsWrite(messageStore, tenant, recordsMessage.descriptor.recordId);
-                let entries =
-                    write::existing_entries(owner, &delete.descriptor.record_id, store).await?;
-                let Some(write) = entries.first() else {
+                let entry =
+                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?;
+                let Some(write) = entry else {
                     return Err(forbidden!("message failed scope authorization"));
                 };
                 write.clone()

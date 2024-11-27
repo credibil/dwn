@@ -994,6 +994,17 @@ pub enum DerivationScheme {
     Schemas,
 }
 
+// Computes the deterministic Entry ID of the message.
+pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
+    #[derive(Serialize)]
+    struct EntryId {
+        #[serde(flatten)]
+        descriptor: WriteDescriptor,
+        author: String,
+    }
+    cid::from_value(&EntryId { descriptor, author })
+}
+
 // Fetch previous entries for this record, ordered from earliest to latest.
 pub(crate) async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
@@ -1011,28 +1022,44 @@ pub(crate) async fn existing_entries(
     Ok(writes)
 }
 
-// Computes the deterministic Entry ID of the message.
-pub(crate) fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
-    #[derive(Serialize)]
-    struct EntryId {
-        #[serde(flatten)]
-        descriptor: WriteDescriptor,
-        author: String,
+// Fetches the first and last `records::Write` messages associated for the
+// `record_id`.
+pub(crate) async fn initial_entry(
+    owner: &str, record_id: &str, store: &impl MessageStore,
+) -> Result<Option<Write>> {
+    let entries = existing_entries(owner, record_id, store).await?;
+
+    // check initial write is found
+    if let Some(first) = entries.first() {
+        if !first.is_initial()? {
+            return Err(unexpected!("initial write is not earliest message"));
+        }
+        Ok(Some(first.clone()))
+    } else {
+        Ok(None)
     }
-    cid::from_value(&EntryId { descriptor, author })
 }
+
+// // Fetches the first and last `records::Write` messages associated for the
+// // `record_id`.
+// pub(crate) async fn latest_entry(
+//     owner: &str, record_id: &str, store: &impl MessageStore,
+// ) -> Result<Option<Write>> {
+//     let entries = existing_entries(owner, record_id, store).await?;
+//     Ok(entries.as_slice().last().cloned())
+// }
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
 pub(crate) async fn earliest_and_latest(
-    messages: &[Write],
+    entries: &[Write],
 ) -> Result<(Option<Write>, Option<Write>)> {
     // check initial write is found
-    if let Some(first) = messages.first() {
+    if let Some(first) = entries.first() {
         if !first.is_initial()? {
             return Err(unexpected!("initial write is not earliest message"));
         }
-        Ok((Some(first.clone()), messages.last().cloned()))
+        Ok((Some(first.clone()), entries.last().cloned()))
     } else {
         Ok((None, None))
     }

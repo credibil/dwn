@@ -6,7 +6,7 @@ use crate::protocols::{
     integrity, Action, ActionRule, Actor, RuleSet, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH,
 };
 use crate::provider::MessageStore;
-use crate::records::{self, Delete, Query, Read, Subscribe, Write};
+use crate::records::{self, write, Delete, Query, Read, Subscribe, Write};
 use crate::store::RecordsQuery;
 use crate::{forbidden, Range, Result};
 
@@ -270,10 +270,7 @@ impl Protocol<'_> {
         // build record chain
         let record_chain = match record {
             Record::Write(write) => {
-                let messages = records::existing_entries(owner, &write.record_id, store).await?;
-                let (initial, _) = records::earliest_and_latest(&messages).await?;
-
-                if initial.is_some() {
+                if write::initial_entry(owner, &write.record_id, store).await?.is_some() {
                     self.record_chain(owner, &write.record_id, store).await?
                 } else if let Some(parent_id) = &write.descriptor.parent_id {
                     self.record_chain(owner, parent_id, store).await?
@@ -352,10 +349,7 @@ impl Protocol<'_> {
         let mut current_id = Some(record_id.to_owned());
 
         while let Some(record_id) = &current_id {
-            let messages = records::existing_entries(owner, record_id, store).await?;
-            let (initial, _) = records::earliest_and_latest(&messages).await?;
-
-            let Some(initial) = initial else {
+            let Some(initial) = write::initial_entry(owner, record_id, store).await? else {
                 return Err(forbidden!(
                     "no parent found with ID {record_id} when constructing record chain"
                 ));
@@ -381,11 +375,8 @@ impl Protocol<'_> {
                 if write.is_initial()? {
                     return Ok(vec![Action::Create]);
                 }
-
-                let messages = records::existing_entries(owner, &write.record_id, store).await?;
-                let (initial, _) = records::earliest_and_latest(&messages).await?;
-
-                let Some(initial) = initial else {
+                let Some(initial) = write::initial_entry(owner, &write.record_id, store).await?
+                else {
                     return Ok(Vec::new());
                 };
                 if write.authorization.author()? == initial.authorization.author()? {
@@ -399,10 +390,9 @@ impl Protocol<'_> {
             // Method::Read => Ok(vec![Action::Read]),
             Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
             Record::Delete(delete) => {
-                let messages =
-                    records::existing_entries(owner, &delete.descriptor.record_id, store).await?;
-                let (initial, _) = records::earliest_and_latest(&messages).await?;
-                let Some(initial) = initial else {
+                let Some(initial) =
+                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?
+                else {
                     return Ok(Vec::new());
                 };
 
