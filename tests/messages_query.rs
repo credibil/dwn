@@ -6,7 +6,6 @@
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-// use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
@@ -24,7 +23,7 @@ async fn all_messages() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow_any.json");
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()

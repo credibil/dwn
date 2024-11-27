@@ -142,17 +142,17 @@ jobs:
   #       env:
   #         MIRIFLAGS: -Zmiri-strict-provenance
 
-  outdated:
-    name: Outdated
-    runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/install@cargo-outdated
-      - run: |
-          sudo apt-get update
-          sudo apt-get -y install libwebkit2gtk-4.1-dev
+  # outdated:
+  #   name: Outdated
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name != 'pull_request'
+  #   timeout-minutes: 45
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/install@cargo-outdated
+  #     - run: |
+  #         sudo apt-get update
+  #         sudo apt-get -y install libwebkit2gtk-4.1-dev
 
-      # - run: cargo outdated --packages vercre-holder
-      - run: cargo outdated --workspace --exit-code 1
+  #     # - run: cargo outdated --packages vercre-holder
+  #     - run: cargo outdated --workspace --exit-code 1
