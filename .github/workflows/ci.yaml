@@ -42,17 +42,6 @@ jobs:
       
       - run: cargo nextest run
 
-  # windows:
-  #   name: Test suite (windows)
-  #   runs-on: windows-latest
-  #   timeout-minutes: 45
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@nightly
-  #     - uses: taiki-e/install-action@nextest
-  #     - run: cargo nextest run
-  #     # - run: cargo test -- --skip ui --exact
-
   test-doc:
     name: Test docs
     runs-on: ubuntu-latest
