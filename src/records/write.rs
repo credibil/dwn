@@ -876,7 +876,7 @@ impl WriteBuilder {
                 },
                 recipient: self.recipient,
                 tags: self.tags,
-                date_created: self.date_created.unwrap_or(Utc::now()),
+                date_created: self.date_created.unwrap_or_else(Utc::now),
                 published: self.published,
                 data_format: self.data_format,
                 parent_id: self.parent_context_id.clone(),
