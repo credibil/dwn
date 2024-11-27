@@ -6,8 +6,6 @@
 
 use std::io::Read;
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{json, Value};
@@ -15,6 +13,9 @@ use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
+
+use crate::key_store::{ALICE_DID, BOB_DID};
+use crate::provider::ProviderImpl;
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
@@ -90,5 +91,5 @@ async fn flat_space() {
     reader.read_to_end(&mut alice_data).expect("should read to end");
 
     let bob_data: Value = serde_json::from_slice(&alice_data).expect("should deserialize");
-    assert_snapshot!("bob_data", bob_data);
+    assert_eq!(json! ({ "message": "test record write" }), bob_data);
 }

@@ -4,14 +4,15 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::{endpoint, Interface, Method};
+
+use crate::key_store::{ALICE_DID, BOB_DID};
+use crate::provider::ProviderImpl;
 
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]
@@ -35,7 +36,7 @@ async fn configure_any() {
     // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
     // --------------------------------------------------
-    let email = include_bytes!("protocols/email.json");
+    let email = include_bytes!("../../protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
 
     // let definition = Definition {
