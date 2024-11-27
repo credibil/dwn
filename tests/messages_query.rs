@@ -130,8 +130,4 @@ async fn all_messages() {
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
-
-    // assert_snapshot!("read", reply, {
-    //     ".entry.message.descriptor.messageTimestamp" => "[messageTimestamp]",
-    // });
 }
