@@ -162,7 +162,7 @@ async fn verify_scope(
         // check if the protocol is the internal permissions protocol
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
             let permission_scope = permissions::protocol::fetch_scope(owner, &write, store).await?;
-            if permission_scope.protocol().as_deref() == Some(protocol) {
+            if permission_scope.protocol() == Some(protocol) {
                 return Ok(());
             }
         }
