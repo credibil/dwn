@@ -1,7 +1,0 @@
----
-source: tests/owner_signature.rs
-assertion_line: 93
-expression: bob_data
-snapshot_kind: text
----
-message: test record write

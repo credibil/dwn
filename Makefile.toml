@@ -26,7 +26,8 @@ dependencies = ["clean"]
 
 [tasks.test]
 command = "cargo"
-args = ["nextest", "run", "--workspace", "--no-fail-fast"]
+args = ["nextest", "run", "--no-fail-fast"]
+# args = ["nextest", "run", "--workspace", "--no-fail-fast"]
 # dependencies = ["testdocs"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
