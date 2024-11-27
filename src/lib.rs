@@ -18,6 +18,7 @@ mod tasks;
 mod utils;
 
 use chrono::{DateTime, Utc};
+// use chrono::serde::ts_seconds;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
@@ -40,9 +41,16 @@ pub struct Descriptor {
     pub method: Method,
 
     /// The timestamp of the message.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_timestamp: Option<DateTime<Utc>>,
+    // #[serde(serialize_with = "truncate_dt")]
+    pub message_timestamp: DateTime<Utc>,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    // pub message_timestamp: Option<DateTime<Utc>>,
 }
+
+// fn truncate_dt<S: Serializer>(dt: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error> {
+//     //dt.format("%m/%d/%Y %H:%M:%S").to_string().serialize(serializer)
+//     dt.to_rfc3339().serialize(serializer)
+// }
 
 /// web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]

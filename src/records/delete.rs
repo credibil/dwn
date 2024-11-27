@@ -190,9 +190,9 @@ pub struct DeleteDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct DeleteBuilder {
+    message_timestamp: DateTime<Utc>,
     record_id: Option<String>,
     prune: Option<bool>,
-    message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
 }
 
@@ -200,11 +200,8 @@ impl DeleteBuilder {
     /// Returns a new [`DeleteBuilder`]
     #[must_use]
     pub fn new() -> Self {
-        let now = Utc::now();
-
-        // set defaults
         Self {
-            message_timestamp: Some(now),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }
@@ -223,12 +220,12 @@ impl DeleteBuilder {
         self
     }
 
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = Some(message_timestamp);
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    //     self.message_timestamp = message_timestamp;
+    //     self
+    // }
 
     /// Specifies the permission grant ID.
     #[must_use]
@@ -270,7 +267,7 @@ impl DeleteBuilder {
     }
 }
 
- async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
+async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = RecordsQuery::new()
         .record_id(&delete.descriptor.record_id)
@@ -289,8 +286,8 @@ impl DeleteBuilder {
 
     // TODO: merge this code with `RecordsWrite`
     // if the incoming message is not the newest, return Conflict
-    let delete_ts = delete.descriptor().message_timestamp.unwrap_or_default();
-    let latest_ts = newest_existing.descriptor().message_timestamp.unwrap_or_default();
+    let delete_ts = delete.descriptor().message_timestamp;
+    let latest_ts = newest_existing.descriptor().message_timestamp;
     if delete_ts.cmp(&latest_ts) == Ordering::Less {
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
@@ -369,8 +366,8 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
 
     // order records from earliest to most recent
     writes.sort_by(|a, b| {
-        let ts_a = a.descriptor().message_timestamp.unwrap_or_default();
-        let ts_b = b.descriptor().message_timestamp.unwrap_or_default();
+        let ts_a = a.descriptor().message_timestamp;
+        let ts_b = b.descriptor().message_timestamp;
         ts_a.cmp(&ts_b)
     });
 
@@ -402,8 +399,8 @@ async fn delete_earlier(
     // N.B. under normal circumstances, there will only be, at most, two existing
     // records per `record_id` (initial + a potential subsequent write/delete),
     for message in existing {
-        let ts_message = message.descriptor().message_timestamp.unwrap_or_default();
-        let ts_newest = newest.descriptor().message_timestamp.unwrap_or_default();
+        let ts_message = message.descriptor().message_timestamp;
+        let ts_newest = newest.descriptor().message_timestamp;
 
         if ts_message.cmp(&ts_newest) == Ordering::Less {
             delete_data(owner, message, newest, provider).await?;

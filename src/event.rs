@@ -268,7 +268,7 @@ impl MessagesFilter {
             }
         }
         if let Some(message_timestamp) = &self.message_timestamp {
-            if !message_timestamp.contains(&descriptor.message_timestamp.unwrap_or_default()) {
+            if !message_timestamp.contains(&descriptor.message_timestamp) {
                 return false;
             }
         }

@@ -164,8 +164,8 @@ pub struct SubscribeDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct SubscribeBuilder {
+    message_timestamp: DateTime<Utc>,
     filter: RecordsFilter,
-    message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
@@ -176,11 +176,8 @@ impl SubscribeBuilder {
     /// Returns a new [`SubscribeBuilder`]
     #[must_use]
     pub fn new() -> Self {
-        let now = Utc::now();
-
-        // set defaults
         Self {
-            message_timestamp: Some(now),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }
@@ -192,12 +189,12 @@ impl SubscribeBuilder {
         self
     }
 
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = Some(message_timestamp);
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    //     self.message_timestamp = message_timestamp;
+    //     self
+    // }
 
     /// Specifies the permission grant ID.
     #[must_use]

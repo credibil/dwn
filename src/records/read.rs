@@ -21,9 +21,7 @@ use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result}
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(
-    owner: &str, read: Read, provider: &impl Provider,
-) -> Result<Reply<ReadReply>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = RecordsQuery::from(read.clone()).build();
     let (entries, _) = MessageStore::query(provider, owner, &query).await?;
@@ -243,8 +241,8 @@ pub struct ReadDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct ReadBuilder {
+    message_timestamp: DateTime<Utc>,
     filter: RecordsFilter,
-    message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
@@ -255,11 +253,8 @@ impl ReadBuilder {
     /// Returns a new [`ReadBuilder`]
     #[must_use]
     pub fn new() -> Self {
-        let now = Utc::now();
-
-        // set defaults
         Self {
-            message_timestamp: Some(now),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }
@@ -271,12 +266,12 @@ impl ReadBuilder {
         self
     }
 
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = Some(message_timestamp);
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    //     self.message_timestamp = Some(message_timestamp);
+    //     self
+    // }
 
     /// Specifies the permission grant ID.
     #[must_use]

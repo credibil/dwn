@@ -23,9 +23,7 @@ use crate::{forbidden, schema, unexpected, Descriptor, Error, Interface, Method,
 ///
 /// # Errors
 /// TODO: Add errors
-pub async fn handle(
-    owner: &str, read: Read, provider: &impl Provider,
-) -> Result<Reply<ReadReply>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     let Some(entry) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
     else {
         return Err(Error::NotFound("message not found".to_string()));
@@ -208,7 +206,7 @@ pub struct ReadDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct ReadBuilder {
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     permission_grant_id: Option<String>,
     message_cid: Option<String>,
 }
@@ -220,7 +218,7 @@ impl ReadBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now()),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }

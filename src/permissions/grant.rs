@@ -134,10 +134,7 @@ impl Grant {
         }
 
         // verify the message is within the grant's time frame
-        let Some(timestamp) = &descriptor.message_timestamp else {
-            return Err(forbidden!("missing message timestamp"));
-        };
-        self.is_current(grantor, timestamp, store).await?;
+        self.is_current(grantor, &descriptor.message_timestamp, store).await?;
 
         Ok(())
     }
@@ -253,10 +250,7 @@ impl Grant {
         let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH).build();
         let (entries, _) = store.query(grantor, &query).await?;
         if let Some(oldest) = entries.first().cloned() {
-            let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
-                return Err(forbidden!("missing message timestamp"));
-            };
-            if message_timestamp.lt(timestamp) {
+            if oldest.descriptor().message_timestamp.lt(timestamp) {
                 return Err(forbidden!("grant with CID {} has been revoked", self.id));
             }
         }

@@ -436,9 +436,7 @@ fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -
 
 /// Get the scope for a permission record. If the record is a revocation, the
 /// scope is fetched from the grant that is being revoked.
-pub async fn fetch_scope(
-    owner: &str, write: &Write, store: &impl MessageStore,
-) -> Result<Scope> {
+pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) -> Result<Scope> {
     //Result<Scope>
     if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
         return Err(forbidden!("unexpected protocol for permission record"));

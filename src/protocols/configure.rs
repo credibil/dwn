@@ -52,9 +52,9 @@ pub async fn handle(
         });
 
         // delete all entries except the most recent
-        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+        let latest_ts = latest.descriptor.base.message_timestamp;
         for e in existing {
-            let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
+            let current_ts = e.descriptor.base.message_timestamp;
             if current_ts.cmp(&latest_ts) == Ordering::Less {
                 let cid = cid::from_value(&e)?;
                 MessageStore::delete(provider, owner, &cid).await?;
@@ -415,7 +415,7 @@ pub struct Tags {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct ConfigureBuilder {
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     definition: Option<Definition>,
     delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
@@ -428,7 +428,7 @@ impl ConfigureBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now()),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }

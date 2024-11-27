@@ -107,7 +107,7 @@ impl From<&Write> for Entry {
         );
         record.indexes.insert(
             "dateUpdated".to_string(),
-            Value::String(write.descriptor.base.message_timestamp.unwrap_or_default().to_rfc3339()),
+            Value::String(write.descriptor.base.message_timestamp.to_rfc3339()),
         );
         if let Some(tags) = &write.descriptor.tags {
             let mut tag_map = Map::new();

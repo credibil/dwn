@@ -125,7 +125,7 @@ pub struct SubscribeDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct SubscribeBuilder {
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     filters: Option<Vec<MessagesFilter>>,
     permission_grant_id: Option<String>,
 }
@@ -137,7 +137,7 @@ impl SubscribeBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now()),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }

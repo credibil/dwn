@@ -51,8 +51,8 @@ pub async fn handle(
 
     // confirm current message will be the latest write AND previous write was not a delete
     if let Some(newest_existing) = &newest_existing {
-        let current_ts = write.descriptor.base.message_timestamp.unwrap_or_default();
-        let latest_ts = newest_existing.descriptor.base.message_timestamp.unwrap_or_default();
+        let current_ts = write.descriptor.base.message_timestamp;
+        let latest_ts = newest_existing.descriptor.base.message_timestamp;
 
         if current_ts.cmp(&latest_ts) == Ordering::Less {
             return Err(Error::Conflict("newer write record already exists".to_string()));
@@ -634,7 +634,7 @@ pub struct WriteBuilder {
     parent_context_id: Option<String>,
     data: WriteData,
     date_created: Option<DateTime<Utc>>,
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     published: Option<bool>,
     date_published: Option<DateTime<Utc>>,
     data_format: String,
@@ -744,7 +744,7 @@ impl WriteBuilder {
         // set defaults
         Self {
             date_created: Some(now),
-            message_timestamp: Some(now),
+            message_timestamp: now,
             data_format: "application/json".to_string(),
             ..Self::default()
         }
@@ -813,12 +813,12 @@ impl WriteBuilder {
         self
     }
 
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = Some(message_timestamp);
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    //     self.message_timestamp = message_timestamp;
+    //     self
+    // }
 
     /// Whether the record is published.
     #[must_use]
@@ -867,19 +867,16 @@ impl WriteBuilder {
     /// # Errors
     /// TODO: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<Write> {
-        let now = Utc::now();
-        let timestamp = self.message_timestamp.unwrap_or(now);
-
         let mut write = Write {
             descriptor: WriteDescriptor {
                 base: Descriptor {
                     interface: Interface::Records,
                     method: Method::Write,
-                    message_timestamp: Some(timestamp),
+                    message_timestamp: self.message_timestamp,
                 },
                 recipient: self.recipient,
                 tags: self.tags,
-                date_created: self.date_created.unwrap_or(now),
+                date_created: self.date_created.unwrap_or(Utc::now()),
                 published: self.published,
                 data_format: self.data_format,
                 parent_id: self.parent_context_id.clone(),
@@ -928,7 +925,7 @@ impl WriteBuilder {
 
         // when published true and date_published not set
         if self.published.unwrap_or_default() && self.date_published.is_none() {
-            write.descriptor.date_published = Some(now);
+            write.descriptor.date_published = Some(Utc::now());
         }
 
         write.record_id = self.record_id.unwrap_or_default();
@@ -1141,7 +1138,7 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     let Some(grant_id) = &write.descriptor.parent_id else {
         return Err(unexpected!("missing `parent_id`"));
     };
-    let message_timestamp = write.descriptor.base.message_timestamp.unwrap_or_default();
+    let message_timestamp = write.descriptor.base.message_timestamp;
 
     let date_range = Range::<String> {
         start: Some(message_timestamp.to_rfc3339()),
