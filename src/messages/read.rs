@@ -15,7 +15,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::DataStream;
+use crate::records::{write, DataStream};
 use crate::store::{Entry, EntryType};
 use crate::{forbidden, schema, unexpected, Descriptor, Error, Interface, Method, Result};
 
@@ -108,11 +108,11 @@ impl Read {
 
         // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Ok(());
+            return Err(forbidden!("missing permission grant ID"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &author, self.descriptor(), store).await?;
-        verify_scope(owner, self, entry, grant.data.scope, store).await?;
+        verify_scope(owner, entry, grant.data.scope, store).await?;
 
         Ok(())
     }
@@ -120,30 +120,34 @@ impl Read {
 
 // Verify message scope against grant scope.
 async fn verify_scope(
-    owner: &str, _read: &Read, requested: &Entry, scope: Scope, store: &impl MessageStore,
+    owner: &str, requested: &Entry, scope: Scope, store: &impl MessageStore,
 ) -> Result<()> {
     // ensure read filters include scoped protocol
-    let Some(scope_protocol) = scope.protocol() else {
-        // TODO: check this is OK?
+    let Some(protocol) = scope.protocol() else {
         return Ok(());
-        //return Err(forbidden!("missing protocol scope",));
     };
 
     if requested.descriptor().interface == Interface::Protocols {
         let Some(configure) = requested.as_configure() else {
             return Err(forbidden!("message failed scope authorization"));
         };
-        if configure.descriptor.definition.protocol == scope_protocol {
+        if configure.descriptor.definition.protocol == protocol {
             return Ok(());
         }
     }
 
     if requested.descriptor().interface == Interface::Records {
         let write = match &requested.message {
-            EntryType::Write(write) => write,
-            EntryType::Delete(_) => {
+            EntryType::Write(write) => write.clone(),
+            EntryType::Delete(delete) => {
+                // TODO: implement fetchNewestRecordsWrite
                 // await RecordsWrite.fetchNewestRecordsWrite(messageStore, tenant, recordsMessage.descriptor.recordId);
-                todo!()
+                let entries =
+                    write::existing_entries(owner, &delete.descriptor.record_id, store).await?;
+                let Some(write) = entries.first() else {
+                    return Err(forbidden!("message failed scope authorization"));
+                };
+                write.clone()
             }
             EntryType::Configure(_) => {
                 return Err(forbidden!("message failed scope authorization"))
@@ -151,17 +155,14 @@ async fn verify_scope(
         };
 
         // protocols match
-        if write.descriptor.protocol == Some(scope_protocol.to_string()) {
+        if write.descriptor.protocol.as_deref() == Some(protocol) {
             return Ok(());
         }
 
-        // we check if the protocol is the internal PermissionsProtocol for further validation
+        // check if the protocol is the internal permissions protocol
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            let permission_scope = permissions::protocol::fetch_scope(owner, write, store).await?;
-            let Some(protocol) = permission_scope.protocol() else {
-                return Err(forbidden!("missing protocol scope",));
-            };
-            if protocol == scope_protocol {
+            let permission_scope = permissions::protocol::fetch_scope(owner, &write, store).await?;
+            if permission_scope.protocol().as_deref() == Some(protocol) {
                 return Ok(());
             }
         }
