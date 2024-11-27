@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use vercre_dwn::provider::{ResumableTask, TaskStore};
 
 use super::ProviderImpl;
-use crate::store::NAMESPACE;
+use crate::provider::NAMESPACE;
 
 pub(crate) const TABLE: &str = "task";
 

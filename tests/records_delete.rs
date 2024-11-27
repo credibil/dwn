@@ -1,7 +1,7 @@
 //! Records Delete
 
 use dwn_test::keystore::ALICE_DID;
-use dwn_test::store::ProviderImpl;
+use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use serde_json::json;
 use vercre_dwn::data::DataStream;

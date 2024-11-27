@@ -65,6 +65,7 @@ impl Subscriber {
 impl Stream for Subscriber {
     type Item = Event;
 
+    // Poll Tokio mpsc receiver for new events
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let event = self.receiver.as_mut().unwrap().poll_recv(cx);
 

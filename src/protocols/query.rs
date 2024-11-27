@@ -132,7 +132,7 @@ impl Query {
         let Some(filter) = &self.descriptor.filter else {
             return Err(forbidden!("missing filter"));
         };
-        if protocol != &filter.protocol {
+        if protocol != filter.protocol {
             return Err(forbidden!("unauthorized protocol"));
         }
 

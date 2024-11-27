@@ -7,7 +7,7 @@
 use std::io::Read;
 
 use dwn_test::keystore::{ALICE_DID, BOB_DID};
-use dwn_test::store::ProviderImpl;
+use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{json, Value};

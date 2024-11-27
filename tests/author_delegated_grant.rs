@@ -5,7 +5,7 @@
 //! grants Bob the ability to configure a protocol on her behalf.
 
 use dwn_test::keystore::{ALICE_DID, BOB_DID};
-use dwn_test::store::ProviderImpl;
+use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};

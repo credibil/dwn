@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use dwn_test::keystore::ALICE_DID;
-use dwn_test::store::ProviderImpl;
+use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use serde_json::json;
@@ -72,14 +72,14 @@ async fn owner_events() {
     // --------------------------------------------------
     // The subscriber should have a matching write event.
     // --------------------------------------------------
-    let find_event = tokio::spawn(async move {
+    let find_event = async move {
         while let Some(event) = subscribe_reply.subscription.next().await {
             if message_cid == event.cid().unwrap() {
                 break;
             }
         }
-    });
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
+    };
+    if let Err(_) = tokio::time::timeout(Duration::from_millis(200), find_event).await {
         panic!("should have found event");
     }
 }

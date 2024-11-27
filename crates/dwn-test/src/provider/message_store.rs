@@ -5,7 +5,7 @@ use vercre_dwn::store::Cursor;
 use vercre_serialize::QuerySerializer;
 
 use super::ProviderImpl;
-use crate::store::NAMESPACE;
+use crate::provider::NAMESPACE;
 pub(crate) const TABLE: &str = "message";
 
 #[async_trait]

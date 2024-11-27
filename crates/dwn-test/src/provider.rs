@@ -5,21 +5,21 @@
 //!
 //! Implementation of the `Provider` trait for testing and examples.
 
-pub mod block;
-pub mod event;
-pub mod message;
-pub mod task;
+pub mod block_store;
+pub mod event_log;
+mod event_stream;
+pub mod keystore;
+pub mod message_store;
+pub mod task_store;
 
 use anyhow::{anyhow, Result};
 use blockstore::InMemoryBlockstore;
-use serde::Deserialize;
 use surrealdb::engine::local::{Db, Mem};
-use surrealdb::opt::RecordId;
 use surrealdb::Surreal;
 use vercre_dwn::protocols::Configure;
 use vercre_dwn::provider::{DidResolver, Document, MessageStore, Provider};
 
-use crate::keystore::{KeystoreImpl, ALICE_DID, BOB_DID};
+use self::keystore::{KeystoreImpl, ALICE_DID, BOB_DID};
 
 const NAMESPACE: &str = "integration-test";
 
@@ -27,7 +27,7 @@ const NAMESPACE: &str = "integration-test";
 pub struct ProviderImpl {
     db: Surreal<Db>,
     blockstore: InMemoryBlockstore<64>,
-    nats_client: async_nats::Client,
+    pub nats_client: async_nats::Client,
     pub keystore: KeystoreImpl,
 }
 
@@ -48,7 +48,7 @@ impl ProviderImpl {
         };
 
         // load base protocol configuration for Alice and Bob
-        let bytes = include_bytes!("./store/protocol.json");
+        let bytes = include_bytes!("./provider/data/protocol.json");
         let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
         MessageStore::put(&provider, ALICE_DID, &config.clone().into()).await?;
         MessageStore::put(&provider, BOB_DID, &config.into()).await?;
@@ -57,15 +57,14 @@ impl ProviderImpl {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct Entry {
-    #[allow(dead_code)]
-    id: RecordId,
-}
-
 impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {
-        serde_json::from_slice(include_bytes!("./store/did.json"))
-            .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
+        if url == ALICE_DID {
+            return serde_json::from_slice(include_bytes!("./provider/data/alice_did.json"))
+                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")));
+        } else {
+            return serde_json::from_slice(include_bytes!("./provider/data/bob_did.json"))
+                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")));
+        }
     }
 }

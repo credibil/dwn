@@ -58,16 +58,19 @@ pub struct Scope {
 
 impl Scope {
     /// Get the scope protocol.
+    #[must_use]
     pub fn protocol(&self) -> Option<&str> {
         match &self.scope_type {
-            ScopeType::Protocols { protocol } => protocol.as_deref(),
-            ScopeType::EntryType { protocol } => protocol.as_deref(),
+            ScopeType::Protocols { protocol } | ScopeType::EntryType { protocol } => {
+                protocol.as_deref()
+            }
             ScopeType::Records { protocol, .. } => Some(protocol),
         }
     }
 
     /// Get records scope options.
-    pub fn options(&self) -> Option<&RecordsOptions> {
+    #[must_use]
+    pub const fn options(&self) -> Option<&RecordsOptions> {
         match &self.scope_type {
             ScopeType::Records { option, .. } => option.as_ref(),
             _ => None,
@@ -128,18 +131,20 @@ impl Default for RecordsOptions {
 
 impl RecordsOptions {
     /// Get the context ID.
+    #[must_use]
     pub fn context_id(&self) -> Option<&str> {
         match self {
             Self::ContextId(id) => Some(id),
-            _ => None,
+            Self::ProtocolPath(_) => None,
         }
     }
 
     /// Get the protocol path.
+    #[must_use]
     pub fn protocol_path(&self) -> Option<&str> {
         match self {
             Self::ProtocolPath(path) => Some(path),
-            _ => None,
+            Self::ContextId(_) => None,
         }
     }
 }

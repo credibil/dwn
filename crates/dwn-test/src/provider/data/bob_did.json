@@ -1,0 +1,35 @@
+{
+    "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/data-integrity/v1"
+    ],
+    "id": "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD",
+    "verificationMethod": [
+        {
+            "id": "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD#z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD",
+            "controller": "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD",
+            "type": "Multikey",
+            "publicKeyMultibase": "z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD"
+        }
+    ],
+    "authentication": [
+        "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD#z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD"
+    ],
+    "assertionMethod": [
+        "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD#z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD"
+    ],
+    "keyAgreement": [
+        {
+            "id": "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD#z6LSbzAC2VY7pbmwQhzbXVWDj1H9oAQxgbo7x4sGre6HNkm4",
+            "controller": "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD",
+            "type": "Multikey",
+            "publicKeyMultibase": "z6LSbzAC2VY7pbmwQhzbXVWDj1H9oAQxgbo7x4sGre6HNkm4"
+        }
+    ],
+    "capabilityInvocation": [
+        "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD#z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD"
+    ],
+    "capabilityDelegation": [
+        "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD#z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD"
+    ]
+}

@@ -1,7 +1,8 @@
 #![feature(let_chains)]
 
-pub mod keystore;
-pub mod store;
+pub mod provider;
+
+pub use provider::keystore;
 
 /// Configure Insta snapshot name.
 ///

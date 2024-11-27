@@ -8,7 +8,7 @@ use ed25519_dalek::{SecretKey, Signer as _, SigningKey};
 use vercre_dwn::provider::{KeyStore, Keyring};
 use vercre_infosec::{Algorithm, Cipher, Signer};
 
-use crate::store::ProviderImpl;
+use crate::provider::ProviderImpl;
 
 pub const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const ALICE_VERIFY_KEY: &str = "z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";

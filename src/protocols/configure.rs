@@ -184,7 +184,7 @@ impl Configure {
             return Ok(());
             // return Err(forbidden!("missing protocol in grant scope"));
         };
-        if protocol != &self.descriptor.definition.protocol {
+        if protocol != self.descriptor.definition.protocol {
             return Err(forbidden!(" message and grant protocols do not match"));
         }
 

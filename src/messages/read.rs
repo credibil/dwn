@@ -120,7 +120,7 @@ impl Read {
 
 // Verify message scope against grant scope.
 async fn verify_scope(
-    owner: &str, read: &Read, requested: &Entry, scope: Scope, store: &impl MessageStore,
+    owner: &str, _read: &Read, requested: &Entry, scope: Scope, store: &impl MessageStore,
 ) -> Result<()> {
     // ensure read filters include scoped protocol
     let Some(scope_protocol) = scope.protocol() else {
@@ -133,7 +133,7 @@ async fn verify_scope(
         let Some(configure) = requested.as_configure() else {
             return Err(forbidden!("message failed scope authorization"));
         };
-        if &configure.descriptor.definition.protocol == scope_protocol {
+        if configure.descriptor.definition.protocol == scope_protocol {
             return Ok(());
         }
     }

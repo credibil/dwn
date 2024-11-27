@@ -5,7 +5,7 @@
 //! grants App X the ability to post as her for the `chat` protocol.
 
 use dwn_test::keystore::{ALICE_DID, APP_DID, BOB_DID};
-use dwn_test::store::ProviderImpl;
+use dwn_test::provider::ProviderImpl;
 use rand::RngCore;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::provider::KeyStore;
