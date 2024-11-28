@@ -24,6 +24,7 @@ pub(crate) async fn fetch_grant(
     let Some(write) = records[0].as_write() else {
         return Err(unexpected!("grant not found"));
     };
+
     let desc = &write.descriptor;
 
     // unpack message payload

@@ -8,13 +8,12 @@ use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use serde_json::json;
-use vercre_dwn::data::{cid, DataStream};
-// use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
+use vercre_dwn::data::DataStream;
+use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
-// use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Interface, Method};
+use vercre_dwn::{endpoint, Interface, Message, Method};
 
 // Scenario:
 // Alice gives Bob a grant allowing him to read any message in her DWN.
@@ -24,7 +23,7 @@ use vercre_dwn::{endpoint, Interface, Method};
 async fn read_message() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
     // Alice writes a record to her web node.
@@ -34,17 +33,14 @@ async fn read_message() {
     }))
     .expect("should serialize");
 
-    let mut write = WriteBuilder::new()
-        // .data(WriteData::Reader {
-        //     reader: DataStream::from(data),
-        // })
-        .data(WriteData::Bytes { data: data.clone() })
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader {
+            reader: DataStream::from(data),
+        })
         .published(true)
         .build(&alice_keyring)
         .await
         .expect("should create write");
-
-    write.data_stream = Some(DataStream::from(data));
 
     let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -52,7 +48,6 @@ async fn read_message() {
     // --------------------------------------------------
     // Alice issues a grant allowing Bob to read any record in her web node.
     // --------------------------------------------------
-
     let builder = GrantBuilder::new()
         .granted_to(BOB_DID)
         .request_id("grant_id_1")
@@ -61,100 +56,47 @@ async fn read_message() {
         .scope(Interface::Messages, Method::Read, ScopeType::Protocols { protocol: None });
     let mut bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
 
-    // convert the encoded data to a stream
-    // TODO: refactor this into a helper function
+    // TODO: help function
     let Some(encoded_data) = &bob_grant.encoded_data else {
         panic!("should have encoded data");
     };
     let data_bytes = Base64UrlUnpadded::decode_vec(encoded_data).expect("should decode");
-    bob_grant.descriptor.data_cid = cid::from_value(&data_bytes).expect("should create CID");
-    bob_grant.descriptor.data_size = data_bytes.len();
-    bob_grant.data_stream = Some(DataStream::from(data_bytes));
-    bob_grant.encoded_data = None;
+    let stream = DataStream::from(data_bytes);
+    let (cid, size) = stream.compute_cid().expect("should have cid");
+    bob_grant.descriptor.data_cid = cid;
+    bob_grant.descriptor.data_size = size;
+    bob_grant.data_stream = Some(stream);
+    // bob_grant.encoded_data = None;
+
+    let record_id = bob_grant.record_id.clone();
+    let message_cid = bob_grant.cid().expect("should get CID");
 
     let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    // let bytes = serde_json::to_vec(&grant_to_bob).expect("should serialize");
-    // let stream = DataStream::from(bytes);
-    // let write=Write::from(&grant_to_bob);
+    // --------------------------------------------------
+    // Bob invokes that grant to read a record from Alice's web node.
+    // --------------------------------------------------
+    // const messagesRead = await TestDataGenerator.generateMessagesRead({
+    //   author            : bob,
+    //   permissionGrantId : permissionGrant.recordsWrite.message.recordId,
+    //   messageCid,
+    // });
+    // const readReply = await dwn.processMessage(alice.did, messagesRead.message);
+    // expect(readReply.status.code).to.equal(200);
+    // expect(readReply.entry).to.not.be.undefined;
+    // expect(readReply.entry!.messageCid).to.equal(messageCid);
 
-    // const grantReply = await dwn.processMessage(alice.did, permissionGrant.recordsWrite.message, { dataStream: grantDataStream });
-    // expect(grantReply.status.code).to.equal(202);
+    let read = ReadBuilder::new()
+        .message_cid(message_cid)
+        .permission_grant_id(record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
 
-    // // --------------------------------------------------
-    // // Alice configures a protocol.
-    // // --------------------------------------------------
-    // let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
-    // let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    println!("{:?}", reply);
 
-    // let configure = ConfigureBuilder::new()
-    //     .definition(definition.clone())
-    //     .build(&alice_keyring)
-    //     .await
-    //     .expect("should build");
-
-    // let mut expected_cids = vec![configure.cid().unwrap()];
-
-    // let reply =
-    //     endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
-    // assert_eq!(reply.status.code, StatusCode::ACCEPTED);
-
-    // // --------------------------------------------------
-    // // Alice queries for messages without a cursor, and expects to see
-    // // all 5 records as well as the protocol configuration message.
-    // // --------------------------------------------------
-    // let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
-    // let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
-    // assert_eq!(reply.status.code, StatusCode::OK);
-
-    // let query_reply = reply.body.expect("should be records read");
-    // let entries = query_reply.entries.expect("should have entries");
-    // assert_eq!(entries.len(), 6);
-
-    // for entry in entries {
-    //     assert!(expected_cids.contains(&entry));
-    // }
-
-    // // --------------------------------------------------
-    // // Alice writes an additional record.
-    // // --------------------------------------------------
-    // let message = WriteBuilder::new()
-    //     .protocol(protocol.clone())
-    //     .schema(&schema)
-    //     // .data(WriteData::Bytes { data: data.clone() })
-    //     .data(WriteData::Reader { reader })
-    //     .published(true)
-    //     .build(&alice_keyring)
-    //     .await
-    //     .expect("should create write");
-
-    // expected_cids.push(message.cid().unwrap());
-
-    // let reply = endpoint::handle(ALICE_DID, message, &provider).await.expect("should write");
-    // assert_eq!(reply.status.code, StatusCode::ACCEPTED);
-
-    // // --------------------------------------------------
-    // // Alice queries for messages beyond the cursor, and
-    // // expects to see only the additional record.
-    // // --------------------------------------------------
-    // // TODO: implement cursor
-    // let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
-    // let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
-    // assert_eq!(reply.status.code, StatusCode::OK);
-
-    // let query_reply = reply.body.expect("should be records read");
-    // let entries = query_reply.entries.expect("should have entries");
-    // assert_eq!(entries.len(), 7);
-
-    // // --------------------------------------------------
-    // // Alice reads one of the returned messages.
-    // // --------------------------------------------------
-    // let read = ReadBuilder::new()
-    //     .message_cid(&entries[0])
-    //     .build(&alice_keyring)
-    //     .await
-    //     .expect("should create read");
-    // let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     // assert_eq!(reply.status.code, StatusCode::OK);
 }

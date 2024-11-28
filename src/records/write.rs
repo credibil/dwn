@@ -50,7 +50,7 @@ pub async fn handle(
         write.compare_immutable(initial_write)?;
     }
 
-    // confirm current message will be the latest write AND previous write was not a delete
+    // confirm current message is the most recent AND previous write was not a 'delete'
     if let Some(newest_existing) = &newest_existing {
         let current_ts = write.descriptor.base.message_timestamp;
         let latest_ts = newest_existing.descriptor.base.message_timestamp;
@@ -63,15 +63,6 @@ pub async fn handle(
         }
     }
 
-    // ----------------------------------------------------------------
-    // TODO: Archived
-    // ----------------------------------------------------------------
-    // **`archived` is set to true when the 'intial write' HAS NO data**
-    // It prevents querying of initial writes without data, thus preventing users
-    // from accessing private data they wouldn't ordinarily be able to access.
-    //
-    // The potential exploit occurs when an initial write has no data but sets
-    // the `data_cid` property to point to another user's private data.
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
         // incoming message WITH data
         (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
@@ -82,10 +73,16 @@ pub async fn handle(
         };
         (process_data(owner, &write, newest_existing, provider).await?, StatusCode::ACCEPTED)
     } else {
-        // **incoming message WITHOUT data AND an initial write**
+        // incoming message WITHOUT data AND an initial write
         (write, StatusCode::NO_CONTENT)
     };
 
+    // ----------------------------------------------------------------
+    // Archived
+    // ----------------------------------------------------------------
+    // The `archived` flag is set when the intial write has no data.
+    // It prevents querying of initial writes without data, thus preventing users
+    // from accessing private data they wouldn't ordinarily be able to access.
     let mut entry = Entry::from(&write);
     entry.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
 
@@ -157,7 +154,7 @@ pub struct Write {
     pub encryption: Option<EncryptionProperty>,
 
     /// The base64url encoded data of the record if the data associated with
-    /// the recordnis equal or smaller than `MAX_ENCODING_SIZE`.
+    /// the record is equal or smaller than `MAX_ENCODING_SIZE`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoded_data: Option<String>,
 
@@ -894,8 +891,7 @@ impl WriteBuilder {
                 write.descriptor.data_size = data.len();
             }
             WriteData::Reader { reader } => {
-                let mut stream = reader.clone();
-                let (data_cid, data_size) = stream.compute_cid()?;
+                let (data_cid, data_size) = reader.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
                 write.data_stream = Some(reader);
@@ -1066,10 +1062,10 @@ async fn process_stream(
 
         let data_cid = cid::from_value(&data_bytes)?;
         if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("computed data CID does not match descriptor `data_cid`"));
+            return Err(unexpected!("computed data CID does not match message `data_cid`"));
         }
         if write.descriptor.data_size != data_bytes.len() {
-            return Err(unexpected!("actual data size does not match descriptor `data_size`"));
+            return Err(unexpected!("actual data size does not match message `data_size`"));
         }
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
             integrity::verify_schema(&write, &data_bytes)?;
@@ -1083,10 +1079,10 @@ async fn process_stream(
 
         // verify data CID and size
         if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("computed data CID does not match descriptor `data_cid`"));
+            return Err(unexpected!("computed data CID does not match message `data_cid`"));
         }
         if write.descriptor.data_size != data_size {
-            return Err(unexpected!("stored data size does not match descriptor data_size"));
+            return Err(unexpected!("actual data size does not match message `data_size`"));
         }
 
         write.descriptor.data_cid = data_cid;

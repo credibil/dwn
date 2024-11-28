@@ -61,13 +61,15 @@ impl DataStream {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub(crate) fn compute_cid(&mut self) -> Result<(String, usize)> {
+    pub fn compute_cid(&self) -> Result<(String, usize)> {
+        let mut cid = self.clone();
+
         let mut links = vec![];
         let mut byte_count = 0;
 
         loop {
             let mut buffer = [0u8; CHUNK_SIZE];
-            if let Ok(bytes_read) = self.read(&mut buffer[..]) {
+            if let Ok(bytes_read) = cid.read(&mut buffer[..]) {
                 if bytes_read == 0 {
                     break;
                 }

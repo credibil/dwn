@@ -94,11 +94,8 @@ impl Deref for Entry {
 
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
-        let mut save = write.clone();
-        save.encoded_data = None;
-
         let mut record = Self {
-            message: EntryType::Write(save),
+            message: EntryType::Write(write.clone()),
             indexes: Map::new(),
         };
 
