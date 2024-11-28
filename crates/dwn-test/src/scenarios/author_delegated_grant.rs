@@ -9,7 +9,7 @@ use insta::assert_yaml_snapshot as assert_snapshot;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::{endpoint, Interface, Method};
+use vercre_dwn::{Interface, Method, endpoint};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;
@@ -38,18 +38,6 @@ async fn configure_any() {
     // --------------------------------------------------
     let email = include_bytes!("../../protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
-
-    // let definition = Definition {
-    //     protocol: "https://example.org/protocol/configure-any".to_string(),
-    //     types: BTreeMap::from([(
-    //         "schema".to_string(),
-    //         ProtocolType {
-    //             schema: Some("test-object".to_string()),
-    //             data_formats: Some(vec!["text/plain".to_string()]),
-    //         },
-    //     )]),
-    //     ..Definition::default()
-    // };
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())

@@ -16,12 +16,12 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::protocols::{query, ProtocolsFilter};
+use crate::protocols::{ProtocolsFilter, query};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::DelegatedGrant;
 use crate::store::{Entry, EntryType};
 use crate::{
-    forbidden, permissions, schema, unexpected, utils, Descriptor, Interface, Method, Range, Result,
+    Descriptor, Interface, Method, Range, Result, forbidden, permissions, schema, unexpected, utils,
 };
 
 /// Process query message.
@@ -205,7 +205,7 @@ pub struct ConfigureDescriptor {
 }
 
 /// Protocol definition.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Definition {
     /// Protocol URI.
@@ -222,10 +222,35 @@ pub struct Definition {
     pub structure: BTreeMap<String, RuleSet>,
 }
 
-impl Default for Definition {
-    fn default() -> Self {
-        let bytes = include_bytes!("default_protocol.json");
-        serde_json::from_slice(bytes).expect("should deserialize")
+impl Definition {
+    /// Returns a new [`Definition`]
+    #[must_use]
+    pub fn new(protocol: impl Into<String>) -> Self {
+        Self {
+            protocol: protocol.into(),
+            ..Self::default()
+        }
+    }
+
+    /// Whether the definition should be published.
+    #[must_use]
+    pub fn published(mut self, published: bool) -> Self {
+        self.published = published;
+        self
+    }
+
+    /// Add a protocol type.
+    #[must_use]
+    pub fn add_type(mut self, name: impl Into<String>, type_: ProtocolType) -> Self {
+        self.types.insert(name.into(), type_);
+        self
+    }
+
+    /// Add a rule.
+    #[must_use]
+    pub fn add_rule(mut self, name: impl Into<String>, rule_set: RuleSet) -> Self {
+        self.structure.insert(name.into(), rule_set);
+        self
     }
 }
 
@@ -521,7 +546,7 @@ fn verify_rule_set(
 ) -> Result<()> {
     // validate $size
     if let Some(size) = &rule_set.size {
-        if size.start > size.end {
+        if size.min > size.max {
             return Err(unexpected!("invalid size range at '{protocol_path}'"));
         }
     }
@@ -602,12 +627,15 @@ fn verify_rule_set(
             if action.who.is_some() {
                 if action.who == other.who && action.of == other.of {
                     return Err(unexpected!(
-                        "more than one action rule per actor {:?} of {:?} not allowed within a rule set: {action:?}", action.who, action.of
+                        "more than one action rule per actor {:?} of {:?} not allowed within a rule set: {action:?}",
+                        action.who,
+                        action.of
                     ));
                 }
             } else if action.role == other.role {
                 return Err(unexpected!(
-                    "more than one action rule per role {:?} not allowed within a rule set: {action:?}",action.role
+                    "more than one action rule per role {:?} not allowed within a rule set: {action:?}",
+                    action.role
                 ));
             }
         }

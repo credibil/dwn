@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::Authorization;
 use crate::provider::Provider;
-use crate::{schema, Descriptor, Result};
+use crate::{Descriptor, Result, schema};
 
 /// Handle incoming messages.
 ///

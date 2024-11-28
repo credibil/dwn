@@ -59,11 +59,11 @@ impl QuerySerializer for MessagesFilter {
             sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
         }
         if let Some(timestamp) = &self.message_timestamp {
-            let start = &DateTime::<Utc>::MIN_UTC;
-            let end = &Utc::now();
+            let min = &DateTime::<Utc>::MIN_UTC;
+            let max = &Utc::now();
 
-            let from = timestamp.start.as_ref().unwrap_or(start);
-            let to = timestamp.end.as_ref().unwrap_or(end);
+            let from = timestamp.min.as_ref().unwrap_or(min);
+            let to = timestamp.max.as_ref().unwrap_or(max);
             sql.push_str(&format!("AND descriptor.messageTimestamp BETWEEN '{from}' AND '{to}'\n"));
         }
 
@@ -130,9 +130,9 @@ impl QuerySerializer for RecordsQuery {
             let min_ctx = &"\u{0000}".to_string();
             let max_ctx = &"\u{ffff}".to_string();
 
-            let start = context_id.start.as_ref().unwrap_or(min_ctx);
-            let end = context_id.end.as_ref().unwrap_or(max_ctx);
-            sql.push_str(&format!("AND contextId BETWEEN '{start}' AND '{end}'\n"));
+            let min = context_id.min.as_ref().unwrap_or(min_ctx);
+            let max = context_id.max.as_ref().unwrap_or(max_ctx);
+            sql.push_str(&format!("AND contextId BETWEEN '{min}' AND '{max}'\n"));
         }
 
         if let Some(protocol) = &self.protocol {
@@ -148,8 +148,8 @@ impl QuerySerializer for RecordsQuery {
         }
 
         if let Some(date_created) = &self.date_created {
-            let from = date_created.start.as_ref().unwrap_or(min_date);
-            let to = date_created.end.as_ref().unwrap_or(max_date);
+            let from = date_created.min.as_ref().unwrap_or(min_date);
+            let to = date_created.max.as_ref().unwrap_or(max_date);
             sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
         }
 
@@ -236,9 +236,9 @@ impl QuerySerializer for RecordsFilter {
 
         if let Some(data_size) = &self.data_size {
             sql.push_str(&format!(
-                "descriptor.dataSize BETWEEN {start} AND {end}\n",
-                start = data_size.start.unwrap_or(0),
-                end = data_size.end.unwrap_or(usize::MAX)
+                "descriptor.dataSize BETWEEN {min} AND {max}\n",
+                min = data_size.min.unwrap_or(0),
+                max = data_size.max.unwrap_or(usize::MAX)
             ));
         }
 
@@ -247,14 +247,14 @@ impl QuerySerializer for RecordsFilter {
         }
 
         if let Some(date_created) = &self.date_created {
-            let from = date_created.start.as_ref().unwrap_or(min_date);
-            let to = date_created.end.as_ref().unwrap_or(max_date);
+            let from = date_created.min.as_ref().unwrap_or(min_date);
+            let to = date_created.max.as_ref().unwrap_or(max_date);
             sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
         }
 
         if let Some(date_published) = &self.date_published {
-            let from = date_published.start.as_ref().unwrap_or(min_date);
-            let to = date_published.end.as_ref().unwrap_or(max_date);
+            let from = date_published.min.as_ref().unwrap_or(min_date);
+            let to = date_published.max.as_ref().unwrap_or(max_date);
             sql.push_str(&format!("AND descriptor.datePublished BETWEEN '{from}' AND '{to}'\n"));
         }
 
@@ -274,8 +274,8 @@ impl QuerySerializer for RecordsFilter {
         }
 
         if let Some(date_updated) = &self.date_updated {
-            let from = date_updated.start.as_ref().unwrap_or(min_date);
-            let to = date_updated.end.as_ref().unwrap_or(max_date);
+            let from = date_updated.min.as_ref().unwrap_or(min_date);
+            let to = date_updated.max.as_ref().unwrap_or(max_date);
             sql.push_str(&format!("AND dateUpdated BETWEEN '{from}' AND '{to}'\n"));
         }
 
@@ -292,9 +292,9 @@ impl QuerySerializer for TagFilter {
         match self {
             Self::StartsWith(value) => format!("LIKE '{value}%'"),
             Self::Range(range) => {
-                let start = range.start.unwrap_or(0);
-                let end = range.end.unwrap_or(usize::MAX);
-                format!("BETWEEN {start} AND {end}")
+                let min = range.min.unwrap_or(0);
+                let max = range.max.unwrap_or(usize::MAX);
+                format!("BETWEEN {min} AND {max}")
             }
             Self::Equal(value) => format!("= '{value}'"),
         }

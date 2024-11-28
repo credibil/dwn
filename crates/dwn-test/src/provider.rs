@@ -12,14 +12,14 @@ pub mod key_store;
 pub mod message_store;
 pub mod task_store;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use blockstore::InMemoryBlockstore;
-use surrealdb::engine::local::{Db, Mem};
 use surrealdb::Surreal;
+use surrealdb::engine::local::{Db, Mem};
 use vercre_dwn::protocols::Configure;
 use vercre_dwn::provider::{DidResolver, Document, MessageStore, Provider};
 
-use self::key_store::{KeyStoreImpl, ALICE_DID, BOB_DID};
+use self::key_store::{ALICE_DID, BOB_DID, KeyStoreImpl};
 
 const NAMESPACE: &str = "integration-test";
 
@@ -49,9 +49,9 @@ impl ProviderImpl {
 
         // load base protocol configuration for Alice and Bob
         let bytes = include_bytes!("./provider/data/protocol.json");
-        let config: Configure = serde_json::from_slice(bytes).expect("should deserialize");
-        MessageStore::put(&provider, ALICE_DID, &config.clone().into()).await?;
-        MessageStore::put(&provider, BOB_DID, &config.into()).await?;
+        let configure: Configure = serde_json::from_slice(bytes).expect("should deserialize");
+        MessageStore::put(&provider, ALICE_DID, &configure.clone().into()).await?;
+        MessageStore::put(&provider, BOB_DID, &configure.into()).await?;
 
         Ok(provider)
     }

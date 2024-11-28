@@ -18,7 +18,7 @@ pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub use self::write::{DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol};
 pub use crate::data::DataStream;
-use crate::{utils, Quota, Range, Result};
+use crate::{Quota, Range, Result, utils};
 
 // TODO: add builder for RecordsFilter
 

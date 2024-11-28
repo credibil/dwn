@@ -7,7 +7,7 @@ use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use vercre_dwn::endpoint;
-use vercre_dwn::protocols::{ConfigureBuilder, Definition};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 
 // Allow a protocol definition with no schema or `data_format`.
@@ -20,11 +20,14 @@ async fn configure() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/minimal.json");
-    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    // let allow_any = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    // let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let definition = Definition::new("http://minimal.xyz")
+        .add_type("foo", ProtocolType::default())
+        .add_rule("foo", RuleSet::default());
 
     let configure = ConfigureBuilder::new()
-        .definition(definition.clone())
+        .definition(definition)
         .build(&alice_keyring)
         .await
         .expect("should build");

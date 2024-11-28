@@ -10,7 +10,7 @@ use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Message};
+use vercre_dwn::{Message, endpoint};
 
 // The owner should be able to to subscribe their own event stream
 #[tokio::test]

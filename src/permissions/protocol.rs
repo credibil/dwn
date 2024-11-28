@@ -3,12 +3,12 @@
 use crate::auth::Authorization;
 use crate::permissions::{self, Grant, Request, Scope};
 use crate::protocols::{
-    integrity, Action, ActionRule, Actor, RuleSet, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH,
+    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH, RuleSet, integrity,
 };
 use crate::provider::MessageStore;
-use crate::records::{write, Delete, Query, Read, Subscribe, Write};
+use crate::records::{Delete, Query, Read, Subscribe, Write, write};
 use crate::store::RecordsQuery;
-use crate::{forbidden, Range, Result};
+use crate::{Range, Result, forbidden};
 
 /// Protocol-based authorization.
 pub struct Protocol<'a> {

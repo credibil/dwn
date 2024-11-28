@@ -106,16 +106,18 @@ impl<T: Clone> Quota<T> {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Range<T> {
     /// The minimum value.
-    pub start: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<T>,
 
     /// The maximum value.
-    pub end: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<T>,
 }
 
 impl<T> Range<T> {
     /// Create a new range filter.
-    pub const fn new(start: Option<T>, end: Option<T>) -> Self {
-        Self { start, end }
+    pub const fn new(min: Option<T>, max: Option<T>) -> Self {
+        Self { min, max }
     }
 
     /// Check if the range contains the value.
@@ -123,13 +125,13 @@ impl<T> Range<T> {
     where
         T: PartialOrd,
     {
-        if let Some(start) = &self.start
-            && value < start
+        if let Some(min) = &self.min
+            && value < min
         {
             return false;
         }
-        if let Some(end) = &self.end
-            && value > end
+        if let Some(max) = &self.max
+            && value > max
         {
             return false;
         }

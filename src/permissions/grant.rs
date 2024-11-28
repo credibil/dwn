@@ -13,7 +13,7 @@ use crate::records::{
     WriteProtocol,
 };
 use crate::store::RecordsQuery;
-use crate::{forbidden, unexpected, utils, Descriptor, Interface, Method, Result};
+use crate::{Descriptor, Interface, Method, Result, forbidden, unexpected, utils};
 
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

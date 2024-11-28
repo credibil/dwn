@@ -12,7 +12,7 @@ use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
-use vercre_dwn::{endpoint, Message};
+use vercre_dwn::{Message, endpoint};
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]

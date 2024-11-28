@@ -4,13 +4,13 @@ use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_did::DidResolver;
-pub use vercre_did::{dereference, Resource};
+pub use vercre_did::{Resource, dereference};
 use vercre_infosec::jose::JwsBuilder;
 use vercre_infosec::{Jws, Signer};
 
 use crate::data::cid;
 use crate::records::DelegatedGrant;
-use crate::{unexpected, Result};
+use crate::{Result, unexpected};
 
 /// Generate a closure to resolve pub key material required by `Jws::decode`.
 ///

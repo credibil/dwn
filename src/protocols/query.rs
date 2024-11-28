@@ -11,7 +11,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::store::{Cursor, ProtocolsQuery};
-use crate::{forbidden, permissions, schema, utils, Descriptor, Interface, Method, Result};
+use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema, utils};
 
 /// Process query message.
 ///
@@ -85,8 +85,7 @@ pub struct QueryReply {
 pub async fn fetch_config(
     owner: &str, filter: Option<ProtocolsFilter>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
-    // let mut protocol = String::new();
-    let mut query = ProtocolsQuery::new().published(true);
+    let mut query = ProtocolsQuery::new(); //.published(true);
     if let Some(filter) = filter {
         let protocol_uri = utils::clean_url(&filter.protocol)?;
         query = query.protocol(&protocol_uri);
@@ -99,7 +98,6 @@ pub async fn fetch_config(
     }
 
     // unpack messages
-
     let mut entries = vec![];
     for message in messages {
         entries.push(Configure::try_from(message)?);
@@ -150,6 +148,7 @@ pub struct QueryDescriptor {
     pub base: Descriptor,
 
     /// Filter Records for query.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<ProtocolsFilter>,
 }
 

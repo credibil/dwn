@@ -3,16 +3,16 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::permissions::{self, Conditions, Scope, ScopeType};
 use crate::protocols::{
-    self, Definition, ProtocolType, RuleSet, GRANT_PATH, REQUEST_PATH, REVOCATION_PATH,
+    self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
 use crate::provider::MessageStore;
 use crate::records::Write;
 use crate::store::{ProtocolsQuery, RecordsQuery};
-use crate::{forbidden, schema, utils, Range, Result};
+use crate::{Range, Result, forbidden, schema, utils};
 
 /// Type for the data payload of a permission request message.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -241,12 +241,12 @@ fn check_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
         return Ok(());
     };
 
-    if let Some(start) = range.start {
+    if let Some(start) = range.min {
         if data_size < start {
             return Err(forbidden!("data size is less than allowed"));
         }
     }
-    if let Some(end) = range.end {
+    if let Some(end) = range.max {
         if data_size > end {
             return Err(forbidden!("data size is greater than allowed"));
         }
@@ -305,7 +305,9 @@ async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> 
             };
 
             if protocol != revoke_protocol {
-                return Err(forbidden!("revocation protocol {revoke_protocol} does not match grant protocol {protocol}"));
+                return Err(forbidden!(
+                    "revocation protocol {revoke_protocol} does not match grant protocol {protocol}"
+                ));
             }
         }
     }
@@ -320,7 +322,7 @@ pub async fn protocol_definition(
 
     // use default definition if first-class protocol
     if protocol_uri == protocols::PROTOCOL_URI {
-        return Ok(Definition::default());
+        return Ok(protocols::DEFINITION.clone());
     }
 
     // fetch the corresponding protocol definition

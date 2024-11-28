@@ -6,12 +6,12 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 use crate::endpoint::Message;
 use crate::provider::{Provider, TaskStore};
 use crate::records::Delete;
-use crate::{unexpected, Result};
+use crate::{Result, unexpected};
 
 // Frequency with which an automatic timeout extension is requested.
 const EXTEND_SECS: u64 = 30;

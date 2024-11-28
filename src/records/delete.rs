@@ -20,7 +20,7 @@ use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider,
 use crate::records::Write;
 use crate::store::{Entry, EntryType, RecordsQuery};
 use crate::tasks::{self, Task, TaskType};
-use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Process `Delete` message.
 ///

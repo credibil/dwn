@@ -19,13 +19,13 @@ use crate::auth::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
-use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
+use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsQuery};
 use crate::{
-    data, forbidden, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result,
+    Descriptor, Error, Interface, Method, Range, Result, data, forbidden, unexpected, utils,
 };
 
 /// Handle `RecordsWrite` messages.
@@ -1141,8 +1141,8 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     let message_timestamp = write.descriptor.base.message_timestamp;
 
     let date_range = Range::<DateTime<Utc>> {
-        start: Some(message_timestamp),
-        end: None,
+        min: Some(message_timestamp),
+        max: None,
     };
     let query = RecordsQuery::new().record_id(grant_id).date_created(date_range).build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;

@@ -8,11 +8,11 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Grant, GrantBuilder, GrantData};
-pub(crate) use self::protocol::{fetch_scope, Protocol};
+pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
 use crate::records::Write;
 use crate::store::RecordsQuery;
-use crate::{unexpected, Interface, Method, Result};
+use crate::{Interface, Method, Result, unexpected};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(

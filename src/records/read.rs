@@ -15,7 +15,7 @@ use crate::permissions::{self, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::store::RecordsQuery;
-use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
 ///

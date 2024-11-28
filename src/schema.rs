@@ -4,7 +4,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::endpoint::Message;
-use crate::{unexpected, Result};
+use crate::{Result, unexpected};
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.

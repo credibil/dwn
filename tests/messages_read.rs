@@ -12,7 +12,7 @@ use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::{GrantBuilder, ScopeType};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Interface, Message, Method};
+use vercre_dwn::{Interface, Message, Method, endpoint};
 
 // Scenario:
 // Alice gives Bob a grant allowing him to read any message in her DWN.

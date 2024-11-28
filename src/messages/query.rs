@@ -11,7 +11,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::store::{Cursor, MessagesQuery};
-use crate::{forbidden, permissions, schema, Descriptor, Interface, Method, Result};
+use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema};
 
 /// Handle a query message.
 ///

@@ -12,7 +12,7 @@ pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Write};
 pub use crate::records::{RecordsFilter, TagFilter};
-use crate::{messages, protocols, Descriptor, Method, Quota, Range, Result};
+use crate::{Descriptor, Method, Quota, Range, Result, messages, protocols};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -179,6 +179,7 @@ impl ProtocolsQuery {
         self
     }
 
+    #[allow(dead_code)]
     #[must_use]
     pub(crate) const fn published(mut self, published: bool) -> Self {
         self.published = Some(published);

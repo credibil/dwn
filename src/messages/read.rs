@@ -15,9 +15,9 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::{write, DataStream};
+use crate::records::{DataStream, write};
 use crate::store::{Entry, EntryType};
-use crate::{forbidden, schema, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{Descriptor, Error, Interface, Method, Result, forbidden, schema, unexpected};
 
 /// Handle a read message.
 ///
@@ -146,7 +146,7 @@ async fn verify_scope(
                 write.clone()
             }
             EntryType::Configure(_) => {
-                return Err(forbidden!("message failed scope authorization"))
+                return Err(forbidden!("message failed scope authorization"));
             }
         };
 

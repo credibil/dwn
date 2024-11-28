@@ -8,7 +8,7 @@ use std::io::Read;
 
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;

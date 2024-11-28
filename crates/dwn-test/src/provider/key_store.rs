@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{SecretKey, Signer as _, SigningKey};
 use vercre_dwn::provider::{KeyStore, Keyring};

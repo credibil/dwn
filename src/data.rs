@@ -11,7 +11,7 @@ use libipld::store::DefaultParams;
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::{unexpected, Result};
+use crate::{Result, unexpected};
 
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: usize = 5; //30000;

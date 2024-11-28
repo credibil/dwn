@@ -13,7 +13,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
 use crate::messages::MessagesFilter;
 use crate::provider::{EventStream, MessageStore, Provider, Signer};
-use crate::{forbidden, permissions, schema, Descriptor, Interface, Method, Result};
+use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema};
 
 /// Handle a subscribe message.
 ///
