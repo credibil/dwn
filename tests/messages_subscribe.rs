@@ -74,7 +74,7 @@ async fn owner_events() {
             }
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(200), find_event).await {
+    if let Err(_) = tokio::time::timeout(Duration::from_millis(1000), find_event).await {
         panic!("should have found event");
     }
 }

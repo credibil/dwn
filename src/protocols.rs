@@ -75,7 +75,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
         ..RuleSet::default()
     });
     structure.insert("revocation".to_string(), RuleSet {
-        size: Some(default_size.clone()),
+        size: Some(default_size),
         actions: Some(vec![ActionRule {
             who: Some(Actor::Anyone),
             can: vec![Action::Read],
@@ -84,10 +84,10 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
         ..RuleSet::default()
     });
 
-    return Definition {
+    Definition {
         protocol: PROTOCOL_URI.to_string(),
         published: true,
         types,
         structure,
-    };
+    }
 });

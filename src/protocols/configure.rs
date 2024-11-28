@@ -234,7 +234,7 @@ impl Definition {
 
     /// Whether the definition should be published.
     #[must_use]
-    pub fn published(mut self, published: bool) -> Self {
+    pub const fn published(mut self, published: bool) -> Self {
         self.published = published;
         self
     }

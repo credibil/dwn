@@ -11,7 +11,6 @@ use vercre_dwn::records::{QueryBuilder, RecordsFilter, WriteBuilder, WriteData};
 
 // Query should return matching records.
 #[tokio::test]
-#[ignore]
 async fn find_matches() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");

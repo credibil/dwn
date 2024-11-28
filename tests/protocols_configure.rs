@@ -12,7 +12,6 @@ use vercre_dwn::provider::KeyStore;
 
 // Allow a protocol definition with no schema or `data_format`.
 #[tokio::test]
-#[ignore]
 async fn configure() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
