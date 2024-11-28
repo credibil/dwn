@@ -17,9 +17,9 @@ pub mod store;
 mod tasks;
 mod utils;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 pub use crate::endpoint::Message;
 pub use crate::error::Error;
@@ -40,7 +40,16 @@ pub struct Descriptor {
     pub method: Method,
 
     /// The timestamp of the message.
+    #[serde(serialize_with = "to_rfc3339")]
     pub message_timestamp: DateTime<Utc>,
+}
+
+/// Force serializing to an RFC 3339 string with microsecond precision.
+pub(crate) fn to_rfc3339<S: Serializer>(
+    date: &DateTime<Utc>, serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
+    serializer.serialize_str(&s)
 }
 
 /// web node interfaces.

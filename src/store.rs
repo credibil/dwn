@@ -3,7 +3,7 @@
 use std::fmt::Display;
 use std::ops::Deref;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -108,8 +108,9 @@ impl From<&Write> for Entry {
         );
 
         let date_updated =
-            serde_json::to_string(&write.descriptor.base.message_timestamp).unwrap_or_default();
+            write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
         record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
+
         if let Some(tags) = &write.descriptor.tags {
             let mut tag_map = Map::new();
             for (k, v) in tags {
@@ -318,7 +319,7 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
+    pub(crate) const fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
         self.date_created = Some(date_created);
         self
     }
