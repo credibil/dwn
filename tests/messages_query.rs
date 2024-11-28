@@ -32,6 +32,9 @@ async fn all_messages() {
         .await
         .expect("should build");
 
+    let json = serde_json::to_string(&configure).expect("should serialize");
+    println!("configure:{}", json);
+
     let mut expected_cids = vec![configure.cid().unwrap()];
 
     let reply =

@@ -41,8 +41,6 @@ pub struct Descriptor {
 
     /// The timestamp of the message.
     pub message_timestamp: DateTime<Utc>,
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub message_timestamp: Option<DateTime<Utc>>,
 }
 
 /// web node interfaces.

@@ -1140,8 +1140,8 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     };
     let message_timestamp = write.descriptor.base.message_timestamp;
 
-    let date_range = Range::<String> {
-        start: Some(message_timestamp.to_rfc3339()),
+    let date_range = Range::<DateTime<Utc>> {
+        start: Some(message_timestamp),
         end: None,
     };
     let query = RecordsQuery::new().record_id(grant_id).date_created(date_range).build();
