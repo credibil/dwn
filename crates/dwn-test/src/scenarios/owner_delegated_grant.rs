@@ -43,7 +43,7 @@ async fn configure() {
     // --------------------------------------------------
     let mut data = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_data = WriteData::Bytes { data: data.to_vec() };
+    let write_data = WriteData::Bytes(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data_format("application/octet-stream")

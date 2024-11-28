@@ -661,17 +661,10 @@ pub struct WriteProtocol {
 #[serde(untagged)]
 pub enum WriteData {
     /// Data bytes.
-    Bytes {
-        /// Used to compute `data_cid` when `data_cid` is not set.
-        /// Must be the encrypted data bytes if `encryption_input` is set.
-        data: Vec<u8>,
-    },
+    Bytes(Vec<u8>),
 
     /// Data is provided as a `DataStream` implementing `std::io::Read`.
-    Reader {
-        /// A data reader for the record's data.
-        reader: DataStream,
-    },
+    Reader(DataStream),
 
     /// Data CID.
     Cid {
@@ -687,7 +680,7 @@ pub enum WriteData {
 
 impl Default for WriteData {
     fn default() -> Self {
-        Self::Bytes { data: Vec::new() }
+        Self::Bytes(Vec::new())
     }
 }
 
@@ -885,12 +878,22 @@ impl WriteBuilder {
         };
 
         match self.data {
-            WriteData::Bytes { data } => {
-                // TODO: store data as encoded_data or in DataStore
-                write.descriptor.data_cid = cid::from_value(&data)?;
-                write.descriptor.data_size = data.len();
+            WriteData::Bytes(data) => {
+                // store data in `encoded_data` if data is small enough
+                // otherwise, convert to data stream
+                if data.len() <= data::MAX_ENCODED_SIZE {
+                    write.descriptor.data_cid = cid::from_value(&data)?;
+                    write.descriptor.data_size = data.len();
+                    write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
+                } else {
+                    let stream = DataStream::from(data);
+                    let (data_cid, data_size) = stream.compute_cid()?;
+                    write.descriptor.data_cid = data_cid;
+                    write.descriptor.data_size = data_size;
+                    write.data_stream = Some(stream);
+                }
             }
-            WriteData::Reader { reader } => {
+            WriteData::Reader(reader) => {
                 let (data_cid, data_size) = reader.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;

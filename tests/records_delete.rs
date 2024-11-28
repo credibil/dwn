@@ -25,9 +25,7 @@ async fn delete_record() {
     .expect("should serialize");
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader {
-            reader: DataStream::from(data),
-        })
+        .data(WriteData::Reader(DataStream::from(data)))
         .build(&alice_keyring)
         .await
         .expect("should create write");

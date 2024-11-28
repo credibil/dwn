@@ -417,9 +417,7 @@ impl GrantBuilder {
                 protocol: protocols::PROTOCOL_URI.to_string(),
                 protocol_path: "grant".to_string(),
             })
-            .data(WriteData::Bytes {
-                data: grant_bytes.clone(),
-            });
+            .data(WriteData::Bytes(grant_bytes.clone()));
 
         // add protocol tag
         let protocol = match &scope.scope_type {
@@ -439,4 +437,3 @@ impl GrantBuilder {
         Ok(write)
     }
 }
-

@@ -59,9 +59,7 @@ async fn all_messages() {
             .protocol(protocol.clone())
             .schema(&schema)
             // .data(WriteData::Bytes { data: data.clone() })
-            .data(WriteData::Reader {
-                reader: reader.clone(),
-            })
+            .data(WriteData::Reader(reader.clone()))
             .published(true)
             .build(&alice_keyring)
             .await
@@ -96,7 +94,7 @@ async fn all_messages() {
         .protocol(protocol.clone())
         .schema(&schema)
         // .data(WriteData::Bytes { data: data.clone() })
-        .data(WriteData::Reader { reader })
+        .data(WriteData::Reader(reader))
         .published(true)
         .build(&alice_keyring)
         .await

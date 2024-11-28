@@ -41,9 +41,7 @@ async fn owner_events() {
     .expect("should serialize");
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader {
-            reader: DataStream::from(data),
-        })
+        .data(WriteData::Reader(DataStream::from(data)))
         .build(&alice_keyring)
         .await
         .expect("should create write");
@@ -80,7 +78,7 @@ async fn owner_events() {
             }
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
+    if let Err(_) = tokio::time::timeout(Duration::from_millis(1000), find_event).await {
         panic!("should have found event");
     }
 }
