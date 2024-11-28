@@ -19,7 +19,7 @@ pub const MAX_ENCODED_SIZE: usize = 5; //30000;
 const CHUNK_SIZE: usize = 16;
 
 /// Compuet CID from a data value or stream.
-pub(crate) mod cid {
+pub mod cid {
 
     use cid::Cid;
     use multihash_codetable::MultihashDigest;

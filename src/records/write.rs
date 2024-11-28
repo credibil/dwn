@@ -22,10 +22,10 @@ use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{integrity, PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
+use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsQuery};
 use crate::{
-    data, forbidden, rfc3339_micros, rfc3339_micros_opt, unexpected, utils, Descriptor, Error,
-    Interface, Method, Range, Result,
+    data, forbidden, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result,
 };
 
 /// Handle `RecordsWrite` messages.
@@ -64,10 +64,9 @@ pub async fn handle(
     }
 
     // ----------------------------------------------------------------
-    // TODO: Hidden
+    // TODO: Archived
     // ----------------------------------------------------------------
     // **`archived` is set to true when the 'intial write' HAS NO data**
-    //
     // It prevents querying of initial writes without data, thus preventing users
     // from accessing private data they wouldn't ordinarily be able to access.
     //
@@ -899,7 +898,6 @@ impl WriteBuilder {
                 let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
-
                 write.data_stream = Some(reader);
             }
             WriteData::Cid { data_cid, data_size } => {
@@ -1068,7 +1066,7 @@ async fn process_stream(
 
         let data_cid = cid::from_value(&data_bytes)?;
         if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("computed data CID does not match descriptor cid"));
+            return Err(unexpected!("computed data CID does not match descriptor `data_cid`"));
         }
         if write.descriptor.data_size != data_bytes.len() {
             return Err(unexpected!("actual data size does not match descriptor `data_size`"));
@@ -1085,7 +1083,7 @@ async fn process_stream(
 
         // verify data CID and size
         if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("computed data CID does not match descriptor cid"));
+            return Err(unexpected!("computed data CID does not match descriptor `data_cid`"));
         }
         if write.descriptor.data_size != data_size {
             return Err(unexpected!("stored data size does not match descriptor data_size"));

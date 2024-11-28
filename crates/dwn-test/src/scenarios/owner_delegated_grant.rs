@@ -36,7 +36,6 @@ async fn configure() {
                 option: None,
             },
         );
-
     let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
 
     // --------------------------------------------------

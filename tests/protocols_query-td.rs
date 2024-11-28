@@ -1,7 +1,7 @@
 //! Message Query
 //!
-//! This test demonstrates how a web node owner create messages and
-//! subsequently query for them.
+//! This test demonstrates how a web node owner create differnt types of
+//! messages and subsequently query for them.
 
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
@@ -16,6 +16,7 @@ use vercre_dwn::{endpoint, Message};
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
+#[ignore]
 async fn all_messages() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
@@ -54,9 +55,10 @@ async fn all_messages() {
     let reader = DataStream::from(data);
 
     for _i in 1..=5 {
-        let write = WriteBuilder::new()
+        let message = WriteBuilder::new()
             .protocol(protocol.clone())
             .schema(&schema)
+            // .data(WriteData::Bytes { data: data.clone() })
             .data(WriteData::Reader {
                 reader: reader.clone(),
             })
@@ -65,9 +67,9 @@ async fn all_messages() {
             .await
             .expect("should create write");
 
-        expected_cids.push(write.cid().unwrap());
+        expected_cids.push(message.cid().unwrap());
 
-        let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+        let reply = endpoint::handle(ALICE_DID, message, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
 

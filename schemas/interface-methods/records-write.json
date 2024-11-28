@@ -6,5 +6,10 @@
   "required": [
     "recordId",
     "authorization"
-  ]
+  ],
+  "properties": {
+    "encodedData": {
+      "type": "string"
+    }
+  }
 }

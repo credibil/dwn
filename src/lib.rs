@@ -17,13 +17,14 @@ pub mod store;
 mod tasks;
 mod utils;
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use ::serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 use derive_more::Display;
-use serde::{Deserialize, Serialize, Serializer};
 
 pub use crate::endpoint::Message;
 pub use crate::error::Error;
 pub use crate::provider::Provider;
+use crate::serde::rfc3339_micros;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -42,30 +43,6 @@ pub struct Descriptor {
     /// The timestamp of the message.
     #[serde(serialize_with = "rfc3339_micros")]
     pub message_timestamp: DateTime<Utc>,
-}
-
-/// Force serializing to an RFC 3339 string with microsecond precision.
-pub(crate) fn rfc3339_micros<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
-    serializer.serialize_str(&s)
-}
-
-/// Force serializing to an RFC 3339 string with microsecond precision.
-#[allow(clippy::ref_option)]
-pub(crate) fn rfc3339_micros_opt<S>(
-    date: &Option<DateTime<Utc>>, serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let Some(date) = date else {
-        return serializer.serialize_none();
-    };
-    let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
-    serializer.serialize_str(&s)
 }
 
 /// web node interfaces.
@@ -161,23 +138,31 @@ impl<T> Range<T> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use std::ops::Range;
+// Custom serialization functions.
+mod serde {
+    use chrono::{DateTime, SecondsFormat, Utc};
+    use serde::Serializer;
 
-//     use super::{DateTime, Utc};
+    /// Force serializing to an RFC 3339 string with microsecond precision.
+    pub fn rfc3339_micros<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
+        serializer.serialize_str(&s)
+    }
 
-//     #[test]
-//     fn test_range() {
-//         let min_date = DateTime::<Utc>::MIN_UTC;
-//         let max_date = Utc::now();
-
-//         let range = Range {
-//             start: Some(min_date),
-//             end: Some(max_date),
-//         };
-
-//         let betw = Utc::now() - chrono::Duration::days(1);
-//         println!("{:?}", range.contains(&Some(betw)));
-//     }
-// }
+    /// Force serializing to an RFC 3339 string with microsecond precision.
+    #[allow(clippy::ref_option)]
+    pub fn rfc3339_micros_opt<S>(
+        date: &Option<DateTime<Utc>>, serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let Some(date) = date else {
+            return serializer.serialize_none();
+        };
+        rfc3339_micros(date, serializer)
+    }
+}
