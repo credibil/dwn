@@ -660,13 +660,13 @@ pub struct WriteProtocol {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum WriteData {
-    /// Data bytes.
+    /// Data is bytes.
     Bytes(Vec<u8>),
 
-    /// Data is provided as a `DataStream` implementing `std::io::Read`.
+    /// Data is a `DataStream`.
     Reader(DataStream),
 
-    /// Data CID.
+    /// A CID referencing previously stored data.
     Cid {
         /// CID of data already stored by the web node. If not set, the `data`
         /// parameter must be set.
@@ -1125,7 +1125,7 @@ async fn process_data(
     let result = store.get(owner, &write.descriptor.data_cid).await?;
     if result.is_none() {
         return Err(unexpected!(
-            "`data_stream` not set and unable to get data from previous message"
+            "`data_stream` is not set and unable to find previously stored data"
         ));
     };
 

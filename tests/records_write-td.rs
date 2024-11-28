@@ -28,10 +28,7 @@ async fn owner_events() {
     let reply =
         endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
-
-    let Some(mut subscribe_reply) = reply.body else {
-        panic!("unexpected reply: {:?}", reply);
-    };
+    let mut subscribe_reply = reply.body.expect("should have body");
 
     // --------------------------------------------------
     // Alice writes a record.

@@ -11,7 +11,7 @@ use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Interface, Message};
+use vercre_dwn::{Interface, Message, endpoint};
 
 // The owner should be able to to subscribe their own event stream
 #[tokio::test]
@@ -31,10 +31,7 @@ async fn owner_events() {
     let reply =
         endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
-
-    let Some(mut subscribe_reply) = reply.body else {
-        panic!("unexpected reply: {:?}", reply);
-    };
+    let mut subscribe_reply = reply.body.expect("should have body");
 
     // --------------------------------------------------
     // Alice writes a record.

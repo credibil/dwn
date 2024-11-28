@@ -53,14 +53,14 @@ resolver = "2"
 [workspace.package]
 authors = ["Vercre"]
 categories = ["data", "messaging", "didcomm", "identity", "verifiable"]
-edition = "2021"
+edition = "2024"
 exclude = [".*", "/docs", "snapshots/"]
 homepage = "https://vercre.io"
 keywords = ["credentials", "decentralized", "identity", "openid", "verifiable"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/vercre/dwn"
-rust-version = "1.80"
+rust-version = "1.85"
 version = "0.1.0-alpha.1"
 
 [workspace.lints.rust]
