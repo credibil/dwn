@@ -40,14 +40,15 @@ pub struct Descriptor {
     pub method: Method,
 
     /// The timestamp of the message.
-    #[serde(serialize_with = "to_rfc3339")]
+    #[serde(serialize_with = "rfc3339_micros")]
     pub message_timestamp: DateTime<Utc>,
 }
 
 /// Force serializing to an RFC 3339 string with microsecond precision.
-pub(crate) fn to_rfc3339<S: Serializer>(
-    date: &DateTime<Utc>, serializer: S,
-) -> Result<S::Ok, S::Error> {
+pub(crate) fn rfc3339_micros<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
     let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
     serializer.serialize_str(&s)
 }

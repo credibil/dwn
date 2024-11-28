@@ -24,7 +24,8 @@ use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, 
 use crate::records::DataStream;
 use crate::store::{Entry, EntryType, RecordsQuery};
 use crate::{
-    data, forbidden, unexpected, utils, Descriptor, Error, Interface, Method, Range, Result,
+    data, forbidden, rfc3339_micros, unexpected, utils, Descriptor, Error, Interface, Method,
+    Range, Result,
 };
 
 /// Handle `RecordsWrite` messages.
@@ -611,6 +612,7 @@ pub struct WriteDescriptor {
     pub data_format: String,
 
     /// The datatime the record was created.
+    #[serde(serialize_with = "rfc3339_micros")]
     pub date_created: DateTime<Utc>,
 
     /// Indicates whether the record is published.
