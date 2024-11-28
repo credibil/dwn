@@ -53,6 +53,21 @@ where
     serializer.serialize_str(&s)
 }
 
+/// Force serializing to an RFC 3339 string with microsecond precision.
+#[allow(clippy::ref_option)]
+pub(crate) fn rfc3339_micros_opt<S>(
+    date: &Option<DateTime<Utc>>, serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let Some(date) = date else {
+        return serializer.serialize_none();
+    };
+    let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
+    serializer.serialize_str(&s)
+}
+
 /// web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
 #[allow(missing_docs)]
