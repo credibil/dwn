@@ -12,7 +12,7 @@ pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Write};
 pub use crate::records::{RecordsFilter, TagFilter};
-use crate::{Descriptor, Method, Quota, Range, Result, messages, protocols};
+use crate::{Descriptor, Method, Quota, Range, Result, auth, messages, protocols};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -103,6 +103,11 @@ impl From<&Write> for Entry {
             "author".to_string(),
             Value::String(write.authorization.author().unwrap_or_default()),
         );
+        
+        if let Some(attestation) = &write.attestation {
+            let attester = auth::signer_did(attestation).unwrap_or_default();
+            record.indexes.insert("attester".to_string(), Value::String(attester));
+        }
 
         let date_updated =
             write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
@@ -115,9 +120,6 @@ impl From<&Write> for Entry {
             }
             record.indexes.insert("tags".to_string(), Value::Object(tag_map));
         }
-
-        // TODO: add fields
-        // attester: None,
 
         record
     }

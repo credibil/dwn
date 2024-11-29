@@ -1,0 +1,26 @@
+---
+source: tests/records_read.rs
+assertion_line: 54
+expression: record
+snapshot_kind: text
+---
+descriptor:
+  interface: Records
+  method: Write
+  messageTimestamp: "[messageTimestamp]"
+  dataCid: bafyreigwsdcozizuq3rk2iedqh6nltjg4t5xifkhhkitqjskxqyuuxvaxe
+  dataSize: 31
+  dataFormat: application/json
+  dateCreated: "[dateCreated]"
+authorization:
+  signature:
+    payload: "[payload]"
+    signatures:
+      - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+        signature: "[signature]"
+recordId: "[recordId]"
+attestation:
+  payload: "[payload]"
+  signatures:
+    - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+      signature: "[signature]"

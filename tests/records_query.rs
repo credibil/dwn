@@ -32,25 +32,17 @@ async fn find_matches() {
     let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write = WriteBuilder::new()
-        .data(stream.clone())
-        .data_format("novel_data_format")
-        .schema("schema_1")
-        .build(&alice_keyring)
-        .await
-        .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
-
-    let write = WriteBuilder::new()
-        .data(stream)
-        .data_format("novel_data_format")
-        .schema("schema_2")
-        .build(&alice_keyring)
-        .await
-        .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    for i in 1..=2 {
+        let write = WriteBuilder::new()
+            .data(stream.clone())
+            .data_format("novel_data_format")
+            .schema(format!("schema_{i}"))
+            .build(&alice_keyring)
+            .await
+            .expect("should create write");
+        let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+        assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    }
 
     // --------------------------------------------------
     // Alice queries for records with matching format.

@@ -1,37 +1,24 @@
-//! Messages Subscribe
-
-use std::time::Duration;
+//! Records Read
 
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
-use futures::StreamExt;
 use http::StatusCode;
+use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use vercre_dwn::data::DataStream;
+use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
-use vercre_dwn::{Message, endpoint};
+use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
 
-// The owner should be able to to subscribe their own event stream
+// The owner should be able to read their own records.
 #[tokio::test]
 #[ignore]
-async fn owner_events() {
+async fn owner_records() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice subscribes to own event stream.
-    // --------------------------------------------------
-    let filter = RecordsFilter::new().add_author(ALICE_DID);
-    let subscribe =
-        SubscribeBuilder::new().filter(filter).build(&alice_keyring).await.expect("should build");
-    let reply =
-        endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    let mut subscribe_reply = reply.body.expect("should have body");
-
-    // --------------------------------------------------
-    // Alice writes a record.
+    // Add a `write` record.
     // --------------------------------------------------
     let data = serde_json::to_vec(&json!({
         "message": "test record write",
@@ -44,39 +31,33 @@ async fn owner_events() {
         .await
         .expect("should create write");
 
-    let message_cid = write.cid().expect("should have cid");
+    let record_id = write.record_id.clone();
 
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Ensure the RecordsWrite event exists.
+    // Read the record.
     // --------------------------------------------------
-    let filter = RecordsFilter::new().record_id(&write.record_id);
-    let query = QueryBuilder::new()
-        .filter(filter)
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(record_id))
         .build(&alice_keyring)
         .await
-        .expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
-    let entries = query_reply.entries.expect("should have entries");
-    assert_eq!(entries.len(), 1);
-    // assert_eq!(entries[0], message_cid);
+    let body = reply.body.expect("should have body");
+    let record = body.entry.records_write.expect("should have records_write");
 
-    // --------------------------------------------------
-    // The subscriber should have a matching write event.
-    // --------------------------------------------------
-    let find_event = async move {
-        while let Some(event) = subscribe_reply.subscription.next().await {
-            if message_cid == event.cid().unwrap() {
-                break;
-            }
-        }
-    };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
-        panic!("should have found event");
-    }
+    assert_snapshot!("read", record, {
+        ".recordId" => "[recordId]",
+        ".descriptor.messageTimestamp" => "[messageTimestamp]",
+        ".descriptor.dateCreated" => "[dateCreated]",
+        ".authorization.signature.payload" => "[payload]",
+        ".authorization.signature.signatures[0].signature" => "[signature]",
+        ".attestation.payload" => "[payload]",
+        ".attestation.signatures[0].signature" => "[signature]",
+    });
 }
