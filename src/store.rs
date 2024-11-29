@@ -227,8 +227,8 @@ pub struct RecordsQuery {
     /// Filter records by `date_created`.
     pub date_created: Option<Range<DateTime<Utc>>>,
 
-    /// Filter records by `hidden`.
-    pub hidden: Option<bool>,
+    /// Filter records by `archived`.
+    pub archived: Option<bool>,
 
     /// Filter records by `filter`.
     pub filter: Option<RecordsFilter>,
@@ -249,7 +249,7 @@ impl Default for RecordsQuery {
 
         Self {
             method: Some(Method::Write),
-            hidden: Some(false),
+            archived: Some(false),
             sort: Some(sort),
 
             record_id: None,
@@ -331,8 +331,8 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) const fn hidden(mut self, hidden: Option<bool>) -> Self {
-        self.hidden = hidden;
+    pub(crate) const fn archived(mut self, archived: Option<bool>) -> Self {
+        self.archived = archived;
         self
     }
 

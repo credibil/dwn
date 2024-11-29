@@ -135,7 +135,7 @@ impl From<&Delete> for Entry {
         record
             .indexes
             .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
-        record.indexes.insert("hidden".to_string(), Value::Bool(false));
+        record.indexes.insert("archived".to_string(), Value::Bool(false));
 
         record
     }
@@ -272,7 +272,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     let query = RecordsQuery::new()
         .record_id(&delete.descriptor.record_id)
         .method(None)
-        .hidden(None)
+        .archived(None)
         .build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;
     if records.is_empty() {
@@ -407,12 +407,12 @@ async fn delete_earlier(
             MessageStore::delete(provider, owner, &message.cid()?).await?;
 
             // when the existing message is the initial write, retain it BUT,
-            // ensure the message is marked as `hidden`
+            // ensure the message is marked as `archived`
             if let Some(write) = message.as_write()
                 && write.is_initial()?
             {
                 let mut record = Entry::from(write);
-                record.indexes.insert("hidden".to_string(), Value::Bool(true));
+                record.indexes.insert("archived".to_string(), Value::Bool(true));
                 MessageStore::put(provider, owner, &record).await?;
             } else {
                 EventLog::delete(provider, owner, &message.cid()?).await?;

@@ -110,8 +110,8 @@ impl QuerySerializer for RecordsQuery {
             interface = Interface::Records
         );
 
-        if let Some(hidden) = &self.hidden {
-            sql.push_str(&format!("AND hidden = {hidden}\n"));
+        if let Some(archived) = &self.archived {
+            sql.push_str(&format!("AND archived = {archived}\n"));
         }
 
         if let Some(method) = &self.method {
