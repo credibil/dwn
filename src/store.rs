@@ -227,8 +227,9 @@ pub struct RecordsQuery {
     /// Filter records by `date_created`.
     pub date_created: Option<Range<DateTime<Utc>>>,
 
-    /// Filter records by `archived`.
-    pub archived: Option<bool>,
+    /// Include records with the `archive` flag (initial write that has been
+    /// superseded).
+    pub include_archived: bool,
 
     /// Filter records by `filter`.
     pub filter: Option<RecordsFilter>,
@@ -249,7 +250,7 @@ impl Default for RecordsQuery {
 
         Self {
             method: Some(Method::Write),
-            archived: Some(false),
+            include_archived: false,
             sort: Some(sort),
 
             record_id: None,
@@ -331,8 +332,8 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) const fn archived(mut self, archived: Option<bool>) -> Self {
-        self.archived = archived;
+    pub(crate) const fn include_archived(mut self, include_archived: bool) -> Self {
+        self.include_archived = include_archived;
         self
     }
 

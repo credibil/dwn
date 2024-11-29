@@ -272,7 +272,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     let query = RecordsQuery::new()
         .record_id(&delete.descriptor.record_id)
         .method(None)
-        .archived(None)
+        .include_archived(true)
         .build();
     let (records, _) = MessageStore::query(provider, owner, &query).await?;
     if records.is_empty() {
