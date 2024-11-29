@@ -96,7 +96,7 @@ fn check_scope(write: &Write, scope: &Scope) -> Result<()> {
             return Err(forbidden!("grants require a `tags` property"));
         };
         let Some(tag_protocol) = tags.get("protocol") else {
-            return Err(forbidden!("grant `tags` must contain a \"protocol\" tag",));
+            return Err(forbidden!("grant tags must contain a \"protocol\" tag",));
         };
         if tag_protocol != protocol {
             return Err(forbidden!("grant scope protocol must match tag protocol"));
@@ -107,12 +107,7 @@ fn check_scope(write: &Write, scope: &Scope) -> Result<()> {
         if Some(protocol) != write.descriptor.protocol.as_ref() {
             return Err(forbidden!("scope protocol does not match record protocol",));
         }
-        // let Some(options)= options.as_ref() else {
-        //     return Err(forbidden!("missing options in records scope"));
-        // };
-        // if options.context_id().is_some() && options.protocol_path().is_some() {
-        //     return Err(forbidden!("grant cannot have  context_id or protocol_path in records scope"));
-        // }
+        // no need to check options as we use an enum
     }
 
     Ok(())
