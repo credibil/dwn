@@ -2,10 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
-use crate::permissions::{self, Conditions, Scope, ScopeType};
+use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope, ScopeProtocol};
 use crate::protocols::{
     self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
@@ -13,33 +12,6 @@ use crate::provider::MessageStore;
 use crate::records::Write;
 use crate::store::{ProtocolsQuery, RecordsQuery};
 use crate::{Range, Result, forbidden, schema, utils};
-
-/// Type for the data payload of a permission request message.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct RequestData {
-    /// If the grant is a delegated grant or not. If `true`, `granted_to` will
-    /// be able to act as the `granted_by` within the scope of this grant.
-    #[serde(default)]
-    pub delegated: bool,
-
-    /// Optional string that communicates what the grant would be used for.
-    pub description: Option<String>,
-
-    /// The scope of the allowed access.
-    pub scope: Scope,
-
-    /// Optional conditions that must be met when the grant is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Conditions>,
-}
-
-/// Type for the data payload of a permission revocation message.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct RevocationData {
-    /// Optional string that communicates the details of the revocation.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
 
 /// Verify the integrity of `RecordsWrite` messages using a protocol.
 pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
@@ -72,16 +44,17 @@ pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
         return Err(forbidden!("missing protocol path"));
     };
 
+    // TODO: convert xxx_PATH to enum
     match protocol_path.as_str() {
         REQUEST_PATH => {
             let request_data: RequestData = serde_json::from_slice(data)?;
             schema::validate_value("PermissionRequestData", &request_data)?;
-            check_scope(write, &request_data.scope.scope_type)
+            check_scope(write, &request_data.scope)
         }
         GRANT_PATH => {
-            let grant_data: RequestData = serde_json::from_slice(data)?;
+            let grant_data: GrantData = serde_json::from_slice(data)?;
             schema::validate_value("PermissionGrantData", &grant_data)?;
-            check_scope(write, &grant_data.scope.scope_type)
+            check_scope(write, &grant_data.scope)
         }
         REVOCATION_PATH => {
             let revocation_data: RevocationData = serde_json::from_slice(data)?;
@@ -117,28 +90,29 @@ fn check_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<(
 }
 
 /// Validate tags include a protocol tag matching the scoped protocol.
-fn check_scope(write: &Write, scope: &ScopeType) -> Result<()> {
-    // validation difficult to do using JSON schema
-    let scope_protocol = match scope {
-        ScopeType::Records { protocol, .. } => {
-            if Some(protocol) != write.descriptor.protocol.as_ref() {
-                return Err(forbidden!("scope protocol does not match record protocol",));
-            }
-            protocol
+fn check_scope(write: &Write, scope: &Scope) -> Result<()> {
+    if let Some(protocol) = scope.protocol() {
+        let Some(tags) = &write.descriptor.tags else {
+            return Err(forbidden!("grants require a `tags` property"));
+        };
+        let Some(tag_protocol) = tags.get("protocol") else {
+            return Err(forbidden!("grant `tags` must contain a \"protocol\" tag",));
+        };
+        if tag_protocol != protocol {
+            return Err(forbidden!("grant scope protocol must match tag protocol"));
         }
-        _ => return Err(forbidden!("invalid scope type")),
-    };
+    }
 
-    let Some(tags) = &write.descriptor.tags else {
-        return Err(forbidden!("grants require a `tags` property"));
-    };
-    let Some(tag_protocol) = tags.get("protocol") else {
-        return Err(forbidden!("grants must have a `tags` property containing a protocol tag",));
-    };
-    if tag_protocol != scope_protocol {
-        return Err(forbidden!(
-            "grants must have a scope with a protocol matching the tagged protocol: {tag_protocol}"
-        ));
+    if let ScopeProtocol::Records { protocol, .. } = &scope.protocol {
+        if Some(protocol) != write.descriptor.protocol.as_ref() {
+            return Err(forbidden!("scope protocol does not match record protocol",));
+        }
+        // let Some(options)= options.as_ref() else {
+        //     return Err(forbidden!("missing options in records scope"));
+        // };
+        // if options.context_id().is_some() && options.protocol_path().is_some() {
+        //     return Err(forbidden!("grant cannot have  context_id or protocol_path in records scope"));
+        // }
     }
 
     Ok(())
@@ -301,7 +275,7 @@ async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> 
             let revoke_protocol =
                 tags.get("protocol").map_or("", |p| p.as_str().unwrap_or_default());
 
-            let ScopeType::Records { protocol, .. } = grant.data.scope.scope_type else {
+            let ScopeProtocol::Records { protocol, .. } = grant.data.scope.protocol else {
                 return Err(forbidden!("missing protocol in grant scope"));
             };
 

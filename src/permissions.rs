@@ -7,7 +7,7 @@ mod request;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
-pub use self::grant::{Grant, GrantBuilder, GrantData};
+pub use self::grant::{Grant, GrantBuilder, GrantData,RequestData, RevocationData};
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
 use crate::records::Write;
@@ -52,28 +52,26 @@ pub struct Scope {
     /// The method the permission is applied to.
     pub method: Method,
 
-    /// Variant scope fields.
+    /// Scope protocol variants.
     #[serde(flatten)]
-    pub scope_type: ScopeType,
+    pub protocol: ScopeProtocol,
 }
 
 impl Scope {
     /// Get the scope protocol.
     #[must_use]
     pub fn protocol(&self) -> Option<&str> {
-        match &self.scope_type {
-            ScopeType::Protocols { protocol } | ScopeType::EntryType { protocol } => {
-                protocol.as_deref()
-            }
-            ScopeType::Records { protocol, .. } => Some(protocol),
+        match &self.protocol {
+            ScopeProtocol::Simple { protocol } => protocol.as_deref(),
+            ScopeProtocol::Records { protocol, .. } => Some(protocol),
         }
     }
 
     /// Get records scope options.
     #[must_use]
     pub const fn options(&self) -> Option<&RecordsOptions> {
-        match &self.scope_type {
-            ScopeType::Records { option, .. } => option.as_ref(),
+        match &self.protocol {
+            ScopeProtocol::Records { options, .. } => options.as_ref(),
             _ => None,
         }
     }
@@ -82,19 +80,14 @@ impl Scope {
 /// Scope type variants.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum ScopeType {
-    /// `Protocols` scope fields.
-    Protocols {
-        /// The protocol the permission is applied to.
+pub enum ScopeProtocol {
+    /// Protocol is a URI reference
+    Simple {
         #[serde(skip_serializing_if = "Option::is_none")]
+        /// The protocol the permission is applied to.
         protocol: Option<String>,
     },
-    /// `EntryType` scope fields.
-    EntryType {
-        /// The protocol the permission is applied to.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        protocol: Option<String>,
-    },
+
     /// `Records` scope fields.
     Records {
         /// The protocol the permission is applied to.
@@ -103,13 +96,13 @@ pub enum ScopeType {
         /// Context ID or protocol path.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(flatten)]
-        option: Option<RecordsOptions>,
+        options: Option<RecordsOptions>,
     },
 }
 
-impl Default for ScopeType {
+impl Default for ScopeProtocol {
     fn default() -> Self {
-        Self::Protocols { protocol: None }
+        Self::Simple { protocol: None }
     }
 }
 

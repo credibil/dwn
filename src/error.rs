@@ -52,43 +52,43 @@ impl Serialize for Error {
 
 impl From<anyhow::Error> for Error {
     fn from(error: anyhow::Error) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("anyhow: {error}"))
     }
 }
 
 impl From<base64ct::Error> for Error {
     fn from(error: Base64Error) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("base64ct: {error}"))
     }
 }
 
 impl From<serde_json::Error> for Error {
     fn from(error: serde_json::Error) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("serde_json: {error}"))
     }
 }
 
 impl From<ciborium::ser::Error<std::io::Error>> for Error {
     fn from(error: ciborium::ser::Error<std::io::Error>) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("ciborium: {error}"))
     }
 }
 
 impl From<http::uri::InvalidUri> for Error {
     fn from(error: http::uri::InvalidUri) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("http: {error}"))
     }
 }
 
 impl From<jsonschema::error::ValidationError<'_>> for Error {
     fn from(error: jsonschema::error::ValidationError<'_>) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("jsonschema: {error}"))
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("std::io: {error}"))
     }
 }
 
@@ -100,7 +100,7 @@ impl From<std::io::Error> for Error {
 
 impl From<libipld::cid::Error> for Error {
     fn from(error: libipld::cid::Error) -> Self {
-        Self::InternalServerError(error.to_string())
+        Self::InternalServerError(format!("libipld: {error}"))
     }
 }
 

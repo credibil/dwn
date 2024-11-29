@@ -9,7 +9,7 @@ use http::StatusCode;
 use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::ReadBuilder;
-use vercre_dwn::permissions::{GrantBuilder, ScopeType};
+use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
 use vercre_dwn::{Interface, Message, Method, endpoint};
@@ -49,7 +49,7 @@ async fn read_message() {
         .request_id("grant_id_1")
         .description("allow Bob to read messages")
         .expires_in(60 * 60 * 24)
-        .scope(Interface::Messages, Method::Read, ScopeType::Protocols { protocol: None });
+        .scope(Interface::Messages, Method::Read, ScopeProtocol::Simple { protocol: None });
     let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
 
     let record_id = bob_grant.record_id.clone();
