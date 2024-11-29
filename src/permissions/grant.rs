@@ -395,6 +395,51 @@ impl GrantBuilder {
     /// # Errors
     /// TODO: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
+        // if (this.isRecordPermissionScope(options.scope) && options.scope.protocol === undefined) {
+        //   throw new DwnError(
+        //     DwnErrorCode.PermissionsProtocolCreateGrantRecordsScopeMissingProtocol,
+        //     'Permission grants for Records must have a scope with a `protocol` property'
+        //   );
+        // }
+
+        // const scope = PermissionsProtocol.normalizePermissionScope(options.scope);
+
+        // const permissionGrantData: PermissionGrantData = {
+        //   dateExpires : options.dateExpires,
+        //   requestId   : options.requestId,
+        //   description : options.description,
+        //   delegated   : options.delegated,
+        //   scope,
+        //   conditions  : options.conditions,
+        // };
+
+        // // If the grant is scoped to a protocol, the protocol tag must be included with the record.
+        // // This is done in order to ensure a subset message query filtered to a protocol includes the permission grants associated with it.
+        // let permissionTags = undefined;
+        // if (this.hasProtocolScope(scope)) {
+        //   permissionTags = {
+        //     protocol: scope.protocol
+        //   };
+        // }
+
+        // const permissionGrantBytes = Encoder.objectToBytes(permissionGrantData);
+        // const recordsWrite = await RecordsWrite.create({
+        //   signer           : options.signer,
+        //   messageTimestamp : options.dateGranted,
+        //   dateCreated      : options.dateGranted,
+        //   recipient        : options.grantedTo,
+        //   protocol         : PermissionsProtocol.uri,
+        //   protocolPath     : PermissionsProtocol.grantPath,
+        //   dataFormat       : 'application/json',
+        //   data             : permissionGrantBytes,
+        //   tags             : permissionTags,
+        // });
+
+        // const dataEncodedMessage: DataEncodedRecordsWriteMessage = {
+        //   ...recordsWrite.message,
+        //   encodedData: Encoder.bytesToBase64Url(permissionGrantBytes)
+        // };
+
         if self.granted_to.is_empty() {
             return Err(forbidden!("missing `granted_to`"));
         }

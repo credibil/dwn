@@ -91,7 +91,6 @@ async fn all_messages() {
     let message = WriteBuilder::new()
         .protocol(protocol.clone())
         .schema(&schema)
-        // .data(WriteData::Bytes { data: data.clone() })
         .data(WriteData::Reader(reader))
         .published(true)
         .build(&alice_keyring)

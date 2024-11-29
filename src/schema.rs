@@ -83,6 +83,10 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/records-delete.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "PermissionGrantData" => {
+            let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
 
         _ => Err(unexpected!("Schema not found: {schema_name}")),
     }
@@ -96,78 +100,100 @@ impl Retrieve for Retriever {
     fn retrieve(
         &self, uri: &Uri<&str>,
     ) -> Result<Value, Box<(dyn std::error::Error + Send + Sync + 'static)>> {
-        let Some(file) = uri.path().split('/').last() else {
-            return Err(unexpected!("Schema not found: {uri}").into());
-        };
+        // let Some(file) = uri.path().split('/').last() else {
+        //     return Err(unexpected!("Schema not found: {uri}").into());
+        // };
 
-        match file.as_str() {
-            "defs.json" => {
+        match uri.as_str() {
+            "https://identity.foundation/dwn/json-schemas/defs.json" => {
                 let schema = include_bytes!("../schemas/definitions.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "messages-filter.json" => {
+            "https://identity.foundation/dwn/json-schemas/messages-filter.json" => {
                 let schema = include_bytes!("../schemas/interface-methods/messages-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "pagination-cursor.json" => {
+            "https://identity.foundation/dwn/json-schemas/pagination-cursor.json" => {
                 let schema = include_bytes!("../schemas/interface-methods/pagination-cursor.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "protocol-definition.json" => {
+            "https://identity.foundation/dwn/json-schemas/protocol-definition.json" => {
                 let schema =
                     include_bytes!("../schemas/interface-methods/protocol-definition.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "protocol-rule-set.json" => {
+            "https://identity.foundation/dwn/json-schemas/protocol-rule-set.json" => {
                 let schema = include_bytes!("../schemas/interface-methods/protocol-rule-set.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "records-write-data-encoded.json" => {
+            "https://identity.foundation/dwn/json-schemas/records-write-data-encoded.json" => {
                 let schema =
                     include_bytes!("../schemas/interface-methods/records-write-data-encoded.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "records-write-unidentified.json" => {
+            "https://identity.foundation/dwn/json-schemas/records-write-unidentified.json" => {
                 let schema =
                     include_bytes!("../schemas/interface-methods/records-write-unidentified.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "records-filter.json" => {
+            "https://identity.foundation/dwn/json-schemas/records-filter.json" => {
                 let schema = include_bytes!("../schemas/interface-methods/records-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "string-range-filter.json" => {
+            "https://identity.foundation/dwn/json-schemas/string-range-filter.json" => {
                 let schema =
                     include_bytes!("../schemas/interface-methods/string-range-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "number-range-filter.json" => {
+            "https://identity.foundation/dwn/json-schemas/number-range-filter.json" => {
                 let schema =
                     include_bytes!("../schemas/interface-methods/number-range-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "authorization.json" => {
+            "https://identity.foundation/dwn/json-schemas/authorization.json" => {
                 let schema = include_bytes!("../schemas/authorization.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "authorization-owner.json" => {
+            "https://identity.foundation/dwn/json-schemas/authorization-owner.json" => {
                 let schema = include_bytes!("../schemas/authorization-owner.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "authorization-delegated-grant.json" => {
+            "https://identity.foundation/dwn/json-schemas/authorization-delegated-grant.json" => {
                 let schema = include_bytes!("../schemas/authorization-delegated-grant.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "general-jws.json" => {
+            "https://identity.foundation/dwn/json-schemas/general-jws.json" => {
                 let schema = include_bytes!("../schemas/general-jws.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "public-jwk.json" => {
+            "https://identity.foundation/dwn/json-schemas/public-jwk.json" => {
                 let schema = include_bytes!("../schemas/jwk/public-jwk.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            "general-jwk.json" => {
+            "https://identity.foundation/dwn/json-schemas/general-jwk.json" => {
                 let schema = include_bytes!("../schemas/jwk/general-jwk.json");
+                Ok(serde_json::from_slice(schema)?)
+            }
+            // "https://identity.foundation/dwn/json-schemas/permission-grant-data.json" => {
+            //     let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
+            //     Ok(serde_json::from_slice(schema)?)
+            // }
+            // "https://identity.foundation/dwn/json-schemas/permissions/permission-request-data.json" =>
+            // {
+            //     let schema = include_bytes!("../schemas/permissions/permission-request-data.json");
+            //     Ok(serde_json::from_slice(schema)?)
+            // }
+            // "https://identity.foundation/dwn/json-schemas/permissions/permission-revocation-data.json" =>
+            // {
+            //     let schema = include_bytes!("../schemas/permissions/permission-revocation-data.json");
+            //     Ok(serde_json::from_slice(schema)?)
+            // }
+            "https://identity.foundation/dwn/json-schemas/permissions/defs.json" => {
+                let schema = include_bytes!("../schemas/permissions/permissions-definitions.json");
+                Ok(serde_json::from_slice(schema)?)
+            }
+            "https://identity.foundation/dwn/json-schemas/permissions/scopes.json" => {
+                let schema = include_bytes!("../schemas/permissions/scopes.json");
                 Ok(serde_json::from_slice(schema)?)
             }
 

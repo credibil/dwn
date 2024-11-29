@@ -63,6 +63,8 @@ pub async fn handle(
         }
     }
 
+    
+
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
         // incoming message WITH data
         (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
@@ -76,6 +78,8 @@ pub async fn handle(
         // incoming message WITHOUT data AND an initial write
         (write, StatusCode::NO_CONTENT)
     };
+
+    println!("here1");
 
     // ----------------------------------------------------------------
     // Archive
@@ -920,17 +924,17 @@ impl WriteBuilder {
             WriteData::Bytes(data) => {
                 // store data in `encoded_data` if data is small enough
                 // otherwise, convert to data stream
-                if data.len() <= data::MAX_ENCODED_SIZE {
-                    write.descriptor.data_cid = cid::from_value(&data)?;
-                    write.descriptor.data_size = data.len();
-                    write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
-                } else {
-                    let stream = DataStream::from(data);
-                    let (data_cid, data_size) = stream.compute_cid()?;
-                    write.descriptor.data_cid = data_cid;
-                    write.descriptor.data_size = data_size;
-                    write.data_stream = Some(stream);
-                }
+                // if data.len() <= data::MAX_ENCODED_SIZE {
+                //     write.descriptor.data_cid = cid::from_value(&data)?;
+                //     write.descriptor.data_size = data.len();
+                //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
+                // } else {
+                let stream = DataStream::from(data);
+                let (data_cid, data_size) = stream.compute_cid()?;
+                write.descriptor.data_cid = data_cid;
+                write.descriptor.data_size = data_size;
+                write.data_stream = Some(stream);
+                // }
             }
             WriteData::Reader(reader) => {
                 let (data_cid, data_size) = reader.compute_cid()?;

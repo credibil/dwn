@@ -15,10 +15,11 @@ use crate::store::{ProtocolsQuery, RecordsQuery};
 use crate::{Range, Result, forbidden, schema, utils};
 
 /// Type for the data payload of a permission request message.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct RequestData {
     /// If the grant is a delegated grant or not. If `true`, `granted_to` will
     /// be able to act as the `granted_by` within the scope of this grant.
+    #[serde(default)]
     pub delegated: bool,
 
     /// Optional string that communicates what the grant would be used for.
