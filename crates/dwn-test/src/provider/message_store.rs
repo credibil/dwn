@@ -12,7 +12,7 @@ pub(crate) const TABLE: &str = "message";
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<Entry> = self.db.create((TABLE, entry.cid()?)).content(entry).await?;
+        let _: Option<Entry> = self.db.update((TABLE, entry.cid()?)).content(entry).await?;
         Ok(())
     }
 
