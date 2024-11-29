@@ -7,7 +7,7 @@ mod request;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
-pub use self::grant::{Grant, GrantBuilder, GrantData,RequestData, RevocationData};
+pub use self::grant::{Grant, GrantBuilder, GrantData, RequestData, RevocationData};
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
 use crate::records::Write;
@@ -72,7 +72,7 @@ impl Scope {
     pub const fn options(&self) -> Option<&RecordsOptions> {
         match &self.protocol {
             ScopeProtocol::Records { options, .. } => options.as_ref(),
-            _ => None,
+            ScopeProtocol::Simple { .. } => None,
         }
     }
 }

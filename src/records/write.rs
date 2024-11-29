@@ -917,7 +917,7 @@ impl WriteBuilder {
         }
         if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
             write.descriptor.date_published =
-                Some(write.descriptor.date_published.unwrap_or(Utc::now()));
+                Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
         }
 
         match self.data {
