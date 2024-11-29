@@ -14,7 +14,7 @@ use crate::provider::BlockStore;
 use crate::{Result, unexpected};
 
 /// The maximum size of a message.
-pub const MAX_ENCODED_SIZE: usize = 5; //30000;
+pub const MAX_ENCODED_SIZE: usize = 30000;
 
 const CHUNK_SIZE: usize = 16;
 

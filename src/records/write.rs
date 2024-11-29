@@ -78,17 +78,24 @@ pub async fn handle(
     };
 
     // ----------------------------------------------------------------
-    // Archived
+    // Current
     // ----------------------------------------------------------------
-    // The `archived` flag is set when the intial write has no data.
+    // The `current` flag is set when the intial write has no data.
     // It prevents querying of initial writes without data, thus preventing users
     // from accessing private data they wouldn't ordinarily be able to access.
     let mut entry = Entry::from(&write);
-    entry.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
+    entry.indexes.insert("archived".to_string(), Value::Bool(code != StatusCode::NO_CONTENT));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
+
+    // // archive the initial write
+    // if let Some(initial_write) = initial_write {
+    //     let mut entry = Entry::from(&initial_write);
+    //     entry.indexes.insert("archived".to_string(), Value::Bool(true));
+    //     MessageStore::put(provider, owner, &entry).await?;
+    // }
 
     // only emit an event when the message is the latest base state
     if newest_existing.is_none() {
@@ -639,10 +646,8 @@ pub struct WriteBuilder {
     data_format: String,
     delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
-
-    // Encryption settings
+    existing_write: Option<Write>,
     encryption_input: Option<EncryptionInput>,
-    // attestation_signers: Option<Vec<Signer>>,
 }
 
 /// Protocol.
@@ -805,13 +810,6 @@ impl WriteBuilder {
         self
     }
 
-    // /// The datetime the record was created. Defaults to now.
-    // #[must_use]
-    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-    //     self.message_timestamp = message_timestamp;
-    //     self
-    // }
-
     /// Whether the record is published.
     #[must_use]
     pub const fn published(mut self, published: bool) -> Self {
@@ -854,28 +852,73 @@ impl WriteBuilder {
         self
     }
 
+    /// Specifies the permission grant ID.
+    #[must_use]
+    pub fn existing_write(mut self, existing_write: Write) -> Self {
+        self.existing_write = Some(existing_write);
+        self
+    }
+
     /// Build the write message.
     ///
     /// # Errors
     /// TODO: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<Write> {
-        let mut write = Write {
-            descriptor: WriteDescriptor {
-                base: Descriptor {
-                    interface: Interface::Records,
-                    method: Method::Write,
-                    message_timestamp: self.message_timestamp,
+        let mut write = if let Some(existing_write) = &self.existing_write {
+            existing_write.clone()
+        } else {
+            let mut write = Write {
+                descriptor: WriteDescriptor {
+                    base: Descriptor {
+                        interface: Interface::Records,
+                        method: Method::Write,
+                        message_timestamp: self.message_timestamp,
+                    },
+                    date_created: self.date_created.unwrap_or_else(Utc::now),
+                    recipient: self.recipient,
+                    ..WriteDescriptor::default()
                 },
-                recipient: self.recipient,
-                tags: self.tags,
-                date_created: self.date_created.unwrap_or_else(Utc::now),
-                published: self.published,
-                data_format: self.data_format,
-                parent_id: self.parent_context_id.clone(),
-                ..WriteDescriptor::default()
-            },
-            ..Write::default()
+                ..Write::default()
+            };
+
+            // immutable properties
+            if let Some(write_protocol) = self.protocol {
+                let normalized = utils::clean_url(&write_protocol.protocol)?;
+                write.descriptor.protocol = Some(normalized);
+                write.descriptor.protocol_path = Some(write_protocol.protocol_path);
+            }
+            if let Some(s) = self.schema {
+                write.descriptor.schema = Some(utils::clean_url(&s)?);
+            }
+            // parent_id == first segment of  `parent_context_id`
+            if let Some(context_id) = self.parent_context_id {
+                let parent_id =
+                    context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
+                write.descriptor.parent_id = parent_id;
+            }
+
+            write
         };
+
+        write.descriptor.data_format = self.data_format;
+
+        // record_id
+        if let Some(record_id) = self.record_id {
+            write.record_id = record_id;
+        }
+        // tags
+        if let Some(tags) = self.tags {
+            write.descriptor.tags = Some(tags);
+        }
+
+        // published, date_published
+        if let Some(published) = self.published {
+            write.descriptor.published = Some(published);
+        }
+        if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
+            write.descriptor.date_published =
+                Some(write.descriptor.date_published.unwrap_or(Utc::now()));
+        }
 
         match self.data {
             WriteData::Bytes(data) => {
@@ -905,36 +948,11 @@ impl WriteBuilder {
             }
         };
 
-        // protocol, protocol_ path
-        if let Some(p) = self.protocol {
-            let normalized = utils::clean_url(&p.protocol)?;
-            write.descriptor.protocol = Some(normalized);
-            write.descriptor.protocol_path = Some(p.protocol_path);
-        }
-
-        // schema
-        if let Some(s) = self.schema {
-            write.descriptor.schema = Some(utils::clean_url(&s)?);
-        }
-
-        // parent_id - first segment of  `parent_context_id`
-        if let Some(id) = self.parent_context_id {
-            let parent_id = id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-            write.descriptor.parent_id = parent_id;
-        }
-
-        // when published true and date_published not set
-        if self.published.unwrap_or_default() && self.date_published.is_none() {
-            write.descriptor.date_published = Some(Utc::now());
-        }
-
-        write.record_id = self.record_id.unwrap_or_default();
         write.authorization = Authorization {
             author_delegated_grant: self.delegated_grant,
             ..Authorization::default()
         };
 
-        // TODO: encryption
         if let Some(ecryption_input) = &self.encryption_input {
             write.encrypt(ecryption_input, keyring)?;
         }
@@ -1059,15 +1077,17 @@ async fn process_stream(
 
     // when data is below the threshold, store it within MessageStore
     if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {
+        // compute CID before reading (and consuming) the stream
+        let (data_cid, data_size) = data.compute_cid()?;
+
         // read data from stream
         let mut data_bytes = Vec::new();
         data.read_to_end(&mut data_bytes)?;
 
-        let data_cid = cid::from_value(&data_bytes)?;
         if write.descriptor.data_cid != data_cid {
             return Err(unexpected!("computed data CID does not match message `data_cid`"));
         }
-        if write.descriptor.data_size != data_bytes.len() {
+        if write.descriptor.data_size != data_size {
             return Err(unexpected!("actual data size does not match message `data_size`"));
         }
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {

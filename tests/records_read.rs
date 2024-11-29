@@ -12,7 +12,6 @@ use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
 
 // The owner should be able to read their own records.
 #[tokio::test]
-#[ignore]
 async fn owner_records() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
@@ -44,7 +43,6 @@ async fn owner_records() {
         .build(&alice_keyring)
         .await
         .expect("should create read");
-
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
