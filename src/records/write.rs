@@ -84,7 +84,7 @@ pub async fn handle(
     // It prevents querying of initial writes without data, thus preventing users
     // from accessing private data they wouldn't ordinarily be able to access.
     let mut entry = Entry::from(&write);
-    entry.indexes.insert("archived".to_string(), Value::Bool(code != StatusCode::NO_CONTENT));
+    entry.indexes.insert("hidden".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
 
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
@@ -93,7 +93,7 @@ pub async fn handle(
     // // archive the initial write
     // if let Some(initial_write) = initial_write {
     //     let mut entry = Entry::from(&initial_write);
-    //     entry.indexes.insert("archived".to_string(), Value::Bool(true));
+    //     entry.indexes.insert("hidden".to_string(), Value::Bool(true));
     //     MessageStore::put(provider, owner, &entry).await?;
     // }
 

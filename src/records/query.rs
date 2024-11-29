@@ -68,7 +68,7 @@ pub async fn handle(
         let write: Write = record.try_into()?;
 
         let initial_write = if write.is_initial()? {
-            let query = RecordsQuery::new().record_id(&write.record_id).archived(None).build();
+            let query = RecordsQuery::new().record_id(&write.record_id).hidden(None).build();
             let (records, _) = MessageStore::query(provider, owner, &query).await?;
             let mut initial_write: Write = (&records[0]).try_into()?;
             initial_write.encoded_data = None;
