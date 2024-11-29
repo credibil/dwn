@@ -78,9 +78,9 @@ pub async fn handle(
     };
 
     // ----------------------------------------------------------------
-    // Current
+    // Archive
     // ----------------------------------------------------------------
-    // The `current` flag is set when the intial write has no data.
+    // The `archive` flag is set when the intial write has no data.
     // It prevents querying of initial writes without data, thus preventing users
     // from accessing private data they wouldn't ordinarily be able to access.
     let mut entry = Entry::from(&write);
@@ -89,17 +89,13 @@ pub async fn handle(
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
+    EventStream::emit(provider, owner, &entry).await?;
 
-    // // archive the initial write
-    // if let Some(initial_write) = initial_write {
-    //     let mut entry = Entry::from(&initial_write);
-    //     entry.indexes.insert("archived".to_string(), Value::Bool(true));
-    //     MessageStore::put(provider, owner, &entry).await?;
-    // }
-
-    // only emit an event when the message is the latest base state
-    if newest_existing.is_none() {
-        EventStream::emit(provider, owner, &entry).await?;
+    // when this is an update, archive the initial write
+    if let Some(initial_write) = initial_write {
+        let mut entry = Entry::from(&initial_write);
+        entry.indexes.insert("archived".to_string(), Value::Bool(true));
+        MessageStore::put(provider, owner, &entry).await?;
     }
 
     // delete any previous messages with the same `record_id` EXCEPT initial write
