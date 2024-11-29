@@ -12,6 +12,7 @@ use crate::records::{
     self, DelegatedGrant, Delete, Query, Read, Subscribe, Write, WriteBuilder, WriteData,
     WriteProtocol,
 };
+use crate::serde::rfc3339_micros;
 use crate::store::RecordsQuery;
 use crate::{Descriptor, Interface, Method, Result, forbidden, unexpected, utils};
 
@@ -30,6 +31,7 @@ pub struct Grant {
     pub grantee: String,
 
     /// The date at which the grant was given.
+    #[serde(serialize_with = "rfc3339_micros")]
     pub date_granted: DateTime<Utc>,
 
     /// The grant's descriptor.
@@ -87,6 +89,7 @@ pub struct GrantData {
     pub request_id: Option<String>,
 
     /// Datetime when grant expires.
+    #[serde(serialize_with = "rfc3339_micros")]
     pub date_expires: DateTime<Utc>,
 
     /// Whether grant is delegated or not. When `true`, the `granted_to` acts
@@ -101,7 +104,6 @@ pub struct GrantData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Conditions>,
 }
-
 
 /// Type for the data payload of a permission request message.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
