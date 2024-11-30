@@ -97,6 +97,8 @@ impl Message for Subscribe {
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeReply {
     /// The subscription to the requested events.
+    /// N.B. serialization/deserialization is skipped because the subscriber
+    /// `Stream` is not serializable.
     #[serde(skip)]
     pub subscription: Subscriber,
 }

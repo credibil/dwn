@@ -493,7 +493,57 @@ impl Write {
             || self_desc.parent_id != other_desc.parent_id
             || self_desc.date_created != other_desc.date_created
         {
-            return Err(unexpected!("immutable properties do not match:\nself: {self_desc:?}\nother: {other_desc:?}"));
+            let mut failure = String::new();
+            if self_desc.base.interface != other_desc.base.interface {
+                failure.push_str(&format!(
+                    "method: self: {:?}, other: {:?}\n",
+                    self_desc.base.interface, other_desc.base.interface
+                ));
+            }
+            if self_desc.base.method != other_desc.base.method {
+                failure.push_str(&format!(
+                    "method: self: {:?}, other: {:?}\n",
+                    self_desc.base.method, other_desc.base.method
+                ));
+            }
+            if self_desc.protocol != other_desc.protocol {
+                failure.push_str(&format!(
+                    "protocol: self: {:?}, other: {:?}\n",
+                    self_desc.protocol, other_desc.protocol
+                ));
+            }
+            if self_desc.protocol_path != other_desc.protocol_path {
+                failure.push_str(&format!(
+                    "protocol_path: self: {:?}, other: {:?}\n",
+                    self_desc.protocol_path, other_desc.protocol_path
+                ));
+            }
+            if self_desc.recipient != other_desc.recipient {
+                failure.push_str(&format!(
+                    "recipient: self: {:?}, other: {:?}\n",
+                    self_desc.recipient, other_desc.recipient
+                ));
+            }
+            if self_desc.schema != other_desc.schema {
+                failure.push_str(&format!(
+                    "schema: self: {:?}, other: {:?}\n",
+                    self_desc.schema, other_desc.schema
+                ));
+            }
+            if self_desc.parent_id != other_desc.parent_id {
+                failure.push_str(&format!(
+                    "parent_id: self: {:?}, other: {:?}\n",
+                    self_desc.parent_id, other_desc.parent_id
+                ));
+            }
+            if self_desc.date_created != other_desc.date_created {
+                failure.push_str(&format!(
+                    "date_created: self: {:?}, other: {:?}\n",
+                    self_desc.date_created, other_desc.date_created
+                ));
+            }
+
+            return Err(unexpected!("immutable properties do not match: {failure}"));
         }
 
         Ok(())
