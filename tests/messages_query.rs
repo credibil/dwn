@@ -155,9 +155,7 @@ async fn invalid_request() {
 }
 
 // Should return a status of BadRequest (400) if an empty filter is provided.
-// N.B. Code comments are at odds with this test.
 #[tokio::test]
-#[ignore]
 async fn empty_filter() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
