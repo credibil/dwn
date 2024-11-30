@@ -1,5 +1,6 @@
 //! # Event
 
+use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -33,22 +34,30 @@ impl Default for SubscribeFilter {
     }
 }
 
-/// Used by the client to handle events subscribed to.
-#[derive(Default, Deserialize, Serialize)]
+/// Used by local clients to handle events subscribed to.
 pub struct Subscriber {
-    #[serde(skip)]
-    inner: Option<Pin<Box<dyn Stream<Item = Event> + Send>>>,
+    inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
 }
 
-impl std::fmt::Debug for Subscriber {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Default for Subscriber {
+    fn default() -> Self {
+        Self {
+            inner: Box::pin(futures::stream::empty()),
+        }
+    }
+}
+
+impl fmt::Debug for Subscriber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Subscriber").finish()
     }
 }
 
 impl Clone for Subscriber {
     fn clone(&self) -> Self {
-        Self { inner: None }
+        Self {
+            inner: Box::pin(futures::stream::empty()),
+        }
     }
 }
 
@@ -56,7 +65,7 @@ impl Subscriber {
     /// Wrap Provider's subscription Stream for ease of surfacing to users.
     #[must_use]
     pub const fn new(stream: Pin<Box<dyn Stream<Item = Event> + Send>>) -> Self {
-        Self { inner: Some(stream) }
+        Self { inner: stream }
     }
 }
 
@@ -65,7 +74,7 @@ impl Stream for Subscriber {
 
     // Poll underlying stream for new events
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.inner.as_mut().unwrap().as_mut().poll_next(cx)
+        self.inner.as_mut().as_mut().poll_next(cx)
     }
 }
 

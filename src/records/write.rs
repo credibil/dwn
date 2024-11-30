@@ -493,9 +493,7 @@ impl Write {
             || self_desc.parent_id != other_desc.parent_id
             || self_desc.date_created != other_desc.date_created
         {
-            println!("self: {self_desc:?}\n");
-            println!("other: {other_desc:?}");
-            return Err(unexpected!("immutable properties do not match"));
+            return Err(unexpected!("immutable properties do not match:\nself: {self_desc:?}\nother: {other_desc:?}"));
         }
 
         Ok(())
