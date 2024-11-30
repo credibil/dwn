@@ -8,7 +8,7 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use serde_json::json;
 use vercre_dwn::data::DataStream;
-use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
+use vercre_dwn::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
@@ -163,7 +163,7 @@ async fn empty_filter() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
-    query.descriptor.filters = vec![];
+    query.descriptor.filters = vec![MessagesFilter::default()];
 
     let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be a bad request");
