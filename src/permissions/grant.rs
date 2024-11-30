@@ -357,7 +357,8 @@ impl GrantBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            date_expires: Utc::now() + Duration::seconds(100),
+            request_id: Some(uuid::Uuid::new_v4().to_string()),
+            date_expires: Utc::now() + Duration::minutes(5),
             ..Self::default()
         }
     }
@@ -403,11 +404,13 @@ impl GrantBuilder {
 
     /// Specify the scope of the grant.
     #[must_use]
-    pub fn scope(mut self, interface: Interface, method: Method, protocol: ScopeProtocol) -> Self {
+    pub fn scope(
+        mut self, interface: Interface, method: Method, protocol: Option<ScopeProtocol>,
+    ) -> Self {
         self.scope = Some(Scope {
             interface,
             method,
-            protocol,
+            protocol: protocol.unwrap_or_default(),
         });
         self
     }

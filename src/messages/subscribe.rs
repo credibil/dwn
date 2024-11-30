@@ -84,7 +84,7 @@ impl Subscribe {
             return Ok(());
         };
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
+        grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // ensure subscribe filters include scoped protocol
         if grant.data.scope.protocol().is_none() {

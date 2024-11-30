@@ -6,7 +6,6 @@ use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
-use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
@@ -32,13 +31,10 @@ async fn owner_events() {
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "test record write",
-    }))
-    .expect("should serialize");
+    let data = br#"{"message": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data)))
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .build(&alice_keyring)
         .await
         .expect("should create write");

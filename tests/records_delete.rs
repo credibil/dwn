@@ -19,13 +19,10 @@ async fn delete_record() {
     // --------------------------------------------------
     // Alice writes a message to her web node
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "test record write",
-    }))
-    .expect("should serialize");
+    let data = br#"{"message": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data)))
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .build(&alice_keyring)
         .await
         .expect("should create write");

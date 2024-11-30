@@ -4,7 +4,6 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
@@ -19,20 +18,18 @@ async fn overwrite_older() {
     // --------------------------------------------------
     // Write a record.
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "a new write record",
-    }))
-    .expect("should serialize");
-    let encoded_data = Base64UrlUnpadded::encode_string(&data);
+    let data = br#"{"message": "a new write record"}"#;
+    let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let initial_write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.clone())))
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .build(&alice_keyring)
         .await
         .expect("should create write");
     let record_id = initial_write.record_id.clone();
 
-    let reply = endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -54,14 +51,11 @@ async fn overwrite_older() {
     // --------------------------------------------------
     // Update the existing record.
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "updated write record",
-    }))
-    .expect("should serialize");
-    let encoded_data = Base64UrlUnpadded::encode_string(&data);
+    let data = br#"{"message": "updated write record"}"#;
+    let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data)))
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .existing_write(initial_write)
         .build(&alice_keyring)
         .await

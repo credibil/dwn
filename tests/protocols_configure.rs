@@ -19,8 +19,6 @@ async fn configure() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    // let allow_any = include_bytes!("../crates/dwn-test/protocols/minimal.json");
-    // let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let definition = Definition::new("http://minimal.xyz")
         .add_type("foo", ProtocolType::default())
         .add_rule("foo", RuleSet::default());

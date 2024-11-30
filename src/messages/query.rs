@@ -92,7 +92,7 @@ impl Query {
             return Err(forbidden!("requestor has no permission grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
-        grant.verify(&author, &authzn.signer()?, self.descriptor(), provider).await?;
+        grant.verify(owner, &authzn.signer()?, self.descriptor(), provider).await?;
 
         // verify filter protocol
         if grant.data.scope.protocol().is_none() {

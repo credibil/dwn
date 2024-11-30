@@ -4,7 +4,6 @@ use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
@@ -19,13 +18,10 @@ async fn owner_records() {
     // --------------------------------------------------
     // Add a `write` record.
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "test record write",
-    }))
-    .expect("should serialize");
+    let data = br#"{"message": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data)))
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .build(&alice_keyring)
         .await
         .expect("should create write");

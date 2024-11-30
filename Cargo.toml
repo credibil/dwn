@@ -37,6 +37,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror = "2.0.3"
 tokio = { workspace = true, features = ["sync"] }
+uuid = { version = "1.11.0", features = ["fast-rng", "v4"] }
 vercre-did.workspace = true
 vercre-infosec.workspace = true
 

@@ -159,12 +159,11 @@ impl Configure {
     /// TODO: Add errors
     pub async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
-        let author = authzn.author()?;
 
         // authorize the author-delegate who signed the message
         if let Some(delegated) = &authzn.author_delegated_grant {
             let grant = delegated.to_grant()?;
-            grant.verify(&author, &authzn.signer()?, &self.descriptor.base, store).await?;
+            grant.verify(owner, &authzn.signer()?, &self.descriptor.base, store).await?;
         }
 
         if self.authorization.author()? == owner {

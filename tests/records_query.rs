@@ -3,7 +3,6 @@
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
@@ -18,11 +17,8 @@ async fn find_matches() {
     // --------------------------------------------------
     // Alice writes 3 records.
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "test record write",
-    }))
-    .expect("should serialize");
-    let stream = WriteData::Reader(DataStream::from(data));
+    let data = br#"{"message": "test record write"}"#;
+    let stream = WriteData::Reader(DataStream::from(data.to_vec()));
 
     let write = WriteBuilder::new()
         .data(stream.clone())

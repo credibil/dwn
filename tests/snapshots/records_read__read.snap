@@ -1,6 +1,6 @@
 ---
 source: tests/records_read.rs
-assertion_line: 54
+assertion_line: 48
 expression: record
 snapshot_kind: text
 ---
@@ -8,8 +8,8 @@ descriptor:
   interface: Records
   method: Write
   messageTimestamp: "[messageTimestamp]"
-  dataCid: bafyreigwsdcozizuq3rk2iedqh6nltjg4t5xifkhhkitqjskxqyuuxvaxe
-  dataSize: 31
+  dataCid: bafyreihwjp5gqgyn3l626sacxxu47ujrgyvub4lzzqokz6sudruuj7nwne
+  dataSize: 32
   dataFormat: application/json
   dateCreated: "[dateCreated]"
 authorization:

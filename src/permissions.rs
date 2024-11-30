@@ -193,7 +193,7 @@ impl TryFrom<&Write> for Request {
     fn try_from(write: &Write) -> Result<Self> {
         let permission_grant = write.encoded_data.clone().unwrap_or_default();
         let grant_data: GrantData = serde_json::from_str(&permission_grant)
-            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+            .map_err(|e| unexpected!("issue deserializing request: {e}"))?;
 
         Ok(Self {
             id: write.record_id.clone(),

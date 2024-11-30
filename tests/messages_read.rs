@@ -6,10 +6,9 @@
 use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::ReadBuilder;
-use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
+use vercre_dwn::permissions::GrantBuilder;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
 use vercre_dwn::{Interface, Message, Method, endpoint};
@@ -26,13 +25,10 @@ async fn read_message() {
     // --------------------------------------------------
     // Alice writes a record to her web node.
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "test record write",
-    }))
-    .expect("should serialize");
+    let data = br#"{"message": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data)))
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .published(true)
         .build(&alice_keyring)
         .await
@@ -49,7 +45,7 @@ async fn read_message() {
         .request_id("grant_id_1")
         .description("allow Bob to read messages")
         .expires_in(60 * 60 * 24)
-        .scope(Interface::Messages, Method::Read, ScopeProtocol::Simple { protocol: None });
+        .scope(Interface::Messages, Method::Read, None);
     let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
 
     let record_id = bob_grant.record_id.clone();

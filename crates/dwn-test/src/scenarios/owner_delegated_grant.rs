@@ -28,10 +28,14 @@ async fn configure() {
         .request_id("grant_id_1")
         .description("allow App X to write as me in chat protocol")
         .delegated(true)
-        .scope(Interface::Records, Method::Write, ScopeProtocol::Records {
-            protocol: "chat".to_string(),
-            options: None,
-        });
+        .scope(
+            Interface::Records,
+            Method::Write,
+            Some(ScopeProtocol::Records {
+                protocol: "chat".to_string(),
+                options: None,
+            }),
+        );
     let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
 
     // --------------------------------------------------
