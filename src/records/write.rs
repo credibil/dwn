@@ -63,8 +63,6 @@ pub async fn handle(
         }
     }
 
-    
-
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
         // incoming message WITH data
         (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
@@ -495,6 +493,8 @@ impl Write {
             || self_desc.parent_id != other_desc.parent_id
             || self_desc.date_created != other_desc.date_created
         {
+            println!("self: {self_desc:?}\n");
+            println!("other: {other_desc:?}");
             return Err(unexpected!("immutable properties do not match"));
         }
 

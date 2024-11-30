@@ -53,7 +53,7 @@ impl Clone for Subscriber {
 }
 
 impl Subscriber {
-    /// Create a new subscriber.
+    /// Wrap Provider's subscription Stream for ease of surfacing to users.
     #[must_use]
     pub const fn new(stream: Pin<Box<dyn Stream<Item = Event> + Send>>) -> Self {
         Self { inner: Some(stream) }
@@ -71,6 +71,7 @@ impl Stream for Subscriber {
 
 impl SubscribeFilter {
     /// Check the event matches the filter.
+    #[must_use]
     pub fn is_match(&self, event: &Event) -> bool {
         match self {
             Self::Messages(filters) => {
