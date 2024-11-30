@@ -6,17 +6,16 @@
 
 use std::io::Read;
 
-use dwn_test::store::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
 
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-const BOB_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
+use crate::key_store::{ALICE_DID, BOB_DID};
+use crate::provider::ProviderImpl;
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
@@ -34,9 +33,7 @@ async fn flat_space() {
     .expect("should serialize");
 
     let bob_msg = WriteBuilder::new()
-        .data(WriteData::Reader {
-            reader: DataStream::from(bob_data),
-        })
+        .data(WriteData::Reader(DataStream::from(bob_data)))
         .published(true)
         .build(&bob_keyring)
         .await
@@ -56,14 +53,14 @@ async fn flat_space() {
         endpoint::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
     assert_snapshot!("alice_read", reply, {
-        ".entry.recordsWrite.recordId" => "[recordId]",
-        ".entry.recordsWrite.descriptor.messageTimestamp" => "[messageTimestamp]",
-        ".entry.recordsWrite.descriptor.dateCreated" => "[dateCreated]",
-        ".entry.recordsWrite.descriptor.datePublished" => "[datePublished]",
-        ".entry.recordsWrite.authorization.signature.payload" => "[payload]",
-        ".entry.recordsWrite.authorization.signature.signatures[0].signature" => "[signature]",
-        ".entry.recordsWrite.attestation.payload" => "[payload]",
-        ".entry.recordsWrite.attestation.signatures[0].signature" => "[signature]",
+        ".**.recordId" => "[recordId]",
+        ".**.messageTimestamp" => "[messageTimestamp]",
+        ".**.dateCreated" => "[dateCreated]",
+        ".**.datePublished" => "[datePublished]",
+        ".**.signature.payload" => "[payload]",
+        ".**.signature.signatures[0].signature" => "[signature]",
+        ".**.attestation.payload" => "[payload]",
+        ".**.attestation.signatures[0].signature" => "[signature]",
         ".entry.data" => "[data]",
     });
 
@@ -92,5 +89,5 @@ async fn flat_space() {
     reader.read_to_end(&mut alice_data).expect("should read to end");
 
     let bob_data: Value = serde_json::from_slice(&alice_data).expect("should deserialize");
-    assert_snapshot!("bob_data", bob_data);
+    assert_eq!(json! ({ "message": "test record write" }), bob_data);
 }

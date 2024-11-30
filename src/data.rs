@@ -11,10 +11,10 @@ use libipld::store::DefaultParams;
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::{unexpected, Result};
+use crate::{Result, unexpected};
 
 /// The maximum size of a message.
-pub const MAX_ENCODED_SIZE: usize = 5; //30000;
+pub const MAX_ENCODED_SIZE: usize = 30000;
 
 const CHUNK_SIZE: usize = 16;
 
@@ -33,7 +33,7 @@ pub mod cid {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub(crate) fn from_value<T: Serialize>(payload: &T) -> Result<String> {
+    pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();
         ciborium::into_writer(payload, &mut buf)?;
         let hash = multihash_codetable::Code::Sha2_256.digest(&buf);
@@ -61,13 +61,15 @@ impl DataStream {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub(crate) fn compute_cid(&mut self) -> Result<(String, usize)> {
+    pub fn compute_cid(&self) -> Result<(String, usize)> {
+        let mut cid = self.clone();
+
         let mut links = vec![];
         let mut byte_count = 0;
 
         loop {
             let mut buffer = [0u8; CHUNK_SIZE];
-            if let Ok(bytes_read) = self.read(&mut buffer[..]) {
+            if let Ok(bytes_read) = cid.read(&mut buffer[..]) {
                 if bytes_read == 0 {
                     break;
                 }

@@ -1,8 +1,8 @@
 //! # Messages
 
-pub mod query;
-pub mod read;
-pub mod subscribe;
+mod query;
+mod read;
+mod subscribe;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

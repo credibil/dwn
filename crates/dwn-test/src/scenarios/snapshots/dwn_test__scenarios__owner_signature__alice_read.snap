@@ -1,6 +1,6 @@
 ---
-source: tests/owner_signature.rs
-assertion_line: 60
+source: crates/dwn-test/src/scenarios/owner_signature.rs
+assertion_line: 57
 expression: reply
 snapshot_kind: text
 ---
@@ -22,12 +22,12 @@ entry:
       signature:
         payload: "[payload]"
         signatures:
-          - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+          - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa3FXR1ZVd013dDRhaHhFU1RWZzFnanZ4WjR3NEtrWG9ta3NTTWRDQjNlSGVEI3o2TWtxV0dWVXdNd3Q0YWh4RVNUVmcxZ2p2eFo0dzRLa1hvbWtzU01kQ0IzZUhlRCJ9
             signature: "[signature]"
     recordId: "[recordId]"
     attestation:
       payload: "[payload]"
       signatures:
-        - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa2o4SnIxcmczWWpWV1doZzdhaEVZSmlicWhqQmdadDFwRENiVDRMdjdENEhYI3o2TWtqOEpyMXJnM1lqVldXaGc3YWhFWUppYnFoakJnWnQxcERDYlQ0THY3RDRIWCJ9
+        - protected: eyJhbGciOiJFZERTQSIsInR5cCI6Imp3dCIsImtpZCI6ImRpZDprZXk6ejZNa3FXR1ZVd013dDRhaHhFU1RWZzFnanZ4WjR3NEtrWG9ta3NTTWRDQjNlSGVEI3o2TWtxV0dWVXdNd3Q0YWh4RVNUVmcxZ2p2eFo0dzRLa1hvbWtzU01kQ0IzZUhlRCJ9
           signature: "[signature]"
   data: "[data]"

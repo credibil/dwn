@@ -1,7 +1,11 @@
 #![feature(let_chains)]
 
-pub mod keystore;
-pub mod store;
+pub mod provider;
+
+#[cfg(test)]
+mod scenarios;
+
+pub use provider::key_store;
 
 /// Configure Insta snapshot name.
 ///

@@ -9,18 +9,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
+use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
 use crate::messages::MessagesFilter;
-use crate::permissions::{self, ScopeType};
 use crate::provider::{EventStream, MessageStore, Provider, Signer};
-use crate::{forbidden, schema, Descriptor, Interface, Method, Result};
+use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema};
 
 /// Handle a subscribe message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
     subscribe.authorize(owner, provider).await?;
@@ -66,8 +65,8 @@ impl Message for Subscribe {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -80,25 +79,21 @@ impl Subscribe {
             return Ok(());
         }
 
+        // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
             return Ok(());
         };
-
-        // verify grant
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
 
         // ensure subscribe filters include scoped protocol
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol scope"));
+        if grant.data.scope.protocol().is_none() {
+            return Ok(());
         };
 
-        if protocol.is_none() {
-            return Ok(());
-        }
-
+        let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
-            if &filter.protocol != protocol {
+            if filter.protocol.as_deref() != protocol {
                 return Err(forbidden!("filter protocol does not match scoped protocol",));
             }
         }
@@ -112,6 +107,7 @@ impl Subscribe {
 #[allow(clippy::module_name_repetitions)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.
+    #[serde(skip)]
     pub subscription: Subscriber,
 }
 
@@ -130,7 +126,7 @@ pub struct SubscribeDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct SubscribeBuilder {
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     filters: Option<Vec<MessagesFilter>>,
     permission_grant_id: Option<String>,
 }
@@ -142,7 +138,7 @@ impl SubscribeBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now()),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }

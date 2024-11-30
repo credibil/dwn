@@ -1,16 +1,18 @@
 //! # Permissions
 
-pub mod grant;
-pub(crate) mod protocol;
+mod grant;
+mod protocol;
+mod request;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
-pub use self::grant::{Grant, GrantBuilder};
-pub use self::protocol::Protocol;
+pub use self::grant::{Grant, GrantBuilder, GrantData, RequestData, RevocationData};
+pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
+use crate::records::Write;
 use crate::store::RecordsQuery;
-use crate::{unexpected, Interface, Method, Result};
+use crate::{Interface, Method, Result, unexpected};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
@@ -22,6 +24,7 @@ pub(crate) async fn fetch_grant(
     let Some(write) = records[0].as_write() else {
         return Err(unexpected!("grant not found"));
     };
+
     let desc = &write.descriptor;
 
     // unpack message payload
@@ -49,27 +52,42 @@ pub struct Scope {
     /// The method the permission is applied to.
     pub method: Method,
 
-    /// Variant scope fields.
+    /// Scope protocol variants.
     #[serde(flatten)]
-    pub scope_type: ScopeType,
+    pub protocol: ScopeProtocol,
+}
+
+impl Scope {
+    /// Get the scope protocol.
+    #[must_use]
+    pub fn protocol(&self) -> Option<&str> {
+        match &self.protocol {
+            ScopeProtocol::Simple { protocol } => protocol.as_deref(),
+            ScopeProtocol::Records { protocol, .. } => Some(protocol),
+        }
+    }
+
+    /// Get records scope options.
+    #[must_use]
+    pub const fn options(&self) -> Option<&RecordsOptions> {
+        match &self.protocol {
+            ScopeProtocol::Records { options, .. } => options.as_ref(),
+            ScopeProtocol::Simple { .. } => None,
+        }
+    }
 }
 
 /// Scope type variants.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum ScopeType {
-    /// `Protocols` scope fields.
-    Protocols {
-        /// The protocol the permission is applied to.
+pub enum ScopeProtocol {
+    /// Protocol is a URI reference
+    Simple {
         #[serde(skip_serializing_if = "Option::is_none")]
+        /// The protocol the permission is applied to.
         protocol: Option<String>,
     },
-    /// `EntryType` scope fields.
-    EntryType {
-        /// The protocol the permission is applied to.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        protocol: Option<String>,
-    },
+
     /// `Records` scope fields.
     Records {
         /// The protocol the permission is applied to.
@@ -78,13 +96,13 @@ pub enum ScopeType {
         /// Context ID or protocol path.
         #[serde(skip_serializing_if = "Option::is_none")]
         #[serde(flatten)]
-        option: Option<RecordsOptions>,
+        options: Option<RecordsOptions>,
     },
 }
 
-impl Default for ScopeType {
+impl Default for ScopeProtocol {
     fn default() -> Self {
-        Self::Protocols { protocol: None }
+        Self::Simple { protocol: None }
     }
 }
 
@@ -102,6 +120,26 @@ pub enum RecordsOptions {
 impl Default for RecordsOptions {
     fn default() -> Self {
         Self::ContextId(String::new())
+    }
+}
+
+impl RecordsOptions {
+    /// Get the context ID.
+    #[must_use]
+    pub fn context_id(&self) -> Option<&str> {
+        match self {
+            Self::ContextId(id) => Some(id),
+            Self::ProtocolPath(_) => None,
+        }
+    }
+
+    /// Get the protocol path.
+    #[must_use]
+    pub fn protocol_path(&self) -> Option<&str> {
+        match self {
+            Self::ProtocolPath(path) => Some(path),
+            Self::ContextId(_) => None,
+        }
     }
 }
 
@@ -124,4 +162,46 @@ pub enum ConditionPublication {
 
     /// The message may be marked as public.
     Prohibited,
+}
+
+/// A permission request.
+pub struct Request {
+    /// The ID of the permission request — the record ID DWN message.
+    pub id: String,
+
+    /// The requester of the permission.
+    pub requestor: String,
+
+    ///used to describe what the requested grant is to be used for.
+    pub description: Option<String>,
+
+    /// Whether the requested grant is delegated or not. If `true`, the
+    /// `requestor` will be able to act as the grantor of the permission
+    /// within the scope of the requested grant.
+    pub delegated: Option<bool>,
+
+    /// The scope of the allowed access.
+    pub scope: Scope,
+
+    /// Optional conditions that must be met when the requested grant is used.
+    pub conditions: Option<Conditions>,
+}
+
+impl TryFrom<&Write> for Request {
+    type Error = crate::Error;
+
+    fn try_from(write: &Write) -> Result<Self> {
+        let permission_grant = write.encoded_data.clone().unwrap_or_default();
+        let grant_data: GrantData = serde_json::from_str(&permission_grant)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: write.record_id.clone(),
+            requestor: write.authorization.signer().unwrap_or_default(),
+            description: grant_data.description,
+            delegated: grant_data.delegated,
+            scope: grant_data.scope,
+            conditions: grant_data.conditions,
+        })
+    }
 }

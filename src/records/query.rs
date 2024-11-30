@@ -9,18 +9,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
+use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{forbidden, Descriptor, Interface, Method, Quota, Result};
+use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
 
 /// Process `Query` message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     let mut filter = query.descriptor.filter.clone();
@@ -68,7 +68,7 @@ pub(crate) async fn handle(
         let write: Write = record.try_into()?;
 
         let initial_write = if write.is_initial()? {
-            let query = RecordsQuery::new().record_id(&write.record_id).archived(None).build();
+            let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true).build();
             let (records, _) = MessageStore::query(provider, owner, &query).await?;
             let mut initial_write: Write = (&records[0]).try_into()?;
             initial_write.encoded_data = None;
@@ -120,8 +120,8 @@ impl Message for Query {
         self.authorization.as_ref()
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -166,14 +166,14 @@ impl Query {
         // verify grant
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant: Grant = delegated_grant.try_into()?;
-            grant.permit_read(&authzn.author()?, &authzn.signer()?, self, provider).await?;
+            grant.permit_query(&authzn.author()?, &authzn.signer()?, self, provider).await?;
         }
 
         // verify protocol when request invokes a protocol role
         if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
             let protocol =
                 Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
-            return protocol.permit_read(owner, self, provider).await;
+            return protocol.permit_query(owner, self, provider).await;
         }
 
         Ok(())
@@ -203,10 +203,10 @@ pub struct QueryDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct QueryBuilder {
+    message_timestamp: DateTime<Utc>,
     filter: RecordsFilter,
     date_sort: Option<Sort>,
     pagination: Option<Pagination>,
-    message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
@@ -217,11 +217,8 @@ impl QueryBuilder {
     /// Returns a new [`QueryBuilder`]
     #[must_use]
     pub fn new() -> Self {
-        let now = Utc::now();
-
-        // set defaults
         Self {
-            message_timestamp: Some(now),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }
@@ -247,12 +244,12 @@ impl QueryBuilder {
         self
     }
 
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = Some(message_timestamp);
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    //     self.message_timestamp = message_timestamp;
+    //     self
+    // }
 
     /// Specifies the permission grant ID.
     #[must_use]

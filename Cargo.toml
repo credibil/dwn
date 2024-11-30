@@ -53,14 +53,14 @@ resolver = "2"
 [workspace.package]
 authors = ["Vercre"]
 categories = ["data", "messaging", "didcomm", "identity", "verifiable"]
-edition = "2021"
+edition = "2024"
 exclude = [".*", "/docs", "snapshots/"]
 homepage = "https://vercre.io"
 keywords = ["credentials", "decentralized", "identity", "openid", "verifiable"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/vercre/dwn"
-rust-version = "1.80"
+rust-version = "1.85"
 version = "0.1.0-alpha.1"
 
 [workspace.lints.rust]
@@ -98,8 +98,8 @@ tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 
-[patch."https://github.com/vercre/infosec.git"]
-vercre-infosec = { path = "../infosec" }
+# [patch."https://github.com/vercre/infosec.git"]
+# vercre-infosec = { path = "../infosec" }
 
 [profile.release]
 # Optimize for small code size

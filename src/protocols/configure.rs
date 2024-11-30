@@ -6,36 +6,38 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::ScopeType;
-use crate::protocols::{query, ProtocolsFilter};
+use crate::endpoint::{Message, Reply, Status};
+use crate::protocols::{ProtocolsFilter, query};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
-use crate::records::Write;
+use crate::records::DelegatedGrant;
 use crate::store::{Entry, EntryType};
-use crate::{forbidden, schema, unexpected, utils, Descriptor, Interface, Method, Range, Result};
+use crate::{
+    Descriptor, Interface, Method, Range, Result, forbidden, permissions, schema, unexpected, utils,
+};
 
 /// Process query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
-    ctx: &Context, configure: Configure, provider: &impl Provider,
+pub async fn handle(
+    owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
-    configure.authorize(ctx, provider).await?;
+    configure.authorize(owner, provider).await?;
 
     // find any matching protocol entries
     let filter = ProtocolsFilter {
         protocol: configure.descriptor.definition.protocol.clone(),
     };
-    let results = query::fetch_config(&ctx.owner, Some(filter), provider).await?;
+    let results = query::fetch_config(owner, Some(filter), provider).await?;
 
     // determine if incoming message is the latest
     let is_latest = if let Some(existing) = &results {
@@ -50,13 +52,13 @@ pub(crate) async fn handle(
         });
 
         // delete all entries except the most recent
-        let latest_ts = latest.descriptor.base.message_timestamp.unwrap_or_default();
+        let latest_ts = latest.descriptor.base.message_timestamp;
         for e in existing {
-            let current_ts = e.descriptor.base.message_timestamp.unwrap_or_default();
+            let current_ts = e.descriptor.base.message_timestamp;
             if current_ts.cmp(&latest_ts) == Ordering::Less {
                 let cid = cid::from_value(&e)?;
-                MessageStore::delete(provider, &ctx.owner, &cid).await?;
-                EventLog::delete(provider, &ctx.owner, &cid).await?;
+                MessageStore::delete(provider, owner, &cid).await?;
+                EventLog::delete(provider, owner, &cid).await?;
             }
         }
         is_latest
@@ -70,9 +72,9 @@ pub(crate) async fn handle(
 
     // save the incoming message
     let entry = Entry::from(&configure);
-    MessageStore::put(provider, &ctx.owner, &entry).await?;
-    EventLog::append(provider, &ctx.owner, &entry).await?;
-    EventStream::emit(provider, &ctx.owner, &entry).await?;
+    MessageStore::put(provider, owner, &entry).await?;
+    EventLog::append(provider, owner, &entry).await?;
+    EventStream::emit(provider, owner, &entry).await?;
 
     Ok(Reply {
         status: Status {
@@ -109,8 +111,8 @@ impl Message for Configure {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(ctx, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -155,35 +157,34 @@ impl Configure {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn authorize(&self, ctx: &Context, provider: &impl Provider) -> Result<()> {
+    pub async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let authzn = &self.authorization;
+        let author = authzn.author()?;
+
         // authorize the author-delegate who signed the message
-        if let Some(delegated) = &self.authorization.author_delegated_grant {
+        if let Some(delegated) = &authzn.author_delegated_grant {
             let grant = delegated.to_grant()?;
-            grant
-                .verify(
-                    &self.authorization.author()?,
-                    &self.authorization.signer()?,
-                    &self.descriptor.base,
-                    provider,
-                )
-                .await?;
+            grant.verify(&author, &authzn.signer()?, &self.descriptor.base, store).await?;
         }
 
-        if self.authorization.author()? == ctx.owner {
+        if self.authorization.author()? == owner {
             return Ok(());
         }
 
-        let grant = ctx.grant.as_ref().ok_or_else(|| forbidden!("missing grant"))?;
+        // permission grant
+        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
+        let payload: JwsPayload = serde_json::from_slice(&decoded)?;
+        let Some(permission_grant_id) = &payload.permission_grant_id else {
+            return Err(forbidden!("missing permission grant ID"));
+        };
+        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol in grant scope"));
-        };
-        let Some(protocol) = &protocol else {
+        let Some(protocol) = grant.data.scope.protocol() else {
             return Ok(());
+            // return Err(forbidden!("missing protocol in grant scope"));
         };
-
-        if protocol != &self.descriptor.definition.protocol {
+        if protocol != self.descriptor.definition.protocol {
             return Err(forbidden!(" message and grant protocols do not match"));
         }
 
@@ -204,7 +205,7 @@ pub struct ConfigureDescriptor {
 }
 
 /// Protocol definition.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Definition {
     /// Protocol URI.
@@ -221,10 +222,35 @@ pub struct Definition {
     pub structure: BTreeMap<String, RuleSet>,
 }
 
-impl Default for Definition {
-    fn default() -> Self {
-        let bytes = include_bytes!("default_protocol.json");
-        serde_json::from_slice(bytes).expect("should deserialize")
+impl Definition {
+    /// Returns a new [`Definition`]
+    #[must_use]
+    pub fn new(protocol: impl Into<String>) -> Self {
+        Self {
+            protocol: protocol.into(),
+            ..Self::default()
+        }
+    }
+
+    /// Whether the definition should be published.
+    #[must_use]
+    pub const fn published(mut self, published: bool) -> Self {
+        self.published = published;
+        self
+    }
+
+    /// Add a protocol type.
+    #[must_use]
+    pub fn add_type(mut self, name: impl Into<String>, type_: ProtocolType) -> Self {
+        self.types.insert(name.into(), type_);
+        self
+    }
+
+    /// Add a rule.
+    #[must_use]
+    pub fn add_rule(mut self, name: impl Into<String>, rule_set: RuleSet) -> Self {
+        self.structure.insert(name.into(), rule_set);
+        self
     }
 }
 
@@ -394,6 +420,7 @@ pub enum Action {
 /// Protocol tags
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names)]
 pub struct Tags {
     /// Tags required for this protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -413,9 +440,9 @@ pub struct Tags {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct ConfigureBuilder {
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     definition: Option<Definition>,
-    delegated_grant: Option<Write>,
+    delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
 }
 
@@ -426,7 +453,7 @@ impl ConfigureBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now()),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }
@@ -441,7 +468,7 @@ impl ConfigureBuilder {
     /// The delegated grant invoked to sign on behalf of the logical author,
     /// who is the grantor of the delegated grant.
     #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: Write) -> Self {
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
         self.delegated_grant = Some(delegated_grant);
         self
     }
@@ -481,8 +508,11 @@ impl ConfigureBuilder {
 
         // authorization
         let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(id);
+        if let Some(permission_grant_id) = self.permission_grant_id {
+            builder = builder.permission_grant_id(permission_grant_id);
+        }
+        if let Some(delegated_grant) = self.delegated_grant {
+            builder = builder.delegated_grant(delegated_grant);
         }
         let authorization = builder.build(signer).await?;
 
@@ -516,7 +546,7 @@ fn verify_rule_set(
 ) -> Result<()> {
     // validate $size
     if let Some(size) = &rule_set.size {
-        if size.start > size.end {
+        if size.min > size.max {
             return Err(unexpected!("invalid size range at '{protocol_path}'"));
         }
     }
@@ -597,12 +627,15 @@ fn verify_rule_set(
             if action.who.is_some() {
                 if action.who == other.who && action.of == other.of {
                     return Err(unexpected!(
-                        "more than one action rule per actor {:?} of {:?} not allowed within a rule set: {action:?}", action.who, action.of
+                        "more than one action rule per actor {:?} of {:?} not allowed within a rule set: {action:?}",
+                        action.who,
+                        action.of
                     ));
                 }
             } else if action.role == other.role {
                 return Err(unexpected!(
-                    "more than one action rule per role {:?} not allowed within a rule set: {action:?}",action.role
+                    "more than one action rule per role {:?} not allowed within a rule set: {action:?}",
+                    action.role
                 ));
             }
         }

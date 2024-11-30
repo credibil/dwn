@@ -5,14 +5,16 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ConditionPublication, Conditions, RecordsOptions, Scope, ScopeType};
+use super::{ConditionPublication, Conditions, RecordsOptions, Scope, ScopeProtocol};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
-    self, Delete, Query, Subscribe, Write, WriteBuilder, WriteData, WriteProtocol,
+    self, DelegatedGrant, Delete, Query, Read, Subscribe, Write, WriteBuilder, WriteData,
+    WriteProtocol,
 };
+use crate::serde::rfc3339_micros;
 use crate::store::RecordsQuery;
-use crate::{forbidden, utils, Descriptor, Interface, Method, Result};
+use crate::{Descriptor, Interface, Method, Result, forbidden, unexpected, utils};
 
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -29,11 +31,48 @@ pub struct Grant {
     pub grantee: String,
 
     /// The date at which the grant was given.
+    #[serde(serialize_with = "rfc3339_micros")]
     pub date_granted: DateTime<Utc>,
 
     /// The grant's descriptor.
     #[serde(flatten)]
     pub data: GrantData,
+}
+
+impl TryFrom<&Write> for Grant {
+    type Error = crate::Error;
+
+    fn try_from(write: &Write) -> Result<Self> {
+        let permission_grant = write.encoded_data.clone().unwrap_or_default();
+        let grant_data = serde_json::from_str(&permission_grant)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: write.record_id.clone(),
+            grantor: write.authorization.signer().unwrap_or_default(),
+            grantee: write.descriptor.recipient.clone().unwrap_or_default(),
+            date_granted: write.descriptor.date_created,
+            data: grant_data,
+        })
+    }
+}
+
+impl TryFrom<&DelegatedGrant> for Grant {
+    type Error = crate::Error;
+
+    fn try_from(delegated: &DelegatedGrant) -> Result<Self> {
+        let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)?;
+        let grant_data = serde_json::from_slice(&bytes)
+            .map_err(|e| unexpected!("issue deserializing grant: {e}"))?;
+
+        Ok(Self {
+            id: delegated.record_id.clone(),
+            grantor: delegated.authorization.signer()?,
+            grantee: delegated.descriptor.recipient.clone().unwrap_or_default(),
+            date_granted: delegated.descriptor.date_created,
+            data: grant_data,
+        })
+    }
 }
 
 /// Permission grant message payload
@@ -50,6 +89,7 @@ pub struct GrantData {
     pub request_id: Option<String>,
 
     /// Datetime when grant expires.
+    #[serde(serialize_with = "rfc3339_micros")]
     pub date_expires: DateTime<Utc>,
 
     /// Whether grant is delegated or not. When `true`, the `granted_to` acts
@@ -63,6 +103,32 @@ pub struct GrantData {
     /// Optional conditions that must be met when the grant is used.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Conditions>,
+}
+
+/// Type for the data payload of a permission request message.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct RequestData {
+    /// If the grant is a delegated grant or not. If `true`, `granted_to` will
+    /// be able to act as the `granted_by` within the scope of this grant.
+    pub delegated: bool,
+
+    /// Optional string that communicates what the grant would be used for.
+    pub description: Option<String>,
+
+    /// The scope of the allowed access.
+    pub scope: Scope,
+
+    /// Optional conditions that must be met when the grant is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditions: Option<Conditions>,
+}
+
+/// Type for the data payload of a permission revocation message.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct RevocationData {
+    /// Optional string that communicates the details of the revocation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 impl Grant {
@@ -97,10 +163,7 @@ impl Grant {
         }
 
         // verify the message is within the grant's time frame
-        let Some(timestamp) = &descriptor.message_timestamp else {
-            return Err(forbidden!("missing message timestamp"));
-        };
-        self.is_current(grantor, timestamp, store).await?;
+        self.is_current(grantor, &descriptor.message_timestamp, store).await?;
 
         Ok(())
     }
@@ -124,6 +187,19 @@ impl Grant {
     /// # Errors
     /// TODO: Add errors
     pub async fn permit_read(
+        &self, grantor: &str, grantee: &str, read: &Read, write: &Write, store: &impl MessageStore,
+    ) -> Result<()> {
+        self.verify(grantor, grantee, &read.descriptor.base, store).await?;
+        self.verify_scope(write)?;
+        Ok(())
+    }
+
+    /// Verify the grant allows the requestor to access `records::Query` and
+    /// `records::Subscribe` records.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn permit_query(
         &self, grantor: &str, grantee: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let descriptor = &query.descriptor;
@@ -131,10 +207,10 @@ impl Grant {
         self.verify(grantor, grantee, &descriptor.base, store).await?;
 
         // verify protocols match
-        let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
+        if self.data.scope.protocol().is_none() {
             return Ok(());
-        };
-        if &descriptor.filter.protocol != protocol {
+        }
+        if descriptor.filter.protocol.as_deref() != self.data.scope.protocol() {
             return Err(forbidden!("grant and query protocols do not match",));
         }
 
@@ -154,10 +230,10 @@ impl Grant {
         self.verify(grantor, grantee, &descriptor.base, store).await?;
 
         // verify protocols match
-        let ScopeType::Protocols { protocol } = &self.data.scope.scope_type else {
+        if self.data.scope.protocol().is_none() {
             return Ok(());
         };
-        if &descriptor.filter.protocol != protocol {
+        if descriptor.filter.protocol.as_deref() != self.data.scope.protocol() {
             return Err(forbidden!("grant protocol does not match query protocol",));
         }
 
@@ -175,11 +251,12 @@ impl Grant {
         self.verify(grantor, grantee, &delete.descriptor.base, store).await?;
 
         // must be deleting a record with the same protocol
-        if let ScopeType::Protocols { protocol } = &self.data.scope.scope_type {
-            if protocol != &write.descriptor.protocol {
-                return Err(forbidden!("grant protocol does not match delete protocol",));
-            }
+        if self.data.scope.protocol().is_none() {
+            return Ok(());
         };
+        if write.descriptor.protocol.as_deref() != self.data.scope.protocol() {
+            return Err(forbidden!("grant protocol does not match delete protocol",));
+        }
 
         Ok(())
     }
@@ -198,44 +275,38 @@ impl Grant {
             return Err(forbidden!("grant has expired"));
         }
 
-        // Check if grant has been revoked — using latest revocation message
+        // check if grant has been revoked — using latest revocation message
         let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH).build();
-        let (messages, _) = store.query(grantor, &query).await?;
-        let Some(oldest) = messages.first().cloned() else {
-            return Err(forbidden!("grant has been revoked"));
-        };
-        let Some(message_timestamp) = &oldest.descriptor().message_timestamp else {
-            return Err(forbidden!("missing message timestamp"));
-        };
-        if message_timestamp.lt(timestamp) {
-            return Err(forbidden!("grant with CID {} has been revoked", self.id));
+        let (entries, _) = store.query(grantor, &query).await?;
+        if let Some(oldest) = entries.first().cloned() {
+            if oldest.descriptor().message_timestamp.lt(timestamp) {
+                return Err(forbidden!("grant with CID {} has been revoked", self.id));
+            }
         }
 
         Ok(())
     }
 
     pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
-        let ScopeType::Records { protocol, option } = &self.data.scope.scope_type else {
+        let ScopeProtocol::Records { protocol, options } = &self.data.scope.protocol else {
             return Err(forbidden!("invalid scope type"));
         };
         if Some(protocol) != write.descriptor.protocol.as_ref() {
             return Err(forbidden!("incorrect scope `protocol`"));
         }
-        let Some(option) = option else {
-            return Ok(());
-        };
 
-        match option {
-            RecordsOptions::ContextId(context_id) => {
+        match options {
+            Some(RecordsOptions::ContextId(context_id)) => {
                 if Some(context_id) != write.context_id.as_ref() {
-                    return Err(forbidden!("incorrect scope `context_id`"));
+                    return Err(forbidden!("grant and record `contextId`s do not match"));
                 }
             }
-            RecordsOptions::ProtocolPath(protocol_path) => {
+            Some(RecordsOptions::ProtocolPath(protocol_path)) => {
                 if Some(protocol_path) != write.descriptor.protocol_path.as_ref() {
-                    return Err(forbidden!("incorrect scope `protocol_path`"));
+                    return Err(forbidden!("grant and record `protocolPath`s do not match"));
                 }
             }
+            None => {}
         }
 
         Ok(())
@@ -332,11 +403,11 @@ impl GrantBuilder {
 
     /// Specify the scope of the grant.
     #[must_use]
-    pub fn scope(mut self, interface: Interface, method: Method, scope_type: ScopeType) -> Self {
+    pub fn scope(mut self, interface: Interface, method: Method, protocol: ScopeProtocol) -> Self {
         self.scope = Some(Scope {
             interface,
             method,
-            scope_type,
+            protocol,
         });
         self
     }
@@ -353,12 +424,12 @@ impl GrantBuilder {
     /// # Errors
     /// TODO: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
-        if self.granted_to.is_empty() {
-            return Err(forbidden!("missing `granted_to`"));
-        }
         let Some(scope) = self.scope else {
             return Err(forbidden!("missing `scope`"));
         };
+        if self.granted_to.is_empty() {
+            return Err(forbidden!("missing `granted_to`"));
+        }
 
         let grant_bytes = serde_json::to_vec(&GrantData {
             date_expires: self.date_expires,
@@ -373,20 +444,12 @@ impl GrantBuilder {
             .recipient(self.granted_to)
             .protocol(WriteProtocol {
                 protocol: protocols::PROTOCOL_URI.to_string(),
-                protocol_path: "grant".to_string(),
+                protocol_path: protocols::GRANT_PATH.to_string(),
             })
-            .data(WriteData::Bytes {
-                data: grant_bytes.clone(),
-            });
+            .data(WriteData::Bytes(grant_bytes.clone()));
 
         // add protocol tag
-        let protocol = match &scope.scope_type {
-            ScopeType::Protocols { protocol } | ScopeType::EntryType { protocol } => {
-                protocol.as_ref()
-            }
-            ScopeType::Records { protocol, .. } => Some(protocol),
-        };
-        if let Some(protocol) = protocol {
+        if let Some(protocol) = scope.protocol() {
             let protocol = utils::clean_url(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };

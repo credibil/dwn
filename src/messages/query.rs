@@ -8,17 +8,16 @@ use serde::{Deserialize, Serialize};
 use super::MessagesFilter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{self, ScopeType};
+use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{EventLog, MessageStore, Provider, Signer};
 use crate::store::{Cursor, MessagesQuery};
-use crate::{forbidden, schema, Descriptor, Interface, Method, Result};
+use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema};
 
 /// Handle a query message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;
@@ -69,8 +68,8 @@ impl Message for Query {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -83,25 +82,21 @@ impl Query {
             return Ok(());
         }
 
+        // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
             return Ok(());
         };
-
-        // verify grant
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
 
-        // ensure query filters include scoped protocol
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol scope"));
+        // verify filter protocol
+        if grant.data.scope.protocol().is_none() {
+            return Ok(());
         };
 
-        if protocol.is_none() {
-            return Ok(());
-        }
-
+        let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
-            if &filter.protocol != protocol {
+            if filter.protocol.as_deref() != protocol {
                 return Err(forbidden!("filter protocol does not match scoped protocol",));
             }
         }
@@ -141,7 +136,7 @@ pub struct QueryDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct QueryBuilder {
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     filters: Option<Vec<MessagesFilter>>,
     permission_grant_id: Option<String>,
 }
@@ -153,7 +148,7 @@ impl QueryBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now()),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }

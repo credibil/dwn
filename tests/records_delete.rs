@@ -1,6 +1,7 @@
 //! Records Delete
 
-use dwn_test::store::ProviderImpl;
+use dwn_test::key_store::ALICE_DID;
+use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use serde_json::json;
 use vercre_dwn::data::DataStream;
@@ -8,8 +9,6 @@ use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{DeleteBuilder, QueryBuilder, RecordsFilter, WriteBuilder, WriteData};
 use vercre_dwn::store::Pagination;
-
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 
 // Successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]
@@ -26,9 +25,7 @@ async fn delete_record() {
     .expect("should serialize");
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader {
-            reader: DataStream::from(data),
-        })
+        .data(WriteData::Reader(DataStream::from(data)))
         .build(&alice_keyring)
         .await
         .expect("should create write");

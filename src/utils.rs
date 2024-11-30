@@ -1,6 +1,6 @@
 use http::uri::Uri;
 
-use crate::{unexpected, Result};
+use crate::{Result, unexpected};
 
 pub fn clean_url(url: &str) -> Result<String> {
     let parsed = url.parse::<Uri>()?;

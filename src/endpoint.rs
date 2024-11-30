@@ -8,9 +8,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Authorization;
-use crate::permissions::{self, Grant};
 use crate::provider::Provider;
-use crate::{schema, unexpected, Descriptor, Error, Result};
+use crate::{Descriptor, Result, schema};
 
 /// Handle incoming messages.
 ///
@@ -19,9 +18,8 @@ use crate::{schema, unexpected, Descriptor, Error, Result};
 pub async fn handle<T>(
     owner: &str, message: impl Message<Reply = T>, provider: &impl Provider,
 ) -> Result<Reply<T>> {
-    let mut ctx = Context::new(owner);
-    message.validate(&mut ctx, provider).await?;
-    message.handle(&ctx, provider).await
+    message.validate().await?;
+    message.handle(owner, provider).await
 }
 
 /// Methods common to all messages.
@@ -43,43 +41,15 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
     fn authorization(&self) -> Option<&Authorization>;
 
     /// Handle the message.
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>>;
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>>;
 
     /// Validate the message. This is a generic validation common to all messages.
     /// Message-specific validation is done in the message handler.
-    async fn validate(&self, ctx: &mut Context, provider: &impl Provider) -> Result<()> {
+    async fn validate(&self) -> Result<()> {
         // if !tenant_gate.active(owner)? {
         //     return Err(Error::Unauthorized("tenant not active"));
         // }
-
-        schema::validate(self)?;
-
-        // message has no authorization
-        let Some(authzn) = self.authorization() else {
-            return Ok(());
-        };
-
-        // authenticate the message
-        if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(Error::Unauthorized(format!("failed to authenticate message: {e}")));
-        }
-
-        // no checks needed when message author is web node owner
-        let author = authzn.author()?;
-        if author == ctx.owner {
-            return Ok(());
-        }
-
-        // verify the permission grant
-        let payload = authzn.jws_payload()?;
-        let Some(grant_id) = &payload.permission_grant_id else {
-            return Err(unexpected!("`permission_grant_id` not found in signature payload",));
-        };
-        let grant = permissions::fetch_grant(&ctx.owner, grant_id, provider).await?;
-        grant.verify(&author, &authzn.signer()?, self.descriptor(), provider).await?;
-        ctx.grant = Some(grant);
-
-        Ok(())
+        schema::validate(self)
     }
 }
 
@@ -106,25 +76,4 @@ pub struct Status {
     /// Status detail.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
-}
-
-/// Message context for attaching information used during processing.
-#[derive(Clone, Debug, Default)]
-pub struct Context {
-    /// The web node owner (aka tenant).
-    pub owner: String,
-
-    /// The permission grant used to authorize the message
-    pub grant: Option<Grant>,
-}
-
-impl Context {
-    /// Create a new context.
-    #[must_use]
-    pub fn new(owner: &str) -> Self {
-        Self {
-            owner: owner.to_string(),
-            ..Self::default()
-        }
-    }
 }

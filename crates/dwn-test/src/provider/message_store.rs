@@ -5,14 +5,14 @@ use vercre_dwn::store::Cursor;
 use vercre_serialize::QuerySerializer;
 
 use super::ProviderImpl;
-use crate::store::NAMESPACE;
+use crate::provider::NAMESPACE;
 pub(crate) const TABLE: &str = "message";
 
 #[async_trait]
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<Entry> = self.db.create((TABLE, entry.cid()?)).content(entry).await?;
+        let _: Option<Entry> = self.db.update((TABLE, entry.cid()?)).content(entry).await?;
         Ok(())
     }
 

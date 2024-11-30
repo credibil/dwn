@@ -1,11 +1,14 @@
 //! # Protocol Permissions
 
 use crate::auth::Authorization;
-use crate::protocols::{integrity, Action, ActionRule, Actor, RuleSet};
+use crate::permissions::{self, Grant, Request, Scope};
+use crate::protocols::{
+    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH, RuleSet, integrity,
+};
 use crate::provider::MessageStore;
-use crate::records::{self, Delete, Query, Subscribe, Write};
+use crate::records::{Delete, Query, Read, Subscribe, Write, write};
 use crate::store::RecordsQuery;
-use crate::{forbidden, Range, Result};
+use crate::{Range, Result, forbidden};
 
 /// Protocol-based authorization.
 pub struct Protocol<'a> {
@@ -33,6 +36,7 @@ impl<'a> Protocol<'a> {
 
 enum Record {
     Write(Write),
+    Read(Read),
     Query(Query),
     Subscribe(Subscribe),
     Delete(Delete),
@@ -41,6 +45,12 @@ enum Record {
 impl From<&Write> for Record {
     fn from(write: &Write) -> Self {
         Self::Write(write.clone())
+    }
+}
+
+impl From<&Read> for Record {
+    fn from(read: &Read) -> Self {
+        Self::Read(read.clone())
     }
 }
 
@@ -66,6 +76,7 @@ impl Record {
     const fn authorization(&self) -> Option<&Authorization> {
         match self {
             Self::Write(write) => Some(&write.authorization),
+            Self::Read(read) => read.authorization.as_ref(),
             Self::Delete(delete) => Some(&delete.authorization),
             Self::Query(query) => query.authorization.as_ref(),
             Self::Subscribe(subscribe) => subscribe.authorization.as_ref(),
@@ -75,6 +86,7 @@ impl Record {
     fn protocol(&self) -> Result<&str> {
         let protocol = match self {
             Self::Write(write) => &write.descriptor.protocol,
+            Self::Read(read) => &read.descriptor.filter.protocol,
             Self::Query(query) => &query.descriptor.filter.protocol,
             Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol,
             Self::Delete(_) => {
@@ -91,6 +103,7 @@ impl Record {
     async fn rule_set(&self, owner: &str, store: &impl MessageStore) -> Result<RuleSet> {
         let protocol_path = match self {
             Self::Write(write) => &write.descriptor.protocol_path,
+            Self::Read(read) => &read.descriptor.filter.protocol_path,
             Self::Query(query) => &query.descriptor.filter.protocol_path,
             Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol_path,
             Self::Delete(_) => {
@@ -136,6 +149,23 @@ impl Protocol<'_> {
     /// # Errors
     /// TODO: Document errors
     pub async fn permit_read(
+        &self, owner: &str, read: &Read, store: &impl MessageStore,
+    ) -> Result<()> {
+        let record: Record = read.into();
+        let rule_set = record.rule_set(owner, store).await?;
+
+        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await?;
+
+        Ok(())
+    }
+
+    /// Protocol-based authorization for `records::Query` and `records::Subscribe`
+    /// messages.
+    ///
+    /// # Errors
+    /// TODO: Document errors
+    pub async fn permit_query(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let record: Record = query.into();
@@ -240,10 +270,7 @@ impl Protocol<'_> {
         // build record chain
         let record_chain = match record {
             Record::Write(write) => {
-                let messages = records::existing_entries(owner, &write.record_id, store).await?;
-                let (initial, _) = records::earliest_and_latest(&messages).await?;
-
-                if initial.is_some() {
+                if write::initial_entry(owner, &write.record_id, store).await?.is_some() {
                     self.record_chain(owner, &write.record_id, store).await?
                 } else if let Some(parent_id) = &write.descriptor.parent_id {
                     self.record_chain(owner, parent_id, store).await?
@@ -251,7 +278,7 @@ impl Protocol<'_> {
                     vec![]
                 }
             }
-            Record::Query(_) | Record::Subscribe(_) => Vec::new(),
+            Record::Query(_) | Record::Subscribe(_) | Record::Read(_) => Vec::new(),
             Record::Delete(delete) => {
                 self.record_chain(owner, &delete.descriptor.record_id, store).await?
             }
@@ -322,10 +349,7 @@ impl Protocol<'_> {
         let mut current_id = Some(record_id.to_owned());
 
         while let Some(record_id) = &current_id {
-            let messages = records::existing_entries(owner, record_id, store).await?;
-            let (initial, _) = records::earliest_and_latest(&messages).await?;
-
-            let Some(initial) = initial else {
+            let Some(initial) = write::initial_entry(owner, record_id, store).await? else {
                 return Err(forbidden!(
                     "no parent found with ID {record_id} when constructing record chain"
                 ));
@@ -351,11 +375,8 @@ impl Protocol<'_> {
                 if write.is_initial()? {
                     return Ok(vec![Action::Create]);
                 }
-
-                let messages = records::existing_entries(owner, &write.record_id, store).await?;
-                let (initial, _) = records::earliest_and_latest(&messages).await?;
-
-                let Some(initial) = initial else {
+                let Some(initial) = write::initial_entry(owner, &write.record_id, store).await?
+                else {
                     return Ok(Vec::new());
                 };
                 if write.authorization.author()? == initial.authorization.author()? {
@@ -364,14 +385,14 @@ impl Protocol<'_> {
 
                 Ok(vec![Action::CoUpdate])
             }
+            Record::Read(_) => Ok(vec![Action::Read]),
             Record::Query(_) => Ok(vec![Action::Query]),
             // Method::Read => Ok(vec![Action::Read]),
             Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
             Record::Delete(delete) => {
-                let messages =
-                    records::existing_entries(owner, &delete.descriptor.record_id, store).await?;
-                let (initial, _) = records::earliest_and_latest(&messages).await?;
-                let Some(initial) = initial else {
+                let Some(initial) =
+                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?
+                else {
                     return Ok(Vec::new());
                 };
 
@@ -411,4 +432,26 @@ fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -
         return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
     }
     Ok(author == ancestor.authorization.author()?)
+}
+
+/// Get the scope for a permission record. If the record is a revocation, the
+/// scope is fetched from the grant that is being revoked.
+pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) -> Result<Scope> {
+    //Result<Scope>
+    if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+        return Err(forbidden!("unexpected protocol for permission record"));
+    }
+    if write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string()) {
+        let Some(parent_id) = &write.descriptor.parent_id else {
+            return Err(forbidden!("missing parent ID for revocation record"));
+        };
+        let grant = permissions::fetch_grant(owner, parent_id, store).await?;
+        return Ok(grant.data.scope);
+    } else if write.descriptor.protocol_path == Some(GRANT_PATH.to_string()) {
+        let grant = Grant::try_from(write)?;
+        return Ok(grant.data.scope);
+    }
+
+    let request = Request::try_from(write)?;
+    Ok(request.scope)
 }

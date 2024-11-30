@@ -11,28 +11,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
-use crate::permissions::{self, ScopeType};
+use crate::endpoint::{Message, Reply, Status};
+use crate::permissions::{self, Scope};
+use crate::protocols::PROTOCOL_URI;
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::DataStream;
-use crate::store::EntryType;
-use crate::{forbidden, schema, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::records::{DataStream, write};
+use crate::store::{Entry, EntryType};
+use crate::{Descriptor, Error, Interface, Method, Result, forbidden, schema, unexpected};
 
 /// Handle a read message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
-    owner: &str, read: Read, provider: &impl Provider,
-) -> Result<Reply<ReadReply>> {
-    read.authorize(owner, provider).await?;
-
-    let Some(record) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
+    let Some(entry) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
     else {
         return Err(Error::NotFound("message not found".to_string()));
     };
 
-    let mut message = (*record).clone();
+    // verify the fetched message can be safely returned to the requestor
+    read.authorize(owner, &entry, provider).await?;
+
+    let mut message = (*entry).clone();
 
     // include data with RecordsWrite messages
     let data = if let EntryType::Write(ref mut write) = message {
@@ -89,39 +89,82 @@ impl Message for Read {
         Some(&self.authorization)
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
 impl Read {
-    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+    async fn authorize(&self, owner: &str, entry: &Entry, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
-        let author = authzn.author()?;
 
+        // owner can read messages they authored
+        let author = authzn.author()?;
         if author == owner {
             return Ok(());
         }
 
-        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Ok(());
-        };
-
         // verify grant
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
-
-        // ensure read filters include scoped protocol
-        let ScopeType::Protocols { protocol } = &grant.data.scope.scope_type else {
-            return Err(forbidden!("missing protocol scope",));
+        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
+            return Err(forbidden!("missing permission grant ID"));
         };
-
-        if protocol.is_none() {
-            return Ok(());
-        }
+        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        grant.verify(owner, &author, self.descriptor(), store).await?;
+        verify_scope(owner, entry, grant.data.scope, store).await?;
 
         Ok(())
     }
+}
+
+// Verify message scope against grant scope.
+async fn verify_scope(
+    owner: &str, requested: &Entry, scope: Scope, store: &impl MessageStore,
+) -> Result<()> {
+    // ensure read filters include scoped protocol
+    let Some(protocol) = scope.protocol() else {
+        return Ok(());
+    };
+
+    if requested.descriptor().interface == Interface::Protocols {
+        let Some(configure) = requested.as_configure() else {
+            return Err(forbidden!("message failed scope authorization"));
+        };
+        if configure.descriptor.definition.protocol == protocol {
+            return Ok(());
+        }
+    }
+
+    if requested.descriptor().interface == Interface::Records {
+        let write = match &requested.message {
+            EntryType::Write(write) => write.clone(),
+            EntryType::Delete(delete) => {
+                let entry =
+                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?;
+                let Some(write) = entry else {
+                    return Err(forbidden!("message failed scope authorization"));
+                };
+                write.clone()
+            }
+            EntryType::Configure(_) => {
+                return Err(forbidden!("message failed scope authorization"));
+            }
+        };
+
+        // protocols match
+        if write.descriptor.protocol.as_deref() == Some(protocol) {
+            return Ok(());
+        }
+
+        // check if the protocol is the internal permissions protocol
+        if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+            let permission_scope = permissions::fetch_scope(owner, &write, store).await?;
+            if permission_scope.protocol() == Some(protocol) {
+                return Ok(());
+            }
+        }
+    }
+
+    Err(forbidden!("message failed scope authorization"))
 }
 
 /// `Read` reply
@@ -163,7 +206,7 @@ pub struct ReadDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct ReadBuilder {
-    message_timestamp: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
     permission_grant_id: Option<String>,
     message_cid: Option<String>,
 }
@@ -175,7 +218,7 @@ impl ReadBuilder {
     pub fn new() -> Self {
         // set defaults
         Self {
-            message_timestamp: Some(Utc::now()),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }

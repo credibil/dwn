@@ -9,18 +9,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
+use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{EventStream, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::{forbidden, Descriptor, Interface, Method, Quota, Result};
+use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
 
 /// Process `Subscribe` message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
+pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
     let mut filter = subscribe.descriptor.filter.clone();
@@ -87,8 +87,8 @@ impl Message for Subscribe {
         self.authorization.as_ref()
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -97,6 +97,9 @@ impl Message for Subscribe {
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeReply {
     /// The subscription to the requested events.
+    /// N.B. serialization/deserialization is skipped because the subscriber
+    /// `Stream` is not serializable.
+    #[serde(skip)]
     pub subscription: Subscriber,
 }
 
@@ -164,8 +167,8 @@ pub struct SubscribeDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct SubscribeBuilder {
+    message_timestamp: DateTime<Utc>,
     filter: RecordsFilter,
-    message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
@@ -176,11 +179,8 @@ impl SubscribeBuilder {
     /// Returns a new [`SubscribeBuilder`]
     #[must_use]
     pub fn new() -> Self {
-        let now = Utc::now();
-
-        // set defaults
         Self {
-            message_timestamp: Some(now),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }
@@ -192,12 +192,12 @@ impl SubscribeBuilder {
         self
     }
 
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = Some(message_timestamp);
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    //     self.message_timestamp = message_timestamp;
+    //     self
+    // }
 
     /// Specifies the permission grant ID.
     #[must_use]

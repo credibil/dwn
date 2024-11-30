@@ -3,14 +3,16 @@
 use std::fmt::Display;
 use std::ops::Deref;
 
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::endpoint::Message;
-pub use crate::messages::{self, MessagesFilter};
-pub use crate::protocols::{self, ProtocolsFilter};
-pub use crate::records::{self, RecordsFilter, TagFilter};
-use crate::{Descriptor, Method, Quota, Range, Result};
+pub use crate::messages::MessagesFilter;
+pub use crate::protocols::ProtocolsFilter;
+use crate::records::{self, Write};
+pub use crate::records::{RecordsFilter, TagFilter};
+use crate::{Descriptor, Method, Quota, Range, Result, auth, messages, protocols};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -53,9 +55,7 @@ impl Entry {
             EntryType::Configure(ref configure) => configure.descriptor(),
         }
     }
-}
 
-impl Entry {
     /// Return the `RecordsWrite` message, if set.
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
@@ -89,6 +89,39 @@ impl Deref for Entry {
 
     fn deref(&self) -> &Self::Target {
         &self.message
+    }
+}
+
+impl From<&Write> for Entry {
+    fn from(write: &Write) -> Self {
+        let mut record = Self {
+            message: EntryType::Write(write.clone()),
+            indexes: Map::new(),
+        };
+
+        record.indexes.insert(
+            "author".to_string(),
+            Value::String(write.authorization.author().unwrap_or_default()),
+        );
+
+        if let Some(attestation) = &write.attestation {
+            let attester = auth::signer_did(attestation).unwrap_or_default();
+            record.indexes.insert("attester".to_string(), Value::String(attester));
+        }
+
+        let date_updated =
+            write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
+        record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
+
+        if let Some(tags) = &write.descriptor.tags {
+            let mut tag_map = Map::new();
+            for (k, v) in tags {
+                tag_map.insert(format!("tag.{k}"), v.clone());
+            }
+            record.indexes.insert("tags".to_string(), Value::Object(tag_map));
+        }
+
+        record
     }
 }
 
@@ -148,6 +181,7 @@ impl ProtocolsQuery {
         self
     }
 
+    #[allow(dead_code)]
     #[must_use]
     pub(crate) const fn published(mut self, published: bool) -> Self {
         self.published = Some(published);
@@ -191,10 +225,11 @@ pub struct RecordsQuery {
     pub protocol_path: Option<String>,
 
     /// Filter records by `date_created`.
-    pub date_created: Option<Range<String>>,
+    pub date_created: Option<Range<DateTime<Utc>>>,
 
-    /// Filter records by `archived`.
-    pub archived: Option<bool>,
+    /// Include records with the `archive` flag (initial write that has been
+    /// superseded).
+    pub include_archived: bool,
 
     /// Filter records by `filter`.
     pub filter: Option<RecordsFilter>,
@@ -215,7 +250,7 @@ impl Default for RecordsQuery {
 
         Self {
             method: Some(Method::Write),
-            archived: Some(false),
+            include_archived: false,
             sort: Some(sort),
 
             record_id: None,
@@ -285,7 +320,7 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) fn date_created(mut self, date_created: Range<String>) -> Self {
+    pub(crate) const fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
         self.date_created = Some(date_created);
         self
     }
@@ -297,8 +332,8 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) const fn archived(mut self, archived: Option<bool>) -> Self {
-        self.archived = archived;
+    pub(crate) const fn include_archived(mut self, include_archived: bool) -> Self {
+        self.include_archived = include_archived;
         self
     }
 

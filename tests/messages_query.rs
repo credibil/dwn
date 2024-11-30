@@ -1,20 +1,18 @@
 //! Message Query
 //!
-//! This test demonstrates how a web node owner create differnt types of
-//! messages and subsequently query for them.
+//! This test demonstrates how a web node owner create messages and
+//! subsequently query for them.
 
-use dwn_test::store::ProviderImpl;
+use dwn_test::key_store::ALICE_DID;
+use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-// use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
-use vercre_dwn::{endpoint, Message};
-
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
+use vercre_dwn::{Message, endpoint};
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
@@ -25,7 +23,7 @@ async fn all_messages() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow_any.json");
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -56,21 +54,18 @@ async fn all_messages() {
     let reader = DataStream::from(data);
 
     for _i in 1..=5 {
-        let message = WriteBuilder::new()
+        let write = WriteBuilder::new()
             .protocol(protocol.clone())
             .schema(&schema)
-            // .data(WriteData::Bytes { data: data.clone() })
-            .data(WriteData::Reader {
-                reader: reader.clone(),
-            })
+            .data(WriteData::Reader(reader.clone()))
             .published(true)
             .build(&alice_keyring)
             .await
             .expect("should create write");
 
-        expected_cids.push(message.cid().unwrap());
+        expected_cids.push(write.cid().unwrap());
 
-        let reply = endpoint::handle(ALICE_DID, message, &provider).await.expect("should write");
+        let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
 
@@ -96,8 +91,7 @@ async fn all_messages() {
     let message = WriteBuilder::new()
         .protocol(protocol.clone())
         .schema(&schema)
-        // .data(WriteData::Bytes { data: data.clone() })
-        .data(WriteData::Reader { reader })
+        .data(WriteData::Reader(reader))
         .published(true)
         .build(&alice_keyring)
         .await
@@ -131,8 +125,4 @@ async fn all_messages() {
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
-
-    // assert_snapshot!("read", reply, {
-    //     ".entry.message.descriptor.messageTimestamp" => "[messageTimestamp]",
-    // });
 }

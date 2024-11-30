@@ -17,13 +17,14 @@ pub mod store;
 mod tasks;
 mod utils;
 
+use ::serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
 
 pub use crate::endpoint::Message;
 pub use crate::error::Error;
 pub use crate::provider::Provider;
+use crate::serde::rfc3339_micros;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -40,8 +41,8 @@ pub struct Descriptor {
     pub method: Method,
 
     /// The timestamp of the message.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_timestamp: Option<DateTime<Utc>>,
+    #[serde(serialize_with = "rfc3339_micros")]
+    pub message_timestamp: DateTime<Utc>,
 }
 
 /// web node interfaces.
@@ -105,16 +106,18 @@ impl<T: Clone> Quota<T> {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Range<T> {
     /// The minimum value.
-    pub start: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<T>,
 
     /// The maximum value.
-    pub end: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<T>,
 }
 
 impl<T> Range<T> {
     /// Create a new range filter.
-    pub const fn new(start: Option<T>, end: Option<T>) -> Self {
-        Self { start, end }
+    pub const fn new(min: Option<T>, max: Option<T>) -> Self {
+        Self { min, max }
     }
 
     /// Check if the range contains the value.
@@ -122,13 +125,13 @@ impl<T> Range<T> {
     where
         T: PartialOrd,
     {
-        if let Some(start) = &self.start
-            && value < start
+        if let Some(min) = &self.min
+            && value < min
         {
             return false;
         }
-        if let Some(end) = &self.end
-            && value > end
+        if let Some(max) = &self.max
+            && value > max
         {
             return false;
         }
@@ -137,23 +140,31 @@ impl<T> Range<T> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use std::ops::Range;
+// Custom serialization functions.
+mod serde {
+    use chrono::{DateTime, SecondsFormat, Utc};
+    use serde::Serializer;
 
-//     use super::{DateTime, Utc};
+    /// Force serializing to an RFC 3339 string with microsecond precision.
+    pub fn rfc3339_micros<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
+        serializer.serialize_str(&s)
+    }
 
-//     #[test]
-//     fn test_range() {
-//         let min_date = DateTime::<Utc>::MIN_UTC;
-//         let max_date = Utc::now();
-
-//         let range = Range {
-//             start: Some(min_date),
-//             end: Some(max_date),
-//         };
-
-//         let betw = Utc::now() - chrono::Duration::days(1);
-//         println!("{:?}", range.contains(&Some(betw)));
-//     }
-// }
+    /// Force serializing to an RFC 3339 string with microsecond precision.
+    #[allow(clippy::ref_option)]
+    pub fn rfc3339_micros_opt<S>(
+        date: &Option<DateTime<Utc>>, serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let Some(date) = date else {
+            return serializer.serialize_none();
+        };
+        rfc3339_micros(date, serializer)
+    }
+}

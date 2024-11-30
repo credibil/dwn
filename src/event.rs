@@ -1,5 +1,6 @@
 //! # Event
 
+use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -7,8 +8,8 @@ use chrono::{DateTime, Utc};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::mpsc;
 
+// use tokio::sync::mpsc;
 use crate::messages::MessagesFilter;
 use crate::records::{RecordsFilter, TagFilter};
 use crate::store::{Entry, EntryType};
@@ -33,55 +34,54 @@ impl Default for SubscribeFilter {
     }
 }
 
-/// Used by the client to handle events subscribed to.
-#[derive(Debug, Default, Deserialize, Serialize)]
+/// Used by local clients to handle events subscribed to.
 pub struct Subscriber {
-    filter: SubscribeFilter,
+    inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
+}
 
-    #[serde(skip)]
-    receiver: Option<mpsc::Receiver<Event>>,
+impl Default for Subscriber {
+    fn default() -> Self {
+        Self {
+            inner: Box::pin(futures::stream::empty()),
+        }
+    }
+}
+
+impl fmt::Debug for Subscriber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Subscriber").finish()
+    }
 }
 
 impl Clone for Subscriber {
     fn clone(&self) -> Self {
         Self {
-            filter: SubscribeFilter::default(),
-            receiver: None,
+            inner: Box::pin(futures::stream::empty()),
         }
     }
 }
 
 impl Subscriber {
-    /// Create a new subscriber.
+    /// Wrap Provider's subscription Stream for ease of surfacing to users.
     #[must_use]
-    pub const fn new(filter: SubscribeFilter, receiver: mpsc::Receiver<Event>) -> Self {
-        Self {
-            filter,
-            receiver: Some(receiver),
-        }
+    pub const fn new(stream: Pin<Box<dyn Stream<Item = Event> + Send>>) -> Self {
+        Self { inner: stream }
     }
 }
 
 impl Stream for Subscriber {
     type Item = Event;
 
+    // Poll underlying stream for new events
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let event = self.receiver.as_mut().unwrap().poll_recv(cx);
-
-        // check 'ready' events match the stream filter before surfacing it
-        if let Poll::Ready(Some(event)) = &event {
-            if self.filter.is_match(event) {
-                return Poll::Ready(Some(event.clone()));
-            }
-            return Poll::Pending;
-        }
-
-        event
+        self.inner.as_mut().as_mut().poll_next(cx)
     }
 }
 
 impl SubscribeFilter {
-    fn is_match(&self, event: &Event) -> bool {
+    /// Check the event matches the filter.
+    #[must_use]
+    pub fn is_match(&self, event: &Event) -> bool {
         match self {
             Self::Messages(filters) => {
                 for filter in filters {
@@ -267,7 +267,7 @@ impl MessagesFilter {
             }
         }
         if let Some(message_timestamp) = &self.message_timestamp {
-            if !message_timestamp.contains(&descriptor.message_timestamp.unwrap_or_default()) {
+            if !message_timestamp.contains(&descriptor.message_timestamp) {
                 return false;
             }
         }

@@ -2,18 +2,17 @@
 
 use std::time::Duration;
 
-use dwn_test::store::ProviderImpl;
+use dwn_test::key_store::ALICE_DID;
+use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use serde_json::json;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
-use vercre_dwn::{endpoint, Message};
+use vercre_dwn::{Message, endpoint};
 
-const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-
-// The owner should be able to to subscribe their own event stream
+// The owner should be able to subscribe their own event stream.
 #[tokio::test]
 async fn owner_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -28,10 +27,7 @@ async fn owner_events() {
     let reply =
         endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
-
-    let Some(mut subscribe_reply) = reply.body else {
-        panic!("unexpected reply: {:?}", reply);
-    };
+    let mut subscribe_reply = reply.body.expect("should have body");
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -42,9 +38,7 @@ async fn owner_events() {
     .expect("should serialize");
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader {
-            reader: DataStream::from(data),
-        })
+        .data(WriteData::Reader(DataStream::from(data)))
         .build(&alice_keyring)
         .await
         .expect("should create write");
@@ -74,13 +68,13 @@ async fn owner_events() {
     // --------------------------------------------------
     // The subscriber should have a matching write event.
     // --------------------------------------------------
-    let find_event = tokio::spawn(async move {
+    let find_event = async move {
         while let Some(event) = subscribe_reply.subscription.next().await {
             if message_cid == event.cid().unwrap() {
                 break;
             }
         }
-    });
+    };
     if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found event");
     }

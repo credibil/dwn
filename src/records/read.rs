@@ -10,19 +10,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
-use crate::endpoint::{Context, Message, Reply, Status};
+use crate::endpoint::{Message, Reply, Status};
+use crate::permissions::{self, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
 use crate::store::RecordsQuery;
-use crate::{forbidden, unexpected, Descriptor, Error, Interface, Method, Result};
+use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
 ///
 /// # Errors
 /// TODO: Add errors
-pub(crate) async fn handle(
-    owner: &str, read: Read, provider: &impl Provider,
-) -> Result<Reply<ReadReply>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = RecordsQuery::from(read.clone()).build();
     let (entries, _) = MessageStore::query(provider, owner, &query).await?;
@@ -63,7 +62,8 @@ pub(crate) async fn handle(
     let mut write = Write::try_from(&entries[0])?;
 
     // TODO: review against the original code — it should take a store provider
-    read.authorize(owner, &write)?;
+    // verify the fetched message can be safely returned to the requestor
+    read.authorize(owner, &write, provider).await?;
 
     let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
@@ -79,7 +79,7 @@ pub(crate) async fn handle(
     let initial_write = if write.is_initial()? {
         None
     } else {
-        let query = RecordsQuery::new().record_id(&write.record_id).archived(None).build();
+        let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true).build();
         let (records, _) = MessageStore::query(provider, owner, &query).await?;
         if records.is_empty() {
             return Err(unexpected!("initial write not found"));
@@ -137,8 +137,8 @@ impl Message for Read {
         self.authorization.as_ref()
     }
 
-    async fn handle(self, ctx: &Context, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(&ctx.owner, self, provider).await
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        handle(owner, self, provider).await
     }
 }
 
@@ -174,32 +174,51 @@ pub struct ReadReplyEntry {
 }
 
 impl Read {
-    fn authorize(&self, owner: &str, write: &Write) -> Result<()> {
+    async fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
         let Some(authzn) = &self.authorization else {
             return Ok(());
         };
         let author = authzn.author()?;
+
+        // authorization not required for published data
+        if write.descriptor.published.unwrap_or_default() {
+            return Ok(());
+        }
 
         // authorize delegate
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = delegated_grant.to_grant()?;
             grant.verify_scope(write)?;
         }
-        // if author is owner, directly grant access
+
+        // owner can read records they authored
         if author == owner {
             return Ok(());
         }
-        // authorization not required for published data
-        if write.descriptor.published.unwrap_or_default() {
-            return Ok(());
-        }
 
+        // recipient can read
         if let Some(recipient) = &write.descriptor.recipient {
             if &author == recipient {
                 return Ok(());
             }
         }
+
+        // author can read
         if author == write.authorization.author()? {
+            return Ok(());
+        }
+
+        // verify grant
+        if let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id {
+            let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+            grant.permit_read(owner, &author, self, write, store).await?;
+            return Ok(());
+        }
+
+        // verify protocol role and action
+        if let Some(protocol) = &write.descriptor.protocol {
+            let protocol = Protocol::new(protocol);
+            protocol.permit_read(owner, self, store).await?;
             return Ok(());
         }
 
@@ -222,8 +241,8 @@ pub struct ReadDescriptor {
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct ReadBuilder {
+    message_timestamp: DateTime<Utc>,
     filter: RecordsFilter,
-    message_timestamp: Option<DateTime<Utc>>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
@@ -234,11 +253,8 @@ impl ReadBuilder {
     /// Returns a new [`ReadBuilder`]
     #[must_use]
     pub fn new() -> Self {
-        let now = Utc::now();
-
-        // set defaults
         Self {
-            message_timestamp: Some(now),
+            message_timestamp: Utc::now(),
             ..Self::default()
         }
     }
@@ -250,12 +266,12 @@ impl ReadBuilder {
         self
     }
 
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-        self.message_timestamp = Some(message_timestamp);
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+    //     self.message_timestamp = Some(message_timestamp);
+    //     self
+    // }
 
     /// Specifies the permission grant ID.
     #[must_use]
