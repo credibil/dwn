@@ -26,18 +26,14 @@ impl QuerySerializer for MessagesQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let mut sql = "SELECT * FROM type::table($table) ".to_string();
+        let mut sql = "SELECT * FROM type::table($table) WHERE (1=1".to_string();
 
         for filter in &self.filters {
-            if sql.is_empty() {
-                sql.push_str("WHERE\n");
-            } else {
-                sql.push_str("OR\n");
-            }
-            sql.push_str(&format!("({filter})", filter = QuerySerializer::serialize(filter)));
+            sql.push_str(&format!("{filter}", filter = QuerySerializer::serialize(filter)));
+            sql.push_str(") OR (1=1");
         }
-
-        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE ASC");
+        sql = sql.strip_suffix(" OR (1=1").unwrap_or(&sql).to_string();
+        sql.push_str(" ORDER BY descriptor.messageTimestamp COLLATE ASC");
         sql
     }
 }
@@ -47,16 +43,16 @@ impl QuerySerializer for MessagesFilter {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let mut sql = String::from("1=1\n");
+        let mut sql = String::new();
 
         if let Some(interface) = &self.interface {
-            sql.push_str(&format!("AND descriptor.interface = '{interface}'\n"));
+            sql.push_str(&format!(" AND descriptor.interface='{interface}'"));
         }
         if let Some(method) = &self.method {
-            sql.push_str(&format!("AND descriptor.method = '{method}'\n"));
+            sql.push_str(&format!(" AND descriptor.method='{method}'"));
         }
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
+            sql.push_str(&format!(" AND descriptor.protocol='{protocol}'"));
         }
         if let Some(timestamp) = &self.message_timestamp {
             let min = &DateTime::<Utc>::MIN_UTC;
@@ -64,9 +60,8 @@ impl QuerySerializer for MessagesFilter {
 
             let from = timestamp.min.as_ref().unwrap_or(min);
             let to = timestamp.max.as_ref().unwrap_or(max);
-            sql.push_str(&format!("AND descriptor.messageTimestamp BETWEEN '{from}' AND '{to}'\n"));
+            sql.push_str(&format!(" AND descriptor.messageTimestamp BETWEEN '{from}' AND '{to}'"));
         }
-
         sql
     }
 }
@@ -110,7 +105,7 @@ impl QuerySerializer for RecordsQuery {
             interface = Interface::Records
         );
 
-        if !self.include_archived{
+        if !self.include_archived {
             sql.push_str(&format!("AND archived = false\n"));
         }
 

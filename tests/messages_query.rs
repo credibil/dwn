@@ -8,7 +8,7 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
-use vercre_dwn::permissions::GrantBuilder;
+use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
@@ -165,6 +165,10 @@ async fn empty_filter() {
     };
 }
 
+// **************************************************
+// Grant Scopes
+// **************************************************
+
 // Should allow querying of messages with matching interface and method grant scope.
 #[tokio::test]
 async fn match_grant_scope() {
@@ -285,4 +289,115 @@ async fn match_grant_scope() {
     for entry in entries {
         assert!(expected_cids.contains(&entry));
     }
+}
+
+// Should reject message queries with mismatching method grant scopes.
+#[tokio::test]
+async fn mismatched_grant_scope() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice creates a grant scoped to `MessagesSubscribe` for Bob.
+    // --------------------------------------------------
+    let builder =
+        GrantBuilder::new().granted_to(BOB_DID).scope(Interface::Messages, Method::Subscribe, None);
+    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to use the `MessagesSubscribe` grant on a `MessagesQuery` message.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .permission_grant_id(&bob_grant.record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create write");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should not be authorized");
+    };
+}
+
+// **************************************************
+// Protocol Grant Scopes
+// **************************************************
+
+// Should allow querying of messages with matching protocol grant scope.
+#[tokio::test]
+async fn match_protocol_scope() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures 2 protocols.
+    // --------------------------------------------------
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let mut definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    definition.protocol = "http://protcol1".to_string();
+
+    let configure_any = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    definition.protocol = "http://protcol2".to_string();
+
+    let configure_any = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates a grant scoped to `MessagesQuery` for Bob.
+    // --------------------------------------------------
+    let builder = GrantBuilder::new().granted_to(BOB_DID).scope(
+        Interface::Messages,
+        Method::Query,
+        Some(ScopeProtocol::Simple {
+            protocol: "http://protcol1".to_string(),
+        }),
+    );
+    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob uses the grant to query for the messages.
+    // --------------------------------------------------
+    let filter = MessagesFilter::new().protocol("http://protcol1".to_string());
+    let query = QueryBuilder::new()
+        .add_filter(filter)
+        .permission_grant_id(&bob_grant.record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should be records read");
+    println!("{:?}", query_reply);
+
+    // let entries = query_reply.entries.expect("should have entries");
+    // assert_eq!(entries.len(), 2);
 }

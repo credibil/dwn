@@ -62,8 +62,9 @@ impl Scope {
     #[must_use]
     pub fn protocol(&self) -> Option<&str> {
         match &self.protocol {
-            ScopeProtocol::Simple { protocol } => protocol.as_deref(),
-            ScopeProtocol::Records { protocol, .. } => Some(protocol),
+            ScopeProtocol::Simple { protocol } | ScopeProtocol::Records { protocol, .. } => {
+                Some(protocol)
+            }
         }
     }
 
@@ -83,9 +84,8 @@ impl Scope {
 pub enum ScopeProtocol {
     /// Protocol is a URI reference
     Simple {
-        #[serde(skip_serializing_if = "Option::is_none")]
         /// The protocol the permission is applied to.
-        protocol: Option<String>,
+        protocol: String,
     },
 
     /// `Records` scope fields.
@@ -102,7 +102,7 @@ pub enum ScopeProtocol {
 
 impl Default for ScopeProtocol {
     fn default() -> Self {
-        Self::Simple { protocol: None }
+        Self::Simple { protocol: String::new() }
     }
 }
 
