@@ -17,7 +17,7 @@ impl EventStream for ProviderImpl {
         let filtered = subscriber
             .map(|message| serde_json::from_slice::<Event>(&message.payload).unwrap())
             .filter(move |event| future::ready(filter.is_match(&event)));
-        Ok(Subscriber::new(filtered.boxed()))
+        Ok(Subscriber::new(filtered))
     }
 
     /// Emits an event to a owner's event stream.

@@ -64,8 +64,10 @@ impl Clone for Subscriber {
 impl Subscriber {
     /// Wrap Provider's subscription Stream for ease of surfacing to users.
     #[must_use]
-    pub const fn new(stream: Pin<Box<dyn Stream<Item = Event> + Send>>) -> Self {
-        Self { inner: stream }
+    pub fn new(stream: impl Stream<Item = Event> + Send + 'static) -> Self {
+        Self {
+            inner: Box::pin(stream),
+        }
     }
 }
 
