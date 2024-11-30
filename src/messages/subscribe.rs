@@ -107,6 +107,7 @@ impl Subscribe {
 #[allow(clippy::module_name_repetitions)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.
+    #[serde(skip)]
     pub subscription: Subscriber,
 }
 

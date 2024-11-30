@@ -7,8 +7,8 @@ use chrono::{DateTime, Utc};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::mpsc;
 
+// use tokio::sync::mpsc;
 use crate::messages::MessagesFilter;
 use crate::records::{RecordsFilter, TagFilter};
 use crate::store::{Entry, EntryType};
@@ -34,55 +34,44 @@ impl Default for SubscribeFilter {
 }
 
 /// Used by the client to handle events subscribed to.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
 pub struct Subscriber {
-    filter: SubscribeFilter,
-
     #[serde(skip)]
-    receiver: Option<mpsc::Receiver<Event>>,
+    inner: Option<Pin<Box<dyn Stream<Item = Event> + Send>>>,
+}
+
+impl std::fmt::Debug for Subscriber {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Subscriber").finish()
+    }
 }
 
 impl Clone for Subscriber {
     fn clone(&self) -> Self {
-        Self {
-            filter: SubscribeFilter::default(),
-            receiver: None,
-        }
+        Self { inner: None }
     }
 }
 
 impl Subscriber {
     /// Create a new subscriber.
     #[must_use]
-    pub const fn new(filter: SubscribeFilter, receiver: mpsc::Receiver<Event>) -> Self {
-        Self {
-            filter,
-            receiver: Some(receiver),
-        }
+    pub const fn new(stream: Pin<Box<dyn Stream<Item = Event> + Send>>) -> Self {
+        Self { inner: Some(stream) }
     }
 }
 
 impl Stream for Subscriber {
     type Item = Event;
 
-    // Poll Tokio mpsc receiver for new events
+    // Poll underlying stream for new events
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let event = self.receiver.as_mut().unwrap().poll_recv(cx);
-
-        // check 'ready' events match the stream filter before surfacing it
-        if let Poll::Ready(Some(event)) = &event {
-            if self.filter.is_match(event) {
-                return Poll::Ready(Some(event.clone()));
-            }
-            return Poll::Pending;
-        }
-
-        event
+        self.inner.as_mut().unwrap().as_mut().poll_next(cx)
     }
 }
 
 impl SubscribeFilter {
-    fn is_match(&self, event: &Event) -> bool {
+    /// Check the event matches the filter.
+    pub fn is_match(&self, event: &Event) -> bool {
         match self {
             Self::Messages(filters) => {
                 for filter in filters {

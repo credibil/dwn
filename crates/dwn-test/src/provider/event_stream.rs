@@ -1,8 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::StreamExt;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use futures::future;
+use futures::stream::StreamExt;
+// use tokio::sync::mpsc;
+// use tokio::task::JoinHandle;
 use vercre_dwn::event::{Event, SubscribeFilter, Subscriber};
 use vercre_dwn::provider::EventStream;
 
@@ -14,19 +15,11 @@ use crate::provider::ProviderImpl;
 impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
     async fn subscribe(&self, owner: &str, filter: SubscribeFilter) -> Result<Subscriber> {
-        let mut subscriber = self.nats_client.subscribe(format!("events.{owner}")).await?;
-        let (sender, receiver) = mpsc::channel::<Event>(100);
-
-        // forward filtered messages from NATS to our subscriber
-        let task: JoinHandle<Result<()>> = tokio::spawn(async move {
-            while let Some(message) = subscriber.next().await {
-                let event: Event = serde_json::from_slice(&message.payload)?;
-                sender.send(event).await?;
-            }
-            Ok(())
-        });
-
-        Ok(Subscriber::new(filter, receiver))
+        let subscriber = self.nats_client.subscribe(format!("events.{owner}")).await?;
+        let filtered = subscriber
+            .map(|message| serde_json::from_slice::<Event>(&message.payload).unwrap())
+            .filter(move |event| future::ready(filter.is_match(&event)));
+        Ok(Subscriber::new(filtered.boxed()))
     }
 
     /// Emits an event to a owner's event stream.
