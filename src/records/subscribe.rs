@@ -14,7 +14,7 @@ use crate::event::{SubscribeFilter, Subscriber};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{EventStream, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
+use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized};
 
 /// Process `Subscribe` message.
 ///
@@ -125,7 +125,7 @@ impl Subscribe {
 
         // authenticate the message
         if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(forbidden!("failed to authenticate: {e}"));
+            return Err(unauthorized!("failed to authenticate: {e}"));
         }
 
         // verify grant

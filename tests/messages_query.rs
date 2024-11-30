@@ -3,7 +3,7 @@
 //! This test demonstrates how a web node owner create messages and
 //! subsequently query for them.
 
-use dwn_test::key_store::ALICE_DID;
+use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use serde_json::json;
@@ -12,11 +12,11 @@ use vercre_dwn::messages::{QueryBuilder, ReadBuilder};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
-use vercre_dwn::{Message, endpoint};
+use vercre_dwn::{Error, Interface, Message, endpoint};
 
-// Use owner signature for authorization when it is provided.
+// Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
-async fn all_messages() {
+async fn all_owner_messages() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
@@ -125,4 +125,47 @@ async fn all_messages() {
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
+}
+
+// Should return a status of Forbidden (403) if the requestor is not the owner
+// and has no permission grant.
+#[tokio::test]
+async fn no_grant() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
+    let Err(Error::Forbidden(_)) = endpoint::handle(BOB_DID, query, &provider).await else {
+        panic!("should not be authorized");
+    };
+}
+
+// Should return a status of BadRequest (400) if the request is invalid.
+#[tokio::test]
+async fn invalid_request() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
+    query.descriptor.base.interface = Interface::Protocols;
+
+    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be a bad request");
+    };
+}
+
+// Should return a status of BadRequest (400) if an empty filter is provided.
+// N.B. Code comments are at odds with this test.
+#[tokio::test]
+#[ignore]
+async fn empty_filter() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
+    query.descriptor.filters = vec![];
+
+    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be a bad request");
+    };
 }

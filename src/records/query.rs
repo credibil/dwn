@@ -14,7 +14,7 @@ use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
+use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized};
 
 /// Process `Query` message.
 ///
@@ -68,7 +68,8 @@ pub async fn handle(
         let write: Write = record.try_into()?;
 
         let initial_write = if write.is_initial()? {
-            let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true).build();
+            let query =
+                RecordsQuery::new().record_id(&write.record_id).include_archived(true).build();
             let (records, _) = MessageStore::query(provider, owner, &query).await?;
             let mut initial_write: Write = (&records[0]).try_into()?;
             initial_write.encoded_data = None;
@@ -160,7 +161,7 @@ impl Query {
 
         // authenticate the message
         if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(forbidden!("failed to authenticate: {e}"));
+            return Err(unauthorized!("failed to authenticate: {e}"));
         }
 
         // verify grant

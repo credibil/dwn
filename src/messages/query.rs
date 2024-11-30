@@ -9,9 +9,9 @@ use super::MessagesFilter;
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::provider::{EventLog, MessageStore, Provider, Signer};
+use crate::provider::{EventLog, Provider, Signer};
 use crate::store::{Cursor, MessagesQuery};
-use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema};
+use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema, unauthorized};
 
 /// Handle a query message.
 ///
@@ -74,20 +74,25 @@ impl Message for Query {
 }
 
 impl Query {
-    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+    async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         let authzn = &self.authorization;
-        let author = authzn.author()?;
 
+        // authenticate the message
+        if let Err(e) = authzn.authenticate(provider.clone()).await {
+            return Err(unauthorized!("failed to authenticate: {e}"));
+        }
+
+        let author = authzn.author()?;
         if author == owner {
             return Ok(());
         }
 
         // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Ok(());
+            return Err(forbidden!("requestor has no permission grant"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
+        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        grant.verify(&author, &authzn.signer()?, self.descriptor(), provider).await?;
 
         // verify filter protocol
         if grant.data.scope.protocol().is_none() {
@@ -97,7 +102,7 @@ impl Query {
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
             if filter.protocol.as_deref() != protocol {
-                return Err(forbidden!("filter protocol does not match scoped protocol",));
+                return Err(forbidden!("filter protocol does not match scoped protocol"));
             }
         }
 
