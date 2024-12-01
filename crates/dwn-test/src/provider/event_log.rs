@@ -17,6 +17,9 @@ const TABLE: &str = "event_log";
 impl EventLog for ProviderImpl {
     async fn append(&self, owner: &str, event: &Event) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
+
+        println!("event: {:?}\n", event);
+
         let _: Option<BTreeMap<String, Value>> =
             self.db.create((TABLE, &event.cid()?)).content(event).await?;
         Ok(())
@@ -28,6 +31,9 @@ impl EventLog for ProviderImpl {
 
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Cursor)> {
         let sql = query.serialize();
+
+        println!("{}", sql);
+
         let mut response = self.db.query(&sql).bind(("table", TABLE)).await?;
         let events: Vec<Event> = response.take(0)?;
         Ok((events, Cursor::default()))
