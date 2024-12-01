@@ -45,7 +45,7 @@ pub struct Descriptor {
     pub message_timestamp: DateTime<Utc>,
 }
 
-/// web node interfaces.
+/// Web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
 #[allow(missing_docs)]
 pub enum Interface {
@@ -67,6 +67,19 @@ pub enum Method {
     Subscribe,
     Delete,
 }
+
+// pub enum Endpoint {
+//     MessagesQuery,
+//     MessagesRead,
+//     MessagesSubscribe,
+//     ProtocolsQuery,
+//     ProtocolsConfigure,
+//     RecordsRead,
+//     RecordsWrite,
+//     RecordsQuery,
+//     RecordsSubscribe,
+//     RecordsDelete,
+// }
 
 /// Interface protocols.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
