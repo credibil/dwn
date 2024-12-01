@@ -288,7 +288,7 @@ impl Grant {
     }
 
     pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
-        let ScopeProtocol::Records { protocol, options } = &self.data.scope.protocol else {
+        let Some(ScopeProtocol::Records { protocol, options }) = &self.data.scope.protocol else {
             return Err(forbidden!("invalid scope type"));
         };
         if Some(protocol) != write.descriptor.protocol.as_ref() {
@@ -410,7 +410,7 @@ impl GrantBuilder {
         self.scope = Some(Scope {
             interface,
             method,
-            protocol: protocol.unwrap_or_default(),
+            protocol,
         });
         self
     }

@@ -103,7 +103,7 @@ fn check_scope(write: &Write, scope: &Scope) -> Result<()> {
         }
     }
 
-    if let ScopeProtocol::Records { protocol, .. } = &scope.protocol {
+    if let Some(ScopeProtocol::Records { protocol, .. }) = &scope.protocol {
         if Some(protocol) != write.descriptor.protocol.as_ref() {
             return Err(forbidden!("scope protocol does not match record protocol",));
         }
@@ -270,7 +270,7 @@ async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> 
             let revoke_protocol =
                 tags.get("protocol").map_or("", |p| p.as_str().unwrap_or_default());
 
-            let ScopeProtocol::Records { protocol, .. } = grant.data.scope.protocol else {
+            let Some(ScopeProtocol::Records { protocol, .. }) = grant.data.scope.protocol else {
                 return Err(forbidden!("missing protocol in grant scope"));
             };
 

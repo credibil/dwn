@@ -26,13 +26,19 @@ impl QuerySerializer for MessagesQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let mut sql = "SELECT * FROM type::table($table) WHERE (1=1".to_string();
+        let mut sql = "SELECT * FROM type::table($table) WHERE 1=1 AND".to_string();
 
         for filter in &self.filters {
-            sql.push_str(&format!("{filter}", filter = QuerySerializer::serialize(filter)));
-            sql.push_str(") OR (1=1");
+            sql.push_str(&format!(" ({filter}) OR", filter = QuerySerializer::serialize(filter)));
         }
-        sql = sql.strip_suffix(" OR (1=1").unwrap_or(&sql).to_string();
+
+        if let Some(stripped) = sql.strip_suffix(" OR") {
+            sql = stripped.to_string();
+        }
+        if let Some(stripped) = sql.strip_suffix(" AND") {
+            sql = stripped.to_string();
+        }
+
         sql.push_str(" ORDER BY descriptor.messageTimestamp COLLATE ASC");
         sql
     }
@@ -43,7 +49,7 @@ impl QuerySerializer for MessagesFilter {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let mut sql = String::new();
+        let mut sql = String::from("1=1");
 
         if let Some(interface) = &self.interface {
             sql.push_str(&format!(" AND descriptor.interface='{interface}'"));
@@ -77,21 +83,21 @@ impl QuerySerializer for ProtocolsQuery {
     fn serialize(&self) -> Self::Output {
         let mut sql = format!(
             "SELECT * FROM type::table($table)
-            WHERE descriptor.interface = '{interface}'
-            AND descriptor.method = '{method}'\n",
+            WHERE descriptor.interface='{interface}'
+            AND descriptor.method='{method}'",
             interface = Interface::Protocols,
             method = Method::Configure
         );
 
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.definition.protocol = '{protocol}'\n"));
+            sql.push_str(&format!(" AND descriptor.definition.protocol='{protocol}'"));
         }
 
         if let Some(published) = &self.published {
-            sql.push_str(&format!("AND descriptor.definition.published = {published}\n"));
+            sql.push_str(&format!(" AND descriptor.definition.published = {published}"));
         }
 
-        sql.push_str("ORDER BY descriptor.messageTimestamp COLLATE DESC");
+        sql.push_str(" ORDER BY descriptor.messageTimestamp COLLATE DESC");
         sql
     }
 }
@@ -105,24 +111,24 @@ impl QuerySerializer for RecordsQuery {
         let max_date = &Utc::now();
 
         let mut sql = format!(
-            "SELECT * FROM type::table($table)\n WHERE descriptor.interface = '{interface}'\n",
+            "SELECT * FROM type::table($table) WHERE descriptor.interface='{interface}'",
             interface = Interface::Records
         );
 
         if !self.include_archived {
-            sql.push_str(&format!("AND archived = false\n"));
+            sql.push_str(&format!(" AND archived = false"));
         }
 
         if let Some(method) = &self.method {
-            sql.push_str(&format!("AND descriptor.method = '{method}'\n"));
+            sql.push_str(&format!(" AND descriptor.method='{method}'"));
         }
 
         if let Some(record_id) = &self.record_id {
-            sql.push_str(&format!("AND recordId = '{record_id}'\n"));
+            sql.push_str(&format!(" AND recordId='{record_id}'"));
         }
 
         if let Some(parent_id) = &self.parent_id {
-            sql.push_str(&format!("AND descriptor.parentId = '{parent_id}'\n"));
+            sql.push_str(&format!(" AND descriptor.parentId='{parent_id}'"));
         }
 
         if let Some(context_id) = &self.context_id {
@@ -131,15 +137,15 @@ impl QuerySerializer for RecordsQuery {
 
             let min = context_id.min.as_ref().unwrap_or(min_ctx);
             let max = context_id.max.as_ref().unwrap_or(max_ctx);
-            sql.push_str(&format!("AND contextId BETWEEN '{min}' AND '{max}'\n"));
+            sql.push_str(&format!(" AND contextId BETWEEN '{min}' AND '{max}'"));
         }
 
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
+            sql.push_str(&format!(" AND descriptor.protocol='{protocol}'"));
         }
 
         if let Some(protocol_path) = &self.protocol_path {
-            sql.push_str(&format!("AND descriptor.protocolPath = '{protocol_path}'\n"));
+            sql.push_str(&format!(" AND descriptor.protocolPath='{protocol_path}'"));
         }
 
         if let Some(recipient) = &self.recipient {
@@ -149,36 +155,36 @@ impl QuerySerializer for RecordsQuery {
         if let Some(date_created) = &self.date_created {
             let from = date_created.min.as_ref().unwrap_or(min_date);
             let to = date_created.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
+            sql.push_str(&format!(" AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'"));
         }
 
         // include `RecordsFilter` sql
         if let Some(filter) = &self.filter {
-            sql.push_str(&format!("{}\n", QuerySerializer::serialize(filter)));
+            sql.push_str(&format!("{}", QuerySerializer::serialize(filter)));
         }
 
         // sorting
         if let Some(sort) = &self.sort {
             let mut fields = vec![];
             if let Some(dir) = &sort.date_created {
-                fields.push(format!("descriptor.dateCreated COLLATE {dir}"));
+                fields.push(format!(" descriptor.dateCreated COLLATE {dir}"));
             }
             if let Some(dir) = &sort.date_published {
-                fields.push(format!("descriptor.datePublished COLLATE {dir}"));
+                fields.push(format!(" descriptor.datePublished COLLATE {dir}"));
             }
             if let Some(dir) = &sort.message_timestamp {
-                fields.push(format!("descriptor.messageTimestamp COLLATE {dir}"));
+                fields.push(format!(" descriptor.messageTimestamp COLLATE {dir}"));
             }
-            sql.push_str(&format!("ORDER BY {sort}\n", sort = fields.join(",")));
+            sql.push_str(&format!(" ORDER BY {sort}", sort = fields.join(",")));
         }
 
         if let Some(pagination) = &self.pagination {
             if let Some(limit) = pagination.limit {
-                sql.push_str(&format!("LIMIT {limit} "));
+                sql.push_str(&format!(" LIMIT {limit}"));
             }
 
             if let Some(offset) = pagination.offset {
-                sql.push_str(&format!("START {offset}\n"));
+                sql.push_str(&format!(" START {offset}"));
             }
         }
 
@@ -197,88 +203,73 @@ impl QuerySerializer for RecordsFilter {
         let mut sql = String::new();
 
         if let Some(record_id) = &self.record_id {
-            sql.push_str(&format!("AND recordId = '{record_id}'\n"));
+            sql.push_str(&format!(" AND recordId='{record_id}'"));
         }
-
         if let Some(context_id) = &self.context_id {
-            sql.push_str(&format!("AND contextId = '{context_id}'\n"));
+            sql.push_str(&format!(" AND contextId='{context_id}'"));
         }
 
         // descriptor fields
         if let Some(recipient) = &self.recipient {
             sql.push_str(&one_or_many("descriptor.recipient", recipient));
         }
-
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!("AND descriptor.protocol = '{protocol}'\n"));
+            sql.push_str(&format!(" AND descriptor.protocol='{protocol}'"));
         }
-
         if let Some(protocol_path) = &self.protocol_path {
-            sql.push_str(&format!("AND descriptor.protocolPath = '{protocol_path}'\n"));
+            sql.push_str(&format!(" AND descriptor.protocolPath='{protocol_path}'"));
         }
-
         if let Some(published) = &self.published {
-            sql.push_str(&format!("AND descriptor.published = {published}\n"));
+            sql.push_str(&format!(" AND descriptor.published = {published}"));
         }
-
         if let Some(schema) = &self.schema {
-            sql.push_str(&format!("AND descriptor.schema = '{schema}'\n"));
+            sql.push_str(&format!(" AND descriptor.schema='{schema}'"));
         }
-
         if let Some(parent_id) = &self.parent_id {
-            sql.push_str(&format!("AND descriptor.parentId = '{parent_id}'\n"));
+            sql.push_str(&format!(" AND descriptor.parentId='{parent_id}'"));
         }
-
         if let Some(data_format) = &self.data_format {
-            sql.push_str(&format!("AND descriptor.dataFormat = '{data_format}'\n"));
+            sql.push_str(&format!(" AND descriptor.dataFormat='{data_format}'"));
         }
-
         if let Some(data_size) = &self.data_size {
             sql.push_str(&format!(
-                "descriptor.dataSize BETWEEN {min} AND {max}\n",
+                " AND descriptor.dataSize BETWEEN {min} AND {max}",
                 min = data_size.min.unwrap_or(0),
                 max = data_size.max.unwrap_or(usize::MAX)
             ));
         }
-
         if let Some(data_cid) = &self.data_cid {
-            sql.push_str(&format!("AND descriptor.dataCid = '{data_cid}'\n"));
+            sql.push_str(&format!(" AND descriptor.dataCid='{data_cid}'"));
         }
-
         if let Some(date_created) = &self.date_created {
             let from = date_created.min.as_ref().unwrap_or(min_date);
             let to = date_created.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!("AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'\n"));
+            sql.push_str(&format!(" AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'"));
         }
-
         if let Some(date_published) = &self.date_published {
             let from = date_published.min.as_ref().unwrap_or(min_date);
             let to = date_published.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!("AND descriptor.datePublished BETWEEN '{from}' AND '{to}'\n"));
+            sql.push_str(&format!(" AND descriptor.datePublished BETWEEN '{from}' AND '{to}'"));
         }
 
         // index fields
         if let Some(author) = &self.author {
             sql.push_str(&one_or_many("author", author));
         }
-
         if let Some(attester) = &self.attester {
-            sql.push_str(&format!("AND attester = '{attester}'\n"));
+            sql.push_str(&format!(" AND attester='{attester}'"));
         }
-
         if let Some(tags) = &self.tags {
             for (property, filter) in tags {
-                sql.push_str(&format!("AND tags.{property} {}\n", filter.serialize()));
+                sql.push_str(&format!(" AND tags.{property} {}", filter.serialize()));
             }
         }
-
         if let Some(date_updated) = &self.date_updated {
             let from = date_updated.min.as_ref().unwrap_or(min_date);
             let to = date_updated.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!("AND dateUpdated BETWEEN '{from}' AND '{to}'\n"));
+            sql.push_str(&format!(" AND dateUpdated BETWEEN '{from}' AND '{to}'"));
         }
 
-        sql.pop(); // remove trailing newline
         sql
     }
 }
@@ -289,11 +280,11 @@ impl QuerySerializer for TagFilter {
 
     fn serialize(&self) -> Self::Output {
         match self {
-            Self::StartsWith(value) => format!("LIKE '{value}%'"),
+            Self::StartsWith(value) => format!(" LIKE '{value}%'"),
             Self::Range(range) => {
                 let min = range.min.unwrap_or(0);
                 let max = range.max.unwrap_or(usize::MAX);
-                format!("BETWEEN {min} AND {max}")
+                format!(" BETWEEN {min} AND {max}")
             }
             Self::Equal(value) => format!("= '{value}'"),
         }
@@ -303,17 +294,16 @@ impl QuerySerializer for TagFilter {
 fn one_or_many(field: &str, clause: &Quota<String>) -> String {
     match clause {
         Quota::One(value) => {
-            format!("AND {field} = '{value}'\n")
+            format!(" AND {field}='{value}'")
         }
         Quota::Many(values) => {
             let mut sql = String::new();
-            sql.push_str(&format!("{field}  IN ("));
+            sql.push_str(&format!(" AND {field} IN ("));
             for value in values {
                 sql.push_str(&format!("'{value}',"));
             }
             sql.pop(); // remove trailing comma
-            sql.push_str(")\n");
-
+            sql.push_str(")");
             sql
         }
     }
@@ -322,17 +312,16 @@ fn one_or_many(field: &str, clause: &Quota<String>) -> String {
 fn quota(field: &str, clause: &Quota<String>) -> String {
     match clause {
         Quota::One(value) => {
-            format!("AND {field} = '{value}'\n")
+            format!(" AND {field}='{value}'")
         }
         Quota::Many(values) => {
             let mut sql = String::new();
-            sql.push_str(&format!("{field}  IN ("));
+            sql.push_str(&format!(" AND {field} IN ("));
             for value in values {
                 sql.push_str(&format!("'{value}',"));
             }
             sql.pop(); // remove trailing comma
-            sql.push_str(")\n");
-
+            sql.push_str(")");
             sql
         }
     }

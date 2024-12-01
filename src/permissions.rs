@@ -53,8 +53,9 @@ pub struct Scope {
     pub method: Method,
 
     /// Scope protocol variants.
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub protocol: ScopeProtocol,
+    pub protocol: Option<ScopeProtocol>,
 }
 
 impl Scope {
@@ -62,9 +63,9 @@ impl Scope {
     #[must_use]
     pub fn protocol(&self) -> Option<&str> {
         match &self.protocol {
-            ScopeProtocol::Simple { protocol } | ScopeProtocol::Records { protocol, .. } => {
-                Some(protocol)
-            }
+            Some(ScopeProtocol::Simple { protocol })
+            | Some(ScopeProtocol::Records { protocol, .. }) => Some(protocol),
+            None => None,
         }
     }
 
@@ -72,8 +73,8 @@ impl Scope {
     #[must_use]
     pub const fn options(&self) -> Option<&RecordsOptions> {
         match &self.protocol {
-            ScopeProtocol::Records { options, .. } => options.as_ref(),
-            ScopeProtocol::Simple { .. } => None,
+            Some(ScopeProtocol::Records { options, .. }) => options.as_ref(),
+            _ => None,
         }
     }
 }
@@ -102,7 +103,9 @@ pub enum ScopeProtocol {
 
 impl Default for ScopeProtocol {
     fn default() -> Self {
-        Self::Simple { protocol: String::new() }
+        Self::Simple {
+            protocol: String::new(),
+        }
     }
 }
 

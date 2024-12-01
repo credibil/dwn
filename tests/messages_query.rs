@@ -179,9 +179,12 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     // Alice creates a grant scoped to `MessagesQuery` for Bob.
     // --------------------------------------------------
-    let builder =
-        GrantBuilder::new().granted_to(BOB_DID).scope(Interface::Messages, Method::Query, None);
-    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Interface::Messages, Method::Query, None)
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
 
     let reply =
         endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
