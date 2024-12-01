@@ -183,6 +183,17 @@ impl From<Vec<u8>> for DataStream {
     }
 }
 
+// impl TryFrom<DataStream> for Vec<u8> {
+//     type Error = Error;
+
+//     fn try_from(stream: DataStream) -> Result<Self, Self::Error> {
+//         let mut data_bytes = Vec::new();
+//         let mut stream = stream.clone();
+//         stream.read_to_end(&mut data_bytes)?;
+//         Ok(data_bytes)
+//     }
+// }
+
 impl Read for DataStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let n = std::cmp::min(buf.len(), self.buffer.len());

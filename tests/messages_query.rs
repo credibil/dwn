@@ -70,8 +70,8 @@ async fn owner_messages() {
     // Alice queries for messages without a cursor, and expects to see
     // all 5 records as well as the protocol configuration message.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
@@ -105,7 +105,7 @@ async fn owner_messages() {
     // --------------------------------------------------
     // TODO: implement cursor
     let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
@@ -120,7 +120,7 @@ async fn owner_messages() {
         .build(&alice_keyring)
         .await
         .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 }
 
@@ -143,7 +143,7 @@ async fn invalid_request() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
+    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
     query.descriptor.base.interface = Interface::Protocols;
 
     let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
@@ -157,7 +157,7 @@ async fn empty_filter() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
+    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
     query.descriptor.filters = vec![MessagesFilter::default()];
 
     let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {

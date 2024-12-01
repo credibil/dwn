@@ -11,7 +11,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{EventLog, Provider, Signer};
 use crate::store::{Cursor, MessagesQuery};
-use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema, unauthorized};
+use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema};
 
 /// Handle a query message.
 ///
@@ -76,11 +76,6 @@ impl Message for Query {
 impl Query {
     async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         let authzn = &self.authorization;
-
-        // authenticate the message
-        if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(unauthorized!("failed to authenticate: {e}"));
-        }
 
         let author = authzn.author()?;
         if author == owner {

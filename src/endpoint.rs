@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::Authorization;
 use crate::provider::Provider;
-use crate::{Descriptor, Result, schema};
+use crate::{Descriptor, Result, schema, unauthorized};
 
 /// Handle incoming messages.
 ///
@@ -18,7 +18,7 @@ use crate::{Descriptor, Result, schema};
 pub async fn handle<T>(
     owner: &str, message: impl Message<Reply = T>, provider: &impl Provider,
 ) -> Result<Reply<T>> {
-    message.validate().await?;
+    message.validate(provider).await?;
     message.handle(owner, provider).await
 }
 
@@ -45,11 +45,21 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
 
     /// Validate the message. This is a generic validation common to all messages.
     /// Message-specific validation is done in the message handler.
-    async fn validate(&self) -> Result<()> {
+    async fn validate(&self, provider: &impl Provider) -> Result<()> {
         // if !tenant_gate.active(owner)? {
         //     return Err(Error::Unauthorized("tenant not active"));
         // }
-        schema::validate(self)
+
+        schema::validate(self)?;
+
+        // authenticate the requestor
+        if let Some(authzn) = self.authorization() {
+            if let Err(e) = authzn.authenticate(provider.clone()).await {
+                return Err(unauthorized!("failed to authenticate: {e}"));
+            }
+        }
+
+        Ok(())
     }
 }
 

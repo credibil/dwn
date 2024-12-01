@@ -22,7 +22,9 @@ pub const APP_DID: &str = "did:key:z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDS
 const APP_VERIFY_KEY: &str = "z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
 const APP_SECRET_KEY: &str = "fAe8yt4xBaDpyuPKY9_1NBxmiFMCfVnnryMXD-oLyVk";
 
-// const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
+pub const INVALID_DID: &str = "did:key:z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
+const INVALID_VERIFY_KEY: &str = "z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
+const INVALID_SECRET_KEY: &str = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo";
 
 #[derive(Default, Clone, Debug)]
 pub struct KeyStoreImpl {
@@ -56,10 +58,16 @@ impl KeyStoreImpl {
             verify_key: APP_VERIFY_KEY.to_string(),
             secret_key: APP_SECRET_KEY.to_string(),
         };
+        let invalid_keyring = KeyringImpl {
+            did: INVALID_DID.to_string(),
+            verify_key: INVALID_VERIFY_KEY.to_string(),
+            secret_key: INVALID_SECRET_KEY.to_string(),
+        };
 
         keyrings.insert(ALICE_DID.to_string(), alice_keyring);
         keyrings.insert(BOB_DID.to_string(), bob_keyring);
         keyrings.insert(APP_DID.to_string(), app_keyring);
+        keyrings.insert(INVALID_DID.to_string(), invalid_keyring);
 
         Self { keyrings }
     }

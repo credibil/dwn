@@ -24,8 +24,11 @@ use crate::{Descriptor, Error, Interface, Method, Result, forbidden, schema, une
 /// # Errors
 /// TODO: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
-    let Some(entry) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
-    else {
+    // validate message CID
+    let cid =
+        Cid::from_str(&read.descriptor.message_cid).map_err(|e| unexpected!("invalid CID: {e}"))?;
+
+    let Some(entry) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
         return Err(Error::NotFound("message not found".to_string()));
     };
 
@@ -36,7 +39,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     // include data with RecordsWrite messages
     let data = if let EntryType::Write(ref mut write) = message {
-        //     // return embedded `encoded_data` as entry data stream.
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
@@ -95,7 +97,7 @@ impl Message for Read {
 }
 
 impl Read {
-    async fn authorize(&self, owner: &str, entry: &Entry, store: &impl MessageStore) -> Result<()> {
+    async fn authorize(&self, owner: &str, entry: &Entry, provider: &impl Provider) -> Result<()> {
         let authzn = &self.authorization;
 
         // owner can read messages they authored
@@ -108,9 +110,9 @@ impl Read {
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
             return Err(forbidden!("missing permission grant ID"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(owner, &author, self.descriptor(), store).await?;
-        verify_scope(owner, entry, grant.data.scope, store).await?;
+        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        grant.verify(owner, &author, self.descriptor(), provider).await?;
+        verify_scope(owner, entry, grant.data.scope, provider).await?;
 
         Ok(())
     }
