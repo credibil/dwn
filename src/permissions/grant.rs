@@ -452,6 +452,8 @@ impl GrantBuilder {
             .data(WriteData::Bytes(grant_bytes.clone()));
 
         // add protocol tag
+        // N.B. adding a protocol tag ensures message queries with a protocol
+        // filter will return associated grants
         if let Some(protocol) = scope.protocol() {
             let protocol = utils::clean_url(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));

@@ -339,7 +339,7 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
     let mut definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
-    definition.protocol = "http://protcol1".to_string();
+    definition.protocol = "http://protocol1".to_string();
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -352,7 +352,7 @@ async fn match_protocol_scope() {
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    definition.protocol = "http://protcol2".to_string();
+    definition.protocol = "http://protocol2".to_string();
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -368,14 +368,18 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     // Alice creates a grant scoped to `MessagesQuery` for Bob.
     // --------------------------------------------------
-    let builder = GrantBuilder::new().granted_to(BOB_DID).scope(
-        Interface::Messages,
-        Method::Query,
-        Some(ScopeProtocol::Simple {
-            protocol: "http://protcol1".to_string(),
-        }),
-    );
-    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(
+            Interface::Messages,
+            Method::Query,
+            Some(ScopeProtocol::Simple {
+                protocol: "http://protocol1".to_string(),
+            }),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
 
     let reply =
         endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
@@ -384,7 +388,7 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
-    let filter = MessagesFilter::new().protocol("http://protcol1".to_string());
+    let filter = MessagesFilter::new().protocol("http://protocol1".to_string());
     let query = QueryBuilder::new()
         .add_filter(filter)
         .permission_grant_id(&bob_grant.record_id)
@@ -396,8 +400,8 @@ async fn match_protocol_scope() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
-    println!("{:?}", query_reply);
+    let entries = query_reply.entries.expect("should have entries");
 
-    // let entries = query_reply.entries.expect("should have entries");
-    // assert_eq!(entries.len(), 2);
+    // expect protocol1 Configure message and Bob's grant
+    assert_eq!(entries.len(), 2);
 }

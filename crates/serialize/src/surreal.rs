@@ -51,13 +51,17 @@ impl QuerySerializer for MessagesFilter {
         if let Some(method) = &self.method {
             sql.push_str(&format!(" AND descriptor.method='{method}'"));
         }
+
+        // N.B. adding a protocol tag ensures message queries with a protocol
+        // filter will return associated grants
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!(" AND descriptor.protocol='{protocol}'"));
+            sql.push_str(&format!(" AND (descriptor.definition.protocol='{protocol}'"));
+            sql.push_str(&format!(" OR descriptor.tags.protocol='{protocol}')"));
         }
+
         if let Some(timestamp) = &self.message_timestamp {
             let min = &DateTime::<Utc>::MIN_UTC;
             let max = &Utc::now();
-
             let from = timestamp.min.as_ref().unwrap_or(min);
             let to = timestamp.max.as_ref().unwrap_or(max);
             sql.push_str(&format!(" AND descriptor.messageTimestamp BETWEEN '{from}' AND '{to}'"));
