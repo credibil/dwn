@@ -8,7 +8,8 @@ use std::io::Read;
 use dwn_test::key_store::{ALICE_DID, BOB_DID, INVALID_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use vercre_dwn::data::DataStream;
+use rand::RngCore;
+use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::GrantBuilder;
 use vercre_dwn::provider::KeyStore;
@@ -184,9 +185,9 @@ async fn forbidden() {
     };
 }
 
-// Should return data less than threshold.
+// Should return data less than data::MAX_ENCODED_SIZE.
 #[tokio::test]
-async fn data_lt_max() {
+async fn data_lt_threshold() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
@@ -194,6 +195,53 @@ async fn data_lt_max() {
     // Alice writes a record to her web node.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .published(true)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let write_cid = write.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice reads the record with data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(write_cid.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entry = body.entry.expect("should have entry");
+    assert_eq!(entry.message_cid, write_cid);
+
+    let mut stream = entry.data.expect("should have data");
+    let mut data_bytes = Vec::new();
+    stream.read_to_end(&mut data_bytes).expect("should read data");
+    assert_eq!(data_bytes, data);
+}
+
+// Should return data less than data::MAX_ENCODED_SIZE.
+#[tokio::test]
+async fn data_gt_threshold() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record to her web node.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
