@@ -63,8 +63,9 @@ impl Scope {
     #[must_use]
     pub fn protocol(&self) -> Option<&str> {
         match &self.protocol {
-            Some(ScopeProtocol::Simple { protocol })
-            | Some(ScopeProtocol::Records { protocol, .. }) => Some(protocol),
+            Some(ScopeProtocol::Simple { protocol } | ScopeProtocol::Records { protocol, .. }) => {
+                Some(protocol)
+            }
             None => None,
         }
     }
