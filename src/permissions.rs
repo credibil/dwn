@@ -110,6 +110,34 @@ impl Default for ScopeProtocol {
     }
 }
 
+impl ScopeProtocol {
+    /// Create a new `ScopeProtocol::Simple` variant.
+    pub fn simple(protocol: impl Into<String>) -> Self {
+        Self::Simple {
+            protocol: protocol.into(),
+        }
+    }
+
+    /// Create a new `ScopeProtocol::Records` variant.
+    pub fn records(protocol: impl Into<String>) -> Self {
+        Self::Records {
+            protocol: protocol.into(),
+            options: None,
+        }
+    }
+
+    /// Create a new `ScopeProtocol::Records` variant with options.
+    pub fn options(&self, options: RecordsOptions) -> Self {
+        match self {
+            Self::Records { protocol, .. } => Self::Records {
+                protocol: protocol.into(),
+                options: Some(options),
+            },
+            _ => self.clone(),
+        }
+    }
+}
+
 /// Fields specific to the `records` scope.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -373,13 +373,7 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .scope(
-            Interface::Messages,
-            Method::Query,
-            Some(ScopeProtocol::Simple {
-                protocol: "http://protocol1".to_string(),
-            }),
-        )
+        .scope(Interface::Messages, Method::Query, Some(ScopeProtocol::simple("http://protocol1")))
         .build(&alice_keyring)
         .await
         .expect("should create grant");
@@ -452,13 +446,7 @@ async fn mismatched_protocol_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .scope(
-            Interface::Messages,
-            Method::Query,
-            Some(ScopeProtocol::Simple {
-                protocol: "http://protocol1".to_string(),
-            }),
-        )
+        .scope(Interface::Messages, Method::Query, Some(ScopeProtocol::simple("http://protocol1")))
         .build(&alice_keyring)
         .await
         .expect("should create grant");

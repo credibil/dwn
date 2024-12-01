@@ -11,7 +11,7 @@ use http::StatusCode;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::messages::ReadBuilder;
-use vercre_dwn::permissions::GrantBuilder;
+use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
@@ -56,8 +56,6 @@ async fn read_message() {
 
     let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
-
-    println!("{message_cid}");
 
     // --------------------------------------------------
     // Bob invokes the grant to read a record from Alice's web node.
@@ -345,9 +343,10 @@ async fn owner_not_author() {
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
-    // Alice configures an unpublished protocol.
+    // Alice configures 2 protocols, one unpublished and the other published.
     // --------------------------------------------------
-    let configure_unpub = ConfigureBuilder::new()
+    // unpublished
+    let configure = ConfigureBuilder::new()
         .definition(
             Definition::new("http://unpublished.xyz")
                 .add_type("foo", ProtocolType::default())
@@ -357,15 +356,14 @@ async fn owner_not_author() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, configure_unpub.clone(), &provider)
-        .await
-        .expect("should configure protocol");
+    let unpublished_cid = configure.cid().expect("should get CID");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    // --------------------------------------------------
-    // Alice configures a published protocol.
-    // --------------------------------------------------
-    let configure_pub = ConfigureBuilder::new()
+    // published
+    let configure = ConfigureBuilder::new()
         .definition(
             Definition::new("http://published.xyz")
                 .add_type("foo", ProtocolType::default())
@@ -376,16 +374,18 @@ async fn owner_not_author() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, configure_pub.clone(), &provider)
-        .await
-        .expect("should configure protocol");
+    let published_cid = configure.cid().expect("should get CID");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob attempts to read the unpublished protocol.
+    // Bob attempts to read the protocols.
     // --------------------------------------------------
+    // unpublished
     let read = ReadBuilder::new()
-        .message_cid(configure_unpub.cid().unwrap())
+        .message_cid(&unpublished_cid)
         .build(&bob_keyring)
         .await
         .expect("should create read");
@@ -394,11 +394,9 @@ async fn owner_not_author() {
         panic!("should be a not found");
     };
 
-    // --------------------------------------------------
-    // Bob attempts to read the published protocol.
-    // --------------------------------------------------
+    // published
     let read = ReadBuilder::new()
-        .message_cid(configure_pub.cid().unwrap())
+        .message_cid(&published_cid)
         .build(&bob_keyring)
         .await
         .expect("should create read");
@@ -410,8 +408,9 @@ async fn owner_not_author() {
     // --------------------------------------------------
     // Alice reads both published and unpublished protocols.
     // --------------------------------------------------
+    // unpublished
     let read = ReadBuilder::new()
-        .message_cid(configure_pub.cid().unwrap())
+        .message_cid(&unpublished_cid)
         .build(&alice_keyring)
         .await
         .expect("should create read");
@@ -420,10 +419,11 @@ async fn owner_not_author() {
     assert_eq!(reply.status.code, StatusCode::OK);
     let body = reply.body.expect("should have body");
     let entry = body.entry.expect("should have entry");
-    assert_eq!(entry.message_cid, configure_pub.cid().unwrap());
+    assert_eq!(entry.message_cid, unpublished_cid);
 
+    // published
     let read = ReadBuilder::new()
-        .message_cid(configure_unpub.cid().unwrap())
+        .message_cid(&published_cid)
         .build(&alice_keyring)
         .await
         .expect("should create read");
@@ -432,5 +432,78 @@ async fn owner_not_author() {
     assert_eq!(reply.status.code, StatusCode::OK);
     let body = reply.body.expect("should have body");
     let entry = body.entry.expect("should have entry");
-    assert_eq!(entry.message_cid, configure_unpub.cid().unwrap());
+    assert_eq!(entry.message_cid, published_cid);
+}
+
+// Should return a status of Forbidden (403) when grant has different interface scope.
+#[tokio::test]
+async fn invalid_grant_interface() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice installs a protocol.
+    // --------------------------------------------------
+    // unpublished
+    let configure = ConfigureBuilder::new()
+        .definition(
+            Definition::new("http://minimalprotocol.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record for Bob to read.
+    // --------------------------------------------------
+    let data = br#"{"message": "test record write"}"#;
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .published(true)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let write_cid = write.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice gives Bob a grant scoped to a `RecordsWrite` and protocol.
+    // --------------------------------------------------
+    let builder = GrantBuilder::new().granted_to(BOB_DID).scope(
+        Interface::Records,
+        Method::Write,
+        Some(ScopeProtocol::simple("http://minimalprotocol.xyz")),
+    );
+    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+
+    let record_id = bob_grant.record_id.clone();
+
+    let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob invokes the grant to try and read the record (and fails).
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(write_cid)
+        .permission_grant_id(record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be a not found");
+    };
 }

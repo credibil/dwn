@@ -358,7 +358,7 @@ impl GrantBuilder {
         // set defaults
         Self {
             request_id: Some(uuid::Uuid::new_v4().to_string()),
-            date_expires: Utc::now() + Duration::minutes(5),
+            date_expires: Utc::now() + Duration::hours(24),
             ..Self::default()
         }
     }
