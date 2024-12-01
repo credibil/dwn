@@ -92,11 +92,12 @@ pub async fn handle(
     EventLog::append(provider, owner, &entry).await?;
     EventStream::emit(provider, owner, &entry).await?;
 
-    // when this is an update, archive the initial write
+    // when this is an update, archive the initial write (and delete its data?)
     if let Some(initial_write) = initial_write {
         let mut entry = Entry::from(&initial_write);
         entry.indexes.insert("archived".to_string(), Value::Bool(true));
         MessageStore::put(provider, owner, &entry).await?;
+        BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
     }
 
     // delete any previous messages with the same `record_id` EXCEPT initial write
@@ -105,6 +106,7 @@ pub async fn handle(
     for msg in deletable {
         let cid = msg.cid()?;
         MessageStore::delete(provider, owner, &cid).await?;
+        BlockStore::delete(provider, owner, &msg.descriptor.data_cid).await?;
         EventLog::delete(provider, owner, &cid).await?;
     }
 

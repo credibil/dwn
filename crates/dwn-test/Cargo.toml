@@ -18,9 +18,7 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
 http.workspace = true
 insta.workspace = true
-multibase = "0.9"
 rand.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 surrealdb = { version = "1.5.6", features = ["kv-mem"] }
 tokio.workspace = true

@@ -12,6 +12,7 @@ use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::GrantBuilder;
+use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
@@ -199,7 +200,6 @@ async fn data_lt_threshold() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .published(true)
         .build(&alice_keyring)
         .await
         .expect("should create write");
@@ -231,7 +231,7 @@ async fn data_lt_threshold() {
     assert_eq!(data_bytes, data);
 }
 
-// Should return data less than data::MAX_ENCODED_SIZE.
+// Should return data greater than data::MAX_ENCODED_SIZE.
 #[tokio::test]
 async fn data_gt_threshold() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -246,7 +246,6 @@ async fn data_gt_threshold() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .published(true)
         .build(&alice_keyring)
         .await
         .expect("should create write");
@@ -276,4 +275,162 @@ async fn data_gt_threshold() {
     let mut data_bytes = Vec::new();
     stream.read_to_end(&mut data_bytes).expect("should read data");
     assert_eq!(data_bytes, data);
+}
+
+// Should not return data for an initial write after the record is updated.
+#[tokio::test]
+async fn no_data_after_update() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record to her web node.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let initial_write_cid = write.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice updates the record.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .existing_write(write)
+        .build(&alice_keyring)
+        .await
+        .expect("should update write");
+
+    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice reads the initial write expecting no data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(initial_write_cid.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entry = body.entry.expect("should have entry");
+    assert_eq!(entry.message_cid, initial_write_cid);
+
+    assert!(entry.data.is_none());
+}
+
+// Should return a status of Forbidden (403) if the owner is not the author.
+#[tokio::test]
+async fn owner_not_author() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures an unpublished protocol.
+    // --------------------------------------------------
+    let configure_unpub = ConfigureBuilder::new()
+        .definition(
+            Definition::new("http://unpublished.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply = endpoint::handle(ALICE_DID, configure_unpub.clone(), &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice configures a published protocol.
+    // --------------------------------------------------
+    let configure_pub = ConfigureBuilder::new()
+        .definition(
+            Definition::new("http://published.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default())
+                .published(true),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply = endpoint::handle(ALICE_DID, configure_pub.clone(), &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to read the unpublished protocol.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(configure_unpub.cid().unwrap())
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be a not found");
+    };
+
+    // --------------------------------------------------
+    // Bob attempts to read the published protocol.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(configure_pub.cid().unwrap())
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be a not found");
+    };
+
+    // --------------------------------------------------
+    // Alice reads both published and unpublished protocols.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(configure_pub.cid().unwrap())
+        .build(&alice_keyring)
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    let body = reply.body.expect("should have body");
+    let entry = body.entry.expect("should have entry");
+    assert_eq!(entry.message_cid, configure_pub.cid().unwrap());
+
+    let read = ReadBuilder::new()
+        .message_cid(configure_unpub.cid().unwrap())
+        .build(&alice_keyring)
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    let body = reply.body.expect("should have body");
+    let entry = body.entry.expect("should have entry");
+    assert_eq!(entry.message_cid, configure_unpub.cid().unwrap());
 }
