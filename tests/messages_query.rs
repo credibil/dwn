@@ -470,7 +470,7 @@ async fn mismatched_protocol_scope() {
     // --------------------------------------------------
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
-    let filter = MessagesFilter::new().protocol("http://protocol1".to_string());
+    let filter = MessagesFilter::new().protocol("http://protocol2".to_string());
     let query = QueryBuilder::new()
         .add_filter(filter)
         .permission_grant_id(&bob_grant.record_id)
@@ -478,12 +478,7 @@ async fn mismatched_protocol_scope() {
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-
-    let query_reply = reply.body.expect("should be records read");
-    let entries = query_reply.entries.expect("should have entries");
-
-    // expect protocol1 Configure message and Bob's grant
-    assert_eq!(entries.len(), 2);
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should not be authorized");
+    };
 }
