@@ -155,12 +155,15 @@ impl Grant {
 
         // verify grant scope for interface
         if descriptor.interface != self.data.scope.interface {
-            return Err(forbidden!("interface not within the scope of grant {}", self.id));
+            return Err(forbidden!(
+                "interface {} not within the scope of grant",
+                descriptor.interface
+            ));
         }
 
         // verify grant scope method
         if descriptor.method != self.data.scope.method {
-            return Err(forbidden!("method not within the scope of grant {}", self.id));
+            return Err(forbidden!("method {} not within the scope of grant", descriptor.method));
         }
 
         // verify the message is within the grant's time frame
@@ -281,7 +284,7 @@ impl Grant {
         let (entries, _) = store.query(grantor, &query).await?;
         if let Some(oldest) = entries.first().cloned() {
             if oldest.descriptor().message_timestamp.lt(timestamp) {
-                return Err(forbidden!("grant with CID {} has been revoked", self.id));
+                return Err(forbidden!("grant has been revoked"));
             }
         }
 
@@ -290,7 +293,7 @@ impl Grant {
 
     pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
         let Some(ScopeProtocol::Records { protocol, options }) = &self.data.scope.protocol else {
-            return Err(forbidden!("invalid scope type"));
+            return Err(forbidden!("invalid scope: `Records` scope must have protocol set"));
         };
         if Some(protocol) != write.descriptor.protocol.as_ref() {
             return Err(forbidden!("incorrect scope `protocol`"));
@@ -299,12 +302,12 @@ impl Grant {
         match options {
             Some(RecordsOptions::ContextId(context_id)) => {
                 if Some(context_id) != write.context_id.as_ref() {
-                    return Err(forbidden!("grant and record `contextId`s do not match"));
+                    return Err(forbidden!("grant and record `context_id`s do not match"));
                 }
             }
             Some(RecordsOptions::ProtocolPath(protocol_path)) => {
                 if Some(protocol_path) != write.descriptor.protocol_path.as_ref() {
-                    return Err(forbidden!("grant and record `protocolPath`s do not match"));
+                    return Err(forbidden!("grant and record `protocol_path`s do not match"));
                 }
             }
             None => {}
@@ -433,6 +436,11 @@ impl GrantBuilder {
         };
         if self.granted_to.is_empty() {
             return Err(forbidden!("missing `granted_to`"));
+        }
+        if scope.interface == Interface::Records {
+            let Some(ScopeProtocol::Records { .. }) = &scope.protocol else {
+                return Err(forbidden!("`Records` scope must have protocol set"));
+            };
         }
 
         let grant_bytes = serde_json::to_vec(&GrantData {
