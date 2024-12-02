@@ -8,7 +8,7 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
-use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
+use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
@@ -181,7 +181,10 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .scope(Interface::Messages, Method::Query, None)
+        .scope(Scope::Messages {
+            method: Method::Query,
+            protocol: None,
+        })
         .build(&alice_keyring)
         .await
         .expect("should create grant");
@@ -304,8 +307,10 @@ async fn mismatched_grant_scope() {
     // --------------------------------------------------
     // Alice creates a grant scoped to `MessagesSubscribe` for Bob.
     // --------------------------------------------------
-    let builder =
-        GrantBuilder::new().granted_to(BOB_DID).scope(Interface::Messages, Method::Subscribe, None);
+    let builder = GrantBuilder::new().granted_to(BOB_DID).scope(Scope::Messages {
+        method: Method::Subscribe,
+        protocol: None,
+    });
     let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
 
     let reply =
@@ -373,7 +378,10 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .scope(Interface::Messages, Method::Query, Some(ScopeProtocol::simple("http://protocol1")))
+        .scope(Scope::Messages {
+            method: Method::Query,
+            protocol: Some("http://protocol1".to_string()),
+        })
         .build(&alice_keyring)
         .await
         .expect("should create grant");
@@ -446,7 +454,10 @@ async fn mismatched_protocol_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .scope(Interface::Messages, Method::Query, Some(ScopeProtocol::simple("http://protocol1")))
+        .scope(Scope::Messages {
+            method: Method::Query,
+            protocol: Some("http://protocol1".to_string()),
+        })
         .build(&alice_keyring)
         .await
         .expect("should create grant");

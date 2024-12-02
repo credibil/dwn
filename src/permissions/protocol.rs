@@ -1,9 +1,12 @@
 //! # Protocol Permissions
 
+use base64ct::{Base64UrlUnpadded, Encoding};
+
 use crate::auth::Authorization;
-use crate::permissions::{self, Grant, Request, Scope};
+use crate::permissions::{self, GrantData, RequestData, Scope};
 use crate::protocols::{
-    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH, RuleSet, integrity,
+    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,
+    integrity,
 };
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, Subscribe, Write, write};
@@ -437,21 +440,34 @@ fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -
 /// Get the scope for a permission record. If the record is a revocation, the
 /// scope is fetched from the grant that is being revoked.
 pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) -> Result<Scope> {
-    //Result<Scope>
     if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
         return Err(forbidden!("unexpected protocol for permission record"));
     }
-    if write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string()) {
-        let Some(parent_id) = &write.descriptor.parent_id else {
-            return Err(forbidden!("missing parent ID for revocation record"));
-        };
-        let grant = permissions::fetch_grant(owner, parent_id, store).await?;
-        return Ok(grant.data.scope);
-    } else if write.descriptor.protocol_path == Some(GRANT_PATH.to_string()) {
-        let grant = Grant::try_from(write)?;
-        return Ok(grant.data.scope);
-    }
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(forbidden!("missing `protocol_path`"));
+    };
+    let Some(encoded) = &write.encoded_data else {
+        return Err(forbidden!("missing grant data"));
+    };
+    let raw_bytes = Base64UrlUnpadded::decode_vec(encoded)?;
 
-    let request = Request::try_from(write)?;
-    Ok(request.scope)
+    match protocol_path.as_str() {
+        REQUEST_PATH => {
+            let data: RequestData = serde_json::from_slice(&raw_bytes)?;
+            Ok(data.scope)
+        }
+        GRANT_PATH => {
+            let data: GrantData = serde_json::from_slice(&raw_bytes)?;
+            Ok(data.scope)
+        }
+        REVOCATION_PATH => {
+            let Some(parent_id) = &write.descriptor.parent_id else {
+                return Err(forbidden!("missing parent ID for revocation record"));
+            };
+            let grant = permissions::fetch_grant(owner, parent_id, store).await?;
+            Ok(grant.data.scope)
+        }
+
+        _ => Err(forbidden!("invalid `protocol_path`")),
+    }
 }

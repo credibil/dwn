@@ -6,10 +6,10 @@
 
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use vercre_dwn::permissions::GrantBuilder;
+use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::{Interface, Method, endpoint};
+use vercre_dwn::{ Method, endpoint};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;
@@ -29,7 +29,10 @@ async fn configure_any() {
         .request_id("grant_id_1")
         .description("Allow Bob to configure any protocol")
         .delegated(true)
-        .scope(Interface::Protocols, Method::Configure, None);
+        .scope(Scope::Messages {
+            method: Method::Query,
+            protocol: None,
+        });
 
     let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
 

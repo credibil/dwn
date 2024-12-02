@@ -11,7 +11,7 @@ use http::StatusCode;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::messages::ReadBuilder;
-use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, ScopeProtocol};
+use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{DeleteBuilder, WriteBuilder, WriteData, WriteProtocol};
@@ -46,7 +46,10 @@ async fn read_message() {
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
         .expires_in(60 * 60 * 24)
-        .scope(Interface::Messages, Method::Read, None)
+        .scope(Scope::Messages {
+            method: Method::Read,
+            protocol: None,
+        })
         .build(&alice_keyring)
         .await
         .expect("should create grant");
@@ -483,7 +486,11 @@ async fn invalid_interface() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .scope(Interface::Records, Method::Write, Some(ScopeProtocol::simple("http://minimal.xyz")))
+        .scope(Scope::Records {
+            method: Method::Write,
+            protocol: "http://minimal.xyz".to_string(),
+            options: None,
+        })
         .build(&alice_keyring)
         .await
         .expect("should create grant");
@@ -537,7 +544,10 @@ async fn permissive_grant() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .scope(Interface::Messages, Method::Read, None)
+        .scope(Scope::Messages {
+            method: Method::Read,
+            protocol: None,
+        })
         .build(&alice_keyring)
         .await
         .expect("should create grant");
@@ -570,7 +580,7 @@ async fn permissive_grant() {
 async fn protocol_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
     let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
 
     // --------------------------------------------------
@@ -594,7 +604,11 @@ async fn protocol_grant() {
     // Carol requests a grant to write records for the protocol.
     // --------------------------------------------------
     let carol_request = RequestBuilder::new()
-        .scope(Interface::Records, Method::Write, Some(ScopeProtocol::simple("http://minimal.xyz")))
+        .scope(Scope::Records {
+            method: Method::Write,
+            protocol: "http://minimal.xyz".to_string(),
+            options: None,
+        })
         .build(&carol_keyring)
         .await
         .expect("should create grant");
@@ -608,11 +622,11 @@ async fn protocol_grant() {
     let carol_grant = GrantBuilder::new()
         .granted_to(CAROL_DID)
         .delegated(false)
-        .scope(
-            Interface::Records,
-            Method::Write,
-            Some(ScopeProtocol::records("http://minimal.xyz")),
-        )
+        .scope(Scope::Records {
+            method: Method::Write,
+            protocol: "http://minimal.xyz".to_string(),
+            options: None,
+        })
         .build(&alice_keyring)
         .await
         .expect("should create grant");

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value, json};
 
-use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope, ScopeProtocol};
+use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{
     self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
@@ -91,23 +91,18 @@ fn check_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<(
 
 /// Validate tags include a protocol tag matching the scoped protocol.
 fn check_scope(write: &Write, scope: &Scope) -> Result<()> {
-    if let Some(protocol) = scope.protocol() {
-        let Some(tags) = &write.descriptor.tags else {
-            return Err(forbidden!("grants require a `tags` property"));
-        };
-        let Some(tag_protocol) = tags.get("protocol") else {
-            return Err(forbidden!("grant tags must contain a \"protocol\" tag",));
-        };
-        if tag_protocol != protocol {
-            return Err(forbidden!("grant scope protocol must match tag protocol"));
-        }
-    }
+    let Some(protocol) = scope.protocol() else {
+        return Ok(());
+    };
 
-    if let Some(ScopeProtocol::Records { protocol, .. }) = &scope.protocol {
-        if Some(protocol) != write.descriptor.protocol.as_ref() {
-            return Err(forbidden!("scope protocol does not match record protocol",));
-        }
-        // no need to check options as we use an enum
+    let Some(tags) = &write.descriptor.tags else {
+        return Err(forbidden!("grants require a `tags` property"));
+    };
+    let Some(tag_protocol) = tags.get("protocol") else {
+        return Err(forbidden!("grant tags must contain a \"protocol\" tag",));
+    };
+    if tag_protocol != protocol {
+        return Err(forbidden!("grant scope protocol must match tag protocol"));
     }
 
     Ok(())
@@ -270,7 +265,7 @@ async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> 
             let revoke_protocol =
                 tags.get("protocol").map_or("", |p| p.as_str().unwrap_or_default());
 
-            let Some(ScopeProtocol::Records { protocol, .. }) = grant.data.scope.protocol else {
+            let Some(protocol) = grant.data.scope.protocol() else {
                 return Err(forbidden!("missing protocol in grant scope"));
             };
 

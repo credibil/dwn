@@ -12,7 +12,6 @@ pub use self::grant::{
 };
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
-use crate::records::Write;
 use crate::store::RecordsQuery;
 use crate::{Interface, Method, Result, unexpected};
 
@@ -46,98 +45,83 @@ pub(crate) async fn fetch_grant(
 }
 
 /// Scope of the permission grant.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Scope {
-    /// The interface the permission is applied to.
-    pub interface: Interface,
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "interface")]
+pub enum Scope {
+    /// Scope applies to the `Records` interface.
+    Records {
+        /// The method the permission is applied to.
+        method: Method,
 
-    /// The method the permission is applied to.
-    pub method: Method,
+        /// Scope protocol.
+        protocol: String,
 
-    /// Scope protocol variants.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    pub protocol: Option<ScopeProtocol>,
+        /// Records scope options.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        options: Option<RecordsOptions>,
+    },
+
+    /// Scope applies to the `Messages` interface.
+    Messages {
+        /// The method the permission is applied to.
+        method: Method,
+
+        /// Scope protocol.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        protocol: Option<String>,
+    },
+    // /// Scope applies to the `Protocols` interface.
+    // Protocols {
+    //   pub method: Method
+    //   pub protocol: Option<String>
+    // }
+}
+
+impl Default for Scope {
+    fn default() -> Self {
+        Self::Records {
+            method: Method::default(),
+            protocol: String::new(),
+            options: None,
+        }
+    }
 }
 
 impl Scope {
     /// Get the scope protocol.
     #[must_use]
-    pub fn protocol(&self) -> Option<&str> {
-        match &self.protocol {
-            Some(ScopeProtocol::Simple { protocol } | ScopeProtocol::Records { protocol, .. }) => {
-                Some(protocol)
-            }
-            None => None,
+    pub const fn interface(&self) -> Interface {
+        match &self {
+            Self::Records { .. } => Interface::Records,
+            Self::Messages { .. } => Interface::Messages,
         }
     }
 
-    /// Get records scope options.
+    /// Get the scope method.
     #[must_use]
-    pub const fn options(&self) -> Option<&RecordsOptions> {
-        match &self.protocol {
-            Some(ScopeProtocol::Records { options, .. }) => options.as_ref(),
-            _ => None,
-        }
-    }
-}
-
-/// Scope type variants.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum ScopeProtocol {
-    /// Protocol is a URI reference
-    Simple {
-        /// The protocol the permission is applied to.
-        protocol: String,
-    },
-
-    /// `Records` scope fields.
-    Records {
-        /// The protocol the permission is applied to.
-        protocol: String,
-
-        /// Context ID or protocol path.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(flatten)]
-        options: Option<RecordsOptions>,
-    },
-}
-
-impl Default for ScopeProtocol {
-    fn default() -> Self {
-        Self::Simple {
-            protocol: String::new(),
-        }
-    }
-}
-
-impl ScopeProtocol {
-    /// Create a new `ScopeProtocol::Simple` variant.
-    pub fn simple(protocol: impl Into<String>) -> Self {
-        Self::Simple {
-            protocol: protocol.into(),
-        }
-    }
-
-    /// Create a new `ScopeProtocol::Records` variant.
-    pub fn records(protocol: impl Into<String>) -> Self {
-        Self::Records {
-            protocol: protocol.into(),
-            options: None,
-        }
-    }
-
-    /// Create a new `ScopeProtocol::Records` variant with options.
-    pub fn options(&self, options: RecordsOptions) -> Self {
+    pub fn method(&self) -> Method {
         match self {
-            Self::Records { protocol, .. } => Self::Records {
-                protocol: protocol.into(),
-                options: Some(options),
-            },
-            _ => self.clone(),
+            Self::Records { method, .. } | Self::Messages { method, .. } => method.clone(),
         }
     }
+
+    /// Get the scope protocol.
+    #[must_use]
+    pub fn protocol(&self) -> Option<&str> {
+        match &self {
+            Self::Records { protocol, .. } => Some(protocol),
+            Self::Messages { protocol, .. } => protocol.as_deref(),
+        }
+    }
+
+    // /// Get records scope options.
+    // #[must_use]
+    // pub const fn options(&self) -> Option<&RecordsOptions> {
+    //     match &self.protocol {
+    //         Some(ScopeProtocol::Records { options, .. }) => options.as_ref(),
+    //         _ => None,
+    //     }
+    // }
 }
 
 /// Fields specific to the `records` scope.
@@ -196,46 +180,4 @@ pub enum ConditionPublication {
 
     /// The message may be marked as public.
     Prohibited,
-}
-
-/// A permission request.
-pub struct Request {
-    /// The ID of the permission request — the record ID DWN message.
-    pub id: String,
-
-    /// The requester of the permission.
-    pub requestor: String,
-
-    ///used to describe what the requested grant is to be used for.
-    pub description: Option<String>,
-
-    /// Whether the requested grant is delegated or not. If `true`, the
-    /// `requestor` will be able to act as the grantor of the permission
-    /// within the scope of the requested grant.
-    pub delegated: Option<bool>,
-
-    /// The scope of the allowed access.
-    pub scope: Scope,
-
-    /// Optional conditions that must be met when the requested grant is used.
-    pub conditions: Option<Conditions>,
-}
-
-impl TryFrom<&Write> for Request {
-    type Error = crate::Error;
-
-    fn try_from(write: &Write) -> Result<Self> {
-        let permission_grant = write.encoded_data.clone().unwrap_or_default();
-        let grant_data: GrantData = serde_json::from_str(&permission_grant)
-            .map_err(|e| unexpected!("issue deserializing request: {e}"))?;
-
-        Ok(Self {
-            id: write.record_id.clone(),
-            requestor: write.authorization.signer().unwrap_or_default(),
-            description: grant_data.description,
-            delegated: grant_data.delegated,
-            scope: grant_data.scope,
-            conditions: grant_data.conditions,
-        })
-    }
 }

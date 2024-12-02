@@ -5,10 +5,10 @@
 //! grants App X the ability to post as her for the `chat` protocol.
 
 use rand::RngCore;
-use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
+use vercre_dwn::Method;
+use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{DelegatedGrant, WriteBuilder, WriteData};
-use vercre_dwn::{Interface, Method};
 
 use crate::key_store::{ALICE_DID, APP_DID, BOB_DID};
 use crate::provider::ProviderImpl;
@@ -28,14 +28,11 @@ async fn configure() {
         .request_id("grant_id_1")
         .description("allow App X to write as me in chat protocol")
         .delegated(true)
-        .scope(
-            Interface::Records,
-            Method::Write,
-            Some(ScopeProtocol::Records {
-                protocol: "chat".to_string(),
-                options: None,
-            }),
-        );
+        .scope(Scope::Records {
+            method: Method::Write,
+            protocol: "chat".to_string(),
+            options: None,
+        });
     let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
 
     // --------------------------------------------------

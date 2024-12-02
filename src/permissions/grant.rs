@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ConditionPublication, Conditions, RecordsOptions, Scope, ScopeProtocol};
+use super::{ConditionPublication, Conditions, RecordsOptions, Scope};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
@@ -14,7 +14,7 @@ use crate::records::{
 };
 use crate::serde::rfc3339_micros;
 use crate::store::RecordsQuery;
-use crate::{Descriptor, Interface, Method, Result, forbidden, unexpected, utils};
+use crate::{Descriptor, Interface, Result, forbidden, unexpected, utils};
 
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -154,15 +154,12 @@ impl Grant {
         }
 
         // verify grant scope for interface
-        if descriptor.interface != self.data.scope.interface {
-            return Err(forbidden!(
-                "interface {} not within the scope of grant",
-                descriptor.interface
-            ));
+        if descriptor.interface != self.data.scope.interface() {
+            return Err(forbidden!("interface is not within the scope of grant"));
         }
 
         // verify grant scope method
-        if descriptor.method != self.data.scope.method {
+        if descriptor.method != self.data.scope.method() {
             return Err(forbidden!("method {} not within the scope of grant", descriptor.method));
         }
 
@@ -292,11 +289,15 @@ impl Grant {
     }
 
     pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
-        let Some(ScopeProtocol::Records { protocol, options }) = &self.data.scope.protocol else {
+        let Scope::Records {
+            protocol, options, ..
+        } = &self.data.scope
+        else {
             return Err(forbidden!("invalid scope: `Records` scope must have protocol set"));
         };
+
         if Some(protocol) != write.descriptor.protocol.as_ref() {
-            return Err(forbidden!("incorrect scope `protocol`"));
+            return Err(forbidden!("scope protocol does not match write protocol"));
         }
 
         match options {
@@ -408,14 +409,8 @@ impl GrantBuilder {
 
     /// Specify the scope of the grant.
     #[must_use]
-    pub fn scope(
-        mut self, interface: Interface, method: Method, protocol: Option<ScopeProtocol>,
-    ) -> Self {
-        self.scope = Some(Scope {
-            interface,
-            method,
-            protocol,
-        });
+    pub fn scope(mut self, scope: Scope) -> Self {
+        self.scope = Some(scope);
         self
     }
 
@@ -437,10 +432,8 @@ impl GrantBuilder {
         if self.granted_to.is_empty() {
             return Err(forbidden!("missing `granted_to`"));
         }
-        if scope.interface == Interface::Records {
-            let Some(ScopeProtocol::Records { .. }) = &scope.protocol else {
-                return Err(forbidden!("`Records` scope must have protocol set"));
-            };
+        if scope.interface() == Interface::Records && scope.protocol().is_none() {
+            return Err(forbidden!("`Records` scope must have protocol set"));
         }
 
         let grant_bytes = serde_json::to_vec(&GrantData {
@@ -508,14 +501,8 @@ impl RequestBuilder {
 
     /// Specify the scope of the grant.
     #[must_use]
-    pub fn scope(
-        mut self, interface: Interface, method: Method, protocol: Option<ScopeProtocol>,
-    ) -> Self {
-        self.scope = Some(Scope {
-            interface,
-            method,
-            protocol,
-        });
+    pub fn scope(mut self, scope: Scope) -> Self {
+        self.scope = Some(scope);
         self
     }
 
