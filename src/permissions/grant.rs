@@ -113,6 +113,7 @@ pub struct RequestData {
     pub delegated: bool,
 
     /// Optional string that communicates what the grant would be used for.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
     /// The scope of the allowed access.
@@ -461,6 +462,97 @@ impl GrantBuilder {
 
         let mut write = builder.build(keyring).await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
+
+        Ok(write)
+    }
+}
+
+/// Options to use when creating a permission grant.
+#[derive(Clone, Debug, Default)]
+pub struct RequestBuilder {
+    description: Option<String>,
+    delegated: Option<bool>,
+    scope: Option<Scope>,
+    conditions: Option<Conditions>,
+}
+
+/// Builder for creating a permission grant.
+impl RequestBuilder {
+    /// Returns a new [`RequestBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Describe the purpose of the grant.
+    #[must_use]
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Specify whether the grant is delegated or not.
+    #[must_use]
+    pub const fn delegated(mut self, delegated: bool) -> Self {
+        self.delegated = Some(delegated);
+        self
+    }
+
+    /// Specify the scope of the grant.
+    #[must_use]
+    pub fn scope(
+        mut self, interface: Interface, method: Method, protocol: Option<ScopeProtocol>,
+    ) -> Self {
+        self.scope = Some(Scope {
+            interface,
+            method,
+            protocol,
+        });
+        self
+    }
+
+    /// Specify conditions that must be met when the grant is used.
+    #[must_use]
+    pub const fn conditions(mut self, conditions: Conditions) -> Self {
+        self.conditions = Some(conditions);
+        self
+    }
+
+    /// Generate the permission grant.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
+        let Some(scope) = self.scope else {
+            return Err(forbidden!("missing `scope`"));
+        };
+
+        let request_bytes = serde_json::to_vec(&RequestData {
+            description: self.description,
+            delegated: self.delegated.unwrap_or_default(),
+            scope: scope.clone(),
+            conditions: self.conditions,
+        })?;
+
+        let mut builder = WriteBuilder::new()
+            .protocol(WriteProtocol {
+                protocol: protocols::PROTOCOL_URI.to_string(),
+                protocol_path: protocols::REQUEST_PATH.to_string(),
+            })
+            .data(WriteData::Bytes(request_bytes.clone()));
+
+        // add protocol tag
+        // N.B. adding a protocol tag ensures message queries with a protocol
+        // filter will return this request
+        if let Some(protocol) = scope.protocol() {
+            let protocol = utils::clean_url(protocol)?;
+            builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
+        };
+
+        let mut write = builder.build(keyring).await?;
+
+        // TODO: move this to WriteBuilder(?)
+        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&request_bytes));
 
         Ok(write)
     }

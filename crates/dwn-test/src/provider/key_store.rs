@@ -11,19 +11,18 @@ use vercre_infosec::{Algorithm, Cipher, Signer};
 use crate::provider::ProviderImpl;
 
 pub const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-const ALICE_VERIFY_KEY: &str = "z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
 const ALICE_SECRET_KEY: &str = "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30";
 
 pub const BOB_DID: &str = "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD";
-const BOB_VERIFY_KEY: &str = "z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD";
 const BOB_SECRET_KEY: &str = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo";
 
+pub const CAROL_DID: &str = "did:key:z6MkuY2MjELw3xQExptJtVkuW5YSjfeQYrVZv41RMYrwZmYd";
+const CAROL_SECRET_KEY: &str = "V0YsmES1Tc8-sozoyYeBKemcrUaOLq_IceWbjWwmbMo";
+
 pub const APP_DID: &str = "did:key:z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
-const APP_VERIFY_KEY: &str = "z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
 const APP_SECRET_KEY: &str = "fAe8yt4xBaDpyuPKY9_1NBxmiFMCfVnnryMXD-oLyVk";
 
 pub const INVALID_DID: &str = "did:key:z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
-const INVALID_VERIFY_KEY: &str = "z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
 const INVALID_SECRET_KEY: &str = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo";
 
 #[derive(Default, Clone, Debug)]
@@ -34,7 +33,7 @@ pub struct KeyStoreImpl {
 #[derive(Default, Clone, Debug)]
 pub struct KeyringImpl {
     pub did: String,
-    pub verify_key: String,
+    // pub verify_key: String,
     pub secret_key: String,
 }
 
@@ -45,27 +44,28 @@ impl KeyStoreImpl {
 
         let alice_keyring = KeyringImpl {
             did: ALICE_DID.to_string(),
-            verify_key: ALICE_VERIFY_KEY.to_string(),
             secret_key: ALICE_SECRET_KEY.to_string(),
         };
         let bob_keyring = KeyringImpl {
             did: BOB_DID.to_string(),
-            verify_key: BOB_VERIFY_KEY.to_string(),
             secret_key: BOB_SECRET_KEY.to_string(),
+        };
+        let carol_keyring = KeyringImpl {
+            did: CAROL_DID.to_string(),
+            secret_key: CAROL_SECRET_KEY.to_string(),
         };
         let app_keyring = KeyringImpl {
             did: APP_DID.to_string(),
-            verify_key: APP_VERIFY_KEY.to_string(),
             secret_key: APP_SECRET_KEY.to_string(),
         };
         let invalid_keyring = KeyringImpl {
             did: INVALID_DID.to_string(),
-            verify_key: INVALID_VERIFY_KEY.to_string(),
             secret_key: INVALID_SECRET_KEY.to_string(),
         };
 
         keyrings.insert(ALICE_DID.to_string(), alice_keyring);
         keyrings.insert(BOB_DID.to_string(), bob_keyring);
+        keyrings.insert(CAROL_DID.to_string(), carol_keyring);
         keyrings.insert(APP_DID.to_string(), app_keyring);
         keyrings.insert(INVALID_DID.to_string(), invalid_keyring);
 
@@ -105,7 +105,8 @@ impl Signer for KeyringImpl {
     }
 
     async fn verification_method(&self) -> Result<String> {
-        Ok(format!("{}#{}", self.did, self.verify_key))
+        let verify_key = self.did.strip_prefix("did:key:").unwrap_or_default();
+        Ok(format!("{}#{}", self.did, verify_key))
     }
 }
 

@@ -7,7 +7,9 @@ mod request;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
-pub use self::grant::{Grant, GrantBuilder, GrantData, RequestData, RevocationData};
+pub use self::grant::{
+    Grant, GrantBuilder, GrantData, RequestBuilder, RequestData, RevocationData,
+};
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
 use crate::records::Write;

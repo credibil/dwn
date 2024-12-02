@@ -5,16 +5,16 @@
 
 use std::io::Read;
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID, INVALID_DID};
+use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID, INVALID_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::messages::ReadBuilder;
-use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
+use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, ScopeProtocol};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, WriteData};
+use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // Bob should be able to read any message in Alice's web node.
@@ -43,13 +43,13 @@ async fn read_message() {
     // --------------------------------------------------
     // Alice issues a grant allowing Bob to read any record in her web node.
     // --------------------------------------------------
-    let builder = GrantBuilder::new()
+    let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .request_id("grant_id_1")
-        .description("allow Bob to read messages")
         .expires_in(60 * 60 * 24)
-        .scope(Interface::Messages, Method::Read, None);
-    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+        .scope(Interface::Messages, Method::Read, None)
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
 
     let record_id = bob_grant.record_id.clone();
     let message_cid = bob_grant.cid().expect("should get CID");
@@ -448,7 +448,7 @@ async fn invalid_interface() {
     // unpublished
     let configure = ConfigureBuilder::new()
         .definition(
-            Definition::new("http://minimalprotocol.xyz")
+            Definition::new("http://minimal.xyz")
                 .add_type("foo", ProtocolType::default())
                 .add_rule("foo", RuleSet::default()),
         )
@@ -481,13 +481,12 @@ async fn invalid_interface() {
     // --------------------------------------------------
     // Alice issues Bob a grant scoped to a `RecordsWrite` and protocol.
     // --------------------------------------------------
-    let builder = GrantBuilder::new().granted_to(BOB_DID).scope(
-        Interface::Records,
-        Method::Write,
-        Some(ScopeProtocol::simple("http://minimalprotocol.xyz")),
-    );
-    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
-
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Interface::Records, Method::Write, Some(ScopeProtocol::simple("http://minimal.xyz")))
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
     let record_id = bob_grant.record_id.clone();
 
     let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
@@ -536,9 +535,12 @@ async fn permissive_grant() {
     // --------------------------------------------------
     // Alice issues Bob a grant allowing Bob to read any record.
     // --------------------------------------------------
-    let builder =
-        GrantBuilder::new().granted_to(BOB_DID).scope(Interface::Messages, Method::Read, None);
-    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Interface::Messages, Method::Read, None)
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
 
     let record_id = bob_grant.record_id.clone();
 
@@ -561,4 +563,92 @@ async fn permissive_grant() {
     let body = reply.body.expect("should have body");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, write_cid);
+}
+
+// Should allow reading protocol messages with a protocol-based grant.
+#[tokio::test]
+async fn protocol_grant() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures an unpublished protocol.
+    // --------------------------------------------------
+    let configure = ConfigureBuilder::new()
+        .definition(
+            Definition::new("http://minimal.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol requests a grant write records for the protocol, and Alice grants it.
+    // --------------------------------------------------
+    let carol_request = RequestBuilder::new()
+        .scope(Interface::Records, Method::Write, Some(ScopeProtocol::simple("http://minimal.xyz")))
+        .build(&carol_keyring)
+        .await
+        .expect("should create grant");
+
+    let reply = endpoint::handle(ALICE_DID, carol_request, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice grants Carol permission to write records to the protocol.
+    // --------------------------------------------------
+    let carol_grant = GrantBuilder::new()
+        .granted_to(CAROL_DID)
+        .delegated(false)
+        .scope(Interface::Messages, Method::Read, None)
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    // let record_id = carol_grant.record_id.clone();
+    // let message_cid = carol_grant.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, carol_grant, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record associated with the protocol.
+    // --------------------------------------------------
+    let data = br#"{"message": "test record write"}"#;
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .protocol(WriteProtocol {
+            protocol: "http://minimal.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let write_cid = write.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice deletes a record associated with the protocol.
+    // --------------------------------------------------
+
+    // --------------------------------------------------
+    // Carol writes a record associated with the protocol.
+    // --------------------------------------------------
+
+    // --------------------------------------------------
+    // Alice revokes Carol's grant.
+    // --------------------------------------------------
 }

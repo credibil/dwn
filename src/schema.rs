@@ -83,8 +83,16 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/records-delete.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "PermissionRequestData" => {
+            let schema = include_bytes!("../schemas/permissions/permission-request-data.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
         "PermissionGrantData" => {
             let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
+        "PermissionRevocationData" => {
+            let schema = include_bytes!("../schemas/permissions/permission-revocation-data.json");
             Ok(serde_json::from_slice(schema)?)
         }
 
