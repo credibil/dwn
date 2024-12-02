@@ -9,7 +9,7 @@ use insta::assert_yaml_snapshot as assert_snapshot;
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::{ Method, endpoint};
+use vercre_dwn::{Method, endpoint};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;

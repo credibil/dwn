@@ -70,11 +70,6 @@ pub enum Scope {
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
-    // /// Scope applies to the `Protocols` interface.
-    // Protocols {
-    //   pub method: Method
-    //   pub protocol: Option<String>
-    // }
 }
 
 impl Default for Scope {
