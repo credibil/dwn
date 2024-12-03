@@ -44,7 +44,7 @@ pub async fn handle(
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
-    let (initial_entry, newest_entry) = earliest_and_latest(&existing)?;
+    let (initial_entry, newest_entry) = earliest_and_latest(&existing);
 
     // when message is not the initial write, verify 'immutable' properties
     if let Some(initial_entry) = &initial_entry {
@@ -204,6 +204,8 @@ impl Message for Write {
     }
 
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        // TODO: fix this lint
+        #[allow(clippy::large_futures)]
         handle(owner, self, provider).await
     }
 }
@@ -1063,13 +1065,8 @@ pub async fn initial_entry(
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-fn earliest_and_latest(entries: &[Entry]) -> Result<(Option<Entry>, Option<Entry>)> {
-    // check initial write is found
-    if let Some(first) = entries.first() {
-        Ok((Some(first.clone()), entries.last().cloned()))
-    } else {
-        Ok((None, None))
-    }
+fn earliest_and_latest(entries: &[Entry]) -> (Option<Entry>, Option<Entry>) {
+    entries.first().map_or((None, None), |first| (Some(first.clone()), entries.last().cloned()))
 }
 
 async fn process_stream(

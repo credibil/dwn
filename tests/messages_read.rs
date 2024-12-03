@@ -747,7 +747,6 @@ async fn protocol_grant() {
     // --------------------------------------------------
     // Bob can read all messages associated with the grant.
     // --------------------------------------------------
-
     // Alice's protocol configuration
     let mut read = ReadBuilder::new()
         .message_cid(&alice_configure_cid)
@@ -815,4 +814,32 @@ async fn protocol_grant() {
     let body = reply.body.expect("should have body");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_revocation_cid);
+
+    // --------------------------------------------------
+    // CONTROL: Alice writes a record not associated with the protocol
+    // --------------------------------------------------
+    let data = br#"{"message": "test record write"}"#;
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let write_cid = write.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // Bob is unable to read the control message
+    let read = ReadBuilder::new()
+        .message_cid(&write_cid)
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be forbidden");
+    };
 }
