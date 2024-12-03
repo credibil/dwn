@@ -7,7 +7,7 @@ pub fn clean_url(url: &str) -> Result<String> {
 
     let scheme = parsed.scheme().map_or_else(|| "http://".to_string(), |s| format!("{s}://"));
     let Some(authority) = parsed.authority() else {
-        return Err(unexpected!("protocol URI ${url} must have an authority"));
+        return Err(unexpected!("protocol URI {url} must have an authority"));
     };
     let path = parsed.path().trim_end_matches('/');
 
@@ -16,7 +16,7 @@ pub fn clean_url(url: &str) -> Result<String> {
 
 // pub fn validate_url(url: &str) -> Result<()> {
 //     if url != clean_url(url)? {
-//         return Err(anyhow!("protocol URI ${url} must be normalized"));
+//         return Err(anyhow!("protocol URI {url} must be normalized"));
 //     }
 //     Ok(())
 // }

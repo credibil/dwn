@@ -545,9 +545,71 @@ impl RequestBuilder {
         };
 
         let mut write = builder.build(keyring).await?;
-
-        // TODO: move this to WriteBuilder(?)
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&request_bytes));
+
+        Ok(write)
+    }
+}
+
+/// Options to use when creating a permission grant.
+#[derive(Clone, Debug, Default)]
+pub struct RevocationBuilder {
+    grant: Option<Write>,
+    description: Option<String>,
+}
+
+/// Builder for creating a permission grant.
+impl RevocationBuilder {
+    /// Returns a new [`RevocationBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The grant to revoke.
+    #[must_use]
+    pub fn grant(mut self, grant: Write) -> Self {
+        self.grant = Some(grant);
+        self
+    }
+
+    /// Generate the permission grant.
+    ///
+    /// # Errors
+    /// TODO: Add errors
+    pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
+        let Some(grant) = self.grant else {
+            return Err(unexpected!("missing `grant`"));
+        };
+
+        let Some(encoded) = &grant.encoded_data else {
+            return Err(unexpected!("missing grant data"));
+        };
+        let grant_bytes = Base64UrlUnpadded::decode_vec(encoded)?;
+        let grant_data: GrantData = serde_json::from_slice(&grant_bytes)?;
+
+        let revocation_bytes = serde_json::to_vec(&RevocationData {
+            description: self.description,
+        })?;
+
+        let mut builder = WriteBuilder::new()
+            .parent_context_id(&grant.record_id)
+            .protocol(WriteProtocol {
+                protocol: protocols::PROTOCOL_URI.to_string(),
+                protocol_path: protocols::REVOCATION_PATH.to_string(),
+            })
+            .data(WriteData::Bytes(revocation_bytes.clone()));
+
+        // add protocol tag
+        // N.B. adding a protocol tag ensures message queries with a protocol
+        // filter will return this request
+        if let Some(protocol) = grant_data.scope.protocol() {
+            let protocol = utils::clean_url(protocol)?;
+            builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
+        };
+
+        let mut write = builder.build(keyring).await?;
+        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&revocation_bytes));
 
         Ok(write)
     }

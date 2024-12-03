@@ -72,15 +72,16 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
             can: vec![Action::Read, Action::Query],
             ..ActionRule::default()
         }]),
-        ..RuleSet::default()
-    });
-    structure.insert("revocation".to_string(), RuleSet {
-        size: Some(default_size),
-        actions: Some(vec![ActionRule {
-            who: Some(Actor::Anyone),
-            can: vec![Action::Read],
-            ..ActionRule::default()
-        }]),
+        // revocation is nested under grant
+        structure: BTreeMap::from([("revocation".to_string(), RuleSet {
+            size: Some(default_size),
+            actions: Some(vec![ActionRule {
+                who: Some(Actor::Anyone),
+                can: vec![Action::Read],
+                ..ActionRule::default()
+            }]),
+            ..RuleSet::default()
+        })]),
         ..RuleSet::default()
     });
 

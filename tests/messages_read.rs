@@ -11,7 +11,7 @@ use http::StatusCode;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::messages::ReadBuilder;
-use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, Scope};
+use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{DeleteBuilder, WriteBuilder, WriteData, WriteProtocol};
@@ -631,9 +631,8 @@ async fn protocol_grant() {
         .await
         .expect("should create grant");
 
-    let carol_grant_id = carol_grant.record_id.clone();
-
-    let reply = endpoint::handle(ALICE_DID, carol_grant, &provider).await.expect("should write");
+    let reply =
+        endpoint::handle(ALICE_DID, carol_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -679,7 +678,7 @@ async fn protocol_grant() {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
         })
-        .permission_grant_id(carol_grant_id)
+        .permission_grant_id(&carol_grant.record_id)
         .build(&carol_keyring)
         .await
         .expect("should create write");
@@ -690,4 +689,13 @@ async fn protocol_grant() {
     // --------------------------------------------------
     // Alice revokes Carol's grant.
     // --------------------------------------------------
+    let carol_revocation = RevocationBuilder::new()
+        .grant(carol_grant)
+        .build(&alice_keyring)
+        .await
+        .expect("should create revocation");
+
+    let reply =
+        endpoint::handle(ALICE_DID, carol_revocation, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }

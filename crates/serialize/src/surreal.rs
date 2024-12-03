@@ -1,6 +1,6 @@
 //! # Surreal Database
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use vercre_dwn::store::{
     MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, TagFilter,
 };
@@ -68,9 +68,11 @@ impl QuerySerializer for MessagesFilter {
         if let Some(timestamp) = &self.message_timestamp {
             let min = &DateTime::<Utc>::MIN_UTC;
             let max = &Utc::now();
-            let from = timestamp.min.as_ref().unwrap_or(min);
-            let to = timestamp.max.as_ref().unwrap_or(max);
-            sql.push_str(&format!(" AND descriptor.messageTimestamp BETWEEN '{from}' AND '{to}'"));
+            let from =
+                timestamp.min.as_ref().unwrap_or(min).to_rfc3339_opts(SecondsFormat::Micros, true);
+            let to =
+                timestamp.max.as_ref().unwrap_or(max).to_rfc3339_opts(SecondsFormat::Micros, true);
+            sql.push_str(&format!(" AND (descriptor.messageTimestamp >= '{from}' AND descriptor.messageTimestamp <='{to}')"));
         }
         sql
     }
@@ -137,7 +139,7 @@ impl QuerySerializer for RecordsQuery {
 
             let min = context_id.min.as_ref().unwrap_or(min_ctx);
             let max = context_id.max.as_ref().unwrap_or(max_ctx);
-            sql.push_str(&format!(" AND contextId BETWEEN '{min}' AND '{max}'"));
+            sql.push_str(&format!(" AND (contextId >= '{min}' AND contextId <= '{max}')"));
         }
 
         if let Some(protocol) = &self.protocol {
@@ -153,9 +155,19 @@ impl QuerySerializer for RecordsQuery {
         }
 
         if let Some(date_created) = &self.date_created {
-            let from = date_created.min.as_ref().unwrap_or(min_date);
-            let to = date_created.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!(" AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'"));
+            let from = date_created
+                .min
+                .as_ref()
+                .unwrap_or(min_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            let to = date_created
+                .max
+                .as_ref()
+                .unwrap_or(max_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            sql.push_str(&format!(
+                " AND (descriptor.dateCreated >= '{from}' AND descriptor.dateCreated <='{to}')"
+            ));
         }
 
         // include `RecordsFilter` sql
@@ -233,7 +245,7 @@ impl QuerySerializer for RecordsFilter {
         }
         if let Some(data_size) = &self.data_size {
             sql.push_str(&format!(
-                " AND descriptor.dataSize BETWEEN {min} AND {max}",
+                " AND (descriptor.dataSize >= {min} AND descriptor.dataSize <= {max})",
                 min = data_size.min.unwrap_or(0),
                 max = data_size.max.unwrap_or(usize::MAX)
             ));
@@ -242,14 +254,34 @@ impl QuerySerializer for RecordsFilter {
             sql.push_str(&format!(" AND descriptor.dataCid='{data_cid}'"));
         }
         if let Some(date_created) = &self.date_created {
-            let from = date_created.min.as_ref().unwrap_or(min_date);
-            let to = date_created.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!(" AND descriptor.dateCreated BETWEEN '{from}' AND '{to}'"));
+            let from = date_created
+                .min
+                .as_ref()
+                .unwrap_or(min_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            let to = date_created
+                .max
+                .as_ref()
+                .unwrap_or(max_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            sql.push_str(&format!(
+                " AND (descriptor.dateCreated >= '{from}' descriptor.dateCreated <= '{to}')"
+            ));
         }
         if let Some(date_published) = &self.date_published {
-            let from = date_published.min.as_ref().unwrap_or(min_date);
-            let to = date_published.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!(" AND descriptor.datePublished BETWEEN '{from}' AND '{to}'"));
+            let from = date_published
+                .min
+                .as_ref()
+                .unwrap_or(min_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            let to = date_published
+                .max
+                .as_ref()
+                .unwrap_or(max_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            sql.push_str(&format!(
+                " AND (descriptor.datePublished >= '{from}' AND descriptor.datePublished <='{to}')"
+            ));
         }
 
         // index fields
@@ -265,9 +297,17 @@ impl QuerySerializer for RecordsFilter {
             }
         }
         if let Some(date_updated) = &self.date_updated {
-            let from = date_updated.min.as_ref().unwrap_or(min_date);
-            let to = date_updated.max.as_ref().unwrap_or(max_date);
-            sql.push_str(&format!(" AND dateUpdated BETWEEN '{from}' AND '{to}'"));
+            let from = date_updated
+                .min
+                .as_ref()
+                .unwrap_or(min_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            let to = date_updated
+                .max
+                .as_ref()
+                .unwrap_or(max_date)
+                .to_rfc3339_opts(SecondsFormat::Micros, true);
+            sql.push_str(&format!(" AND (dateUpdated >= '{from}' AND dateUpdated <= '{to}')"));
         }
 
         sql

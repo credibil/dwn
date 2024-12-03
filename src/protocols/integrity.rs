@@ -142,7 +142,7 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
     let Some(parent_path) = &parent.descriptor.protocol_path else {
         return Err(forbidden!("missing protocol path"));
     };
-    if &format!("{parent_path}/${type_name}") != protocol_path {
+    if &format!("{parent_path}/{type_name}") != protocol_path {
         return Err(forbidden!("invalid `protocol_path`"));
     }
 
