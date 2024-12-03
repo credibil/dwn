@@ -625,7 +625,6 @@ async fn protocol_grant() {
     // --------------------------------------------------
     let carol_grant = GrantBuilder::new()
         .granted_to(CAROL_DID)
-        .delegated(false)
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
@@ -835,6 +834,84 @@ async fn protocol_grant() {
     // Bob is unable to read the control message
     let read = ReadBuilder::new()
         .message_cid(&write_cid)
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be forbidden");
+    };
+}
+
+// Should reject reading protocol messages with mismatching protocol grant scopes
+#[tokio::test]
+async fn invalid_protocol_grant() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let configure = ConfigureBuilder::new()
+        .definition(
+            Definition::new("http://minimal.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record associated with the protocol.
+    // --------------------------------------------------
+    let data = br#"{"message": "test record write"}"#;
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .protocol(WriteProtocol {
+            protocol: "http://minimal.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let write_cid = write.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record associated with the protocol.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Messages {
+            method: Method::Read,
+            protocol: Some("http://another.xyz".to_string()),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let grant_cid = bob_grant.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to use the grant to read the protocol message, but fails.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(&write_cid)
+        .permission_grant_id(grant_cid)
         .build(&bob_keyring)
         .await
         .expect("should create read");

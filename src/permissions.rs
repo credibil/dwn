@@ -13,24 +13,27 @@ pub use self::grant::{
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
 use crate::store::RecordsQuery;
-use crate::{Interface, Method, Result, unexpected};
+use crate::{Interface, Method, Result, forbidden};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
     let query = RecordsQuery::new().record_id(grant_id).build();
-    let (records, _) = store.query(owner, &query).await?;
+    let (entries, _) = store.query(owner, &query).await?;
 
-    let Some(write) = records[0].as_write() else {
-        return Err(unexpected!("grant not found"));
+    let Some(entry) = entries.first() else {
+        return Err(forbidden!("no grants found"));
+    };
+    let Some(write) = entry.as_write() else {
+        return Err(forbidden!("not a valid grant"));
     };
 
     let desc = &write.descriptor;
 
     // unpack message payload
     let Some(grant_enc) = &write.encoded_data else {
-        return Err(unexpected!("missing grant data"));
+        return Err(forbidden!("missing grant data"));
     };
     let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc)?;
     let grant: grant::GrantData = serde_json::from_slice(&grant_bytes)?;
