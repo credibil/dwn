@@ -734,15 +734,15 @@ async fn protocol_grant() {
     // --------------------------------------------------
     // Bob cannot read Alice's messages without a grant.
     // --------------------------------------------------
-    // let read = ReadBuilder::new()
-    //     .message_cid(&alice_write_cid)
-    //     .build(&bob_keyring)
-    //     .await
-    //     .expect("should create read");
+    let read = ReadBuilder::new()
+        .message_cid(&alice_write_cid)
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
 
-    // let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-    //     panic!("should be forbidden");
-    // };
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be forbidden");
+    };
 
     // --------------------------------------------------
     // Bob can read all messages associated with the grant.

@@ -404,7 +404,6 @@ async fn delete_earlier(
 
         if ts_message.cmp(&ts_newest) == Ordering::Less {
             delete_data(owner, message, newest, provider).await?;
-            MessageStore::delete(provider, owner, &message.cid()?).await?;
 
             // when the existing message is the initial write, retain it BUT,
             // ensure the message is marked as `archived`
@@ -415,6 +414,7 @@ async fn delete_earlier(
                 record.indexes.insert("archived".to_string(), Value::Bool(true));
                 MessageStore::put(provider, owner, &record).await?;
             } else {
+                MessageStore::delete(provider, owner, &message.cid()?).await?;
                 EventLog::delete(provider, owner, &message.cid()?).await?;
             }
         }

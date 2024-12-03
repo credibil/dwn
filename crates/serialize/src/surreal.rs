@@ -72,7 +72,7 @@ impl QuerySerializer for MessagesFilter {
                 timestamp.min.as_ref().unwrap_or(min).to_rfc3339_opts(SecondsFormat::Micros, true);
             let to =
                 timestamp.max.as_ref().unwrap_or(max).to_rfc3339_opts(SecondsFormat::Micros, true);
-            sql.push_str(&format!(" AND (descriptor.messageTimestamp >= '{from}' AND descriptor.messageTimestamp <='{to}')"));
+            sql.push_str(&format!(" AND (descriptor.messageTimestamp >= '{from}' AND descriptor.messageTimestamp <= '{to}')"));
         }
         sql
     }
