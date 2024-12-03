@@ -4,6 +4,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use futures::{StreamExt, future};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -25,7 +26,7 @@ pub async fn handle(
 ) -> Result<Reply<SubscribeReply>> {
     let mut filter = subscribe.descriptor.filter.clone();
 
-    // authorize messages subscribeing for private records
+    // authorize users subscribing to private records
     if !filter.published.unwrap_or_default() {
         subscribe.authorize(owner, provider).await?;
 
@@ -42,11 +43,19 @@ pub async fn handle(
 
         // when filter.protocol_role is set, set method to be RecordsWrite or RecordsDelete
         if subscribe.authorization.as_ref().unwrap().jws_payload()?.protocol_role.is_some() {
+            // TODO: fix this
             // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
         }
     }
-    let subscriber =
-        EventStream::subscribe(provider, owner, SubscribeFilter::Records(filter)).await?;
+
+    // get event stream from provider
+    // N.B. the provider is expected to map events to our Event type
+    let mut subscriber = EventStream::subscribe(provider, owner).await?;
+
+    // apply filtering before returning
+    let filter = SubscribeFilter::Records(filter);
+    let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
+    subscriber.inner = Box::pin(filtered);
 
     Ok(Reply {
         status: Status {

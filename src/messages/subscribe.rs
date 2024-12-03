@@ -4,6 +4,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use futures::{StreamExt, future};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -22,11 +23,17 @@ use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schem
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
+    // authorize the subscriber
     subscribe.authorize(owner, provider).await?;
 
-    let filters = subscribe.descriptor.filters;
-    let subscriber =
-        EventStream::subscribe(provider, owner, SubscribeFilter::Messages(filters)).await?;
+    // get event stream from provider
+    // N.B. the provider is expected to map events to our Event type
+    let mut subscriber = EventStream::subscribe(provider, owner).await?;
+
+    // filter the stream before returning
+    let filter = SubscribeFilter::Messages(subscribe.descriptor.filters);
+    let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
+    subscriber.inner = Box::pin(filtered);
 
     Ok(Reply {
         status: Status {
@@ -81,7 +88,7 @@ impl Subscribe {
 
         // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Ok(());
+            return Err(forbidden!("missing permission grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
@@ -94,7 +101,7 @@ impl Subscribe {
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
             if filter.protocol.as_deref() != protocol {
-                return Err(forbidden!("filter protocol does not match scoped protocol",));
+                return Err(forbidden!("filter protocol does not match scoped protocol"));
             }
         }
 

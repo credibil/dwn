@@ -5,11 +5,10 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use chrono::{DateTime, Utc};
-use futures::Stream;
+use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-// use tokio::sync::mpsc;
 use crate::messages::MessagesFilter;
 use crate::records::{RecordsFilter, TagFilter};
 use crate::store::{Entry, EntryType};
@@ -36,13 +35,13 @@ impl Default for SubscribeFilter {
 
 /// Used by local clients to handle events subscribed to.
 pub struct Subscriber {
-    inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
+    pub(crate) inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
 }
 
 impl Default for Subscriber {
     fn default() -> Self {
         Self {
-            inner: Box::pin(futures::stream::empty()),
+            inner: Box::pin(stream::empty()),
         }
     }
 }
@@ -56,7 +55,7 @@ impl fmt::Debug for Subscriber {
 impl Clone for Subscriber {
     fn clone(&self) -> Self {
         Self {
-            inner: Box::pin(futures::stream::empty()),
+            inner: Box::pin(stream::empty()),
         }
     }
 }
@@ -76,7 +75,7 @@ impl Stream for Subscriber {
 
     // Poll underlying stream for new events
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.inner.as_mut().as_mut().poll_next(cx)
+        self.inner.as_mut().poll_next(cx)
     }
 }
 
@@ -86,6 +85,10 @@ impl SubscribeFilter {
     pub fn is_match(&self, event: &Event) -> bool {
         match self {
             Self::Messages(filters) => {
+                if filters.is_empty() {
+                    return true;
+                }
+                
                 for filter in filters {
                     if filter.is_match(event) {
                         return true;

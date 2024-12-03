@@ -1,5 +1,5 @@
 {
-  "protocol": "http://allow-any-protocol.xyz",
+  "protocol": "http://allow-any.xyz",
   "published": true,
   "types": {
     "post": {

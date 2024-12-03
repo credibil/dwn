@@ -2,17 +2,39 @@
 
 use std::time::Duration;
 
-use dwn_test::key_store::ALICE_DID;
+use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
+use vercre_dwn::permissions::{GrantBuilder, Scope};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::{Interface, Message, endpoint};
+use vercre_dwn::{Authorization, Error, Interface, Message, Method, endpoint};
 
-// The owner should be able to to subscribe their own event stream
+// TODO: implement fake provider with no subscription support for this test.
+// // Should respond with a status of NotImplemented (501) if subscriptions are
+// // not supported.
+// #[tokio::test]
+// async fn unsupported() {}
+
+// Should respond with a status of BadRequest (400) when message is invalid.
+#[tokio::test]
+async fn invalid_message() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let mut subscribe = SubscribeBuilder::new().build(&alice_keyring).await.expect("should build");
+    subscribe.descriptor.filters.push(MessagesFilter::default());
+
+    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should have failed");
+    };
+}
+
+// Should allow owner to subscribe their own event stream.
 #[tokio::test]
 async fn owner_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -27,18 +49,16 @@ async fn owner_events() {
         .build(&alice_keyring)
         .await
         .expect("should build");
-    let reply =
-        endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut subscribe_reply = reply.body.expect("should have body");
+    let mut event_stream = reply.body.expect("should have body").subscription;
 
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
-    let data = br#"{"message": "test record write"}"#;
-
+    let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Reader(reader))
         .build(&alice_keyring)
         .await
         .expect("should create write");
@@ -57,14 +77,16 @@ async fn owner_events() {
 
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0], message_cid);
+    let Some(entry_cid) = entries.first() else {
+        panic!("should have entry");
+    };
+    assert_eq!(entry_cid, &message_cid);
 
     // --------------------------------------------------
     // The subscriber should have a matching write event.
     // --------------------------------------------------
     let find_event = async move {
-        while let Some(event) = subscribe_reply.subscription.next().await {
+        while let Some(event) = event_stream.next().await {
             if message_cid == event.cid().unwrap() {
                 break;
             }
@@ -72,5 +94,158 @@ async fn owner_events() {
     };
     if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found event");
+    }
+}
+
+// Should not allow non-owners to subscribe to unauthorized event streams.
+#[tokio::test]
+async fn unauthorized() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // An anonymous use attempts to subscribe to Alice's event stream.
+    // --------------------------------------------------
+    let mut subscribe = SubscribeBuilder::new().build(&alice_keyring).await.expect("should build");
+    subscribe.authorization = Authorization::default();
+
+    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should have failed");
+    };
+
+    // --------------------------------------------------
+    // Bob attempts to subscribe to Alice's event stream.
+    // --------------------------------------------------
+    let subscribe = SubscribeBuilder::new().build(&bob_keyring).await.expect("should build");
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should have failed");
+    };
+}
+
+// Should allow users to subscribe to events matching grant scope.
+#[tokio::test]
+async fn interface_scope() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to subscribe to all her messages.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Messages {
+            method: Method::Subscribe,
+            protocol: None,
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let bob_grant_id = bob_grant.record_id.clone();
+    // let message_cid = bob_grant.cid().expect("should get CID");
+
+    let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob uses the grant to subscribe to Alice's event stream.
+    // --------------------------------------------------
+    let subscribe = SubscribeBuilder::new()
+        .permission_grant_id(bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let reply = endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should subscribe");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    let mut alice_events = reply.body.expect("should have body").subscription;
+
+    // --------------------------------------------------
+    // Alice writes a number of messages.
+    // --------------------------------------------------
+
+    let mut message_cids = vec![];
+
+    // 1. configure 'allow-any' protocol
+    let bytes = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let definition = serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    message_cids.push(configure.cid().expect("should have cid"));
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // 2. configure a random protocol
+    let configure = ConfigureBuilder::new()
+        .definition(
+            Definition::new("http://random.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    message_cids.push(configure.cid().expect("should have cid"));
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // 3. write a record to the 'allow-any' protocol
+    let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .protocol(vercre_dwn::records::WriteProtocol {
+            protocol: definition.protocol.clone(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    message_cids.push(write.cid().expect("should have cid"));
+
+    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // 4. write a random record
+    let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    message_cids.push(write.cid().expect("should have cid"));
+
+    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob's event stream should have matching events.
+    // --------------------------------------------------
+    let find_event = async move {
+        let mut event_count = 0;
+        while let Some(event) = alice_events.next().await {
+            if message_cids.contains(&event.cid().unwrap()) {
+                event_count += 1;
+            }
+            if event_count >= 4 {
+                break;
+            }
+        }
+    };
+    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
+        panic!("should have found events");
     }
 }

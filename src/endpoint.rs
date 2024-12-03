@@ -66,14 +66,14 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
 /// Reply used by all endpoints.
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
-pub struct Reply<T> {
+pub struct Reply<ReplyBody> {
     /// Status message to accompany the reply.
     pub status: Status,
 
     /// Endpoint-specific reply.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub body: Option<T>,
+    pub body: Option<ReplyBody>,
 }
 
 /// Reply status.

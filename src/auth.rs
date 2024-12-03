@@ -111,7 +111,7 @@ pub struct Attestation {
 
 impl Authorization {
     /// Verify message signatures.
-    pub async fn authenticate(&self, resolver: impl DidResolver) -> Result<()> {
+    pub(crate) async fn authenticate(&self, resolver: impl DidResolver) -> Result<()> {
         // let verifier = verify_key!(resolver);
         self.signature.verify(verify_key!(resolver.clone())).await?;
 
@@ -130,14 +130,15 @@ impl Authorization {
 
     // TODO: cache this value
     /// Get message author's DID.
-    pub fn author(&self) -> Result<String> {
+    pub(crate) fn author(&self) -> Result<String> {
         self.author_delegated_grant.as_ref().map_or_else(
             || signer_did(&self.signature),
             |grant| signer_did(&grant.authorization.signature),
         )
     }
 
-    pub fn owner(&self) -> Result<Option<String>> {
+    /// Get message owner's DID.
+    pub(crate) fn owner(&self) -> Result<Option<String>> {
         let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
             signer_did(&grant.authorization.signature)?
         } else {
@@ -150,18 +151,20 @@ impl Authorization {
     }
 
     /// Get message signer's DID from the message authorization.
-    pub fn signer(&self) -> Result<String> {
+    pub(crate) fn signer(&self) -> Result<String> {
         signer_did(&self.signature)
     }
 
-    pub fn owner_signer(&self) -> Result<String> {
+    /// Get the owner's signing DID from the owner signature.
+    pub(crate) fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
             return Err(unexpected!("owner delegated grant not found"));
         };
         signer_did(&grant.authorization.signature)
     }
 
-    pub fn jws_payload(&self) -> Result<JwsPayload> {
+    /// Get the JWS payload of the message.
+    pub(crate) fn jws_payload(&self) -> Result<JwsPayload> {
         let base64 = &self.signature.payload;
         let decoded = Base64UrlUnpadded::decode_vec(base64)
             .map_err(|e| unexpected!("issue decoding header: {e}"))?;

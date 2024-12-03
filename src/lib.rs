@@ -18,6 +18,7 @@ mod tasks;
 mod utils;
 
 use ::serde::{Deserialize, Serialize};
+pub use auth::Authorization;
 use chrono::{DateTime, Utc};
 use derive_more::Display;
 

@@ -41,7 +41,7 @@ async fn read_message() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice issues a grant allowing Bob to read any record in her web node.
+    // Alice give Bob permission to read any of her records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -54,18 +54,18 @@ async fn read_message() {
         .await
         .expect("should create grant");
 
-    let record_id = bob_grant.record_id.clone();
+    let bob_grant_id = bob_grant.record_id.clone();
     let message_cid = bob_grant.cid().expect("should get CID");
 
     let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob invokes the grant to read a record from Alice's web node.
+    // Bob uses the grant to read one of Alice's records.
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(message_cid.clone())
-        .permission_grant_id(record_id)
+        .permission_grant_id(bob_grant_id)
         .build(&bob_keyring)
         .await
         .expect("should create read");
@@ -239,7 +239,7 @@ async fn data_gt_threshold() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice writes a record to her web node.
+    // Alice writes a record.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
@@ -257,7 +257,7 @@ async fn data_gt_threshold() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice reads the record with data.
+    // Alice reads the record, with data.
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(write_cid.clone())
@@ -285,7 +285,7 @@ async fn no_data_after_update() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice writes a record to her web node.
+    // Alice writes a record.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
@@ -384,7 +384,7 @@ async fn owner_not_author() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob attempts to read the protocols.
+    // Bob attempts to read a message protected by the protocol.
     // --------------------------------------------------
     // unpublished
     let read = ReadBuilder::new()
@@ -446,7 +446,7 @@ async fn invalid_interface() {
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
-    // Alice installs a protocol.
+    // Alice configures a protocol.
     // --------------------------------------------------
     // unpublished
     let configure = ConfigureBuilder::new()
@@ -482,7 +482,8 @@ async fn invalid_interface() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice issues Bob a grant scoped to a `RecordsWrite` and protocol.
+    // Alice grants Bob permission read a `RecordsWrite` message protected by
+    // the `http://minimal.xyz` protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -494,23 +495,25 @@ async fn invalid_interface() {
         .build(&alice_keyring)
         .await
         .expect("should create grant");
-    let record_id = bob_grant.record_id.clone();
+
+    let bob_grant_id = bob_grant.record_id.clone();
 
     let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob invokes the grant to try and read the record (and fails).
+    // Bob uses the grant to try and read the message and fails because the
+    // message does not have the protocol allowed by the grant.
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(write_cid)
-        .permission_grant_id(record_id)
+        .permission_grant_id(bob_grant_id)
         .build(&bob_keyring)
         .await
         .expect("should create read");
 
     let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be a not found");
+        panic!("should be Forbidden");
     };
 }
 
@@ -540,7 +543,7 @@ async fn permissive_grant() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice issues Bob a grant allowing Bob to read any record.
+    // Alice grants Bob permission to read any record.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -552,17 +555,17 @@ async fn permissive_grant() {
         .await
         .expect("should create grant");
 
-    let record_id = bob_grant.record_id.clone();
+    let bob_grant_id = bob_grant.record_id.clone();
 
     let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob invokes the grant to try and read the record.
+    // Bob uses the grant to read the record.
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(&write_cid)
-        .permission_grant_id(record_id)
+        .permission_grant_id(bob_grant_id)
         .build(&bob_keyring)
         .await
         .expect("should create read");
@@ -603,7 +606,7 @@ async fn protocol_grant() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Carol requests a grant to write records for the protocol.
+    // Carol requests permission to write records for the protocol.
     // --------------------------------------------------
     let carol_request = RequestBuilder::new()
         .scope(Scope::Records {
@@ -731,7 +734,7 @@ async fn protocol_grant() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob cannot read Alice's messages without a grant.
+    // Bob cannot read Alice's messages without permission.
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(&alice_write_cid)
@@ -964,7 +967,7 @@ async fn delete_with_no_write() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice inserts a delete record directly into the database.
+    // Alice adds a delete record directly into the database.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
     let reader = DataStream::from(data.to_vec());
