@@ -13,9 +13,9 @@ use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
-use vercre_dwn::provider::KeyStore;
+use vercre_dwn::provider::{KeyStore, MessageStore};
 use vercre_dwn::records::{DeleteBuilder, WriteBuilder, WriteData, WriteProtocol};
-use vercre_dwn::{Error, Interface, Message, Method, endpoint};
+use vercre_dwn::{Error, Interface, Message, Method, endpoint, store};
 
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]
@@ -843,7 +843,7 @@ async fn protocol_grant() {
     };
 }
 
-// Should reject reading protocol messages with mismatching protocol grant scopes
+// Should reject reading protocol messages with mismatching protocol grant scopes.
 #[tokio::test]
 async fn invalid_protocol_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -889,13 +889,13 @@ async fn invalid_protocol_grant() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice writes a record associated with the protocol.
+    // Alice grants Bob permission to read messages for the protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
         .scope(Scope::Messages {
             method: Method::Read,
-            protocol: Some("http://another.xyz".to_string()),
+            protocol: Some("http://minimal.xyz".to_string()),
         })
         .build(&alice_keyring)
         .await
@@ -918,5 +918,87 @@ async fn invalid_protocol_grant() {
 
     let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be forbidden");
+    };
+}
+
+// Should fail if a `RecordsWrite` message is not found for a requested `RecordsDelete`.
+#[tokio::test]
+async fn delete_with_no_write() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let configure = ConfigureBuilder::new()
+        .definition(
+            Definition::new("http://minimal.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to read messages for the protocol.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Messages {
+            method: Method::Read,
+            protocol: Some("http://minimal.xyz".to_string()),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let bob_grant_id = bob_grant.record_id.clone();
+
+    let reply = endpoint::handle(ALICE_DID, bob_grant, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice inserts a delete record directly into the database.
+    // --------------------------------------------------
+    let data = br#"{"message": "test record write"}"#;
+    let reader = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(reader))
+        .protocol(WriteProtocol {
+            protocol: "http://minimal.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let delete = DeleteBuilder::new()
+        .record_id(&write.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let entry = store::Entry::from(&delete);
+    MessageStore::put(&provider, ALICE_DID, &entry).await.expect("should put message");
+
+    // --------------------------------------------------
+    // Bob attempts to use the grant to read the protocol message, but fails.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .message_cid(&delete.cid().expect("should get CID"))
+        .permission_grant_id(bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create read");
+
+    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be bad request");
     };
 }

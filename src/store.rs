@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
-use crate::records::{self, Write};
+use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, TagFilter};
 use crate::{Descriptor, Method, Quota, Range, Result, auth, messages, protocols};
 
@@ -120,6 +120,23 @@ impl From<&Write> for Entry {
             }
             record.indexes.insert("tags".to_string(), Value::Object(tag_map));
         }
+
+        record
+    }
+}
+
+impl From<&Delete> for Entry {
+    fn from(delete: &Delete) -> Self {
+        let mut record = Self {
+            message: EntryType::Delete(delete.clone()),
+            indexes: Map::new(),
+        };
+
+        // flatten record_id so it queries correctly
+        record
+            .indexes
+            .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
+        record.indexes.insert("archived".to_string(), Value::Bool(false));
 
         record
     }

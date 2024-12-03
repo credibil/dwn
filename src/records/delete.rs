@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::auth::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
@@ -121,23 +121,6 @@ impl TryFrom<&Entry> for Delete {
             EntryType::Delete(delete) => Ok(delete.clone()),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
-    }
-}
-
-impl From<&Delete> for Entry {
-    fn from(delete: &Delete) -> Self {
-        let mut record = Self {
-            message: EntryType::Delete(delete.clone()),
-            indexes: Map::new(),
-        };
-
-        // flatten record_id so it queries correctly
-        record
-            .indexes
-            .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
-        record.indexes.insert("archived".to_string(), Value::Bool(false));
-
-        record
     }
 }
 
