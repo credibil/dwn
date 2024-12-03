@@ -244,7 +244,7 @@ pub struct RecordsQuery {
 impl Default for RecordsQuery {
     fn default() -> Self {
         let sort = Sort {
-            message_timestamp: Some(Direction::Descending),
+            message_timestamp: Some(Direction::Ascending),
             ..Sort::default()
         };
 
@@ -252,7 +252,6 @@ impl Default for RecordsQuery {
             method: Some(Method::Write),
             include_archived: false,
             sort: Some(sort),
-
             record_id: None,
             parent_id: None,
             context_id: None,
@@ -418,10 +417,10 @@ pub struct Sort {
 #[serde(rename_all = "camelCase")]
 pub enum Direction {
     /// Sort ascending.
+    #[default]
     Ascending,
 
     /// Sort descending.
-    #[default]
     Descending,
 }
 

@@ -44,22 +44,26 @@ pub async fn handle(
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
-    let (initial_write, newest_existing) = earliest_and_latest(&existing)?;
+    let (initial_entry, newest_entry) = earliest_and_latest(&existing)?;
 
     // when message is not the initial write, verify 'immutable' properties
-    if let Some(initial_write) = &initial_write {
-        write.compare_immutable(initial_write)?;
+    if let Some(initial_entry) = &initial_entry {
+        let initial_write = Write::try_from(initial_entry)?;
+        if !initial_write.is_initial()? {
+            return Err(unexpected!("initial write is not earliest message"));
+        }
+        write.compare_immutable(&initial_write)?;
     }
 
     // confirm current message is the most recent AND previous write was not a 'delete'
-    if let Some(newest_existing) = &newest_existing {
+    if let Some(newest_entry) = &newest_entry {
         let current_ts = write.descriptor.base.message_timestamp;
-        let latest_ts = newest_existing.descriptor.base.message_timestamp;
+        let latest_ts = newest_entry.descriptor().message_timestamp;
 
         if current_ts.cmp(&latest_ts) == Ordering::Less {
             return Err(Error::Conflict("newer write record already exists".to_string()));
         }
-        if newest_existing.descriptor.base.method == Method::Delete {
+        if newest_entry.descriptor().method == Method::Delete {
             return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
         }
     }
@@ -67,12 +71,13 @@ pub async fn handle(
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
         // incoming message WITH data
         (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
-    } else if initial_write.is_some() {
+    } else if initial_entry.is_some() {
         // incoming message WITHOUT data AND not an initial write
-        let Some(newest_existing) = &newest_existing else {
+        let Some(newest_entry) = &newest_entry else {
             return Err(unexpected!("latest existing message should exist"));
         };
-        (process_data(owner, &write, newest_existing, provider).await?, StatusCode::ACCEPTED)
+        let newest_write = Write::try_from(newest_entry)?;
+        (process_data(owner, &write, &newest_write, provider).await?, StatusCode::ACCEPTED)
     } else {
         // incoming message WITHOUT data AND an initial write
         (write, StatusCode::NO_CONTENT)
@@ -93,9 +98,12 @@ pub async fn handle(
     EventStream::emit(provider, owner, &entry).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
-    if let Some(initial_write) = initial_write {
-        let mut entry = Entry::from(&initial_write);
+    if let Some(initial_entry) = initial_entry {
+        let initial_write = Write::try_from(&initial_entry)?;
+
+        let mut entry = initial_entry;
         entry.indexes.insert("archived".to_string(), Value::Bool(true));
+
         MessageStore::put(provider, owner, &entry).await?;
         BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
     }
@@ -103,10 +111,11 @@ pub async fn handle(
     // delete any previous messages with the same `record_id` EXCEPT initial write
     let mut deletable = VecDeque::from(existing);
     let _ = deletable.pop_front(); // initial write is first entry
-    for msg in deletable {
-        let cid = msg.cid()?;
+    for entry in deletable {
+        let write = Write::try_from(entry)?;
+        let cid = write.cid()?;
         MessageStore::delete(provider, owner, &cid).await?;
-        BlockStore::delete(provider, owner, &msg.descriptor.data_cid).await?;
+        BlockStore::delete(provider, owner, &write.descriptor.data_cid).await?;
         EventLog::delete(provider, owner, &cid).await?;
     }
 
@@ -207,8 +216,8 @@ pub struct WriteReply;
 impl TryFrom<Entry> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: Entry) -> Result<Self> {
-        match record.message {
+    fn try_from(entry: Entry) -> Result<Self> {
+        match entry.message {
             EntryType::Write(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
@@ -218,8 +227,8 @@ impl TryFrom<Entry> for Write {
 impl TryFrom<&Entry> for Write {
     type Error = crate::Error;
 
-    fn try_from(record: &Entry) -> Result<Self> {
-        match &record.message {
+    fn try_from(entry: &Entry) -> Result<Self> {
+        match &entry.message {
             EntryType::Write(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
@@ -1024,18 +1033,13 @@ pub fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
 // Fetch previous entries for this record, ordered from earliest to latest.
 async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
-) -> Result<Vec<Write>> {
-    // N.B. only use `interface` in order to to get both `RecordsWrite` and
-    //`RecordsDelete` messages
-    let query = RecordsQuery::new().record_id(record_id).method(None).build();
-    let (records, _) = store.query(owner, &query).await.unwrap();
+) -> Result<Vec<Entry>> {
+    // N.B. unset method in order to get Write and Delete messages
+    let query =
+        RecordsQuery::new().record_id(record_id).include_archived(true).method(None).build();
 
-    let mut writes = Vec::new();
-    for record in records {
-        writes.push(Write::try_from(record)?);
-    }
-
-    Ok(writes)
+    let (entries, _) = store.query(owner, &query).await.unwrap();
+    Ok(entries)
 }
 
 // Fetches the first and last `records::Write` messages associated for the
@@ -1046,11 +1050,12 @@ pub async fn initial_entry(
     let entries = existing_entries(owner, record_id, store).await?;
 
     // check initial write is found
-    if let Some(first) = entries.first() {
-        if !first.is_initial()? {
+    if let Some(entry) = entries.first() {
+        let write = Write::try_from(entry)?;
+        if !write.is_initial()? {
             return Err(unexpected!("initial write is not earliest message"));
         }
-        Ok(Some(first.clone()))
+        Ok(Some(write))
     } else {
         Ok(None)
     }
@@ -1058,12 +1063,9 @@ pub async fn initial_entry(
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-fn earliest_and_latest(entries: &[Write]) -> Result<(Option<Write>, Option<Write>)> {
+fn earliest_and_latest(entries: &[Entry]) -> Result<(Option<Entry>, Option<Entry>)> {
     // check initial write is found
     if let Some(first) = entries.first() {
-        if !first.is_initial()? {
-            return Err(unexpected!("initial write is not earliest message"));
-        }
         Ok((Some(first.clone()), entries.last().cloned()))
     } else {
         Ok((None, None))

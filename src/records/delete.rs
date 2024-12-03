@@ -332,11 +332,11 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
 
     // group by `record_id` (a record can have multiple children)
     let mut record_id_map = HashMap::<&str, Vec<Entry>>::new();
-    for message in children {
-        let record_id = if let Some(write) = message.as_write() {
+    for entry in children {
+        let record_id = if let Some(write) = entry.as_write() {
             &write.record_id
         } else {
-            let Some(delete) = message.as_delete() else {
+            let Some(delete) = entry.as_delete() else {
                 return Err(unexpected!("unexpected message type"));
             };
             &delete.descriptor.record_id
@@ -345,14 +345,14 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
         record_id_map
             .get_mut(record_id.as_str())
             .unwrap_or(&mut Vec::<Entry>::new())
-            .push(message.clone());
+            .push(entry.clone());
     }
 
-    for (record_id, messages) in record_id_map {
+    for (record_id, entries) in record_id_map {
         // purge child's descendants
         delete_children(owner, record_id, provider).await?;
-        // purge child's messages
-        purge(owner, &messages, provider).await?;
+        // purge child's entries
+        purge(owner, &entries, provider).await?;
     }
 
     Ok(())

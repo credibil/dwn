@@ -780,23 +780,23 @@ async fn protocol_grant() {
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_grant_cid);
 
-    // // Alice's write
-    // read.descriptor.message_cid = alice_write_cid.clone();
+    // Alice's write
+    read.descriptor.message_cid = alice_write_cid.clone();
 
-    // let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should read");
-    // assert_eq!(reply.status.code, StatusCode::OK);
-    // let body = reply.body.expect("should have body");
-    // let entry = body.entry.expect("should have entry");
-    // assert_eq!(entry.message_cid, alice_write_cid);
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    let body = reply.body.expect("should have body");
+    let entry = body.entry.expect("should have entry");
+    assert_eq!(entry.message_cid, alice_write_cid);
 
-    // // Alice's delete
-    // read.descriptor.message_cid = alice_delete_cid.clone();
+    // Alice's delete
+    read.descriptor.message_cid = alice_delete_cid.clone();
 
-    // let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should read");
-    // assert_eq!(reply.status.code, StatusCode::OK);
-    // let body = reply.body.expect("should have body");
-    // let entry = body.entry.expect("should have entry");
-    // assert_eq!(entry.message_cid, alice_delete_cid);
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    let body = reply.body.expect("should have body");
+    let entry = body.entry.expect("should have entry");
+    assert_eq!(entry.message_cid, alice_delete_cid);
 
     // Carol's write
     read.descriptor.message_cid = carol_write_cid.clone();

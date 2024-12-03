@@ -99,7 +99,7 @@ impl QuerySerializer for ProtocolsQuery {
             sql.push_str(&format!(" AND descriptor.definition.published = {published}"));
         }
 
-        sql.push_str(" ORDER BY descriptor.messageTimestamp COLLATE DESC");
+        sql.push_str(" ORDER BY descriptor.messageTimestamp COLLATE ASC");
         sql
     }
 }
