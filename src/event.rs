@@ -38,6 +38,16 @@ pub struct Subscriber {
     pub(crate) inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
 }
 
+impl Subscriber {
+    /// Wrap Provider's subscription Stream for ease of surfacing to users.
+    #[must_use]
+    pub fn new(stream: impl Stream<Item = Event> + Send + 'static) -> Self {
+        Self {
+            inner: Box::pin(stream),
+        }
+    }
+}
+
 impl Default for Subscriber {
     fn default() -> Self {
         Self {
@@ -55,17 +65,8 @@ impl fmt::Debug for Subscriber {
 impl Clone for Subscriber {
     fn clone(&self) -> Self {
         Self {
+            // inner: self.inner,
             inner: Box::pin(stream::empty()),
-        }
-    }
-}
-
-impl Subscriber {
-    /// Wrap Provider's subscription Stream for ease of surfacing to users.
-    #[must_use]
-    pub fn new(stream: impl Stream<Item = Event> + Send + 'static) -> Self {
-        Self {
-            inner: Box::pin(stream),
         }
     }
 }
@@ -85,10 +86,6 @@ impl SubscribeFilter {
     pub fn is_match(&self, event: &Event) -> bool {
         match self {
             Self::Messages(filters) => {
-                if filters.is_empty() {
-                    return true;
-                }
-                
                 for filter in filters {
                     if filter.is_match(event) {
                         return true;

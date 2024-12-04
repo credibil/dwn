@@ -15,7 +15,7 @@ use crate::event::{SubscribeFilter, Subscriber};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{EventStream, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized};
+use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
 
 /// Process `Subscribe` message.
 ///
@@ -24,35 +24,25 @@ use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorize
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
-    let mut filter = subscribe.descriptor.filter.clone();
-
-    // authorize users subscribing to private records
-    if !filter.published.unwrap_or_default() {
-        subscribe.authorize(owner, provider).await?;
-
-        let Some(authzn) = &subscribe.authorization else {
-            return Err(forbidden!("missing authorization"));
-        };
-        let author = authzn.author()?;
-
-        // non-owner queries
-        if author != owner {
-            filter.author = Some(Quota::One(author.clone()));
-            filter.recipient = Some(Quota::One(author));
-        }
-
-        // when filter.protocol_role is set, set method to be RecordsWrite or RecordsDelete
-        if subscribe.authorization.as_ref().unwrap().jws_payload()?.protocol_role.is_some() {
-            // TODO: fix this
-            // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
-        }
-    }
+    // authorize subscription
+    subscribe.authorize(owner, provider).await?;
 
     // get event stream from provider
     // N.B. the provider is expected to map events to our Event type
     let mut subscriber = EventStream::subscribe(provider, owner).await?;
 
     // apply filtering before returning
+    let mut filter = subscribe.descriptor.filter.clone();
+
+    let authzn =
+        subscribe.authorization.as_ref().ok_or_else(|| forbidden!("missing authorization"))?;
+    let author = authzn.author()?;
+    if author != owner {
+        // non-owners can only see records they created or received
+        filter.author = Some(Quota::One(author.clone()));
+        filter.recipient = Some(Quota::One(author));
+    }
+
     let filter = SubscribeFilter::Records(filter);
     let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
     subscriber.inner = Box::pin(filtered);
@@ -128,19 +118,20 @@ pub struct SubscribeReplyEntry {
 
 impl Subscribe {
     async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
+        // only authorize subscriptions to private records
+        if self.descriptor.filter.published.unwrap_or_default() {
+            return Ok(());
+        };
+
         let Some(authzn) = &self.authorization else {
             return Err(forbidden!("missing authorization"));
         };
-
-        // authenticate the message
-        if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(unauthorized!("failed to authenticate: {e}"));
-        }
+        let author = authzn.author()?;
 
         // verify grant
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant: Grant = delegated_grant.try_into()?;
-            grant.permit_subscribe(&authzn.author()?, &authzn.signer()?, self, provider).await?;
+            grant.permit_subscribe(&author, &authzn.signer()?, self, provider).await?;
         }
 
         // verify protocol when request invokes a protocol role
@@ -148,6 +139,12 @@ impl Subscribe {
             let protocol =
                 Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
             return protocol.permit_subscribe(owner, self, provider).await;
+        }
+
+        // when filter.protocol_role is set, set method to be RecordsWrite or RecordsDelete
+        if self.authorization.as_ref().unwrap().jws_payload()?.protocol_role.is_some() {
+            // TODO: fix this
+            // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
         }
 
         Ok(())

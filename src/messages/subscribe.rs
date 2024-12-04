@@ -31,10 +31,12 @@ pub async fn handle(
     let mut subscriber = EventStream::subscribe(provider, owner).await?;
 
     // filter the stream before returning
-    let filter = SubscribeFilter::Messages(subscribe.descriptor.filters);
-    let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
-    subscriber.inner = Box::pin(filtered);
-
+    if !subscribe.descriptor.filters.is_empty() {
+        let filter = SubscribeFilter::Messages(subscribe.descriptor.filters);
+        let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
+        subscriber.inner = Box::pin(filtered);
+    }
+    
     Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
