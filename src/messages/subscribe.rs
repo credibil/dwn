@@ -36,7 +36,7 @@ pub async fn handle(
         let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
         subscriber.inner = Box::pin(filtered);
     }
-    
+
     Ok(Reply {
         status: Status {
             code: StatusCode::OK.as_u16(),
@@ -112,7 +112,7 @@ impl Subscribe {
 }
 
 /// Subscribe reply
-#[derive( Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.

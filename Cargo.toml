@@ -35,7 +35,7 @@ libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-thiserror = "2.0.3"
+thiserror = "2.0.4"
 tokio = { workspace = true, features = ["sync"] }
 uuid = { version = "1.11.0", features = ["fast-rng", "v4"] }
 vercre-did.workspace = true
@@ -76,7 +76,7 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.93"
+anyhow = "1.0.94"
 assert_let_bind = "0.1.1"
 async-trait = "0.1.83"
 axum = { version = "0.7.9", features = ["macros"] }
@@ -87,7 +87,7 @@ cid = "0.11.1"
 derive_more = "1.0.0"
 dwn-test = { path = "crates/dwn-test" }
 futures = "0.3.31"
-http = "1.1.0"
+http = "1.2.0"
 insta = { version = "1.41.1", features = ["redactions", "yaml"] }
 libipld = "0.16.0"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
@@ -95,7 +95,7 @@ rand = "0.8.5"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = { version = "1.0.133", features = ["alloc"] }
 sha2 = "0.10.8"
-tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 
