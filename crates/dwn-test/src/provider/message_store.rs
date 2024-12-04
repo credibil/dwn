@@ -62,7 +62,7 @@ impl MessageStore for ProviderImpl {
 
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<()> = self.db.delete((TABLE, message_cid)).await?;
+        let _: Option<Entry> = self.db.delete((TABLE, message_cid)).await?;
         Ok(())
     }
 

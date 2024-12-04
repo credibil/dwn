@@ -44,7 +44,7 @@ pub async fn handle(
     }
 
     let existing = existing_entries(owner, &write.record_id, provider).await?;
-    let (initial_entry, newest_entry) = earliest_and_latest(&existing);
+    let (initial_entry, latest_entry) = earliest_and_latest(&existing);
 
     // when message is not the initial write, verify 'immutable' properties
     if let Some(initial_entry) = &initial_entry {
@@ -56,14 +56,14 @@ pub async fn handle(
     }
 
     // confirm current message is the most recent AND previous write was not a 'delete'
-    if let Some(newest_entry) = &newest_entry {
+    if let Some(latest_entry) = &latest_entry {
         let current_ts = write.descriptor.base.message_timestamp;
-        let latest_ts = newest_entry.descriptor().message_timestamp;
+        let latest_ts = latest_entry.descriptor().message_timestamp;
 
         if current_ts.cmp(&latest_ts) == Ordering::Less {
             return Err(Error::Conflict("newer write record already exists".to_string()));
         }
-        if newest_entry.descriptor().method == Method::Delete {
+        if latest_entry.descriptor().method == Method::Delete {
             return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
         }
     }
@@ -73,11 +73,11 @@ pub async fn handle(
         (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
     } else if initial_entry.is_some() {
         // incoming message WITHOUT data AND not an initial write
-        let Some(newest_entry) = &newest_entry else {
+        let Some(latest_entry) = &latest_entry else {
             return Err(unexpected!("latest existing message should exist"));
         };
-        let newest_write = Write::try_from(newest_entry)?;
-        (process_data(owner, &write, &newest_write, provider).await?, StatusCode::ACCEPTED)
+        let latest_write = Write::try_from(latest_entry)?;
+        (process_data(owner, &write, &latest_write, provider).await?, StatusCode::ACCEPTED)
     } else {
         // incoming message WITHOUT data AND an initial write
         (write, StatusCode::NO_CONTENT)
@@ -422,7 +422,8 @@ impl Write {
         Ok(())
     }
 
-    /// Encrypt message
+    // Encrypt message
+    // See: createEncryptionProperty in records-write.ts
     fn encrypt(
         &self, input: &EncryptionInput, _encryptor: &impl Cipher,
     ) -> Result<EncryptionProperty> {

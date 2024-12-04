@@ -6,7 +6,8 @@
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
+use tokio::time;
+use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::{Error, endpoint};
 
@@ -19,12 +20,12 @@ async fn minimal() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let definition = Definition::new("http://minimal.xyz")
-        .add_type("foo", ProtocolType::default())
-        .add_rule("foo", RuleSet::default());
-
     let configure = ConfigureBuilder::new()
-        .definition(definition)
+        .definition(
+            Definition::new("http://minimal.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
         .build(&alice_keyring)
         .await
         .expect("should build");
@@ -45,12 +46,13 @@ async fn forbidden() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-    let definition = Definition::new("http://minimal.xyz")
-        .add_type("foo", ProtocolType::default())
-        .add_rule("foo", RuleSet::default());
-
+    // configure a protocol
     let mut configure = ConfigureBuilder::new()
-        .definition(definition)
+        .definition(
+            Definition::new("http://minimal.xyz")
+                .add_type("foo", ProtocolType::default())
+                .add_rule("foo", RuleSet::default()),
+        )
         .build(&alice_keyring)
         .await
         .expect("should build");
@@ -62,4 +64,74 @@ async fn forbidden() {
     else {
         panic!("should not configure protocol");
     };
+}
+
+// Should overwrite existing protocol if timestamp is newer.
+#[tokio::test]
+async fn overwrite() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let definition = Definition::new("http://minimal.xyz")
+        .add_type("foo", ProtocolType::default())
+        .add_rule("foo", RuleSet::default());
+
+    // --------------------------------------------------
+    // Alice creates an older protocol but doesn't use it.
+    // --------------------------------------------------
+    let older = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    time::sleep(time::Duration::from_secs(1)).await;
+
+    // --------------------------------------------------
+    // Alice configures a newer protocol.
+    // --------------------------------------------------
+    let newer = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, newer, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts to configure the older protocol and fails.
+    // --------------------------------------------------
+    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, older, &provider).await else {
+        panic!("should not configure protocol");
+    };
+
+    // --------------------------------------------------
+    // Alice updates the existing protocol.
+    // --------------------------------------------------
+    let update = ConfigureBuilder::new()
+        .definition(definition)
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, update, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Control: only the most recent protocol should exist.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter("http://minimal.xyz")
+        .build(&alice_keyring)
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should exist");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
 }

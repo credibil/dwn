@@ -32,42 +32,30 @@ pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
-
     // find any matching protocol entries
     let filter = ProtocolsFilter {
         protocol: configure.descriptor.definition.protocol.clone(),
     };
     let results = query::fetch_config(owner, Some(filter), provider).await?;
 
-    // determine if incoming message is the latest
-    let is_latest = if let Some(existing) = &results {
-        // find latest matching protocol entry
-        let timestamp = &configure.descriptor.base.message_timestamp;
-        let (is_latest, latest) = existing.iter().fold((true, &configure), |(_, _), e| {
-            if &e.descriptor.base.message_timestamp > timestamp {
-                (false, e)
-            } else {
-                (true, &configure)
-            }
-        });
-
-        // delete all entries except the most recent
-        let latest_ts = latest.descriptor.base.message_timestamp;
-        for e in existing {
-            let current_ts = e.descriptor.base.message_timestamp;
-            if current_ts.cmp(&latest_ts) == Ordering::Less {
-                let cid = cid::from_value(&e)?;
-                MessageStore::delete(provider, owner, &cid).await?;
-                EventLog::delete(provider, owner, &cid).await?;
-            }
+    // determine incoming message is the latest
+    if let Some(existing) = &results {
+        let current_ts = &configure.descriptor.base.message_timestamp;
+        let Some(latest) = existing.iter().max_by(|a, b| {
+            a.descriptor.base.message_timestamp.cmp(&b.descriptor.base.message_timestamp)
+        }) else {
+            return Err(unexpected!("no matching protocol entries found"));
+        };
+        if latest.descriptor.base.message_timestamp.cmp(current_ts) == Ordering::Greater {
+            return Err(unexpected!("message is not the latest"));
         }
-        is_latest
-    } else {
-        true
-    };
 
-    if !is_latest {
-        return Err(unexpected!("message is not the latest"));
+        // remove existing entries
+        for e in existing {
+            let cid = cid::from_value(&e)?;
+            MessageStore::delete(provider, owner, &cid).await?;
+            EventLog::delete(provider, owner, &cid).await?;
+        }
     }
 
     // save the incoming message
@@ -181,7 +169,6 @@ impl Configure {
         // when the grant scope does not specify a protocol, it is an unrestricted grant
         let Some(protocol) = grant.data.scope.protocol() else {
             return Ok(());
-            // return Err(forbidden!("missing protocol in grant scope"));
         };
         if protocol != self.descriptor.definition.protocol {
             return Err(forbidden!(" message and grant protocols do not match"));
