@@ -11,7 +11,7 @@ use vercre_dwn::authorization::Authorization;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
-use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
@@ -185,11 +185,7 @@ async fn interface_scope() {
 
     // 2. configure a random protocol
     let configure = ConfigureBuilder::new()
-        .definition(
-            Definition::new("http://random.xyz")
-                .add_type("foo", ProtocolType::default())
-                .add_rule("foo", RuleSet::default()),
-        )
+        .definition(Definition::new("http://random.xyz"))
         .build(&alice_keyring)
         .await
         .expect("should build");

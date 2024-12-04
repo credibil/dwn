@@ -350,11 +350,7 @@ async fn owner_not_author() {
     // --------------------------------------------------
     // unpublished
     let configure = ConfigureBuilder::new()
-        .definition(
-            Definition::new("http://unpublished.xyz")
-                .add_type("foo", ProtocolType::default())
-                .add_rule("foo", RuleSet::default()),
-        )
+        .definition(Definition::new("http://unpublished.xyz"))
         .build(&alice_keyring)
         .await
         .expect("should build");
@@ -367,12 +363,7 @@ async fn owner_not_author() {
 
     // published
     let configure = ConfigureBuilder::new()
-        .definition(
-            Definition::new("http://published.xyz")
-                .add_type("foo", ProtocolType::default())
-                .add_rule("foo", RuleSet::default())
-                .published(true),
-        )
+        .definition(Definition::new("http://published.xyz").published(true))
         .build(&alice_keyring)
         .await
         .expect("should build");
@@ -450,11 +441,7 @@ async fn invalid_interface() {
     // --------------------------------------------------
     // unpublished
     let configure = ConfigureBuilder::new()
-        .definition(
-            Definition::new("http://minimal.xyz")
-                .add_type("foo", ProtocolType::default())
-                .add_rule("foo", RuleSet::default()),
-        )
+        .definition(Definition::new("http://minimal.xyz"))
         .build(&alice_keyring)
         .await
         .expect("should build");
@@ -935,11 +922,7 @@ async fn delete_with_no_write() {
     // Alice configures a protocol.
     // --------------------------------------------------
     let configure = ConfigureBuilder::new()
-        .definition(
-            Definition::new("http://minimal.xyz")
-                .add_type("foo", ProtocolType::default())
-                .add_rule("foo", RuleSet::default()),
-        )
+        .definition(Definition::new("http://minimal.xyz"))
         .build(&alice_keyring)
         .await
         .expect("should build");

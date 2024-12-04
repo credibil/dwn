@@ -21,7 +21,8 @@ use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::DelegatedGrant;
 use crate::store::{Entry, EntryType};
 use crate::{
-    Descriptor, Interface, Method, Range, Result, forbidden, permissions, schema, unexpected, utils,
+    Descriptor, Error, Interface, Method, Range, Result, forbidden, permissions, schema,
+    unexpected, utils,
 };
 
 /// Process query message.
@@ -46,8 +47,18 @@ pub async fn handle(
         }) else {
             return Err(unexpected!("no matching protocol entries found"));
         };
+
+        // if latest message is more recent than incoming message
         if latest.descriptor.base.message_timestamp.cmp(current_ts) == Ordering::Greater {
-            return Err(unexpected!("message is not the latest"));
+            return Err(Error::Conflict("message is not the latest".to_string()));
+        }
+        // when timestamps are identical, compare CIDs
+        if latest.descriptor.base.message_timestamp.cmp(current_ts) == Ordering::Equal {
+            if latest.cid()?.cmp(&configure.cid()?) == Ordering::Greater {
+                return Err(Error::Conflict(
+                    "message CID is smaller than previous entry".to_string(),
+                ));
+            }
         }
 
         // remove existing entries
