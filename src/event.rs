@@ -62,15 +62,6 @@ impl fmt::Debug for Subscriber {
     }
 }
 
-impl Clone for Subscriber {
-    fn clone(&self) -> Self {
-        Self {
-            // inner: self.inner,
-            inner: Box::pin(stream::empty()),
-        }
-    }
-}
-
 impl Stream for Subscriber {
     type Item = Event;
 

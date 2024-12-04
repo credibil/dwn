@@ -92,7 +92,7 @@ impl Message for Subscribe {
 }
 
 /// Subscribe reply.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeReply {
     /// The subscription to the requested events.

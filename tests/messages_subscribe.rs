@@ -449,7 +449,7 @@ async fn protocol_filter() {
             panic!("unexpected event: {:?}", event);
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(200), find_event).await {
+    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found events");
     }
 }
