@@ -16,7 +16,7 @@ use serde_json::{Map, Value};
 use vercre_infosec::jose::{EncryptionAlgorithm, Jws, JwsBuilder, PublicKeyJwk};
 use vercre_infosec::{Cipher, Signer};
 
-use crate::auth::{self, Authorization, JwsPayload};
+use crate::authorization::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
@@ -311,7 +311,7 @@ impl Write {
             &self.authorization.author_delegated_grant
         {
             (
-                Some(auth::signer_did(&grant.authorization.signature)?),
+                Some(authorization::signer_did(&grant.authorization.signature)?),
                 Some(cid::from_value(&grant)?),
             )
         } else {

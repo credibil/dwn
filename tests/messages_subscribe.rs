@@ -7,13 +7,14 @@ use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
+use vercre_dwn::authorization::Authorization;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{WriteBuilder, WriteData};
-use vercre_dwn::{Authorization, Error, Interface, Message, Method, endpoint};
+use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // TODO: implement fake provider with no subscription support for this test.
 // // Should respond with a status of NotImplemented (501) if subscriptions are
@@ -441,17 +442,23 @@ async fn protocol_filter() {
     // nothing we shouldn't have received.
     // --------------------------------------------------
     // check for protocol1 message
-    let find_event = async move {
-        while let Some(event) = alice_events.next().await {
-            if protocol1_cid == event.cid().unwrap() {
-                break;
-            }
+    let event_fut = alice_events.next();
+    let protocol1 = async move {
+        let Some(event) = event_fut.await else {
+            panic!("should have found event");
+        };
+        assert_eq!(protocol1_cid, event.cid().unwrap());
+    };
+    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), protocol1).await {
+        panic!("should have found events");
+    }
+
+    let remaining = async move {
+        if let Some(event) = alice_events.next().await {
             panic!("unexpected event: {:?}", event);
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
-        panic!("should have found events");
-    }
+    let _ = tokio::time::timeout(Duration::from_millis(500), remaining).await;
 }
 
 // Should reject subscribing to messages with incorrect protocol grant scope.
@@ -513,9 +520,8 @@ async fn invalid_protocol() {
     // --------------------------------------------------
     // Bob subscribes to `protocol2` messages in Alice's event stream.
     // --------------------------------------------------
-    let filter = MessagesFilter::new().protocol("http://protocol2.xyz");
     let subscribe = SubscribeBuilder::new()
-        .add_filter(filter)
+        .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .permission_grant_id(&bob_grant_id)
         .build(&bob_keyring)
         .await
@@ -528,11 +534,9 @@ async fn invalid_protocol() {
     // --------------------------------------------------
     // Bob subscribes to `protocol1` or `protocol2` messages in Alice's event stream.
     // --------------------------------------------------
-    let filter1 = MessagesFilter::new().protocol("http://protocol2.xyz");
-    let filter2 = MessagesFilter::new().protocol("http://protocol2.xyz");
     let subscribe = SubscribeBuilder::new()
-        .add_filter(filter1)
-        .add_filter(filter2)
+        .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
+        .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .permission_grant_id(&bob_grant_id)
         .build(&bob_keyring)
         .await

@@ -12,7 +12,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::Protocol;

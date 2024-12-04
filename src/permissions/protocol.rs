@@ -2,7 +2,7 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 
-use crate::auth::Authorization;
+use crate::authorization::Authorization;
 use crate::permissions::{self, GrantData, RequestData, Scope};
 use crate::protocols::{
     Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,

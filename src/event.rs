@@ -48,6 +48,15 @@ impl Subscriber {
     }
 }
 
+impl Stream for Subscriber {
+    type Item = Event;
+
+    // Poll underlying stream for new events
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.inner.as_mut().poll_next(cx)
+    }
+}
+
 impl Default for Subscriber {
     fn default() -> Self {
         Self {
@@ -59,15 +68,6 @@ impl Default for Subscriber {
 impl fmt::Debug for Subscriber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Subscriber").finish()
-    }
-}
-
-impl Stream for Subscriber {
-    type Item = Event;
-
-    // Poll underlying stream for new events
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.inner.as_mut().poll_next(cx)
     }
 }
 

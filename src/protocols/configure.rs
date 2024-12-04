@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
+use crate::authorization::{Authorization, AuthorizationBuilder, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{ProtocolsFilter, query};

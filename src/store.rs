@@ -12,7 +12,7 @@ pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, TagFilter};
-use crate::{Descriptor, Method, Quota, Range, Result, auth, messages, protocols};
+use crate::{Descriptor, Method, Quota, Range, Result, authorization, messages, protocols};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -105,7 +105,7 @@ impl From<&Write> for Entry {
         );
 
         if let Some(attestation) = &write.attestation {
-            let attester = auth::signer_did(attestation).unwrap_or_default();
+            let attester = authorization::signer_did(attestation).unwrap_or_default();
             record.indexes.insert("attester".to_string(), Value::String(attester));
         }
 

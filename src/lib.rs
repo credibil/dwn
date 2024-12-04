@@ -2,7 +2,7 @@
 
 //! # Decentralized Web Node (web node)
 
-mod auth;
+pub mod authorization;
 pub mod data;
 pub mod endpoint;
 mod error;
@@ -18,7 +18,6 @@ mod tasks;
 mod utils;
 
 use ::serde::{Deserialize, Serialize};
-pub use auth::Authorization;
 use chrono::{DateTime, Utc};
 use derive_more::Display;
 

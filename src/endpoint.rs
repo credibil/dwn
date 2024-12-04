@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::Authorization;
+use crate::authorization::Authorization;
 use crate::provider::Provider;
 use crate::{Descriptor, Result, schema, unauthorized};
 

@@ -6,7 +6,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use super::MessagesFilter;
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{EventLog, Provider, Signer};
