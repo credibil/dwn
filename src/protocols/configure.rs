@@ -33,6 +33,10 @@ pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
+
+    // validate the message
+    configure.validate()?;
+
     // find any matching protocol entries
     let filter = ProtocolsFilter {
         protocol: configure.descriptor.definition.protocol.clone(),
@@ -52,13 +56,11 @@ pub async fn handle(
         if latest.descriptor.base.message_timestamp.cmp(current_ts) == Ordering::Greater {
             return Err(Error::Conflict("message is not the latest".to_string()));
         }
-        // when timestamps are identical, compare CIDs
-        if latest.descriptor.base.message_timestamp.cmp(current_ts) == Ordering::Equal {
-            if latest.cid()?.cmp(&configure.cid()?) == Ordering::Greater {
-                return Err(Error::Conflict(
-                    "message CID is smaller than previous entry".to_string(),
-                ));
-            }
+        // when timestamps are equal, compare the CIDs
+        if latest.descriptor.base.message_timestamp.cmp(current_ts) == Ordering::Equal
+            && latest.cid()?.cmp(&configure.cid()?) == Ordering::Greater
+        {
+            return Err(Error::Conflict("message CID is smaller than existing entry".to_string()));
         }
 
         // remove existing entries
@@ -156,7 +158,7 @@ impl Configure {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
 
         // authorize the author-delegate who signed the message
@@ -184,6 +186,23 @@ impl Configure {
         if protocol != self.descriptor.definition.protocol {
             return Err(forbidden!(" message and grant protocols do not match"));
         }
+
+        Ok(())
+    }
+
+    /// Validate the message.
+    fn validate(&self) -> Result<()> {
+        // validate protocol
+        utils::validate_url(&self.descriptor.definition.protocol)?;
+
+        // validate schemas
+        for t in self.descriptor.definition.types.values() {
+            if let Some(schema) = &t.schema {
+                utils::validate_url(schema)?;
+            }
+        }
+
+        validate_structure(&self.descriptor.definition)?;
 
         Ok(())
     }
@@ -492,7 +511,7 @@ impl ConfigureBuilder {
                 t.schema = Some(utils::clean_url(schema)?);
             }
         }
-        verify_structure(&definition)?;
+        validate_structure(&definition)?;
 
         let descriptor = ConfigureDescriptor {
             base: Descriptor {
@@ -525,23 +544,26 @@ impl ConfigureBuilder {
     }
 }
 
-fn verify_structure(definition: &Definition) -> Result<()> {
+// Verify the structure (rule sets) of the protocol definition.
+fn validate_structure(definition: &Definition) -> Result<()> {
     let keys = definition.types.keys().collect::<Vec<&String>>();
 
-    // validate the entire rule set
+    // parse rule set for roles
+    let roles = role_paths("", &definition.structure, &[])?;
+
+    // validate rule set hierarchy
     for rule_set in definition.structure.values() {
-        let roles = role_paths("", rule_set, vec![])?;
-        verify_rule_set(rule_set, "", &keys, &roles)?;
+        validate_rule_set(rule_set, "", &keys, &roles)?;
     }
 
     Ok(())
 }
 
 // Validates a rule set structure, recursively validating nested rule sets.
-fn verify_rule_set(
+fn validate_rule_set(
     rule_set: &RuleSet, protocol_path: &str, types: &Vec<&String>, roles: &Vec<String>,
 ) -> Result<()> {
-    // validate $size
+    // validate size rule
     if let Some(size) = &rule_set.size {
         if size.min > size.max {
             return Err(unexpected!("invalid size range at '{protocol_path}'"));
@@ -567,23 +589,19 @@ fn verify_rule_set(
         if let Some(role) = &action.role {
             // role must contain valid protocol paths to a role record
             if !roles.contains(role) {
-                return Err(unexpected!("missing role {role} in action for {protocol_path}"));
+                return Err(unexpected!("missing role {role} in action"));
             }
 
-            // all read-like ('read', 'query', 'subscribe') `can` actions must be present
+            // all `can` actions read-like ('read', 'query', 'subscribe')  must be present
             let allowed = [Action::Read, Action::Query, Action::Subscribe];
             if !allowed.iter().all(|ra| action.can.contains(ra)) {
-                return Err(unexpected!(
-                    "role {role} missing read-like action(s) for {protocol_path}"
-                ));
+                return Err(unexpected!("role {role} is missing read-like actions"));
             }
         }
 
         // when `who` is `anyone`, `of` cannot be set
         if action.who.as_ref().is_some_and(|w| w == &Actor::Anyone) && action.of.is_some() {
-            return Err(unexpected!(
-                "`of` must not be set when `who` is \"anyone\" for {protocol_path}"
-            ));
+            return Err(unexpected!("`of` must not be set when `who` is \"anyone\""));
         }
 
         // When `who` is "recipient" and `of` is unset, `can` must only contain
@@ -618,16 +636,10 @@ fn verify_rule_set(
 
         // ensure no duplicate actors or roles in the remaining action rules
         // ie. no two action rules can have the same combination of `who` + `of` or `role`.
-
-        // let other_iter = action_iter.clone();
         for other in action_iter.clone() {
             if action.who.is_some() {
                 if action.who == other.who && action.of == other.of {
-                    return Err(unexpected!(
-                        "more than one action rule per actor {:?} of {:?} not allowed within a rule set: {action:?}",
-                        action.who,
-                        action.of
-                    ));
+                    return Err(unexpected!("an actor may only have one rule within a rule set"));
                 }
             } else if action.role == other.role {
                 return Err(unexpected!(
@@ -648,31 +660,35 @@ fn verify_rule_set(
         } else {
             &format!("{protocol_path}/{set_name}")
         };
-        verify_rule_set(rule_set, protocol_path, types, roles)?;
+        validate_rule_set(rule_set, protocol_path, types, roles)?;
     }
 
     Ok(())
 }
 
 // Parses the given rule set hierarchy to get all the role protocol paths.
-fn role_paths(protocol_path: &str, rule_set: &RuleSet, roles: Vec<String>) -> Result<Vec<String>> {
+fn role_paths(
+    protocol_path: &str, structure: &BTreeMap<String, RuleSet>, roles: &[String],
+) -> Result<Vec<String>> {
     // restrict to max depth of 10 levels
     if protocol_path.split('/').count() > 10 {
         return Err(unexpected!("Entry nesting depth exceeded 10 levels."));
     }
 
-    for (rule_name, rule_set) in &rule_set.structure {
+    let mut roles = roles.to_owned();
+
+    // only check for roles in nested rule sets
+    for (rule_name, rule_set) in structure {
         let protocol_path = if protocol_path.is_empty() {
             rule_name
         } else {
             &format!("{protocol_path}/{rule_name}")
         };
 
-        let mut roles = roles.clone();
         if rule_set.role.is_some() {
             roles.push(protocol_path.to_string());
         } else {
-            role_paths(protocol_path, rule_set, roles)?;
+            roles = role_paths(protocol_path, &rule_set.structure, &roles)?;
         }
     }
 
