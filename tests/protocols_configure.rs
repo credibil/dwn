@@ -172,12 +172,11 @@ async fn overwrite_smaller() {
             .await
             .expect("should build"),
     ];
+    messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
 
     let timestamp = messages[0].descriptor().message_timestamp;
     messages[1].descriptor.base.message_timestamp = timestamp;
     messages[2].descriptor.base.message_timestamp = timestamp;
-
-    // messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
 
     // --------------------------------------------------
     // Alice attempts to configure all 3 protocols, failing when the protocol
@@ -190,15 +189,11 @@ async fn overwrite_smaller() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check the protocol with the smallest CID cannot be written
-    // let Err(Error::Conflict(_)) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await
-    // else {
-    //     panic!("should not configure protocol");
-    // };
-    let Err(e) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await else {
+    let Err(Error::Conflict(_)) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await
+    else {
         panic!("should not configure protocol");
     };
-    println!("{:?}", e);
-    
+
     // check the protocol with the largest CID can be written
     let reply = endpoint::handle(ALICE_DID, messages[2].clone(), &provider)
         .await
