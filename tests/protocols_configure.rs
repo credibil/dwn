@@ -176,7 +176,7 @@ async fn overwrite_smaller() {
     let timestamp = messages[0].descriptor().message_timestamp;
     messages[1].descriptor.base.message_timestamp = timestamp;
     messages[2].descriptor.base.message_timestamp = timestamp;
-
+    
     messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
 
     // --------------------------------------------------
