@@ -194,10 +194,11 @@ async fn overwrite_smaller() {
     // else {
     //     panic!("should not configure protocol");
     // };
-    if let Err(e) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await {
-        println!("{:?}", e);
+    let Err(e) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await else {
+        panic!("should not configure protocol");
     };
-
+    println!("{:?}", e);
+    
     // check the protocol with the largest CID can be written
     let reply = endpoint::handle(ALICE_DID, messages[2].clone(), &provider)
         .await
