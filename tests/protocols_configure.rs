@@ -192,6 +192,7 @@ async fn overwrite_smaller() {
     // check the protocol with the smallest CID cannot be written
     let Err(Error::Conflict(_)) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await
     else {
+        println!("{messages:?}");
         panic!("should not configure protocol");
     };
 
