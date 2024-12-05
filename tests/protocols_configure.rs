@@ -177,7 +177,7 @@ async fn overwrite_smaller() {
     messages[1].descriptor.base.message_timestamp = timestamp;
     messages[2].descriptor.base.message_timestamp = timestamp;
 
-    messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
+    // messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
 
     // --------------------------------------------------
     // Alice attempts to configure all 3 protocols, failing when the protocol
@@ -193,7 +193,6 @@ async fn overwrite_smaller() {
     let Err(Error::Conflict(_)) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await
     else {
         messages.iter().for_each(|m| println!("{:?}\n", m.cid().unwrap()));
-        println!("{messages:?}");
         panic!("should not configure protocol");
     };
 
