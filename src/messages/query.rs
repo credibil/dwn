@@ -84,7 +84,7 @@ impl Query {
 
         // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Err(forbidden!("requestor has no permission grant"));
+            return Err(forbidden!("author has no permission grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), provider).await?;

@@ -323,10 +323,6 @@ async fn mismatched_grant_scope() {
     };
 }
 
-// **************************************************
-// Protocol Grant Scopes
-// **************************************************
-
 // Should allow querying of messages with matching protocol grant scope.
 #[tokio::test]
 async fn match_protocol_scope() {

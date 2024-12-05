@@ -5,15 +5,16 @@
 
 use std::collections::BTreeMap;
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
+use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use tokio::time;
+use vercre_dwn::permissions::{GrantBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{
     Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
 };
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::{Error, Message, endpoint};
+use vercre_dwn::{Error, Message, Method, endpoint};
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]
@@ -503,7 +504,7 @@ async fn invalid_read_action() {
     assert_eq!(desc, "role friend is missing read-like actions");
 
     // --------------------------------------------------
-    // Control: it should validate when all actions are present.
+    // Control: it should suceed when all actions are present.
     // --------------------------------------------------
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
@@ -524,4 +525,87 @@ async fn invalid_read_action() {
     let reply =
         endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should allows an external party to configure a protocol when they have a valid grant.
+#[tokio::test]
+async fn valid_grant() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to configure protocols.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .expires_in(60 * 60 * 24)
+        .scope(Scope::Protocols {
+            method: Method::Configure,
+            protocol: None,
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let bob_grant_id = bob_grant.record_id.clone();
+    // let message_cid = bob_grant.cid().expect("should get CID");
+
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob configures a protocol on Alice's web node.
+    // --------------------------------------------------
+    let configure = ConfigureBuilder::new()
+        .definition(Definition::new("http://minimal.xyz"))
+        .permission_grant_id(&bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol should not be able to use Bob's grant to configure a protocol.
+    // --------------------------------------------------
+    let configure = ConfigureBuilder::new()
+        .definition(Definition::new("http://minimal.xyz"))
+        .permission_grant_id(bob_grant_id)
+        .build(&carol_keyring)
+        .await
+        .expect("should build");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    else {
+        panic!("should not configure protocol");
+    };
+
+    // --------------------------------------------------
+    // Alice revokes Bob's grant.
+    // --------------------------------------------------
+    let bob_revocation = RevocationBuilder::new()
+        .grant(bob_grant)
+        .build(&alice_keyring)
+        .await
+        .expect("should create revocation");
+
+    let reply = endpoint::handle(ALICE_DID, bob_revocation, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify Bob can no longer use the grant.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter("http://minimal.xyz")
+        .build(&bob_keyring)
+        .await
+        .expect("should create query");
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should not configure protocol");
+    };
 }

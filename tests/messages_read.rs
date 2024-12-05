@@ -41,7 +41,7 @@ async fn read_message() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice give Bob permission to read any of her records.
+    // Alice grants Bob permission to read any of her records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)

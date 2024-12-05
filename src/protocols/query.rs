@@ -1,11 +1,10 @@
 //! # Protocols Query
 
 use async_trait::async_trait;
-use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::authorization::{Authorization, AuthorizationBuilder, JwsPayload};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
@@ -114,14 +113,16 @@ impl Query {
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
 
-        // no grant -> author == owner
-        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-        let payload: JwsPayload = serde_json::from_slice(&decoded)?;
-        let Some(permission_grant_id) = &payload.permission_grant_id else {
-            // return Err(forbidden!("missing permission grant ID"));
+        if authzn.author()? == owner {
             return Ok(());
+        }
+        
+        // verify grant
+        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
+            return Err(forbidden!("author has no permission grant"));
         };
-        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // if set, query and grant protocols need to match
         let Some(protocol) = grant.data.scope.protocol() else {

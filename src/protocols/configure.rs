@@ -6,14 +6,13 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
-use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-use crate::authorization::{Authorization, AuthorizationBuilder, JwsPayload};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{ProtocolsFilter, query};
@@ -161,23 +160,16 @@ impl Configure {
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
 
-        // authorize the author-delegate who signed the message
-        if let Some(delegated) = &authzn.author_delegated_grant {
-            let grant = delegated.to_grant()?;
-            grant.verify(owner, &authzn.signer()?, &self.descriptor.base, store).await?;
-        }
-
-        if self.authorization.author()? == owner {
+        if authzn.author()? == owner {
             return Ok(());
         }
 
         // permission grant
-        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-        let payload: JwsPayload = serde_json::from_slice(&decoded)?;
-        let Some(permission_grant_id) = &payload.permission_grant_id else {
-            return Err(forbidden!("missing permission grant ID"));
+        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
+            return Err(forbidden!("author has no permission grant"));
         };
-        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        grant.verify(owner, &authzn.author()?, self.descriptor(), store).await?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
         let Some(protocol) = grant.data.scope.protocol() else {

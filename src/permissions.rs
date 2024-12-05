@@ -73,6 +73,15 @@ pub enum Scope {
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
+    /// Scope applies to the `Protocols` interface.
+    Protocols {
+        /// The method the permission is applied to.
+        method: Method,
+
+        /// Scope protocol.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        protocol: Option<String>,
+    },
 }
 
 impl Default for Scope {
@@ -92,6 +101,7 @@ impl Scope {
         match &self {
             Self::Records { .. } => Interface::Records,
             Self::Messages { .. } => Interface::Messages,
+            Self::Protocols { .. } => Interface::Protocols,
         }
     }
 
@@ -99,7 +109,9 @@ impl Scope {
     #[must_use]
     pub fn method(&self) -> Method {
         match self {
-            Self::Records { method, .. } | Self::Messages { method, .. } => method.clone(),
+            Self::Records { method, .. }
+            | Self::Messages { method, .. }
+            | Self::Protocols { method, .. } => method.clone(),
         }
     }
 
@@ -108,7 +120,9 @@ impl Scope {
     pub fn protocol(&self) -> Option<&str> {
         match &self {
             Self::Records { protocol, .. } => Some(protocol),
-            Self::Messages { protocol, .. } => protocol.as_deref(),
+            Self::Messages { protocol, .. } | Self::Protocols { protocol, .. } => {
+                protocol.as_deref()
+            }
         }
     }
 
