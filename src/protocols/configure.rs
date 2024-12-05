@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Timelike, Utc};
+use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -50,18 +50,15 @@ pub async fn handle(
             return Err(unexpected!("no matching protocol entries found"));
         };
 
-        let current_ts = configure.descriptor.base.message_timestamp.timestamp_micros();
+        let configure_ts = configure.descriptor.base.message_timestamp.timestamp_micros();
         let latest_ts = latest.descriptor.base.message_timestamp.timestamp_micros();
 
-        // println!("latest_ts: {}; current_ts: {}", latest_ts, current_ts);
-        // println!("latest_cid: {}; configure_cid: {}", latest.cid()?, configure.cid()?);
-
         // when latest message is more recent than incoming message
-        if latest_ts > current_ts {
+        if latest_ts > configure_ts {
             return Err(Error::Conflict("message is not the latest".to_string()));
         }
-        // when timestamps are equal, compare the CIDs
-        if latest_ts == current_ts && latest.cid()?.cmp(&configure.cid()?) == Ordering::Greater {
+        // when latest message CID is larger than incoming message CID
+        if latest_ts == configure_ts && latest.cid()?.cmp(&configure.cid()?) == Ordering::Greater {
             return Err(Error::Conflict("message CID is smaller than existing entry".to_string()));
         }
 

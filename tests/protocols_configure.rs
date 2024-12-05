@@ -172,11 +172,13 @@ async fn overwrite_smaller() {
             .await
             .expect("should build"),
     ];
-    messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
 
+    // change timestamp before sorting (CID is recalculated)
     let timestamp = messages[0].descriptor().message_timestamp;
     messages[1].descriptor.base.message_timestamp = timestamp;
     messages[2].descriptor.base.message_timestamp = timestamp;
+
+    messages.sort_unstable_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
 
     // --------------------------------------------------
     // Alice attempts to configure all 3 protocols, failing when the protocol

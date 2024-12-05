@@ -2,7 +2,6 @@
 //!
 //! `Delete` is a message type used to delete a record in the web node.
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
@@ -269,9 +268,9 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 
     // TODO: merge this code with `RecordsWrite`
     // if the incoming message is not the newest, return Conflict
-    let delete_ts = delete.descriptor().message_timestamp;
-    let latest_ts = newest_existing.descriptor().message_timestamp;
-    if delete_ts.cmp(&latest_ts) == Ordering::Less {
+    let delete_ts = delete.descriptor().message_timestamp.timestamp_micros();
+    let latest_ts = newest_existing.descriptor().message_timestamp.timestamp_micros();
+    if delete_ts < latest_ts {
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
 
@@ -348,11 +347,7 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
         records.iter().filter(|m| m.descriptor().method == Method::Write).collect::<Vec<&Entry>>();
 
     // order records from earliest to most recent
-    writes.sort_by(|a, b| {
-        let ts_a = a.descriptor().message_timestamp;
-        let ts_b = b.descriptor().message_timestamp;
-        ts_a.cmp(&ts_b)
-    });
+    writes.sort_by(|a, b| a.descriptor().message_timestamp.cmp(&b.descriptor().message_timestamp));
 
     // delete data for the most recent write
     let Some(latest) = writes.pop() else {
@@ -377,28 +372,29 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
 // given tenant, but keep the initial write write for future processing by
 // ensuring its `private` index is "true".
 async fn delete_earlier(
-    owner: &str, newest: &Entry, existing: &[Entry], provider: &impl Provider,
+    owner: &str, latest: &Entry, existing: &[Entry], provider: &impl Provider,
 ) -> Result<()> {
     // N.B. under normal circumstances, there will only be, at most, two existing
     // records per `record_id` (initial + a potential subsequent write/delete),
-    for message in existing {
-        let ts_message = message.descriptor().message_timestamp;
-        let ts_newest = newest.descriptor().message_timestamp;
+    for entry in existing {
+        let entry_ts = entry.descriptor().message_timestamp.timestamp_micros();
+        let latest_ts = latest.descriptor().message_timestamp.timestamp_micros();
 
-        if ts_message.cmp(&ts_newest) == Ordering::Less {
-            delete_data(owner, message, newest, provider).await?;
+        if entry_ts < latest_ts {
+            delete_data(owner, entry, latest, provider).await?;
 
             // when the existing message is the initial write, retain it BUT,
             // ensure the message is marked as `archived`
-            if let Some(write) = message.as_write()
+            if let Some(write) = entry.as_write()
                 && write.is_initial()?
             {
                 let mut record = Entry::from(write);
                 record.indexes.insert("archived".to_string(), Value::Bool(true));
                 MessageStore::put(provider, owner, &record).await?;
             } else {
-                MessageStore::delete(provider, owner, &message.cid()?).await?;
-                EventLog::delete(provider, owner, &message.cid()?).await?;
+                let cid = entry.cid()?;
+                MessageStore::delete(provider, owner, &cid).await?;
+                EventLog::delete(provider, owner, &cid).await?;
             }
         }
     }

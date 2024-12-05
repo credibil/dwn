@@ -2,7 +2,6 @@
 //!
 //! `Write` is a message type used to create a new record in the web node.
 
-use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::io::Read;
 
@@ -57,12 +56,12 @@ pub async fn handle(
 
     // confirm current message is the most recent AND previous write was not a 'delete'
     if let Some(latest_entry) = &latest_entry {
-        let current_ts = write.descriptor.base.message_timestamp;
-        let latest_ts = latest_entry.descriptor().message_timestamp;
-
-        if current_ts.cmp(&latest_ts) == Ordering::Less {
+        let write_ts = write.descriptor.base.message_timestamp.timestamp_micros();
+        let latest_ts = latest_entry.descriptor().message_timestamp.timestamp_micros();
+        if write_ts < latest_ts {
             return Err(Error::Conflict("newer write record already exists".to_string()));
         }
+
         if latest_entry.descriptor().method == Method::Delete {
             return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
         }
