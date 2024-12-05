@@ -13,7 +13,8 @@ use vercre_dwn::permissions::{GrantBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{
     Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
 };
-use vercre_dwn::provider::KeyStore;
+use vercre_dwn::provider::{EventLog, KeyStore};
+use vercre_dwn::store::{ProtocolsFilter, ProtocolsQuery, Query};
 use vercre_dwn::{Error, Message, Method, endpoint};
 
 // Should allow a protocol definition with no schema or `data_format`.
@@ -527,7 +528,7 @@ async fn invalid_read_action() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
-// Should allows an external party to configure a protocol when they have a valid grant.
+// Should allow an external party to configure a protocol when they have a valid grant.
 #[tokio::test]
 async fn valid_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -550,7 +551,6 @@ async fn valid_grant() {
         .expect("should create grant");
 
     let bob_grant_id = bob_grant.record_id.clone();
-    // let message_cid = bob_grant.cid().expect("should get CID");
 
     let reply =
         endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
@@ -608,4 +608,126 @@ async fn valid_grant() {
     let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should not configure protocol");
     };
+}
+
+// Should allow configuring a specific protocol.
+#[tokio::test]
+async fn configure_scope() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to configure protoocols for a specific protocol.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .expires_in(60 * 60 * 24)
+        .scope(Scope::Protocols {
+            method: Method::Configure,
+            protocol: Some("https://example.com/protocol/allowed".to_string()),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let bob_grant_id = bob_grant.record_id.clone();
+
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob configures a protocol for the permitted protocol.
+    // --------------------------------------------------
+    let configure = ConfigureBuilder::new()
+        .definition(Definition::new("https://example.com/protocol/allowed"))
+        .permission_grant_id(&bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    //  Bob fails to configure a protocol for a different protocol.
+    // --------------------------------------------------
+    let configure = ConfigureBuilder::new()
+        .definition(Definition::new("https://example.com/protocol/not-allowed"))
+        .permission_grant_id(bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    else {
+        panic!("should not configure protocol");
+    };
+}
+
+// Should add an event when a protocol is configured.
+#[tokio::test]
+async fn configure_event() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let configure = ConfigureBuilder::new()
+        .definition(Definition::new("https://minimal.xyz"))
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // check log
+    let query = Query::Protocols(ProtocolsQuery::from(ProtocolsFilter {
+        protocol: "https://minimal.xyz".to_string(),
+    }));
+
+    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
+    assert_eq!(entries.len(), 1);
+}
+
+// Should delete older events when one is overwritten.
+#[tokio::test]
+async fn delete_older_events() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let oldest = ConfigureBuilder::new()
+        .definition(Definition::new("https://minimal.xyz"))
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, oldest, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    time::sleep(time::Duration::from_secs(1)).await;
+
+    let newest = ConfigureBuilder::new()
+        .definition(Definition::new("https://minimal.xyz"))
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let newest_cid = newest.cid().expect("should have CID");
+
+    let reply =
+        endpoint::handle(ALICE_DID, newest, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // check log
+    let query = Query::Protocols(ProtocolsQuery::from(ProtocolsFilter {
+        protocol: "https://minimal.xyz".to_string(),
+    }));
+
+    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].cid().unwrap(), newest_cid);
 }

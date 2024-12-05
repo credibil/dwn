@@ -116,7 +116,7 @@ impl Query {
         if authzn.author()? == owner {
             return Ok(());
         }
-        
+
         // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
             return Err(forbidden!("author has no permission grant"));

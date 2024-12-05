@@ -125,15 +125,6 @@ impl Scope {
             }
         }
     }
-
-    // /// Get records scope options.
-    // #[must_use]
-    // pub const fn options(&self) -> Option<&RecordsOptions> {
-    //     match &self.protocol {
-    //         Some(ScopeProtocol::Records { options, .. }) => options.as_ref(),
-    //         _ => None,
-    //     }
-    // }
 }
 
 /// Fields specific to the `records` scope.
