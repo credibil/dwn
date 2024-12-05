@@ -44,7 +44,8 @@ pub struct Query {
     pub descriptor: QueryDescriptor,
 
     /// The message authorization.
-    pub authorization: Authorization,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<Authorization>,
 }
 
 #[async_trait]
@@ -60,7 +61,7 @@ impl Message for Query {
     }
 
     fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
+        self.authorization.as_ref()
     }
 
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
@@ -111,7 +112,9 @@ impl Query {
     /// # Errors
     /// TODO: Add errors
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
-        let authzn = &self.authorization;
+        let Some(authzn) = &self.authorization else {
+            return Ok(());
+        };
 
         if authzn.author()? == owner {
             return Ok(());
@@ -208,11 +211,9 @@ impl QueryBuilder {
         if let Some(id) = self.permission_grant_id {
             builder = builder.permission_grant_id(id);
         }
-        let authorization = builder.build(signer).await?;
-
         let query = Query {
             descriptor,
-            authorization,
+            authorization: Some(builder.build(signer).await?),
         };
 
         schema::validate(&query)?;
