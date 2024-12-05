@@ -177,7 +177,7 @@ async fn overwrite_smaller() {
     messages[1].descriptor.base.message_timestamp = timestamp;
     messages[2].descriptor.base.message_timestamp = timestamp;
 
-    // messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
+    messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
 
     // --------------------------------------------------
     // Alice attempts to configure all 3 protocols, failing when the protocol
