@@ -186,33 +186,14 @@ pub struct ProtocolsQuery {
     pub published: Option<bool>,
 }
 
-impl ProtocolsQuery {
-    #[must_use]
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    #[must_use]
-    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
-        self.protocol = Some(protocol.into());
-        self
-    }
-
-    #[allow(dead_code)]
-    #[must_use]
-    pub(crate) const fn published(mut self, published: bool) -> Self {
-        self.published = Some(published);
-        self
-    }
-
-    pub(crate) fn build(&self) -> Query {
-        Query::Protocols(self.clone())
-    }
-}
-
-impl From<ProtocolsFilter> for ProtocolsQuery {
-    fn from(filter: ProtocolsFilter) -> Self {
-        Self::new().protocol(filter.protocol)
+impl From<protocols::Query> for Query {
+    fn from(query: protocols::Query) -> Self {
+        let mut pq = ProtocolsQuery::default();
+        if let Some(filter) = &query.descriptor.filter {
+            pq.protocol = filter.protocol.clone();
+            pq.published = filter.published;
+        }
+        Self::Protocols(pq)
     }
 }
 

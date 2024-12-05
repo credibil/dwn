@@ -15,7 +15,7 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::protocols::{ProtocolsFilter, query};
+use crate::protocols::query;
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::DelegatedGrant;
 use crate::store::{Entry, EntryType};
@@ -37,10 +37,9 @@ pub async fn handle(
     configure.validate()?;
 
     // find any matching protocol entries
-    let filter = ProtocolsFilter {
-        protocol: configure.descriptor.definition.protocol.clone(),
-    };
-    let results = query::fetch_config(owner, Some(filter), provider).await?;
+    let results =
+        query::fetch_config(owner, Some(&configure.descriptor.definition.protocol), provider)
+            .await?;
 
     // determine incoming message is the latest
     if let Some(existing) = &results {

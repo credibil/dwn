@@ -60,6 +60,7 @@ async fn query_private() {
 async fn query_published() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
     // Alice configures 3 protocols: 1 private + 2 published.
@@ -82,11 +83,8 @@ async fn query_published() {
     // --------------------------------------------------
     // Query as an anonymous user.
     // --------------------------------------------------
-    let query = QueryBuilder::new()
-        .filter("http://protocol-1.xyz")
-        .build(&alice_keyring)
-        .await
-        .expect("should build");
+    let query =
+        QueryBuilder::new().filter("http://protocol-1.xyz").build_anon().expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -96,10 +94,10 @@ async fn query_published() {
     // --------------------------------------------------
     // Query without sufficient permission to access the private configuration.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should build");
+    let query = QueryBuilder::new().build_anon().expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 3);
+    assert_eq!(body.entries.unwrap().len(), 2);
 }

@@ -6,11 +6,11 @@ use serde_json::{Map, Value, json};
 
 use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{
-    self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
+    self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet, query,
 };
 use crate::provider::MessageStore;
 use crate::records::Write;
-use crate::store::{ProtocolsQuery, RecordsQuery};
+use crate::store::RecordsQuery;
 use crate::{Range, Result, forbidden, schema, utils};
 
 /// Verify the integrity of `RecordsWrite` messages using a protocol.
@@ -290,17 +290,14 @@ pub async fn protocol_definition(
         return Ok(protocols::DEFINITION.clone());
     }
 
-    // fetch the corresponding protocol definition
-    let query = ProtocolsQuery::new().protocol(&protocol_uri).build();
-    let (protocols, _) = store.query(owner, &query).await?;
+    let Some(protocols) = query::fetch_config(owner, Some(protocol_uri), store).await? else {
+        return Err(forbidden!("unable to find protocol definition"));
+    };
     if protocols.is_empty() {
-        return Err(forbidden!("unable to find protocol definition for {protocol_uri}"));
+        return Err(forbidden!("unable to find protocol definition"));
     }
 
-    let Some(protocol) = protocols[0].as_configure() else {
-        return Err(forbidden!("expected `ProtocolsConfigure` message"));
-    };
-    Ok(protocol.descriptor.definition.clone())
+    Ok(protocols[0].descriptor.definition.clone())
 }
 
 pub fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {

@@ -14,7 +14,6 @@ use vercre_dwn::protocols::{
     Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
 };
 use vercre_dwn::provider::{EventLog, KeyStore};
-use vercre_dwn::store::{ProtocolsFilter, ProtocolsQuery, Query};
 use vercre_dwn::{Error, Message, Method, endpoint};
 
 // Should allow a protocol definition with no schema or `data_format`.
@@ -685,11 +684,13 @@ async fn configure_event() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check log
-    let query = Query::Protocols(ProtocolsQuery::from(ProtocolsFilter {
-        protocol: "https://minimal.xyz".to_string(),
-    }));
+    let query = QueryBuilder::new()
+        .filter("https://minimal.xyz")
+        .build_anon()
+        .expect("should create query");
 
-    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
+    let (entries, _) =
+        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -724,11 +725,14 @@ async fn delete_older_events() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check log
-    let query = Query::Protocols(ProtocolsQuery::from(ProtocolsFilter {
-        protocol: "https://minimal.xyz".to_string(),
-    }));
+    let query = QueryBuilder::new()
+        .filter("https://minimal.xyz")
+        .build(&alice_keyring)
+        .await
+        .expect("should build query");
 
-    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
+    let (entries, _) =
+        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cid().unwrap(), newest_cid);
 }
