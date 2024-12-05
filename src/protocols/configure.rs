@@ -59,11 +59,7 @@ pub async fn handle(
         if latest.descriptor.base.message_timestamp.cmp(current_ts) == Ordering::Equal
             && latest.cid()?.cmp(&configure.cid()?) == Ordering::Greater
         {
-            return Err(Error::Conflict(format!(
-                "message CID is smaller than existing entry. latest: {}, incoming: {}",
-                latest.cid()?,
-                configure.cid()?
-            )));
+            return Err(Error::Conflict("message CID is smaller than existing entry".to_string()));
         }
 
         // remove existing entries
