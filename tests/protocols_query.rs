@@ -20,10 +20,8 @@ async fn query_private() {
     // Alice configures 3 protocols.
     // --------------------------------------------------
     for i in 1..=3 {
-        let definition = Definition::new(format!("http://protocol-{i}.xyz"));
-
         let configure = ConfigureBuilder::new()
-            .definition(definition)
+            .definition(Definition::new(format!("http://protocol-{i}.xyz")))
             .build(&alice_keyring)
             .await
             .expect("should build");
@@ -54,7 +52,7 @@ async fn query_private() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 4);
+    assert_eq!(body.entries.unwrap().len(), 3);
 }
 
 // Should return published protocols matching the query if query is unauthenticated or unauthorized.
@@ -103,5 +101,5 @@ async fn query_published() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 4);
+    assert_eq!(body.entries.unwrap().len(), 3);
 }
