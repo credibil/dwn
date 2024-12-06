@@ -56,7 +56,7 @@ async fn overwrite_older() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .existing_write(initial_write)
+        .existing(initial_write)
         .build(&alice_keyring)
         .await
         .expect("should create write");

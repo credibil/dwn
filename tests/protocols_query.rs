@@ -6,6 +6,7 @@
 use std::time::Duration;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use chrono::Days;
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -205,7 +206,7 @@ async fn valid_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
 
     // --------------------------------------------------
     // Alice creates 2 protocols, 1 published and 1 unpublished.
@@ -409,7 +410,7 @@ async fn valid_scope() {
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-3.xyz");
 }
 
-// Should reject an external party when they rpresent an expired grant.
+// Should reject an external party when they present an expired grant.
 #[tokio::test]
 async fn expired_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -439,7 +440,7 @@ async fn expired_grant() {
     // --------------------------------------------------
     // Bob attempts to query for Alice's protocols using the expired grant.
     // --------------------------------------------------
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    time::sleep(Duration::from_secs(1)).await;
 
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
@@ -450,4 +451,167 @@ async fn expired_grant() {
     let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
+}
+
+// Should reject an external party when they present a grant that is not yet active.
+#[tokio::test]
+async fn inactive_grant() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to query protocols.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Protocols {
+            method: Method::Query,
+            protocol: None,
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let bob_grant_id = bob_grant.record_id.clone();
+
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to query for Alice's protocols using an inactive grant.
+    // --------------------------------------------------
+    let mut query = QueryBuilder::new()
+        .permission_grant_id(&bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    // fake inactive grant by setting message's timestamp prior to grant activation
+    let older_timestamp = query
+        .descriptor
+        .base
+        .message_timestamp
+        .checked_sub_days(Days::new(1))
+        .expect("should subtract");
+    query.descriptor.base.message_timestamp = older_timestamp;
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be Forbidden");
+    };
+}
+
+// Should reject an external party using a grant with a different scope.
+#[tokio::test]
+async fn invalid_scope() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to read records.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Records {
+            method: Method::Read,
+            protocol: "https://example.com/protocol/test".to_string(),
+            options: None,
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let bob_grant_id = bob_grant.record_id.clone();
+
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to query protocols using the `RecordsRead` grant.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .permission_grant_id(&bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be Forbidden");
+    };
+}
+
+// Should reject an external party using a grant if the grant cannot be found.
+#[tokio::test]
+async fn missing_grant() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    // let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Bob attempts to query protocols using a grant that cannot be found in the database.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .permission_grant_id("somerandomgrantid")
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be Forbidden");
+    };
+}
+
+// Should fail if the grant has not been granted for the owner.
+#[tokio::test]
+async fn incorrect_grantor() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice gives Carol a permission grant with scope ProtocolsQuery.
+    // --------------------------------------------------
+    let carol_grant = GrantBuilder::new()
+        .granted_to(CAROL_DID)
+        .scope(Scope::Records {
+            method: Method::Read,
+            protocol: "https://example.com/protocol/test".to_string(),
+            options: None,
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let carol_grant_id = carol_grant.record_id.clone();
+
+    let reply =
+        endpoint::handle(ALICE_DID, carol_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob (for some unknown reason) stores the grant on his web node.
+    // --------------------------------------------------
+    let mut grant = carol_grant;
+    grant.sign_as_owner(&bob_keyring).await.expect("should sign");
+
+    let reply = endpoint::handle(BOB_DID, grant, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    //  Carol attempts (and fails) to use her grant to gain access to Bob's protocols.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .permission_grant_id(carol_grant_id)
+        .build(&carol_keyring)
+        .await
+        .expect("should build");
+
+    let Err(Error::Forbidden(desc)) = endpoint::handle(BOB_DID, query, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(desc, "grant not granted by grantor");
 }

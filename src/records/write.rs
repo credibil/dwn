@@ -302,7 +302,7 @@ impl Write {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub async fn sign(
+    pub async fn sign_as_author(
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
         signer: &impl Signer,
     ) -> Result<()> {
@@ -865,7 +865,7 @@ impl WriteBuilder {
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn existing_write(mut self, existing_write: Write) -> Self {
+    pub fn existing(mut self, existing_write: Write) -> Self {
         self.existing_write = Some(existing_write);
         self
     }
@@ -969,7 +969,7 @@ impl WriteBuilder {
         }
 
         // sign message
-        write.sign(self.permission_grant_id, self.protocol_role, keyring).await?;
+        write.sign_as_author(self.permission_grant_id, self.protocol_role, keyring).await?;
 
         Ok(write)
     }
@@ -1037,8 +1037,7 @@ async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Entry>> {
     // N.B. unset method in order to get Write and Delete messages
-    let query =
-        RecordsQuery::new().record_id(record_id).include_archived(true).method(None);
+    let query = RecordsQuery::new().record_id(record_id).include_archived(true).method(None);
 
     let (entries, _) = store.query(owner, &query.into()).await.unwrap();
     Ok(entries)

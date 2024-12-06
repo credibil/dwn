@@ -12,6 +12,13 @@ use crate::provider::{MessageStore, Provider, Signer};
 use crate::store::{self, Cursor};
 use crate::{Descriptor, Interface, Method, Result, permissions, schema, utils};
 
+// Access level for query.
+#[derive(PartialEq, PartialOrd)]
+enum Access {
+    Published,
+    Unpublished,
+}
+
 /// Process query message.
 ///
 /// # Errors
@@ -28,7 +35,7 @@ pub async fn handle(
     let mut store_query = store::ProtocolsQuery::from(query.clone());
 
     // unauthorized queries can query for published protocols
-    if !query.authorize(owner, provider).await? {
+    if query.authorize(owner, provider).await? == Access::Published {
         store_query.published = Some(true);
     };
 
@@ -129,18 +136,18 @@ impl Query {
     ///
     /// # Errors
     /// TODO: Add errors
-    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<bool> {
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<Access> {
         let Some(authzn) = &self.authorization else {
-            return Ok(false);
+            return Ok(Access::Published);
         };
 
         if authzn.author()? == owner {
-            return Ok(true);
+            return Ok(Access::Unpublished);
         }
 
         // does the message have a permission grant?
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Ok(false);
+            return Ok(Access::Published);
         };
 
         // verify permission grant
@@ -149,18 +156,18 @@ impl Query {
 
         // if set, query and grant protocols need to match
         let Some(protocol) = grant.data.scope.protocol() else {
-            return Ok(true);
+            return Ok(Access::Unpublished);
         };
         // has a grant but no filter: published protocols only
         let Some(filter) = &self.descriptor.filter else {
-            return Ok(false);
+            return Ok(Access::Published);
         };
         // filter protocol must match grant protocol
         if protocol != filter.protocol {
-            return Ok(false);
+            return Ok(Access::Published);
         }
 
-        Ok(true)
+        Ok(Access::Unpublished)
     }
 }
 

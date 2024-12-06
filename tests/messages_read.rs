@@ -310,7 +310,7 @@ async fn no_data_after_update() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .existing_write(write)
+        .existing(write)
         .build(&alice_keyring)
         .await
         .expect("should update write");

@@ -150,7 +150,7 @@ impl Grant {
 
         // verifies `grantor` against actual signer
         if grantor != self.grantor {
-            return Err(forbidden!("grant not granted by {grantor}"));
+            return Err(forbidden!("grant not granted by grantor"));
         }
 
         // verify grant scope for interface
@@ -160,7 +160,7 @@ impl Grant {
 
         // verify grant scope method
         if descriptor.method != self.data.scope.method() {
-            return Err(forbidden!("method {} not within the scope of grant", descriptor.method));
+            return Err(forbidden!("method is not within the scope of grant"));
         }
 
         // verify the message is within the grant's time frame

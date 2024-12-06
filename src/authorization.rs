@@ -164,6 +164,9 @@ impl Authorization {
     }
 
     /// Get the JWS payload of the message.
+    /// 
+    /// # Errors
+    /// TODO: Add errors
     pub fn jws_payload(&self) -> Result<JwsPayload> {
         let base64 = &self.signature.payload;
         let decoded = Base64UrlUnpadded::decode_vec(base64)
