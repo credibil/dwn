@@ -145,7 +145,7 @@ impl Grant {
     ) -> Result<()> {
         // verify the `grantee` against intended recipient
         if grantee != self.grantee {
-            return Err(forbidden!("grant not granted to {grantee}"));
+            return Err(forbidden!("grant not granted to grantee"));
         }
 
         // verifies `grantor` against actual signer

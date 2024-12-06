@@ -23,7 +23,7 @@ pub(crate) async fn fetch_grant(
     let (entries, _) = store.query(owner, &query.into()).await?;
 
     let Some(entry) = entries.first() else {
-        return Err(forbidden!("no grants found"));
+        return Err(forbidden!("no grant found"));
     };
     let Some(write) = entry.as_write() else {
         return Err(forbidden!("not a valid grant"));

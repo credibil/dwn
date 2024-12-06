@@ -236,7 +236,7 @@ async fn invalid_protocol() {
     else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "invalid URL minimal.xyz/: invalid format");
+    assert_eq!(desc, "invalid URL: minimal.xyz/");
 }
 
 // Should return a status of BadRequest (400) when schema is not normalized.
@@ -264,7 +264,7 @@ async fn invalid_schema() {
     else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "invalid URL bad-schema.xyz/: invalid format");
+    assert_eq!(desc, "invalid URL: bad-schema.xyz/");
 }
 
 // Should reject non-owner requests with no grant with status of Forbidden (403).

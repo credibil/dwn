@@ -16,7 +16,7 @@ pub fn clean_url(url: &str) -> Result<String> {
 }
 
 pub fn validate_url(url: &str) -> Result<()> {
-    url.parse::<Uri>().map_or_else(|e| Err(unexpected!("invalid URL {url}: {e}")), |_| Ok(()))
+    url.parse::<Uri>().map_or_else(|_| Err(unexpected!("invalid URL: {url}")), |_| Ok(()))
 }
 
 #[cfg(test)]
