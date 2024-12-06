@@ -6,6 +6,7 @@ use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
+use tokio::time;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
@@ -71,7 +72,7 @@ async fn owner_events() {
             }
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
+    if let Err(_) = time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found event");
     }
 }

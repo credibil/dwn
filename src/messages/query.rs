@@ -84,7 +84,7 @@ impl Query {
 
         // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Err(forbidden!("author has no permission grant"));
+            return Err(forbidden!("author has no grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), provider).await?;
@@ -97,7 +97,7 @@ impl Query {
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
             if filter.protocol.as_deref() != protocol {
-                return Err(forbidden!("filter protocol does not match scoped protocol"));
+                return Err(forbidden!("filter protocol does not match grant protocol"));
             }
         }
 

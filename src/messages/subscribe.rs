@@ -103,7 +103,7 @@ impl Subscribe {
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
             if filter.protocol.as_deref() != protocol {
-                return Err(forbidden!("filter protocol does not match scoped protocol"));
+                return Err(forbidden!("filter protocol does not match grant protocol"));
             }
         }
 

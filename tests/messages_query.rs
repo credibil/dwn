@@ -132,9 +132,10 @@ async fn no_grant() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     let query = QueryBuilder::new().build(&alice_keyring).await.expect("should create write");
-    let Err(Error::Forbidden(_)) = endpoint::handle(BOB_DID, query, &provider).await else {
-        panic!("should not be authorized");
+    let Err(Error::Forbidden(e)) = endpoint::handle(BOB_DID, query, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "author has no grant");
 }
 
 // Should return a status of BadRequest (400) if the request is invalid.
@@ -146,9 +147,10 @@ async fn invalid_request() {
     let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
     query.descriptor.base.interface = Interface::Protocols;
 
-    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
-        panic!("should be a bad request");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be BadRequest");
     };
+    assert!(e.starts_with("validation failed for "));
 }
 
 // Should return a status of BadRequest (400) if an empty filter is provided.
@@ -160,9 +162,10 @@ async fn empty_filter() {
     let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should create query");
     query.descriptor.filters = vec![MessagesFilter::default()];
 
-    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
-        panic!("should be a bad request");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be BadRequest");
     };
+    assert!(e.starts_with("validation failed for "));
 }
 
 // Should allow querying of messages with matching interface and method grant scope.
@@ -318,9 +321,10 @@ async fn mismatched_grant_scope() {
         .await
         .expect("should create write");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
-        panic!("should not be authorized");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "method is not within grant scope");
 }
 
 // Should allow querying of messages with matching protocol grant scope.
@@ -465,7 +469,8 @@ async fn mismatched_protocol_scope() {
         .await
         .expect("should create write");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
-        panic!("should not be authorized");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "filter protocol does not match grant protocol");
 }

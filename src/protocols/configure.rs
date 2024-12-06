@@ -168,7 +168,7 @@ impl Configure {
 
         // permission grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Err(forbidden!("author has no permission grant"));
+            return Err(forbidden!("author has no grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.author()?, self.descriptor(), store).await?;
@@ -178,7 +178,7 @@ impl Configure {
             return Ok(());
         };
         if protocol != self.descriptor.definition.protocol {
-            return Err(forbidden!(" message and grant protocols do not match"));
+            return Err(forbidden!("message and grant protocols do not match"));
         }
 
         Ok(())

@@ -59,7 +59,7 @@ async fn forbidden() {
 
     let Err(Error::Unauthorized(_)) = endpoint::handle(ALICE_DID, configure, &provider).await
     else {
-        panic!("should not configure protocol");
+        panic!("should be Unauthorized");
     };
 }
 
@@ -98,9 +98,10 @@ async fn overwrite_older() {
     // --------------------------------------------------
     // Alice attempts to configure the older protocol and fails.
     // --------------------------------------------------
-    let Err(Error::Conflict(_)) = endpoint::handle(ALICE_DID, older, &provider).await else {
-        panic!("should not configure protocol");
+    let Err(Error::Conflict(e)) = endpoint::handle(ALICE_DID, older, &provider).await else {
+        panic!("should be Conflict");
     };
+    assert_eq!(e, "message is not the latest");
 
     // --------------------------------------------------
     // Alice updates the existing protocol.
@@ -190,10 +191,11 @@ async fn overwrite_smaller() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check the protocol with the smallest CID cannot be written
-    let Err(Error::Conflict(_)) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await
+    let Err(Error::Conflict(e)) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await
     else {
-        panic!("should not configure protocol");
+        panic!("should be Conflict");
     };
+    assert_eq!(e, "message CID is smaller than existing entry");
 
     // check the protocol with the largest CID can be written
     let reply = endpoint::handle(ALICE_DID, messages[2].clone(), &provider)
@@ -232,11 +234,10 @@ async fn invalid_protocol() {
     // override builder's normalizing of  protocol
     configure.descriptor.definition.protocol = "minimal.xyz/".to_string();
 
-    let Err(Error::BadRequest(desc)) = endpoint::handle(ALICE_DID, configure, &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "invalid URL: minimal.xyz/");
+    assert_eq!(e, "invalid URL: minimal.xyz/");
 }
 
 // Should return a status of BadRequest (400) when schema is not normalized.
@@ -260,11 +261,10 @@ async fn invalid_schema() {
         data_formats: None,
     });
 
-    let Err(Error::BadRequest(desc)) = endpoint::handle(ALICE_DID, configure, &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "invalid URL: bad-schema.xyz/");
+    assert_eq!(e, "invalid URL: bad-schema.xyz/");
 }
 
 // Should reject non-owner requests with no grant with status of Forbidden (403).
@@ -279,9 +279,10 @@ async fn no_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
-        panic!("should not configure protocol");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "author has no grant");
 }
 
 // Should reject request when action rule contains duplicated actors (`who`
@@ -319,11 +320,10 @@ async fn duplicate_actor() {
             ..RuleSet::default()
         });
 
-    let Err(Error::BadRequest(desc)) = endpoint::handle(ALICE_DID, configure, &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "an actor may only have one rule within a rule set");
+    assert_eq!(e, "an actor may only have one rule within a rule set");
 
     // --------------------------------------------------
     // Duplicate 'who' with 'of' in a nested rule set.
@@ -360,11 +360,10 @@ async fn duplicate_actor() {
             ..RuleSet::default()
         });
 
-    let Err(Error::BadRequest(desc)) = endpoint::handle(ALICE_DID, configure, &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "an actor may only have one rule within a rule set");
+    assert_eq!(e, "an actor may only have one rule within a rule set");
 }
 
 // Should reject request when action rule contains duplicated roles.
@@ -406,11 +405,10 @@ async fn duplicate_role() {
             ..RuleSet::default()
         });
 
-    let Err(Error::BadRequest(desc)) = endpoint::handle(ALICE_DID, configure, &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert!(desc.starts_with("validation failed for {\"$schema"));
+    assert!(e.starts_with("validation failed for {\"$schema"));
 }
 
 // Should reject request when role action rule does not contain all read actions
@@ -445,12 +443,11 @@ async fn invalid_read_action() {
             ..RuleSet::default()
         });
 
-    let Err(Error::BadRequest(desc)) =
-        endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "role friend is missing read-like actions");
+    assert_eq!(e, "role friend is missing read-like actions");
 
     // --------------------------------------------------
     // Missing Action::Query.
@@ -471,12 +468,11 @@ async fn invalid_read_action() {
             ..RuleSet::default()
         });
 
-    let Err(Error::BadRequest(desc)) =
-        endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "role friend is missing read-like actions");
+    assert_eq!(e, "role friend is missing read-like actions");
 
     // --------------------------------------------------
     // Missing Action::Read.
@@ -497,12 +493,11 @@ async fn invalid_read_action() {
             ..RuleSet::default()
         });
 
-    let Err(Error::BadRequest(desc)) =
-        endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
-    assert_eq!(desc, "role friend is missing read-like actions");
+    assert_eq!(e, "role friend is missing read-like actions");
 
     // --------------------------------------------------
     // Control: it should suceed when all actions are present.
@@ -579,10 +574,11 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
+    assert_eq!(e, "grant not granted to grantee");
 
     // --------------------------------------------------
     // Alice revokes Bob's grant.
@@ -606,9 +602,10 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should be Forbidden");
     };
+    assert_eq!(e, "grant not granted to grantee");
 }
 
 // Should allow configuring a specific protocol.
@@ -661,10 +658,11 @@ async fn configure_scope() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
+    assert_eq!(e, "message and grant protocols do not match");
 }
 
 // Should add an event when a protocol is configured.

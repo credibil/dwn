@@ -89,7 +89,7 @@ async fn invalid_signature() {
         .await
         .expect("should create read");
     let Err(Error::Unauthorized(_)) = endpoint::handle(INVALID_DID, read, &provider).await else {
-        panic!("should not be authorized");
+        panic!("should be Unauthorized");
     };
 }
 
@@ -106,9 +106,10 @@ async fn invalid_request() {
         .expect("should create read");
     read.descriptor.base.interface = Interface::Protocols;
 
-    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be a bad request");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be BadRequest");
     };
+    assert!(e.starts_with("schema not found"));
 }
 
 // Should return a status of BadRequest (400) when the message CID is invalid.
@@ -127,9 +128,10 @@ async fn invalid_message_cid() {
     // set an invalid message CID
     read.descriptor.message_cid = "invalidcid".to_string();
 
-    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be a bad request");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be BadRequest");
     };
+    assert_eq!(e, "invalid CID: Failed to parse multihash");
 }
 
 // Should return a status of NotFound (404) when the message cannot be found.
@@ -144,9 +146,10 @@ async fn not_found() {
         .await
         .expect("should create read");
 
-    let Err(Error::NotFound(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be a not found");
+    let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be NotFound");
     };
+    assert_eq!(e, "message not found");
 }
 
 // Should return a status of Forbidden (401) when the owner is not the author
@@ -181,9 +184,10 @@ async fn forbidden() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(BOB_DID, read, &provider).await else {
-        panic!("should be a not found");
+    let Err(Error::Forbidden(e)) = endpoint::handle(BOB_DID, read, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "missing grant ID");
 }
 
 // Should return data less than data::MAX_ENCODED_SIZE.
@@ -383,9 +387,10 @@ async fn owner_not_author() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be a not found");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "missing grant ID");
 
     // published
     let read = ReadBuilder::new()
@@ -394,9 +399,10 @@ async fn owner_not_author() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be a not found");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "missing grant ID");
 
     // --------------------------------------------------
     // Alice reads both published and unpublished protocols.
@@ -498,9 +504,10 @@ async fn invalid_interface() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be Forbidden");
     };
+    assert_eq!(e, "interface is not within grant scope");
 }
 
 // Should allow external parties to read a message using a n unrestricted grant.
@@ -728,9 +735,10 @@ async fn protocol_grant() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be forbidden");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "missing grant ID");
 
     // --------------------------------------------------
     // Bob can read all messages associated with the grant.
@@ -827,9 +835,10 @@ async fn protocol_grant() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be forbidden");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "missing grant ID");
 }
 
 // Should reject reading protocol messages with mismatching protocol grant scopes.
@@ -905,9 +914,10 @@ async fn invalid_protocol_grant() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be forbidden");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "no grant found");
 }
 
 // Should fail if a `RecordsWrite` message is not found for a requested `RecordsDelete`.
@@ -983,7 +993,8 @@ async fn delete_with_no_write() {
         .await
         .expect("should create read");
 
-    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be bad request");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be BadRequest");
     };
+    assert_eq!(e, "expected `RecordsWrite` message");
 }

@@ -11,16 +11,16 @@ pub mod surreal;
 /// # Example
 ///
 /// ```rust
-/// use vercre_dwn::store::{Query,QuerySerializer};
+/// use vercre_dwn::store::{Query, QuerySerializer};
 ///
 /// struct CustomSerializer(Query);
 ///
 /// impl QuerySerializer for CustomSerializer {
-///    type Output = String;
+///     type Output = String;
 ///
-///    fn serialize(&self) -> Self::Output {
-///        format!("SELECT * FROM message WHERE protocol={}", self.0.protocol)
-///    }
+///     fn serialize(&self) -> Self::Output {
+///         format!("SELECT * FROM message WHERE protocol={}", self.0.protocol)
+///     }
 /// }
 /// ```
 pub trait QuerySerializer {

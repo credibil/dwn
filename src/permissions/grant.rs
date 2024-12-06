@@ -155,12 +155,12 @@ impl Grant {
 
         // verify grant scope for interface
         if descriptor.interface != self.data.scope.interface() {
-            return Err(forbidden!("interface is not within the scope of grant"));
+            return Err(forbidden!("interface is not within grant scope"));
         }
 
         // verify grant scope method
         if descriptor.method != self.data.scope.method() {
-            return Err(forbidden!("method is not within the scope of grant"));
+            return Err(forbidden!("method is not within grant scope"));
         }
 
         // verify the message is within the grant's time frame

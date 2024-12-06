@@ -96,7 +96,7 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             Ok(serde_json::from_slice(schema)?)
         }
 
-        _ => Err(unexpected!("Schema not found: {schema_name}")),
+        _ => Err(unexpected!("schema not found: {schema_name}")),
     }
 }
 
@@ -109,7 +109,7 @@ impl Retrieve for Retriever {
         &self, uri: &Uri<&str>,
     ) -> Result<Value, Box<(dyn std::error::Error + Send + Sync + 'static)>> {
         // let Some(file) = uri.path().split('/').last() else {
-        //     return Err(unexpected!("Schema not found: {uri}").into());
+        //     return Err(unexpected!("schema not found: {uri}").into());
         // };
 
         match uri.path().as_str() {

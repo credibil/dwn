@@ -7,6 +7,7 @@ use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
+use tokio::time;
 use vercre_dwn::authorization::Authorization;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
@@ -31,9 +32,10 @@ async fn invalid_message() {
     let mut subscribe = SubscribeBuilder::new().build(&alice_keyring).await.expect("should build");
     subscribe.descriptor.filters.push(MessagesFilter::default());
 
-    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
-        panic!("should have failed");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should be BadRequest");
     };
+    assert!(e.starts_with("validation failed for "));
 }
 
 // Should allow owner to subscribe their own event stream.
@@ -94,7 +96,7 @@ async fn owner_events() {
             }
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
+    if let Err(_) = time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found event");
     }
 }
@@ -112,17 +114,19 @@ async fn unauthorized() {
     let mut subscribe = SubscribeBuilder::new().build(&alice_keyring).await.expect("should build");
     subscribe.authorization = Authorization::default();
 
-    let Err(Error::BadRequest(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
-        panic!("should have failed");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should be BadRequest");
     };
+    assert!(e.starts_with("validation failed for "));
 
     // --------------------------------------------------
     // Bob attempts to subscribe to Alice's event stream.
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new().build(&bob_keyring).await.expect("should build");
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
-        panic!("should have failed");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "missing permission grant");
 }
 
 // Should allow users to subscribe to events matching grant scope.
@@ -241,7 +245,7 @@ async fn interface_scope() {
             }
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
+    if let Err(_) = time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found events");
     }
 }
@@ -281,9 +285,10 @@ async fn unauthorized_interface() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
-        panic!("should be forbidden");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "interface is not within grant scope");
 }
 
 // Should reject subscriptions when method is not authorized.
@@ -320,9 +325,10 @@ async fn unauthorized_method() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
-        panic!("should be forbidden");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "method is not within grant scope");
 }
 
 // Should allow subscribing to protocol filtered messages with matching protocol grant scopes.
@@ -445,7 +451,7 @@ async fn protocol_filter() {
         };
         assert_eq!(protocol1_cid, event.cid().unwrap());
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), protocol1).await {
+    if let Err(_) = time::timeout(Duration::from_millis(500), protocol1).await {
         panic!("should have found events");
     }
 
@@ -454,7 +460,7 @@ async fn protocol_filter() {
             panic!("unexpected event: {:?}", event);
         }
     };
-    let _ = tokio::time::timeout(Duration::from_millis(500), remaining).await;
+    let _ = time::timeout(Duration::from_millis(500), remaining).await;
 }
 
 // Should reject subscribing to messages with incorrect protocol grant scope.
@@ -523,9 +529,10 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
-        panic!("should be forbidden");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "filter protocol does not match grant protocol");
 
     // --------------------------------------------------
     // Bob subscribes to `protocol1` or `protocol2` messages in Alice's event stream.
@@ -538,7 +545,8 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
-        panic!("should be forbidden");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
+        panic!("should be Forbidden");
     };
+    assert_eq!(e, "filter protocol does not match grant protocol");
 }

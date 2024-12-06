@@ -108,7 +108,7 @@ impl Read {
 
         // verify grant
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Err(forbidden!("missing permission grant ID"));
+            return Err(forbidden!("missing grant ID"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &author, self.descriptor(), provider).await?;

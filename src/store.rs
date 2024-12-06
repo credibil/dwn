@@ -383,7 +383,7 @@ pub struct MessagesQuery {
 
 impl From<messages::Query> for MessagesQuery {
     fn from(query: messages::Query) -> Self {
-        Self{
+        Self {
             filters: query.descriptor.filters,
         }
     }

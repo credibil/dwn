@@ -151,10 +151,10 @@ async fn bad_protocol() {
         protocol: "protocol-3.xyz/".to_string(),
     });
 
-    let Err(Error::BadRequest(desc)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert_eq!(desc, "invalid URL: protocol-3.xyz/");
+    assert_eq!(e, "invalid URL: protocol-3.xyz/");
 }
 
 // Should fail with a status of Unauthorized (401) if signature payload  has
@@ -265,10 +265,10 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(desc)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(desc, "grant not granted to grantee");
+    assert_eq!(e, "grant not granted to grantee");
 
     // --------------------------------------------------
     // Alice revokes Bob's grant.
@@ -450,10 +450,10 @@ async fn expired_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(desc)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(desc, "grant has expired");
+    assert_eq!(e, "grant has expired");
 }
 
 // Should reject an external party when they present a grant that is not yet active.
@@ -500,10 +500,10 @@ async fn inactive_grant() {
         .expect("should subtract");
     query.descriptor.base.message_timestamp = older_timestamp;
 
-    let Err(Error::Forbidden(desc)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(desc, "grant is not yet active");
+    assert_eq!(e, "grant is not yet active");
 }
 
 // Should reject an external party using a grant with a different scope.
@@ -542,10 +542,10 @@ async fn invalid_scope() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(desc)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(desc, "interface is not within the scope of grant");
+    assert_eq!(e, "interface is not within grant scope");
 }
 
 // Should reject an external party using a grant if the grant cannot be found.
@@ -564,10 +564,10 @@ async fn missing_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(desc)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(desc, "no grant found");
+    assert_eq!(e, "no grant found");
 }
 
 // Should fail if the grant has not been granted for the owner.
@@ -616,8 +616,8 @@ async fn incorrect_grantor() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(desc)) = endpoint::handle(BOB_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(BOB_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(desc, "grant not granted by grantor");
+    assert_eq!(e, "grant not granted by grantor");
 }
