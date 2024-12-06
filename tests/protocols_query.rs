@@ -3,10 +3,13 @@
 //! This test demonstrates how a web node owner create differnt types of
 //! messages and subsequently query for them.
 
+use std::time::Duration;
+
 use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use tokio::time;
 use vercre_dwn::data::cid;
 use vercre_dwn::permissions::{GrantBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, QueryBuilder};
@@ -404,4 +407,47 @@ async fn valid_scope() {
     let entries = body.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-3.xyz");
+}
+
+// Should reject an external party when they rpresent an expired grant.
+#[tokio::test]
+async fn expired_grant() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to query protocols.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Protocols {
+            method: Method::Query,
+            protocol: None,
+        })
+        .expires_in(1)
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+
+    let bob_grant_id = bob_grant.record_id.clone();
+
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to query for Alice's protocols using the expired grant.
+    // --------------------------------------------------
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    let query = QueryBuilder::new()
+        .permission_grant_id(&bob_grant_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be Forbidden");
+    };
 }

@@ -157,7 +157,6 @@ impl Query {
         };
         // filter protocol must match grant protocol
         if protocol != filter.protocol {
-            // return Err(forbidden!("unauthorized protocol"));
             return Ok(false);
         }
 
