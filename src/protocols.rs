@@ -33,10 +33,7 @@ pub const REVOCATION_PATH: &str = "grant/revocation";
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolsFilter {
     /// Protocol matching the specified protocol.
-    pub protocol: Option<String>,
-
-    #[serde(skip)]
-    pub(crate) published: Option<bool>,
+    pub protocol: String,
 }
 
 /// Default protocol definition.

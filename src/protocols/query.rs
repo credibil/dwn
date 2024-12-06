@@ -9,7 +9,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::store::Cursor;
+use crate::store::{self, Cursor};
 use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema, utils};
 
 /// Process query message.
@@ -21,28 +21,23 @@ pub async fn handle(
 ) -> Result<Reply<QueryReply>> {
     // validate query
     if let Some(filter) = &query.descriptor.filter {
-        if let Some(protocol) = &filter.protocol {
-            utils::validate_url(protocol)?;
-        }
+        utils::validate_url(&filter.protocol)?;
     }
 
+    // build actual query
+    let mut store_query = store::ProtocolsQuery::default();
+
     // unauthorized queries can query for published protocols
-    let mut query = query;
     if query.authorization.is_some() {
         query.authorize(owner, provider).await?;
     } else {
-        let filter = if let Some(filter) = &query.descriptor.filter {
-            filter
-        } else {
-            &ProtocolsFilter {
-                protocol: None,
-                published: Some(true),
-            }
-        };
-        query.descriptor.filter = Some(filter.clone());
+        store_query.published = Some(true);
     };
 
-    let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    if let Some(filter) = &query.descriptor.filter {
+        store_query.protocol = Some(filter.protocol.clone());
+    }
+    let (records, _) = MessageStore::query(provider, owner, &store_query.into()).await?;
 
     // unpack messages
     let mut entries = vec![];
@@ -111,14 +106,13 @@ pub struct QueryReply {
 
 // Fetch published protocols matching the filter
 pub(super) async fn fetch_config(
-    owner: &str, protocol: Option<impl Into<String>>, store: &impl MessageStore,
+    owner: &str, protocol: Option<String>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
     // build query
-    let mut query = QueryBuilder::new();
-    if let Some(protocol) = protocol {
-        query = query.filter(protocol);
-    }
-    let query = query.build_anon()?;
+    let query = store::ProtocolsQuery {
+        protocol,
+        published: None,
+    };
 
     // execute query
     let (messages, _) = store.query(owner, &query.into()).await?;
@@ -163,7 +157,7 @@ impl Query {
         let Some(filter) = &self.descriptor.filter else {
             return Err(forbidden!("missing filter"));
         };
-        if Some(protocol) != filter.protocol.as_deref() {
+        if protocol != filter.protocol {
             return Err(forbidden!("unauthorized protocol"));
         }
 
@@ -209,8 +203,7 @@ impl QueryBuilder {
     #[must_use]
     pub fn filter(mut self, protocol: impl Into<String>) -> Self {
         self.filter = Some(ProtocolsFilter {
-            protocol: Some(protocol.into()),
-            published: None,
+            protocol: protocol.into(),
         });
         self
     }
@@ -256,7 +249,7 @@ impl QueryBuilder {
     ///
     /// # Errors
     /// TODO: Add errors
-    pub fn build_anon(self) -> Result<Query> {
+    pub fn anonymous(self) -> Result<Query> {
         let query = Query {
             descriptor: QueryDescriptor {
                 base: Descriptor {

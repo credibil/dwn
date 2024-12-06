@@ -83,8 +83,11 @@ async fn query_published() {
     // --------------------------------------------------
     // Query as an anonymous user.
     // --------------------------------------------------
-    let query =
-        QueryBuilder::new().filter("http://protocol-1.xyz").build_anon().expect("should build");
+    let query = QueryBuilder::new()
+        .filter("http://protocol-1.xyz")
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -94,7 +97,7 @@ async fn query_published() {
     // --------------------------------------------------
     // Query without sufficient permission to access the private configuration.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build_anon().expect("should build");
+    let query = QueryBuilder::new().anonymous().expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 

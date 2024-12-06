@@ -186,14 +186,9 @@ pub struct ProtocolsQuery {
     pub published: Option<bool>,
 }
 
-impl From<protocols::Query> for Query {
-    fn from(query: protocols::Query) -> Self {
-        let mut pq = ProtocolsQuery::default();
-        if let Some(filter) = &query.descriptor.filter {
-            pq.protocol = filter.protocol.clone();
-            pq.published = filter.published;
-        }
-        Self::Protocols(pq)
+impl From<ProtocolsQuery> for Query {
+    fn from(query: ProtocolsQuery) -> Self {
+        Self::Protocols(query)
     }
 }
 

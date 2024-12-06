@@ -37,9 +37,12 @@ pub async fn handle(
     configure.validate()?;
 
     // find any matching protocol entries
-    let results =
-        query::fetch_config(owner, Some(&configure.descriptor.definition.protocol), provider)
-            .await?;
+    let results = query::fetch_config(
+        owner,
+        Some(configure.descriptor.definition.protocol.clone()),
+        provider,
+    )
+    .await?;
 
     // determine incoming message is the latest
     if let Some(existing) = &results {
