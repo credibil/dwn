@@ -28,9 +28,7 @@ pub async fn handle(
     let mut store_query = store::ProtocolsQuery::from(query.clone());
 
     // unauthorized queries can query for published protocols
-    if query.authorization.is_some() {
-        query.authorize(owner, provider).await?;
-    } else {
+    if query.authorization.is_none() || query.authorize(owner, provider).await.is_err() {
         store_query.published = Some(true);
     };
 
