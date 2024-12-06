@@ -1038,9 +1038,9 @@ async fn existing_entries(
 ) -> Result<Vec<Entry>> {
     // N.B. unset method in order to get Write and Delete messages
     let query =
-        RecordsQuery::new().record_id(record_id).include_archived(true).method(None).build();
+        RecordsQuery::new().record_id(record_id).include_archived(true).method(None);
 
-    let (entries, _) = store.query(owner, &query).await.unwrap();
+    let (entries, _) = store.query(owner, &query.into()).await.unwrap();
     Ok(entries)
 }
 
@@ -1163,8 +1163,8 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         min: Some(message_timestamp),
         max: None,
     };
-    let query = RecordsQuery::new().record_id(grant_id).date_created(date_range).build();
-    let (records, _) = MessageStore::query(provider, owner, &query).await?;
+    let query = RecordsQuery::new().record_id(grant_id).date_created(date_range);
+    let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
 
     // delete matching messages
     for record in records {

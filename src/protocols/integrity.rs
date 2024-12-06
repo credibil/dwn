@@ -128,8 +128,8 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
         return Err(forbidden!("missing protocol"));
     };
 
-    let query = RecordsQuery::new().record_id(parent_id).protocol(protocol).build();
-    let (records, _) = store.query(owner, &query).await?;
+    let query = RecordsQuery::new().record_id(parent_id).protocol(protocol);
+    let (records, _) = store.query(owner, &query.into()).await?;
     if records.is_empty() {
         return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
     }
@@ -187,7 +187,7 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
         ));
     };
 
-    let (entries, _) = store.query(owner, &query.build()).await?;
+    let (entries, _) = store.query(owner, &query.into()).await?;
     for entry in entries {
         let Some(w) = entry.as_write() else {
             return Err(forbidden!("expected `RecordsWrite` message"));

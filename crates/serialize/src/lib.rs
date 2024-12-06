@@ -15,7 +15,7 @@ pub mod surreal;
 ///
 /// struct CustomSerializer(Query);
 ///
-/// QuerySerializer for CustomSerializer {
+/// impl QuerySerializer for CustomSerializer {
 ///    type Output = String;
 ///
 ///    fn serialize(&self) -> Self::Output {

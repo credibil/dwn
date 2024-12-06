@@ -23,8 +23,8 @@ pub async fn handle(
     query.authorize(owner, provider).await?;
 
     // TODO: use pagination cursor
-    let query = MessagesQuery::from(query).build();
-    let (events, _) = EventLog::query(provider, owner, &query).await?;
+    let query = MessagesQuery::from(query);
+    let (events, _) = EventLog::query(provider, owner, &query.into()).await?;
 
     let events =
         events.iter().map(|e| e.cid().unwrap_or_else(|_| String::new())).collect::<Vec<String>>();

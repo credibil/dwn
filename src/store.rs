@@ -192,6 +192,16 @@ impl From<ProtocolsQuery> for Query {
     }
 }
 
+impl From<protocols::Query> for ProtocolsQuery {
+    fn from(query: protocols::Query) -> Self {
+        let mut pq = Self::default();
+        if let Some(filter) = query.descriptor.filter {
+            pq.protocol = Some(filter.protocol);
+        }
+        pq
+    }
+}
+
 /// `RecordsQuery` use a builder to simplify the process of creating
 /// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
 #[derive(Clone, Debug)]
@@ -335,10 +345,6 @@ impl RecordsQuery {
         self.sort = Some(sort);
         self
     }
-
-    pub(crate) fn build(&self) -> Query {
-        Query::Records(self.clone())
-    }
 }
 
 impl From<records::Query> for RecordsQuery {
@@ -361,6 +367,12 @@ impl From<records::Read> for RecordsQuery {
     }
 }
 
+impl From<RecordsQuery> for Query {
+    fn from(query: RecordsQuery) -> Self {
+        Self::Records(query)
+    }
+}
+
 /// `MessagesQuery` use a builder to simplify the process of creating
 /// `EventStore` queries.
 #[derive(Clone, Debug, Default)]
@@ -369,22 +381,17 @@ pub struct MessagesQuery {
     pub filters: Vec<MessagesFilter>,
 }
 
-impl MessagesQuery {
-    #[must_use]
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    pub(crate) fn build(&self) -> Query {
-        Query::Messages(self.clone())
+impl From<messages::Query> for MessagesQuery {
+    fn from(query: messages::Query) -> Self {
+        Self{
+            filters: query.descriptor.filters,
+        }
     }
 }
 
-impl From<messages::Query> for MessagesQuery {
-    fn from(query: messages::Query) -> Self {
-        let mut mq = Self::new();
-        mq.filters = query.descriptor.filters;
-        mq
+impl From<MessagesQuery> for Query {
+    fn from(query: MessagesQuery) -> Self {
+        Self::Messages(query)
     }
 }
 

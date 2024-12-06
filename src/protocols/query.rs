@@ -25,7 +25,7 @@ pub async fn handle(
     }
 
     // build actual query
-    let mut store_query = store::ProtocolsQuery::default();
+    let mut store_query = store::ProtocolsQuery::from(query.clone());
 
     // unauthorized queries can query for published protocols
     if query.authorization.is_some() {
@@ -34,9 +34,6 @@ pub async fn handle(
         store_query.published = Some(true);
     };
 
-    if let Some(filter) = &query.descriptor.filter {
-        store_query.protocol = Some(filter.protocol.clone());
-    }
     let (records, _) = MessageStore::query(provider, owner, &store_query.into()).await?;
 
     // unpack messages
