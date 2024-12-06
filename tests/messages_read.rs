@@ -45,7 +45,6 @@ async fn read_message() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .expires_in(60 * 60 * 24)
         .scope(Scope::Messages {
             method: Method::Read,
             protocol: None,

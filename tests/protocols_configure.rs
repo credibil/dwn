@@ -541,7 +541,6 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .expires_in(60 * 60 * 24)
         .scope(Scope::Protocols {
             method: Method::Configure,
             protocol: None,
@@ -575,7 +574,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .permission_grant_id(bob_grant_id)
+        .permission_grant_id(&bob_grant_id)
         .build(&carol_keyring)
         .await
         .expect("should build");
@@ -600,13 +599,15 @@ async fn valid_grant() {
     // --------------------------------------------------
     // Verify Bob can no longer use the grant.
     // --------------------------------------------------
-    let query = QueryBuilder::new()
-        .filter("http://minimal.xyz")
-        .build(&bob_keyring)
+    let configure = ConfigureBuilder::new()
+        .definition(Definition::new("http://minimal.xyz"))
+        .permission_grant_id(bob_grant_id)
+        .build(&carol_keyring)
         .await
-        .expect("should create query");
-    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, query, &provider).await else {
-        panic!("should not configure protocol");
+        .expect("should build");
+
+    let Err(Error::Forbidden(_)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+        panic!("should be Forbidden");
     };
 }
 
@@ -622,7 +623,6 @@ async fn configure_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
-        .expires_in(60 * 60 * 24)
         .scope(Scope::Protocols {
             method: Method::Configure,
             protocol: Some("https://example.com/protocol/allowed".to_string()),

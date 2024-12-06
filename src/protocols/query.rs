@@ -10,7 +10,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::store::{self, Cursor};
-use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema, utils};
+use crate::{Descriptor, Interface, Method, Result, permissions, schema, utils};
 
 /// Process query message.
 ///
@@ -28,7 +28,7 @@ pub async fn handle(
     let mut store_query = store::ProtocolsQuery::from(query.clone());
 
     // unauthorized queries can query for published protocols
-    if query.authorization.is_none() || query.authorize(owner, provider).await.is_err() {
+    if !query.authorize(owner, provider).await? {
         store_query.published = Some(true);
     };
 
@@ -129,34 +129,39 @@ impl Query {
     ///
     /// # Errors
     /// TODO: Add errors
-    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<bool> {
         let Some(authzn) = &self.authorization else {
-            return Err(forbidden!("missing authorization"));
+            return Ok(false);
         };
 
         if authzn.author()? == owner {
-            return Ok(());
+            return Ok(true);
         }
 
-        // verify grant
+        // does the message have a permission grant?
         let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Err(forbidden!("author has no permission grant"));
+            return Ok(false);
         };
+
+        // verify permission grant
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // if set, query and grant protocols need to match
         let Some(protocol) = grant.data.scope.protocol() else {
-            return Ok(());
+            return Ok(true);
         };
+        // has a grant but no filter: published protocols only
         let Some(filter) = &self.descriptor.filter else {
-            return Err(forbidden!("missing filter"));
+            return Ok(false);
         };
+        // filter protocol must match grant protocol
         if protocol != filter.protocol {
-            return Err(forbidden!("unauthorized protocol"));
+            // return Err(forbidden!("unauthorized protocol"));
+            return Ok(false);
         }
 
-        Ok(())
+        Ok(true)
     }
 }
 
