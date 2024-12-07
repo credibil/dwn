@@ -140,7 +140,7 @@ impl Protocol<'_> {
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &record.protocol()?, store).await?;
+        self.allow_role(owner, &record, record.protocol()?, store).await?;
         self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -157,10 +157,8 @@ impl Protocol<'_> {
         let record: Record = read.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Query` and `records::Subscribe`
@@ -174,10 +172,8 @@ impl Protocol<'_> {
         let record: Record = query.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Subscribe` messages.
@@ -190,10 +186,8 @@ impl Protocol<'_> {
         let record: Record = subscribe.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Delete` messages.
@@ -207,10 +201,8 @@ impl Protocol<'_> {
         let delete_record = delete.into();
         let rule_set = write_record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &delete_record, &write_record.protocol()?, store).await?;
-        self.allow_action(owner, &delete_record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &delete_record, write_record.protocol()?, store).await?;
+        self.allow_action(owner, &delete_record, &rule_set, store).await
     }
 
     // Check if the incoming message is invoking a role. If so, validate the invoked role.

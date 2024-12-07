@@ -35,7 +35,7 @@ libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-thiserror = "2.0.4"
+thiserror = "2.0.5"
 tokio = { workspace = true, features = ["sync"] }
 uuid = { version = "1.11.0", features = ["fast-rng", "v4"] }
 vercre-did.workspace = true
