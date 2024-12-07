@@ -26,7 +26,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let query = RecordsQuery::from(read.clone());
     let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {
-        return Err(Error::NotFound("no matching records found".to_string()));
+        return Err(Error::NotFound("no matching record".to_string()));
     }
     if entries.len() > 1 {
         return Err(unexpected!("multiple messages exist"));

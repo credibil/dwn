@@ -29,23 +29,25 @@ pub async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
-
     let query = RecordsQuery::new().record_id(&delete.descriptor.record_id).method(None);
     let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if records.is_empty() {
-        return Err(Error::NotFound("no matching records found".to_string()));
+        return Err(Error::NotFound("no matching record found".to_string()));
     }
+    let latest = &records[0];
 
-    // run checks when latest existing message is a `RecordsDelete`
-    let newest_existing = &records[0];
-    if newest_existing.descriptor().method == Method::Delete {
+    // authorize the delete message
+    delete.authorize(owner, &Write::try_from(latest)?, provider).await?;
+
+    // check the latest existing message has not already been deleted
+    if latest.descriptor().method == Method::Delete {
         // cannot delete a `RecordsDelete` record
         if !delete.descriptor.prune {
             return Err(Error::NotFound("cannot delete a `RecordsDelete` record".to_string()));
         }
 
         // cannot prune previously pruned record
-        let existing_delete = Delete::try_from(newest_existing)?;
+        let existing_delete = Delete::try_from(latest)?;
         if existing_delete.descriptor.prune {
             return Err(Error::NotFound(
                 "attempting to prune an already pruned record".to_string(),
@@ -53,7 +55,14 @@ pub async fn handle(
         }
     }
 
-    delete.authorize(owner, &Write::try_from(&records[0])?, provider).await?;
+    // ensure the delete request does not pre-date the latest existing version
+    if delete.descriptor().message_timestamp.timestamp_micros()
+        < latest.descriptor().message_timestamp.timestamp_micros()
+    {
+        return Err(Error::Conflict("newer record version exists".to_string()));
+    }
+
+    // run the delete task as a resumable task
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
     Ok(Reply {
@@ -263,12 +272,12 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(unexpected!("multiple messages exist"));
     }
 
-    let newest_existing = &records[0];
+    let latest = &records[0];
 
     // TODO: merge this code with `RecordsWrite`
-    // if the incoming message is not the newest, return Conflict
+    // if the incoming message is not the latest, return Conflict
     let delete_ts = delete.descriptor().message_timestamp.timestamp_micros();
-    let latest_ts = newest_existing.descriptor().message_timestamp.timestamp_micros();
+    let latest_ts = latest.descriptor().message_timestamp.timestamp_micros();
     if delete_ts < latest_ts {
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
@@ -367,7 +376,7 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
     Ok(())
 }
 
-// Deletes all messages in `existing` that are older than the `newest` in the
+// Deletes all messages in `existing` that are older than the `latest` in the
 // given tenant, but keep the initial write write for future processing by
 // ensuring its `private` index is "true".
 async fn delete_earlier(
@@ -403,15 +412,15 @@ async fn delete_earlier(
 
 // Deletes the data referenced by the given message if needed.
 async fn delete_data(
-    owner: &str, existing: &Entry, newest: &Entry, store: &impl BlockStore,
+    owner: &str, existing: &Entry, latest: &Entry, store: &impl BlockStore,
 ) -> Result<()> {
     let Some(existing_write) = existing.as_write() else {
         return Err(unexpected!("unexpected message type"));
     };
 
-    // keep data if referenced by newest message
-    if let Some(newest_write) = newest.as_write() {
-        if existing_write.descriptor.data_cid == newest_write.descriptor.data_cid {
+    // keep data if referenced by latest message
+    if let Some(latest_write) = latest.as_write() {
+        if existing_write.descriptor.data_cid == latest_write.descriptor.data_cid {
             return Ok(());
         }
     };

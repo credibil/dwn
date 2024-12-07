@@ -23,7 +23,7 @@ async fn owner_messages() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -195,7 +195,7 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     // Alice configures a `free_for_all` protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure_any = ConfigureBuilder::new()
@@ -337,7 +337,7 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
     let mut definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     definition.protocol = "http://protocol1".to_string();
 
@@ -413,7 +413,7 @@ async fn mismatched_protocol_scope() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
     let mut definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     definition.protocol = "http://protocol1".to_string();
 

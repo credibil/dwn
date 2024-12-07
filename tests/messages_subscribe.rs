@@ -173,7 +173,7 @@ async fn interface_scope() {
     let mut message_cids = vec![];
 
     // 1. configure 'allow-any' protocol
-    let bytes = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let bytes = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
     let definition = serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -341,7 +341,7 @@ async fn protocol_filter() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let bytes = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let bytes = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
     let mut definition =
         serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
 
@@ -473,7 +473,7 @@ async fn invalid_protocol() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let bytes = include_bytes!("../crates/dwn-test/protocols/allow_any.json");
+    let bytes = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
     let mut definition =
         serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
 
