@@ -614,3 +614,115 @@ async fn ancestor_author() {
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
+
+// Should allow co-delete by invoking a context role.
+#[tokio::test]
+async fn context_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates a thread.
+    // --------------------------------------------------
+    let data = br#"{"record": "thread write"}"#;
+
+    let thread = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .protocol(WriteProtocol {
+            protocol: definition.protocol.clone(),
+            protocol_path: "thread".to_string(),
+        })
+        .recipient(BOB_DID)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob as a 'thread/admin' for the thread
+    // --------------------------------------------------
+    let data = br#"{"record": "Bob admin"}"#;
+    let thread_context_id = thread.context_id.unwrap();
+
+    let admin = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .protocol(WriteProtocol {
+            protocol: definition.protocol.clone(),
+            protocol_path: "thread/admin".to_string(),
+        })
+        .recipient(BOB_DID)
+        .parent_context_id(&thread_context_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, admin.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a chat message on the thread
+    // --------------------------------------------------
+    let data = br#"{"record": "chat message"}"#;
+
+    let chat = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .protocol(WriteProtocol {
+            protocol: definition.protocol.clone(),
+            protocol_path: "thread/chat".to_string(),
+        })
+        .recipient(ALICE_DID)
+        .parent_context_id(&thread_context_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol is unable to delete Alice's 'post/comment'.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&chat.record_id)
+        .build(&carol_keyring)
+        .await
+        .expect("should create delete");
+
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "missing `protoocol_role`");
+
+    // --------------------------------------------------
+    // Bob (as thread admin) is able to delete the chat message.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&chat.record_id)
+        .protocol_role("thread/admin")
+        .build(&bob_keyring)
+        .await
+        .expect("should create delete");
+
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}

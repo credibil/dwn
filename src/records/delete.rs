@@ -36,9 +36,6 @@ pub async fn handle(
     }
     let latest = &records[0];
 
-    // authorize the delete message
-    delete.authorize(owner, &Write::try_from(latest)?, provider).await?;
-
     // check the latest existing message has not already been deleted
     if latest.descriptor().method == Method::Delete {
         // cannot delete a `RecordsDelete` record
@@ -54,6 +51,9 @@ pub async fn handle(
             ));
         }
     }
+
+    // authorize the delete message
+    delete.authorize(owner, &Write::try_from(latest)?, provider).await?;
 
     // ensure the delete request does not pre-date the latest existing version
     if delete.descriptor().message_timestamp.timestamp_micros()
@@ -159,7 +159,7 @@ impl Delete {
             return protocol.permit_delete(owner, self, write, store).await;
         }
 
-        Err(forbidden!("`RecordsDelete` message failed authorization"))
+        Err(forbidden!("delete request failed authorization"))
     }
 }
 
@@ -185,6 +185,7 @@ pub struct DeleteBuilder {
     record_id: Option<String>,
     prune: Option<bool>,
     permission_grant_id: Option<String>,
+    protocol_role: Option<String>,
 }
 
 impl DeleteBuilder {
@@ -211,17 +212,17 @@ impl DeleteBuilder {
         self
     }
 
-    // /// The datetime the record was created. Defaults to now.
-    // #[must_use]
-    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-    //     self.message_timestamp = message_timestamp;
-    //     self
-    // }
-
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
         self.permission_grant_id = Some(permission_grant_id.into());
+        self
+    }
+
+    /// Specifies the permission grant ID.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
         self
     }
 
@@ -248,6 +249,9 @@ impl DeleteBuilder {
             AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
         if let Some(id) = self.permission_grant_id {
             auth_builder = auth_builder.permission_grant_id(id);
+        }
+        if let Some(role) = self.protocol_role {
+            auth_builder = auth_builder.protocol_role(role);
         }
         let authorization = auth_builder.build(signer).await?;
 

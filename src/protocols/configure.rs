@@ -578,7 +578,6 @@ fn validate_rule_set(
     let mut action_iter = rule_set.actions.as_ref().unwrap_or(&empty).iter();
 
     while let Some(action) = action_iter.next() {
-        // for action in rule_set.actions.as_ref().unwrap_or(&Vec::new()) {
         // validate action's `role` property, if exists.
         if let Some(role) = &action.role {
             // role must contain valid protocol paths to a role record
@@ -586,9 +585,13 @@ fn validate_rule_set(
                 return Err(unexpected!("missing role {role} in action"));
             }
 
-            // all `can` actions read-like ('read', 'query', 'subscribe')  must be present
-            let allowed = [Action::Read, Action::Query, Action::Subscribe];
-            if !allowed.iter().all(|ra| action.can.contains(ra)) {
+            // if ANY `can` actions are read-like ('read', 'query', 'subscribe')
+            // then ALL read-like actions must be present
+            let mut read_actions = vec![Action::Read, Action::Query, Action::Subscribe];
+            read_actions.retain(|ra| action.can.contains(ra));
+
+            // intersection of `read_actions` and `can`: it should be empty or 3
+            if !read_actions.is_empty() && read_actions.len() != 3 {
                 return Err(unexpected!("role {role} is missing read-like actions"));
             }
         }

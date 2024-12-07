@@ -143,7 +143,7 @@ impl Subscribe {
 
         // when filter.protocol_role is set, set method to be RecordsWrite or RecordsDelete
         if self.authorization.as_ref().unwrap().jws_payload()?.protocol_role.is_some() {
-            // TODO: fix this
+            // FIXME: fix this
             // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
         }
 

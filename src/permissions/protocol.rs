@@ -5,8 +5,8 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use crate::authorization::Authorization;
 use crate::permissions::{self, GrantData, RequestData, Scope};
 use crate::protocols::{
-    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,
-    integrity,
+    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH,
+    RuleSet, integrity,
 };
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, Subscribe, Write, write};
@@ -113,13 +113,13 @@ impl Record {
                 unimplemented!("delete's protocol is provided by initial write record");
             }
         };
+        let Some(protocol_path) = &protocol_path else {
+            return Err(forbidden!("missing protocol"));
+        };
 
         let protocol = self.protocol()?;
         let definition = integrity::protocol_definition(owner, protocol, store).await?;
 
-        let Some(protocol_path) = &protocol_path else {
-            return Err(forbidden!("missing protocol"));
-        };
         let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
             return Err(forbidden!("no rule set defined for protocol path"));
         };
@@ -204,11 +204,22 @@ impl Protocol<'_> {
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
         let record: Record = write.into();
-        let rule_set = record.rule_set(owner, store).await?;
+
+        // TODO: implement the following block for all record types
+        // ---------------------------------------------------------
+        let Some(protocol_role) = delete.authorization.jws_payload()?.protocol_role else {
+            // return Ok(());
+            return Err(forbidden!("missing `protoocol_role`"));
+        };
+        let protocol = record.protocol()?;
+        let definition = integrity::protocol_definition(owner, protocol, store).await?;
+        let rule_set = integrity::rule_set(&protocol_role, &definition.structure).unwrap();
+        // ---------------------------------------------------------
 
         let delete: Record = delete.into();
-
         self.allow_role(owner, &delete, &rule_set, store).await?;
+
+        let rule_set = record.rule_set(owner, store).await?;
         self.allow_action(owner, &delete, &rule_set, store).await?;
 
         Ok(())
@@ -221,20 +232,18 @@ impl Protocol<'_> {
         let Some(authzn) = record.authorization() else {
             return Err(forbidden!("missing authorization"));
         };
-
         let author = authzn.author()?;
         let Some(protocol_role) = authzn.jws_payload()?.protocol_role else {
             return Ok(());
         };
+
         if !rule_set.role.unwrap_or_default() {
-            return Err(forbidden!(
-                "protocol path {protocol_role} does not match role record type"
-            ));
+            return Err(forbidden!("protocol path does not match role record type"));
         }
 
-        let segment_count = protocol_role.split('/').count();
-        if self.context_id.is_none() && segment_count > 1 {
-            return Err(forbidden!("unable verify role without `context_id`"));
+        let ancestor_count = protocol_role.split('/').count() - 1;
+        if self.context_id.is_none() && ancestor_count > 1 {
+            return Err(forbidden!("unable verify role without a `context_id`"));
         }
 
         let mut query = RecordsQuery::new()
@@ -243,23 +252,23 @@ impl Protocol<'_> {
             .add_recipient(author);
 
         // `context_id` prefix filter
-        if segment_count > 0 {
+        if ancestor_count > 0 {
             // context_id segment count is never shorter than the role path count.
             let default = String::new();
             let context_id = self.context_id.unwrap_or(&default);
             let context_id_segments: Vec<&str> = context_id.split('/').collect();
-            let prefix = context_id_segments[..segment_count].join("/");
+            let prefix = context_id_segments[..ancestor_count].join("/");
 
             query = query.context_id(Range::new(
                 Some(prefix.to_string()),
                 Some(format!("{prefix}\u{ffff}")),
             ));
         }
+
         // fetch the invoked role record
         let (records, _) = store.query(owner, &query.into()).await?;
-
         if records.is_empty() {
-            return Err(forbidden!("unable to find records for {protocol_role}"));
+            return Err(forbidden!("unable to find records for role"));
         }
 
         Ok(())
