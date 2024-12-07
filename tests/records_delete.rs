@@ -371,9 +371,9 @@ async fn anyone_delete() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
-// Should allow delete using an ancestor recipient rule.
+// Should allow recipient to delete using an ancestor recipient rule.
 #[tokio::test]
-async fn recipient_delete() {
+async fn ancestor_recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -451,6 +451,162 @@ async fn recipient_delete() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&tag.record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create delete");
+
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should allow recipient to delete using a recipient rule.
+#[tokio::test]
+async fn direct_recipient() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let recipient_can = include_bytes!("../crates/dwn-test/protocols/recipient-can.json");
+    let definition: Definition = serde_json::from_slice(recipient_can).expect("should deserialize");
+
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a chat record with Bob as the recipient.
+    // --------------------------------------------------
+    let data = br#"{"record": "chat write"}"#;
+
+    let chat = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .protocol(WriteProtocol {
+            protocol: definition.protocol.clone(),
+            protocol_path: "post".to_string(),
+        })
+        .recipient(BOB_DID)
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol is unable to delete the chat record.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&chat.record_id)
+        .build(&carol_keyring)
+        .await
+        .expect("should create delete");
+
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+        panic!("should be NotFound");
+    };
+    assert_eq!(e, "action not permitted");
+
+    // --------------------------------------------------
+    // Bob (as recipient) is able to delete the chat record.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&chat.record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create delete");
+
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should allow the author to delete with ancestor author rule.
+#[tokio::test]
+async fn ancestor_author() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let author_can = include_bytes!("../crates/dwn-test/protocols/author-can.json");
+    let definition: Definition = serde_json::from_slice(author_can).expect("should deserialize");
+
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob writes a post on Alice's 'feed'.
+    // --------------------------------------------------
+    let data = br#"{"record": "post write"}"#;
+
+    let post = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .protocol(WriteProtocol {
+            protocol: definition.protocol.clone(),
+            protocol_path: "post".to_string(),
+        })
+        .build(&bob_keyring)
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, post.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a post/comment.
+    // --------------------------------------------------
+    let data = br#"{"record": "post comment write"}"#;
+
+    let comment = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .protocol(WriteProtocol {
+            protocol: definition.protocol.clone(),
+            protocol_path: "post/comment".to_string(),
+        })
+        .parent_context_id(post.context_id.unwrap())
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, comment.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol is unable to delete Alice's 'post/comment'.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&comment.record_id)
+        .build(&carol_keyring)
+        .await
+        .expect("should create delete");
+
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+        panic!("should be NotFound");
+    };
+    assert_eq!(e, "action not permitted");
+
+    // --------------------------------------------------
+    // Bob (as post author) is able to delete the post comment.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&comment.record_id)
         .build(&bob_keyring)
         .await
         .expect("should create delete");
