@@ -711,7 +711,7 @@ async fn context_role() {
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(e, "missing `protoocol_role`");
+    assert_eq!(e, "action not permitted");
 
     // --------------------------------------------------
     // Bob (as thread admin) is able to delete the chat message.

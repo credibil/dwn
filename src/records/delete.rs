@@ -145,6 +145,7 @@ impl Delete {
         let authzn = &self.authorization;
         let author = &authzn.author()?;
 
+        // when signed by delegate, authorize delegate
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = delegated_grant.to_grant()?;
             grant.permit_delete(author, &authzn.signer()?, self, write, store).await?;

@@ -5,8 +5,8 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use crate::authorization::Authorization;
 use crate::permissions::{self, GrantData, RequestData, Scope};
 use crate::protocols::{
-    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH,
-    RuleSet, integrity,
+    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,
+    integrity,
 };
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, Subscribe, Write, write};
@@ -207,20 +207,19 @@ impl Protocol<'_> {
 
         // TODO: implement the following block for all record types
         // ---------------------------------------------------------
-        let Some(protocol_role) = delete.authorization.jws_payload()?.protocol_role else {
-            // return Ok(());
-            return Err(forbidden!("missing `protoocol_role`"));
-        };
         let protocol = record.protocol()?;
         let definition = integrity::protocol_definition(owner, protocol, store).await?;
-        let rule_set = integrity::rule_set(&protocol_role, &definition.structure).unwrap();
+
+        if let Some(protocol_role) = delete.authorization.jws_payload()?.protocol_role {
+            let role_rule_set = integrity::rule_set(&protocol_role, &definition.structure).unwrap();
+            let delete: Record = delete.into();
+            self.allow_role(owner, &delete, &role_rule_set, store).await?;
+        }
         // ---------------------------------------------------------
 
         let delete: Record = delete.into();
-        self.allow_role(owner, &delete, &rule_set, store).await?;
-
-        let rule_set = record.rule_set(owner, store).await?;
-        self.allow_action(owner, &delete, &rule_set, store).await?;
+        let message_rule_set = record.rule_set(owner, store).await?;
+        self.allow_action(owner, &delete, &message_rule_set, store).await?;
 
         Ok(())
     }
