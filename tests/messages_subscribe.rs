@@ -532,7 +532,7 @@ async fn invalid_protocol() {
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(e, "filter protocol does not match grant protocol");
+    assert_eq!(e, "filter and grant protocols do not match");
 
     // --------------------------------------------------
     // Bob subscribes to `protocol1` or `protocol2` messages in Alice's event stream.
@@ -548,5 +548,5 @@ async fn invalid_protocol() {
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(e, "filter protocol does not match grant protocol");
+    assert_eq!(e, "filter and grant protocols do not match");
 }

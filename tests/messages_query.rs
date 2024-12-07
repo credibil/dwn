@@ -472,5 +472,5 @@ async fn mismatched_protocol_scope() {
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(e, "filter protocol does not match grant protocol");
+    assert_eq!(e, "filter and grant protocols do not match");
 }
