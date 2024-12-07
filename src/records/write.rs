@@ -31,7 +31,7 @@ use crate::{
 /// Handle `RecordsWrite` messages.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, write: Write, provider: &impl Provider,
 ) -> Result<Reply<WriteReply>> {
@@ -203,7 +203,7 @@ impl Message for Write {
     }
 
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        // TODO: fix this lint
+        // FIXME: fix this lint
         #[allow(clippy::large_futures)]
         handle(owner, self, provider).await
     }
@@ -301,7 +301,7 @@ impl Write {
     /// Signs the Write message body. The signer is either the author or a delegate.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn sign_as_author(
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
         signer: &impl Signer,
@@ -372,7 +372,7 @@ impl Write {
     /// N.B.: requires the `RecordsWrite` to already have the author's signature.
     ///
     /// # Errors
-    /// TODO: add errors
+    /// LATER: Add errors
     pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
         if self.authorization.author().is_err() {
             return Err(unexpected!("message signature is required in order to sign as owner"));
@@ -395,7 +395,7 @@ impl Write {
     /// N.B. requires `Write` to have previously beeen signed by the author.
     ///
     /// # Errors
-    /// TODO: add errors
+    /// LATER: Add errors
     pub async fn sign_as_delegate(
         &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
     ) -> Result<()> {
@@ -566,7 +566,7 @@ impl DelegatedGrant {
     /// Convert [`DelegatedGrant`] to `permissions::Grant`.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn to_grant(&self) -> Result<Grant> {
         self.try_into()
     }
@@ -873,7 +873,7 @@ impl WriteBuilder {
     /// Build the write message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<Write> {
         let mut write = if let Some(existing_write) = &self.existing_write {
             existing_write.clone()

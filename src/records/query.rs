@@ -19,7 +19,7 @@ use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorize
 /// Process `Query` message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
@@ -282,7 +282,7 @@ impl QueryBuilder {
     /// Build the write message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {

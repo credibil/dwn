@@ -37,7 +37,7 @@ impl Entry {
     /// The message's CID.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn cid(&self) -> Result<String> {
         match self.message {
             EntryType::Write(ref write) => write.cid(),

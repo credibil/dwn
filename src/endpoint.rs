@@ -14,7 +14,7 @@ use crate::{Descriptor, Result, schema, unauthorized};
 /// Handle incoming messages.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle<T>(
     owner: &str, message: impl Message<Reply = T>, provider: &impl Provider,
 ) -> Result<Reply<T>> {
@@ -31,7 +31,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
     /// Compute the CID of the message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     fn cid(&self) -> Result<String>;
 
     /// Returns the component of the message descriptor common to all messages

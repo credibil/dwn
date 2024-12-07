@@ -27,7 +27,7 @@ use crate::{
 /// Process query message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
@@ -158,7 +158,7 @@ impl Configure {
     /// Check message has sufficient privileges.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
 
@@ -493,7 +493,7 @@ impl ConfigureBuilder {
     /// Generate the Configure message body..
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Configure> {
         // check definition has been set
         let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;

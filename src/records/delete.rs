@@ -24,7 +24,7 @@ use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected}
 /// Process `Delete` message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
@@ -230,7 +230,7 @@ impl DeleteBuilder {
     /// Build the write message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Delete> {
         let Some(record_id) = self.record_id else {
             return Err(unexpected!("`record_id` is not set"));

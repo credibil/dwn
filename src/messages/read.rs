@@ -22,7 +22,7 @@ use crate::{Descriptor, Error, Interface, Method, Result, forbidden, schema, une
 /// Handle a read message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // validate message CID
     let cid =
@@ -242,7 +242,7 @@ impl ReadBuilder {
     /// Generate the Read message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Read> {
         // verify CID
         let Some(message_cid) = self.message_cid else {

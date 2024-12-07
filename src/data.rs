@@ -32,7 +32,7 @@ pub mod cid {
     /// Compute a CID from provided payload, serialized to CBOR.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();
         ciborium::into_writer(payload, &mut buf)?;
@@ -60,7 +60,7 @@ impl DataStream {
     /// Compute a CID for the provided data stream.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn compute_cid(&self) -> Result<(String, usize)> {
         let mut cid = self.clone();
 
@@ -94,7 +94,7 @@ impl DataStream {
     /// Write data stream to the underlying block store.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn to_store(
         &mut self, owner: &str, store: &impl BlockStore,
     ) -> Result<(String, usize)> {
@@ -134,7 +134,7 @@ impl DataStream {
     /// Read data stream from the underlying block store.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn from_store(
         owner: &str, cid: &str, store: &impl BlockStore,
     ) -> Result<Option<Self>> {

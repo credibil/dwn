@@ -36,7 +36,7 @@ async fn minimal() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
-// TODO: add support for multiple signatures to infosec
+// LATER: add support for multiple signatures to infosec
 // // Should return a status of BadRequest (400) whe more than 1 signature is set.
 // #[tokio::test]
 // async fn two_signatures() {}

@@ -20,7 +20,7 @@ use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected}
 /// Process `Read` message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = RecordsQuery::from(read.clone());
@@ -35,7 +35,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     // if the matched message is a `RecordsDelete`, mark as not-found and return
     // both the RecordsDelete and the initial RecordsWrite
     if entries[0].descriptor().method == Method::Delete {
-        // TODO: implement this
+        // FIXME: implement this
 
         //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
         //   if initial_write.is_none() {
@@ -61,7 +61,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     let mut write = Write::try_from(&entries[0])?;
 
-    // TODO: review against the original code — it should take a store provider
+    // FIXME: review against the original code — it should take a store provider
     // verify the fetched message can be safely returned to the requestor
     read.authorize(owner, &write, provider).await?;
 
@@ -304,7 +304,7 @@ impl ReadBuilder {
     /// Build the write message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Read> {
         let descriptor = ReadDescriptor {
             base: Descriptor {

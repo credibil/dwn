@@ -22,7 +22,7 @@ enum Access {
 /// Process query message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
@@ -62,7 +62,7 @@ pub async fn handle(
 /// Protocols Query payload
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
@@ -135,7 +135,7 @@ impl Query {
     /// Check message has sufficient privileges.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<Access> {
         let Some(authzn) = &self.authorization else {
             return Ok(Access::Published);
@@ -224,7 +224,7 @@ impl QueryBuilder {
     /// Build the query.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -254,7 +254,7 @@ impl QueryBuilder {
     /// Build an anonymous query.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn anonymous(self) -> Result<Query> {
         let query = Query {
             descriptor: QueryDescriptor {

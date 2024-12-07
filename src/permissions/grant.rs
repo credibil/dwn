@@ -139,7 +139,7 @@ impl Grant {
     /// `method`.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn verify(
         &self, grantor: &str, grantee: &str, descriptor: &Descriptor, store: &impl MessageStore,
     ) -> Result<()> {
@@ -172,7 +172,7 @@ impl Grant {
     /// Verify the grant allows the `records::Write` message to be written.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn permit_write(
         &self, grantor: &str, grantee: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
@@ -186,7 +186,7 @@ impl Grant {
     /// `records::Subscribe` records.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn permit_read(
         &self, grantor: &str, grantee: &str, read: &Read, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
@@ -199,7 +199,7 @@ impl Grant {
     /// `records::Subscribe` records.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn permit_query(
         &self, grantor: &str, grantee: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
@@ -222,7 +222,7 @@ impl Grant {
     /// `records::Subscribe` records.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn permit_subscribe(
         &self, grantor: &str, grantee: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
@@ -244,7 +244,7 @@ impl Grant {
     /// Verify the grant allows the `records::Write` message to be deleted.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn permit_delete(
         &self, grantor: &str, grantee: &str, delete: &Delete, write: &Write,
         store: &impl MessageStore,
@@ -267,7 +267,7 @@ impl Grant {
     async fn is_current(
         &self, grantor: &str, timestamp: &DateTime<Utc>, store: &impl MessageStore,
     ) -> Result<()> {
-        // TODO: use chrono dattime for compare
+        // FIXME: use chrono dattime for compare
         // Check that message is within the grant's time frame
         if timestamp.lt(&self.date_granted) {
             return Err(forbidden!("grant is not yet active"));
@@ -424,7 +424,7 @@ impl GrantBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
         let Some(scope) = self.scope else {
             return Err(forbidden!("missing `scope`"));
@@ -516,7 +516,7 @@ impl RequestBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
         let Some(scope) = self.scope else {
             return Err(forbidden!("missing `scope`"));
@@ -576,7 +576,7 @@ impl RevocationBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
         let Some(grant) = self.grant else {
             return Err(unexpected!("missing `grant`"));

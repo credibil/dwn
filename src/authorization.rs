@@ -166,7 +166,7 @@ impl Authorization {
     /// Get the JWS payload of the message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn jws_payload(&self) -> Result<JwsPayload> {
         let base64 = &self.signature.payload;
         let decoded = Base64UrlUnpadded::decode_vec(base64)
@@ -235,7 +235,7 @@ impl AuthorizationBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub(crate) async fn build(self, signer: &impl Signer) -> Result<Authorization> {
         let descriptor_cid =
             self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;

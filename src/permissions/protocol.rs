@@ -132,7 +132,7 @@ impl Protocol<'_> {
     /// Protocol-based authorization for `records::Write` messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_write(
         &self, owner: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
@@ -150,7 +150,7 @@ impl Protocol<'_> {
     /// messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_read(
         &self, owner: &str, read: &Read, store: &impl MessageStore,
     ) -> Result<()> {
@@ -165,7 +165,7 @@ impl Protocol<'_> {
     /// messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_query(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
@@ -179,7 +179,7 @@ impl Protocol<'_> {
     /// Protocol-based authorization for `records::Subscribe` messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_subscribe(
         &self, owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
@@ -193,7 +193,7 @@ impl Protocol<'_> {
     /// Protocol-based authorization for `records::Delete` messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_delete(
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {

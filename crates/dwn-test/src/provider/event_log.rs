@@ -32,7 +32,7 @@ impl EventLog for ProviderImpl {
         let events: Vec<Event> = response.take(0)?;
         Ok((events, Cursor::default()))
 
-        // TODO: sort and paginate
+        // FIXME: sort and paginate
     }
 
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {

@@ -20,7 +20,7 @@ use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
 /// Process `Subscribe` message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
@@ -236,7 +236,7 @@ impl SubscribeBuilder {
     /// Build the write message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
         let descriptor = SubscribeDescriptor {
             base: Descriptor {

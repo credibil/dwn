@@ -19,7 +19,7 @@ use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schem
 /// Handle a subscribe message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
@@ -169,7 +169,7 @@ impl SubscribeBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
         let descriptor = SubscribeDescriptor {
             base: Descriptor {

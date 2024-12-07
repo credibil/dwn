@@ -16,13 +16,13 @@ use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schem
 /// Handle a query message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;
 
-    // TODO: use pagination cursor
+    // FIXME: use pagination cursor
     let query = MessagesQuery::from(query);
     let (events, _) = EventLog::query(provider, owner, &query.into()).await?;
 
@@ -170,7 +170,7 @@ impl QueryBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
