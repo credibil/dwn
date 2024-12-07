@@ -140,7 +140,7 @@ impl Protocol<'_> {
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_role(owner, &record, &record.protocol()?, store).await?;
         self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -157,7 +157,7 @@ impl Protocol<'_> {
         let record: Record = read.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_role(owner, &record, &record.protocol()?, store).await?;
         self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -174,7 +174,7 @@ impl Protocol<'_> {
         let record: Record = query.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_role(owner, &record, &record.protocol()?, store).await?;
         self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -190,7 +190,7 @@ impl Protocol<'_> {
         let record: Record = subscribe.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
+        self.allow_role(owner, &record, &record.protocol()?, store).await?;
         self.allow_action(owner, &record, &rule_set, store).await?;
 
         Ok(())
@@ -203,30 +203,19 @@ impl Protocol<'_> {
     pub async fn permit_delete(
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
-        let record: Record = write.into();
+        let write_record: Record = write.into();
+        let delete_record = delete.into();
+        let rule_set = write_record.rule_set(owner, store).await?;
 
-        // TODO: implement the following block for all record types
-        // ---------------------------------------------------------
-        let protocol = record.protocol()?;
-        let definition = integrity::protocol_definition(owner, protocol, store).await?;
-
-        if let Some(protocol_role) = delete.authorization.jws_payload()?.protocol_role {
-            let role_rule_set = integrity::rule_set(&protocol_role, &definition.structure).unwrap();
-            let delete: Record = delete.into();
-            self.allow_role(owner, &delete, &role_rule_set, store).await?;
-        }
-        // ---------------------------------------------------------
-
-        let delete: Record = delete.into();
-        let message_rule_set = record.rule_set(owner, store).await?;
-        self.allow_action(owner, &delete, &message_rule_set, store).await?;
+        self.allow_role(owner, &delete_record, &write_record.protocol()?, store).await?;
+        self.allow_action(owner, &delete_record, &rule_set, store).await?;
 
         Ok(())
     }
 
     // Check if the incoming message is invoking a role. If so, validate the invoked role.
     async fn allow_role(
-        &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
+        &self, owner: &str, record: &Record, protocol: &str, store: &impl MessageStore,
     ) -> Result<()> {
         let Some(authzn) = record.authorization() else {
             return Err(forbidden!("missing authorization"));
@@ -236,7 +225,10 @@ impl Protocol<'_> {
             return Ok(());
         };
 
-        if !rule_set.role.unwrap_or_default() {
+        let definition = integrity::protocol_definition(owner, protocol, store).await?;
+        let role_rule_set = integrity::rule_set(&protocol_role, &definition.structure).unwrap();
+
+        if !role_rule_set.role.unwrap_or_default() {
             return Err(forbidden!("protocol path does not match role record type"));
         }
 
