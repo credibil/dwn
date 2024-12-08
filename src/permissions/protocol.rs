@@ -113,6 +113,7 @@ impl Record {
                 unimplemented!("delete's protocol is provided by initial write record");
             }
         };
+
         let Some(protocol_path) = &protocol_path else {
             return Err(forbidden!("missing protocol"));
         };
@@ -141,9 +142,7 @@ impl Protocol<'_> {
         let rule_set = record.rule_set(owner, store).await?;
 
         self.allow_role(owner, &record, record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Query` and `records::Subscribe`
@@ -219,36 +218,32 @@ impl Protocol<'_> {
 
         let definition = integrity::protocol_definition(owner, protocol, store).await?;
         let role_rule_set = integrity::rule_set(&protocol_role, &definition.structure).unwrap();
-
         if !role_rule_set.role.unwrap_or_default() {
             return Err(forbidden!("protocol path does not match role record type"));
         }
 
-        let ancestor_count = protocol_role.split('/').count() - 1;
-        if self.context_id.is_none() && ancestor_count > 1 {
-            return Err(forbidden!("unable verify role without a `context_id`"));
-        }
-
+        // build query to fetch the invoked role record
         let mut query = RecordsQuery::new()
             .protocol(self.protocol)
             .protocol_path(&protocol_role)
             .add_recipient(author);
 
-        // `context_id` prefix filter
-        if ancestor_count > 0 {
-            // context_id segment count is never shorter than the role path count.
-            let default = String::new();
-            let context_id = self.context_id.unwrap_or(&default);
-            let context_id_segments: Vec<&str> = context_id.split('/').collect();
-            let prefix = context_id_segments[..ancestor_count].join("/");
+        // `context_id` filter
+        let role_segments = protocol_role.split('/').count() - 1;
+        if role_segments > 0 {
+            let Some(context_id) = self.context_id else {
+                return Err(forbidden!("unable verify role without a `context_id`"));
+            };
 
-            query = query.context_id(Range::new(
-                Some(prefix.to_string()),
-                Some(format!("{prefix}\u{ffff}")),
-            ));
+            // get parent context ID
+            let parent_segments = context_id.split('/').collect::<Vec<&str>>();
+            let parent = parent_segments[..role_segments].join("/");
+
+            query = query
+                .context_id(Range::new(Some(parent.clone()), Some(format!("{parent}\u{ffff}"))));
         }
 
-        // fetch the invoked role record
+        // check the invoked role record exists
         let (records, _) = store.query(owner, &query.into()).await?;
         if records.is_empty() {
             return Err(forbidden!("unable to find records for role"));
