@@ -16,7 +16,7 @@ pub enum Error {
     #[error(r#"{{"code": 401, "detail": "{0}"}}"#)]
     Unauthorized(String),
 
-    /// The client does not have access rights to the content.
+    /// The client does not have access rights to the content, i.e. is unauthorized.
     #[error(r#"{{"code": 403, "detail": "{0}"}}"#)]
     Forbidden(String),
 

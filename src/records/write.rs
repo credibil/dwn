@@ -104,6 +104,8 @@ pub async fn handle(
         entry.indexes.insert("archived".to_string(), Value::Bool(true));
 
         MessageStore::put(provider, owner, &entry).await?;
+        // FIXME: event_log data should be immutable
+        EventLog::append(provider, owner, &entry).await?;
         BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
     }
 
@@ -911,6 +913,7 @@ impl WriteBuilder {
             write
         };
 
+        write.descriptor.base.message_timestamp = self.message_timestamp;
         write.descriptor.data_format = self.data_format;
 
         // record_id

@@ -8,11 +8,11 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
-use vercre_dwn::provider::KeyStore;
+use vercre_dwn::provider::{EventLog, KeyStore, MessageStore};
 use vercre_dwn::records::{
     DeleteBuilder, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteData, WriteProtocol,
 };
-use vercre_dwn::{Error, endpoint};
+use vercre_dwn::{Error, Method, endpoint, store};
 
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]
@@ -771,7 +771,7 @@ async fn root_role() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice writes a chat message in the thread.
+    // Alice writes a chat message.
     // --------------------------------------------------
     let data = br#"{"record": "a chat message"}"#;
 
@@ -790,7 +790,7 @@ async fn root_role() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Carol is unable to delete Alice's chat message'.
+    // Carol is unable to delete Alice's chat message.
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
@@ -815,4 +815,198 @@ async fn root_role() {
 
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should return a status of Forbidden (403) if message is not authorized.
+#[tokio::test]
+async fn forbidden() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice writes record.
+    // --------------------------------------------------
+    let data = br#"{"record": "a record"}"#;
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to delete the record but is unable to.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&write.record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create delete");
+
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "delete request failed authorization");
+}
+
+// FIXME: ignore until we are building full indexes for each data type
+// Should index additional properties for the record being deleted.
+#[tokio::test]
+#[ignore]
+async fn index_additional() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes record.
+    // --------------------------------------------------
+    let data = br#"{"record": "a record"}"#;
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .schema("http://test_schema")
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice deletes the message.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&write.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+
+    let reply = endpoint::handle(ALICE_DID, delete.clone(), &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Check MessageStore and EventLog.
+    // --------------------------------------------------
+    let query = store::RecordsQuery {
+        method: Some(Method::Delete),
+        filter: Some(RecordsFilter::new().schema("http://test_schema")),
+        include_archived: true,
+        ..store::RecordsQuery::default()
+    };
+    let (entries, _) = MessageStore::query(&provider, ALICE_DID, &query.clone().into())
+        .await
+        .expect("should query");
+    assert_eq!(entries.len(), 1);
+
+    // check log
+    let (entries, _) =
+        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+    assert_eq!(entries.len(), 1);
+}
+
+// Should log delete event while retaining initial write event.
+#[tokio::test]
+async fn log_delete() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes record.
+    // --------------------------------------------------
+    let data = br#"{"record": "a record"}"#;
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice deletes the message.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&write.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+
+    let reply = endpoint::handle(ALICE_DID, delete.clone(), &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Check EventLog.
+    // --------------------------------------------------
+    // Write record
+    let query = store::RecordsQuery {
+        include_archived: true,
+        method: None,
+        ..store::RecordsQuery::default()
+    };
+    let (entries, _) =
+        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+    assert_eq!(entries.len(), 2);
+}
+
+// Should delete all writes except the initial write.
+#[tokio::test]
+async fn delete_updates() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes record.
+    // --------------------------------------------------
+    let data = br#"{"record": "a record"}"#;
+
+    let write1 = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, write1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write2 = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .existing(write1.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should create write");
+
+    let reply = endpoint::handle(ALICE_DID, write2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice deletes the message.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&write2.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+
+    let reply =
+        endpoint::handle(ALICE_DID, delete.clone(), &provider).await.expect("should delete");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Check EventLog. There should only be 2 events: the initial write and the delete.
+    // --------------------------------------------------
+    // Write record
+    let query = store::RecordsQuery {
+        include_archived: true,
+        method: None,
+        ..store::RecordsQuery::default()
+    };
+    let (entries, _) =
+        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+    assert_eq!(entries.len(), 2);
 }

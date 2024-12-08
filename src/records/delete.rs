@@ -287,7 +287,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
 
-    let Some(earliest) = records.last() else {
+    let Some(earliest) = records.first() else {
         return Err(unexpected!("no records found"));
     };
 
@@ -296,10 +296,12 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(unexpected!("initial write is not earliest message"));
     }
 
+    // FIXME: need to copy initial write indexes to delete message
     // save the delete message using same indexes as the initial write
     let initial = Entry::from(&write);
     let mut entry = Entry::from(delete);
     entry.indexes.extend(initial.indexes);
+
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
     EventStream::emit(provider, owner, &entry).await?;

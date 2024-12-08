@@ -99,6 +99,7 @@ impl From<&Write> for Entry {
             indexes: Map::new(),
         };
 
+        // FIXME: build full indexes for each record
         record.indexes.insert(
             "author".to_string(),
             Value::String(write.authorization.author().unwrap_or_default()),
@@ -132,6 +133,7 @@ impl From<&Delete> for Entry {
             indexes: Map::new(),
         };
 
+        // FIXME: build full indexes for each record
         // flatten record_id so it queries correctly
         record
             .indexes

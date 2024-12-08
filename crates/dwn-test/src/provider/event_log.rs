@@ -18,7 +18,7 @@ impl EventLog for ProviderImpl {
     async fn append(&self, owner: &str, event: &Event) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<BTreeMap<String, Value>> =
-            self.db.create((TABLE, &event.cid()?)).content(event).await?;
+            self.db.update((TABLE, event.cid()?)).content(event).await?;
         Ok(())
     }
 
