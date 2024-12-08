@@ -1,6 +1,5 @@
 //! # Store
 
-use std::fmt::Display;
 use std::ops::Deref;
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -11,7 +10,7 @@ use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
-pub use crate::records::{RecordsFilter, TagFilter};
+pub use crate::records::{RecordsFilter, Sort, TagFilter};
 use crate::{Descriptor, Method, Quota, Range, Result, authorization, messages, protocols};
 
 /// Entry wraps each message with a unifying type used for all stored messages
@@ -248,15 +247,10 @@ pub struct RecordsQuery {
 
 impl Default for RecordsQuery {
     fn default() -> Self {
-        let sort = Sort {
-            message_timestamp: Some(Direction::Ascending),
-            ..Sort::default()
-        };
-
         Self {
             method: Some(Method::Write),
             include_archived: false,
-            sort: Some(sort),
+            sort: Some(Sort::default()),
             record_id: None,
             parent_id: None,
             context_id: None,
@@ -394,44 +388,6 @@ impl From<messages::Query> for MessagesQuery {
 impl From<MessagesQuery> for Query {
     fn from(query: MessagesQuery) -> Self {
         Self::Messages(query)
-    }
-}
-
-/// `EntryType` sort.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Sort {
-    /// Sort by `date_created`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<Direction>,
-
-    /// Sort by `date_published`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<Direction>,
-
-    /// Sort by `message_timestamp`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_timestamp: Option<Direction>,
-}
-
-/// Sort direction.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Direction {
-    /// Sort ascending.
-    #[default]
-    Ascending,
-
-    /// Sort descending.
-    Descending,
-}
-
-impl Display for Direction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ascending => write!(f, "ASC"),
-            Self::Descending => write!(f, "DESC"),
-        }
     }
 }
 

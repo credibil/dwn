@@ -14,7 +14,7 @@ use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized};
+use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized, unexpected};
 
 /// Process `Query` message.
 ///
@@ -28,6 +28,7 @@ pub async fn handle(
     // authorize messages querying for private records
     if !filter.published.unwrap_or_default() {
         query.authorize(owner, provider).await?;
+        query.validate()?;
 
         let Some(authzn) = &query.authorization else {
             return Err(forbidden!("missing authorization"));
@@ -178,6 +179,12 @@ impl Query {
 
         Ok(())
     }
+
+    fn validate(&self) -> Result<()> {
+        validate_sort(self.descriptor.date_sort.as_ref(), &self.descriptor.filter)?;
+
+        Ok(())
+    }
 }
 
 /// Query descriptor.
@@ -284,6 +291,8 @@ impl QueryBuilder {
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
+        validate_sort(self.date_sort.as_ref(), &self.filter)?;
+
         let descriptor = QueryDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
@@ -317,4 +326,20 @@ impl QueryBuilder {
             authorization,
         })
     }
+}
+
+fn validate_sort(sort: Option<&Sort>, filter: &RecordsFilter) -> Result<()> {
+    let Some(sort) = sort else {
+        return Ok(());
+    };
+
+    if !filter.published.unwrap_or_default() {
+        if sort == &Sort::PublishedAscending || sort == &Sort::PublishedDescending {
+            return Err(unexpected!(
+                "cannot sort by `date_published` when querying for unpublished records"
+            ));
+        }
+    }
+
+    Ok(())
 }

@@ -2,7 +2,8 @@
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use vercre_dwn::store::{
-    MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, TagFilter,
+    MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
+    TagFilter,
 };
 use vercre_dwn::{Interface, Method, Quota};
 
@@ -177,17 +178,14 @@ impl QuerySerializer for RecordsQuery {
 
         // sorting
         if let Some(sort) = &self.sort {
-            let mut fields = vec![];
-            if let Some(dir) = &sort.date_created {
-                fields.push(format!(" descriptor.dateCreated COLLATE {dir}"));
+            match sort {
+                Sort::CreatedAscending | Sort::PublishedAscending | Sort::TimestampAscending => {
+                    sql.push_str(&format!(" ORDER BY descriptor.{sort} COLLATE ASC"));
+                }
+                Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending => {
+                    sql.push_str(&format!(" ORDER BY descriptor.{sort} COLLATE DESC"));
+                }
             }
-            if let Some(dir) = &sort.date_published {
-                fields.push(format!(" descriptor.datePublished COLLATE {dir}"));
-            }
-            if let Some(dir) = &sort.message_timestamp {
-                fields.push(format!(" descriptor.messageTimestamp COLLATE {dir}"));
-            }
-            sql.push_str(&format!(" ORDER BY {sort}", sort = fields.join(",")));
         }
 
         if let Some(pagination) = &self.pagination {

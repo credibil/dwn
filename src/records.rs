@@ -7,6 +7,7 @@ mod subscribe;
 pub(crate) mod write;
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -108,6 +109,43 @@ impl RecordsFilter {
             if let Some(schema) = &self.schema { Some(utils::clean_url(schema)?) } else { None };
 
         Ok(filter)
+    }
+}
+
+/// `EntryType` sort.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Sort {
+    /// Sort `date_created` from oldest to newest.
+    #[default]
+    CreatedAscending,
+
+    /// Sort `date_created` newest to oldest.
+    CreatedDescending,
+
+    /// Sort `date_published` from oldest to newest.
+    PublishedAscending,
+
+    /// Sort `date_published` from newest to oldest.
+    PublishedDescending,
+
+    /// Sort `message_timestamp` from oldest to newest.
+    TimestampAscending,
+
+    /// Sort `message_timestamp` from newest to oldest.
+    TimestampDescending,
+}
+
+impl Display for Sort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Sort::CreatedAscending => write!(f, "date_created"),
+            Sort::CreatedDescending => write!(f, "date_created"),
+            Sort::PublishedAscending => write!(f, "date_published"),
+            Sort::PublishedDescending => write!(f, "date_published"),
+            Sort::TimestampAscending => write!(f, "message_timestamp"),
+            Sort::TimestampDescending => write!(f, "message_timestamp"),
+        }
     }
 }
 
