@@ -18,9 +18,8 @@ pub const MAX_ENCODED_SIZE: usize = 30000;
 
 const CHUNK_SIZE: usize = 16;
 
-/// Compuet CID from a data value or stream.
+/// Compute CID from a data value or stream.
 pub mod cid {
-
     use cid::Cid;
     use multihash_codetable::MultihashDigest;
     use serde::Serialize;
