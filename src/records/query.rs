@@ -333,12 +333,12 @@ fn validate_sort(sort: Option<&Sort>, filter: &RecordsFilter) -> Result<()> {
         return Ok(());
     };
 
-    if !filter.published.unwrap_or_default() {
-        if sort == &Sort::PublishedAscending || sort == &Sort::PublishedDescending {
-            return Err(unexpected!(
-                "cannot sort by `date_published` when querying for unpublished records"
-            ));
-        }
+    if !filter.published.unwrap_or_default()
+        && (sort == &Sort::PublishedAscending || sort == &Sort::PublishedDescending)
+    {
+        return Err(unexpected!(
+            "cannot sort by `date_published` when querying for unpublished records"
+        ));
     }
 
     Ok(())

@@ -113,7 +113,7 @@ impl RecordsFilter {
 }
 
 /// `EntryType` sort.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Sort {
     /// Sort `date_created` from oldest to newest.
@@ -139,12 +139,9 @@ pub enum Sort {
 impl Display for Sort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Sort::CreatedAscending => write!(f, "date_created"),
-            Sort::CreatedDescending => write!(f, "date_created"),
-            Sort::PublishedAscending => write!(f, "date_published"),
-            Sort::PublishedDescending => write!(f, "date_published"),
-            Sort::TimestampAscending => write!(f, "message_timestamp"),
-            Sort::TimestampDescending => write!(f, "message_timestamp"),
+            Self::CreatedAscending | Self::CreatedDescending => write!(f, "date_created"),
+            Self::PublishedAscending | Self::PublishedDescending => write!(f, "date_published"),
+            Self::TimestampAscending | Self::TimestampDescending => write!(f, "message_timestamp"),
         }
     }
 }

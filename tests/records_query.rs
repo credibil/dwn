@@ -20,8 +20,15 @@ async fn invalid_sort() {
         .build(&alice_keyring)
         .await
         .expect("should create query");
-    query.descriptor.date_sort = Some(Sort::PublishedAscending);
 
+    query.descriptor.date_sort = Some(Sort::PublishedAscending);
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query.clone(), &provider).await
+    else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "cannot sort by `date_published` when querying for unpublished records");
+
+    query.descriptor.date_sort = Some(Sort::PublishedDescending);
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be BadRequest");
     };
