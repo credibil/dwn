@@ -184,6 +184,7 @@ impl Message for Write {
     type Reply = WriteReply;
 
     fn cid(&self) -> Result<String> {
+        // exclude `record_id` and `context_id` from CID calculation
         #[derive(Serialize)]
         struct Cid {
             #[serde(flatten)]
