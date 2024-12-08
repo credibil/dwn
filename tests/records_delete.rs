@@ -10,7 +10,8 @@ use vercre_dwn::data::DataStream;
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{EventLog, KeyStore, MessageStore};
 use vercre_dwn::records::{
-    DeleteBuilder, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteData, WriteProtocol,
+    DeleteBuilder, DeleteDescriptor, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder,
+    WriteData, WriteProtocol,
 };
 use vercre_dwn::{Error, Method, endpoint, store};
 
@@ -851,6 +852,51 @@ async fn forbidden() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "delete request failed authorization");
+}
+
+// Should return a status of Forbidden (403) if message is not authorized.
+#[tokio::test]
+async fn unauthorized() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Bob attempts to delete the record but is unable to.
+    // --------------------------------------------------
+    let mut delete = DeleteBuilder::new()
+        .record_id("record_id")
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+
+    delete.authorization.signature.signatures[0].signature = "bad_signature".to_string();
+
+    let Err(Error::Unauthorized(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+        panic!("should be Unauthorized");
+    };
+    assert!(e.starts_with("failed to authenticate"));
+}
+
+// Should return a status of BadRequest (400) when message is invalid.
+#[tokio::test]
+async fn invalid_message() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Bob attempts to delete the record but is unable to.
+    // --------------------------------------------------
+    let mut delete = DeleteBuilder::new()
+        .record_id("record_id")
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+    delete.descriptor = DeleteDescriptor::default();
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert!(e.starts_with("validation failed for "));
 }
 
 // FIXME: ignore until we are building full indexes for each data type
