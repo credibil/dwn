@@ -748,21 +748,7 @@ impl WriteBuilder {
             date_created: Some(now),
             message_timestamp: now,
             data_format: "application/json".to_string(),
-            // ..WriteBuilder::default()
-            recipient: None,
-            protocol: None,
-            protocol_role: None,
-            schema: None,
-            tags: None,
-            record_id: None,
-            parent_context_id: None,
-            data: WriteData::default(),
-            published: None,
-            date_published: None,
-            delegated_grant: None,
-            permission_grant_id: None,
-            existing_write: None,
-            encryption_input: None,
+            ..WriteBuilder::default()
         }
     }
 
@@ -1058,7 +1044,6 @@ async fn existing_entries(
 ) -> Result<Vec<Entry>> {
     // N.B. unset method in order to get Write and Delete messages
     let query = RecordsQuery::new().record_id(record_id).include_archived(true).method(None);
-
     let (entries, _) = store.query(owner, &query.into()).await.unwrap();
     Ok(entries)
 }
