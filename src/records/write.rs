@@ -748,7 +748,7 @@ impl WriteBuilder {
             date_created: Some(now),
             message_timestamp: now,
             data_format: "application/json".to_string(),
-            ..WriteBuilder::default()
+            ..Self::default()
         }
     }
 
