@@ -312,9 +312,8 @@ async fn no_data_after_update() {
     rand::thread_rng().fill_bytes(&mut data);
     let reader = DataStream::from(data.to_vec());
 
-    let write = WriteBuilder::new()
+    let write = WriteBuilder::from(write)
         .data(WriteData::Reader(reader))
-        .existing(write)
         .build(&alice_keyring, None)
         .await
         .expect("should update write");

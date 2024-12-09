@@ -54,9 +54,8 @@ async fn overwrite_older() {
     let data = br#"{"message": "updated write record"}"#;
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
-    let write = WriteBuilder::new()
+    let write = WriteBuilder::from(initial_write)
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .existing(initial_write)
         .build(&alice_keyring, None)
         .await
         .expect("should create write");

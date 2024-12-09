@@ -250,8 +250,7 @@ async fn newer_version() {
     // --------------------------------------------------
     let data = br#"{"record": "test record write again"}"#;
 
-    let write = WriteBuilder::new()
-        .existing(write.clone())
+    let write = WriteBuilder::from(write.clone())
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .build(&alice_keyring, None)
         .await
@@ -1023,9 +1022,8 @@ async fn delete_updates() {
     let reply = endpoint::handle(ALICE_DID, write1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write2 = WriteBuilder::new()
+    let write2 = WriteBuilder::from(write1.clone())
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .existing(write1.clone())
         .build(&alice_keyring, None)
         .await
         .expect("should create write");
