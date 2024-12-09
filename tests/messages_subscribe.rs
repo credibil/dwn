@@ -63,7 +63,7 @@ async fn owner_events() {
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .build(&alice_keyring)
+        .build(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -209,7 +209,7 @@ async fn interface_scope() {
             protocol_path: "post".to_string(),
         })
         .schema("post")
-        .build(&alice_keyring)
+        .build(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -222,7 +222,7 @@ async fn interface_scope() {
     let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .build(&alice_keyring)
+        .build(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -414,7 +414,7 @@ async fn protocol_filter() {
             protocol_path: "post".to_string(),
         })
         .schema("post")
-        .build(&alice_keyring)
+        .build(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -432,7 +432,7 @@ async fn protocol_filter() {
             protocol_path: "post".to_string(),
         })
         .schema("post")
-        .build(&alice_keyring)
+        .build(&alice_keyring, None)
         .await
         .expect("should create write");
 

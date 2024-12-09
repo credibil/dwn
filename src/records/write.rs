@@ -336,19 +336,9 @@ impl Write {
             };
         }
 
-        // attestation
-        let payload = Payload {
-            descriptor_cid: cid::from_value(&self.descriptor)?,
-        };
-        let signature = JwsBuilder::new().payload(payload).build(signer).await?;
-        self.attestation = Some(signature);
-        let attestation_cid = Some(cid::from_value(&self.attestation)?);
-
-        let encryption_cid = if let Some(encryption) = &self.encryption {
-            Some(cid::from_value(encryption)?)
-        } else {
-            None
-        };
+        // compute CIDs for attestation and encryption
+        let attestation_cid = self.attestation.as_ref().map(cid::from_value).transpose()?;
+        let encryption_cid = self.encryption.as_ref().map(cid::from_value).transpose()?;
 
         let payload = WriteSignaturePayload {
             base: JwsPayload {
@@ -752,12 +742,27 @@ impl WriteBuilder {
     pub fn new() -> Self {
         let now = Utc::now();
 
+        // Self::default()
         // set defaults
         Self {
             date_created: Some(now),
             message_timestamp: now,
             data_format: "application/json".to_string(),
-            ..Self::default()
+            // ..WriteBuilder::default()
+            recipient: None,
+            protocol: None,
+            protocol_role: None,
+            schema: None,
+            tags: None,
+            record_id: None,
+            parent_context_id: None,
+            data: WriteData::default(),
+            published: None,
+            date_published: None,
+            delegated_grant: None,
+            permission_grant_id: None,
+            existing_write: None,
+            encryption_input: None,
         }
     }
 
@@ -877,7 +882,7 @@ impl WriteBuilder {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub async fn build(self, keyring: &impl Keyring) -> Result<Write> {
+    pub async fn build<K: Keyring>(self, keyring: &K, attesters: Option<&[&K]>) -> Result<Write> {
         let mut write = if let Some(existing_write) = &self.existing_write {
             existing_write.clone()
         } else {
@@ -968,6 +973,17 @@ impl WriteBuilder {
             ..Authorization::default()
         };
 
+        // attestation
+        // FIXME: add support for multiple attesters
+        if let Some(attesters) = attesters {
+            let payload = Payload {
+                descriptor_cid: cid::from_value(&write.descriptor)?,
+            };
+            let signature = JwsBuilder::new().payload(payload).build(attesters[0]).await?;
+            write.attestation = Some(signature);
+        }
+
+        // encryption
         if let Some(ecryption_input) = &self.encryption_input {
             write.encrypt(ecryption_input, keyring)?;
         }

@@ -1,8 +1,9 @@
 //! Messages Subscribe
 
-use dwn_test::key_store::ALICE_DID;
+use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use insta::assert_yaml_snapshot as assert_snapshot;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{QueryBuilder, RecordsFilter, Sort, WriteBuilder, WriteData};
@@ -16,9 +17,8 @@ async fn invalid_sort() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     let mut query = QueryBuilder::new()
-        .filter(&RecordsFilter::new().published(false))
-        .signer(&alice_keyring)
-        .build()
+        .filter(RecordsFilter::new().published(false))
+        .build(Some(&alice_keyring))
         .await
         .expect("should create query");
 
@@ -41,6 +41,7 @@ async fn invalid_sort() {
 async fn return_values() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -49,20 +50,20 @@ async fn return_values() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(stream.clone()))
-        .build(&alice_keyring)
+        .data_format("awesome_data_format")
+        .build(&alice_keyring, Some(&[&bob_keyring]))
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice queries for records with matching format.
     // --------------------------------------------------
-    let filter = RecordsFilter::new().add_author(ALICE_DID).data_format("novel_data_format");
+    let filter = RecordsFilter::new().add_author(ALICE_DID).data_format("awesome_data_format");
     let query = QueryBuilder::new()
-        .filter(&filter)
-        .signer(&alice_keyring)
-        .build()
+        .filter(filter)
+        .build(Some(&alice_keyring))
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -71,6 +72,16 @@ async fn return_values() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
+
+    assert_snapshot!("return_values", entries[0].write, {
+        ".recordId" => "[recordId]",
+        ".descriptor.messageTimestamp" => "[messageTimestamp]",
+        ".descriptor.dateCreated" => "[dateCreated]",
+        ".authorization.signature.payload" => "[payload]",
+        ".authorization.signature.signatures[0].signature" => "[signature]",
+        ".attestation.payload" => "[payload]",
+        ".attestation.signatures[0].signature" => "[signature]",
+    });
 }
 
 // Should return matching records.
@@ -89,7 +100,7 @@ async fn find_matches() {
             .data(WriteData::Reader(stream.clone()))
             .data_format("novel_data_format")
             .schema(format!("schema_{i}"))
-            .build(&alice_keyring)
+            .build(&alice_keyring, None)
             .await
             .expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
@@ -101,9 +112,8 @@ async fn find_matches() {
     // --------------------------------------------------
     let filter = RecordsFilter::new().add_author(ALICE_DID).data_format("novel_data_format");
     let query = QueryBuilder::new()
-        .filter(&filter)
-        .signer(&alice_keyring)
-        .build()
+        .filter(filter)
+        .build(Some(&alice_keyring))
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");

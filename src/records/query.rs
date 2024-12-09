@@ -208,82 +208,71 @@ pub struct QueryDescriptor {
 }
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug)]
-pub struct QueryBuilder<'a, S: Signer> {
+#[derive(Clone, Debug, Default)]
+pub struct QueryBuilder {
+    // pub struct QueryBuilder<'a, S: Signer> {
     message_timestamp: DateTime<Utc>,
-    filter: Option<&'a RecordsFilter>,
-    date_sort: Option<&'a Sort>,
-    pagination: Option<&'a Pagination>,
-    permission_grant_id: Option<&'a str>,
-    protocol_role: Option<&'a str>,
-    delegated_grant: Option<&'a DelegatedGrant>,
-    signer: Option<&'a S>,
-    attesters: Option<Vec<&'a S>>,
+    filter: Option<RecordsFilter>,
+    date_sort: Option<Sort>,
+    pagination: Option<Pagination>,
+    permission_grant_id: Option<String>,
+    protocol_role: Option<String>,
+    delegated_grant: Option<DelegatedGrant>,
+    // signer: Option<&'a S>,
+    // attesters: Option<Vec<&'a S>>,
 }
 
-impl<'a, S: Signer + Default> QueryBuilder<'a, S> {
+impl QueryBuilder {
+    // impl<'a, S: Signer> QueryBuilder<'a, S> {
+
     /// Returns a new [`QueryBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self {
             message_timestamp: Utc::now(),
-            filter: None,
-            date_sort: None,
-            pagination: None,
-            permission_grant_id: None,
-            protocol_role: None,
-            delegated_grant: None,
-            signer: None,
-            attesters: None,
+            ..Self::default()
         }
     }
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn filter(mut self, filter: &'a RecordsFilter) -> Self {
+    pub fn filter(mut self, filter: RecordsFilter) -> Self {
         self.filter = Some(filter);
         self
     }
 
     /// Determines which date to use when sorting query results.
     #[must_use]
-    pub const fn date_sort(mut self, date_sort: &'a Sort) -> Self {
+    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
         self.date_sort = Some(date_sort);
         self
     }
 
     /// Sets the limit (size) and offset of the resultset pagination cursor.
     #[must_use]
-    pub fn pagination(mut self, pagination: &'a Pagination) -> Self {
+    pub fn pagination(mut self, pagination: Pagination) -> Self {
         self.pagination = Some(pagination);
         self
     }
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: &'a str) -> Self {
-        self.permission_grant_id = Some(permission_grant_id);
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
         self
     }
 
     /// Specify a protocol role for the record.
     #[must_use]
-    pub fn protocol_role(mut self, protocol_role: &'a str) -> Self {
-        self.protocol_role = Some(protocol_role);
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
         self
     }
 
     /// The delegated grant used with this record.
     #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: &'a DelegatedGrant) -> Self {
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
         self.delegated_grant = Some(delegated_grant);
-        self
-    }
-
-    /// The delegated grant used with this record.
-    #[must_use]
-    pub fn signer(mut self, signer: &'a S) -> Self {
-        self.signer = Some(signer);
         self
     }
 
@@ -291,12 +280,12 @@ impl<'a, S: Signer + Default> QueryBuilder<'a, S> {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub async fn build(self) -> Result<Query> {
+    pub async fn build(self, signer: Option<&impl Signer>) -> Result<Query> {
         let Some(filter) = self.filter else {
             return Err(unexpected!("missing filter"));
         };
 
-        validate_sort(self.date_sort, filter)?;
+        validate_sort(self.date_sort.as_ref(), &filter)?;
 
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -305,12 +294,12 @@ impl<'a, S: Signer + Default> QueryBuilder<'a, S> {
                 message_timestamp: self.message_timestamp,
             },
             filter: filter.normalize()?,
-            date_sort: self.date_sort.cloned(),
-            pagination: self.pagination.cloned(),
+            date_sort: self.date_sort,
+            pagination: self.pagination,
         };
 
         // let authorization = if self.authorize.unwrap_or(true) {
-        let authorization = if let Some(signer) = self.signer {
+        let authorization = if let Some(signer) = signer {
             let mut auth_builder =
                 AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
             if let Some(id) = self.permission_grant_id {
@@ -320,7 +309,7 @@ impl<'a, S: Signer + Default> QueryBuilder<'a, S> {
                 auth_builder = auth_builder.protocol_role(role);
             }
             if let Some(delegated_grant) = self.delegated_grant {
-                auth_builder = auth_builder.delegated_grant(delegated_grant.to_owned());
+                auth_builder = auth_builder.delegated_grant(delegated_grant);
             }
             Some(auth_builder.build(signer).await?)
         } else {

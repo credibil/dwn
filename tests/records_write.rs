@@ -23,7 +23,7 @@ async fn overwrite_older() {
 
     let initial_write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .build(&alice_keyring)
+        .build(&alice_keyring, None)
         .await
         .expect("should create write");
     let record_id = initial_write.record_id.clone();
@@ -37,7 +37,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let read = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(record_id))
-        .build(&alice_keyring)
+        .build(Some(&alice_keyring))
         .await
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
@@ -57,7 +57,7 @@ async fn overwrite_older() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .existing(initial_write)
-        .build(&alice_keyring)
+        .build(&alice_keyring, None)
         .await
         .expect("should create write");
     let record_id = write.record_id.clone();
@@ -70,7 +70,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let read = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(record_id))
-        .build(&alice_keyring)
+        .build(Some(&alice_keyring))
         .await
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
