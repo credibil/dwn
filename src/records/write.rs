@@ -632,29 +632,6 @@ pub struct WriteDescriptor {
     pub date_published: Option<DateTime<Utc>>,
 }
 
-/// Options to use when creating a permission grant.
-#[derive(Default)]
-pub struct WriteBuilder {
-    recipient: Option<String>,
-    protocol: Option<WriteProtocol>,
-    protocol_role: Option<String>,
-    schema: Option<String>,
-    tags: Option<Map<String, Value>>,
-    record_id: Option<String>,
-    parent_context_id: Option<String>,
-    data: WriteData,
-    date_created: Option<DateTime<Utc>>,
-    message_timestamp: DateTime<Utc>,
-    published: Option<bool>,
-    date_published: Option<DateTime<Utc>>,
-    data_format: String,
-    delegated_grant: Option<DelegatedGrant>,
-    permission_grant_id: Option<String>,
-    existing_write: Option<Write>,
-    encryption_input: Option<EncryptionInput>,
-    // attesters: Option<Vec<&'a dyn Signer>>,
-}
-
 /// Protocol.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -737,6 +714,29 @@ struct Payload {
     descriptor_cid: String,
 }
 
+/// Options to use when creating a permission grant.
+#[derive(Default)]
+pub struct WriteBuilder {
+    recipient: Option<String>,
+    protocol: Option<WriteProtocol>,
+    protocol_role: Option<String>,
+    schema: Option<String>,
+    tags: Option<Map<String, Value>>,
+    record_id: Option<String>,
+    parent_context_id: Option<String>,
+    data: WriteData,
+    date_created: Option<DateTime<Utc>>,
+    message_timestamp: DateTime<Utc>,
+    published: Option<bool>,
+    date_published: Option<DateTime<Utc>>,
+    data_format: String,
+    delegated_grant: Option<DelegatedGrant>,
+    permission_grant_id: Option<String>,
+    existing_write: Option<Write>,
+    encryption_input: Option<EncryptionInput>,
+    // attesters: Option<Vec<&'a dyn Signer>>,
+}
+
 impl WriteBuilder {
     /// Returns a new [`WriteBuilder`]
     #[must_use]
@@ -749,6 +749,21 @@ impl WriteBuilder {
             date_created: Some(now),
             message_timestamp: now,
             data_format: "application/json".to_string(),
+            ..Self::default()
+        }
+    }
+
+    /// Returns a new [`WriteBuilder`]
+    #[must_use]
+    pub fn from(existing: Write) -> Self {
+        let now = Utc::now();
+
+        // Self::default()
+        // set defaults
+        Self {
+            date_created: Some(now),
+            message_timestamp: now,
+            existing_write: Some(existing),
             ..Self::default()
         }
     }
