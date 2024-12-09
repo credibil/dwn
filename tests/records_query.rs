@@ -95,14 +95,14 @@ async fn find_matches() {
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    for i in 1..=2 {
-        let write = WriteBuilder::new()
-            .data(WriteData::Reader(stream.clone()))
-            .data_format("novel_data_format")
-            .schema(format!("schema_{i}"))
-            .build(&alice_keyring, None)
-            .await
-            .expect("should create write");
+    for i in 1..=3 {
+        let mut builder = WriteBuilder::new().data(WriteData::Reader(stream.clone()));
+
+        if i > 1 {
+            builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
+        }
+
+        let write = builder.build(&alice_keyring, None).await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
@@ -110,9 +110,8 @@ async fn find_matches() {
     // --------------------------------------------------
     // Alice queries for records with matching format.
     // --------------------------------------------------
-    let filter = RecordsFilter::new().add_author(ALICE_DID).data_format("novel_data_format");
     let query = QueryBuilder::new()
-        .filter(filter)
+        .filter(RecordsFilter::new().data_format("awesome_data_format"))
         .build(Some(&alice_keyring))
         .await
         .expect("should create query");
@@ -122,4 +121,43 @@ async fn find_matches() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Alice queries for records with matching schema.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_format("awesome_data_format").schema("schema_2"))
+        .build(Some(&alice_keyring))
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+}
+
+// Should return `encoded_data` if data size is within the spec threshold.
+#[tokio::test]
+async fn encoded_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes 3 records.
+    // --------------------------------------------------
+    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+
+    for i in 1..=3 {
+        let mut builder = WriteBuilder::new().data(WriteData::Reader(stream.clone()));
+
+        if i > 1 {
+            builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
+        }
+
+        let write = builder.build(&alice_keyring, None).await.expect("should create write");
+        let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+        assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    }
 }
