@@ -62,8 +62,7 @@ pub trait KeyStore: Send + Sync {
 /// Implementers of this trait are expected to provide the necessary
 /// cryptographic functionality to support Verifiable Credential issuance and
 /// Verifiable Presentation submissions.
-#[async_trait]
-pub trait Keyring: Signer + Cipher + Send + Sync {}
+pub trait Keyring: Signer + Cipher {}
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.

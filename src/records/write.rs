@@ -633,7 +633,7 @@ pub struct WriteDescriptor {
 }
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
+#[derive(Default)]
 pub struct WriteBuilder {
     recipient: Option<String>,
     protocol: Option<WriteProtocol>,
@@ -652,6 +652,7 @@ pub struct WriteBuilder {
     permission_grant_id: Option<String>,
     existing_write: Option<Write>,
     encryption_input: Option<EncryptionInput>,
+    // attesters: Option<Vec<&'a dyn Signer>>,
 }
 
 /// Protocol.
@@ -864,6 +865,13 @@ impl WriteBuilder {
         self
     }
 
+    // /// Add an attester.
+    // #[must_use]
+    // pub fn add_attester(mut self, attester: &'a impl Signer) -> Self {
+    //     self.attesters.get_or_insert_with(Vec::new).push(attester);
+    //     self
+    // }
+
     /// Build the write message.
     ///
     /// # Errors
@@ -961,11 +969,13 @@ impl WriteBuilder {
 
         // attestation
         // FIXME: add support for multiple attesters
-        if let Some(attesters) = attesters {
+        if let Some(attesters) = &attesters {
             let payload = Payload {
                 descriptor_cid: cid::from_value(&write.descriptor)?,
             };
-            let signature = JwsBuilder::new().payload(payload).build(attesters[0]).await?;
+
+            let signer = attesters[0];
+            let signature = JwsBuilder::new().payload(payload).build(signer).await?;
             write.attestation = Some(signature);
         }
 

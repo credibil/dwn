@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Result, anyhow};
+// use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{SecretKey, Signer as _, SigningKey};
 use vercre_dwn::provider::{KeyStore, Keyring};
@@ -81,6 +82,7 @@ impl KeyStore for ProviderImpl {
 
 impl Keyring for KeyringImpl {}
 
+// #[async_trait]
 impl Signer for KeyringImpl {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
@@ -110,6 +112,7 @@ impl Signer for KeyringImpl {
     }
 }
 
+// #[async_trait]
 impl Cipher for KeyringImpl {
     async fn encrypt(&self, _plaintext: &[u8], _recipient_public_key: &[u8]) -> Result<Vec<u8>> {
         todo!()
@@ -123,43 +126,3 @@ impl Cipher for KeyringImpl {
         todo!()
     }
 }
-
-// #[derive(Default, Clone, Debug)]
-// pub struct Keystore;
-
-// impl Keystore {
-//     pub fn try_sign(&self, _msg: &[u8]) -> Result<Vec<u8>> {
-//         unimplemented!()
-//     }
-
-//     pub fn public_key(&self) -> Result<Vec<u8>> {
-//         unimplemented!()
-//     }
-
-//     pub fn algorithm(&self) -> Algorithm {
-//         Algorithm::EdDSA
-//     }
-
-//     pub async fn verification_method(&self) -> Result<String> {
-//         unimplemented!()
-//     }
-
-//     pub fn public_jwk(&self) -> PublicKeyJwk {
-//         unimplemented!()
-
-//         // let (_, key_bytes) = multibase::decode(OWNER_VERIFY_KEY).expect("should decode");
-//         // if key_bytes.len() - 2 != 32 {
-//         //     panic!("key is not 32 bytes long");
-//         // }
-//         // if key_bytes[0..2] != ED25519_CODEC {
-//         //     panic!("not Ed25519");
-//         // }
-
-//         // PublicKeyJwk {
-//         //     kty: KeyType::Okp,
-//         //     crv: Curve::Ed25519,
-//         //     x: Base64UrlUnpadded::encode_string(&key_bytes[2..]),
-//         //     ..PublicKeyJwk::default()
-//         // }
-//     }
-// }
