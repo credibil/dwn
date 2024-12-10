@@ -750,7 +750,7 @@ impl<'a, S: Signer> AttestationBuilder<'a, S> {
 
     /// Set signer.
     #[must_use]
-    pub fn sign(self, signer: &'a S) -> SignatureBuilder<S> {
+    pub fn sign(self, signer: &'a S) -> SignatureBuilder<'a, S> {
         SignatureBuilder {
             write_builder: self.write_builder,
             signer,
@@ -777,7 +777,7 @@ pub struct SignatureBuilder<'a, S: Signer> {
     signer: &'a S,
 }
 
-impl<'a, S: Signer> SignatureBuilder<'a, S> {
+impl<S: Signer> SignatureBuilder<'_, S> {
     pub async fn build(self) -> Result<Write> {
         let protocol_role = self.write_builder.protocol_role.clone();
         let permission_grant_id = self.write_builder.permission_grant_id.clone();
@@ -806,7 +806,7 @@ impl<'a, S: Signer> SignatureBuilder<'a, S> {
 impl WriteBuilder {
     /// Add an attester.
     #[must_use]
-    pub fn add_attester<'a, S: Signer>(self, attester: &'a S) -> AttestationBuilder<S> {
+    pub fn add_attester<S: Signer>(self, attester: &S) -> AttestationBuilder<S> {
         AttestationBuilder {
             write_builder: self,
             attesters: vec![attester],
@@ -815,7 +815,7 @@ impl WriteBuilder {
 
     /// Set signer.
     #[must_use]
-    pub fn sign<'a,S: Signer>(self, signer: &'a S) -> SignatureBuilder<S> {
+    pub const fn sign<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
         SignatureBuilder {
             write_builder: self,
             signer,
