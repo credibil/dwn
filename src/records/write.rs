@@ -739,6 +739,13 @@ pub struct AttestationBuilder<'a, S: Signer> {
 }
 
 impl<'a, S: Signer> AttestationBuilder<'a, S> {
+    fn from(write_builder: WriteBuilder) -> Self {
+        Self {
+            write_builder,
+            attesters: vec![],
+        }
+    }
+
     pub fn add_attester(mut self, attester: &'a S) -> Self {
         self.attesters.push(attester);
         self
@@ -849,10 +856,7 @@ impl WriteBuilder {
     /// Add an attester.
     #[must_use]
     pub fn add_attester<S: Signer>(self, attester: &S) -> AttestationBuilder<S> {
-        AttestationBuilder {
-            write_builder: self,
-            attesters: vec![attester],
-        }
+        AttestationBuilder::from(self).add_attester(attester)
     }
 
     /// Add an encryption.
