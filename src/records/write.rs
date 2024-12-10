@@ -739,7 +739,7 @@ pub struct AttestationBuilder<'a, S: Signer> {
 }
 
 impl<'a, S: Signer> AttestationBuilder<'a, S> {
-    fn from(write_builder: WriteBuilder) -> Self {
+    const fn from(write_builder: WriteBuilder) -> Self {
         Self {
             write_builder,
             attesters: vec![],
@@ -753,8 +753,8 @@ impl<'a, S: Signer> AttestationBuilder<'a, S> {
 
     /// Set signer.
     #[must_use]
-    pub fn signer(self, signer: &'a S) -> SignatureBuilder<'a, S> {
-        SignatureBuilder::new(self.write_builder, signer).attesters(self.attesters)
+    pub const fn signer(self, signer: &'a S) -> SignatureBuilder<'a, S> {
+        SignatureBuilder::from_attestation(self, signer)
     }
 
     pub async fn build(self) -> Result<Write> {
@@ -796,29 +796,32 @@ impl<'a, C: Cipher> EncryptionBuilder<'a, C> {
 }
 
 pub struct SignatureBuilder<'a, S: Signer> {
-    write_builder: WriteBuilder,
+    write_builder: Option<WriteBuilder>,
+    attestation_builder: Option<AttestationBuilder<'a, S>>,
     protocol_role: Option<String>,
     permission_grant_id: Option<String>,
-    attesters: Option<Vec<&'a S>>,
     signer: &'a S,
 }
 
 impl<'a, S: Signer> SignatureBuilder<'a, S> {
-    fn new(builder: WriteBuilder, signer: &'a S) -> Self {
+    const fn from_write(builder: WriteBuilder, signer: &'a S) -> Self {
         Self {
+            write_builder: Some(builder),
+            attestation_builder: None,
             protocol_role: None,
             permission_grant_id: None,
-            attesters: None,
-            write_builder: builder,
             signer,
         }
     }
 
-    // Set attesters when initiated from `AttestationBuilder`.
-    #[must_use]
-    fn attesters(mut self, attesters: Vec<&'a S>) -> Self {
-        self.attesters = Some(attesters);
-        self
+    const fn from_attestation(builder: AttestationBuilder<'a, S>, signer: &'a S) -> Self {
+        Self {
+            write_builder: None,
+            attestation_builder: Some(builder),
+            protocol_role: None,
+            permission_grant_id: None,
+            signer,
+        }
     }
 
     /// Specify a protocol role for the record.
@@ -836,15 +839,11 @@ impl<'a, S: Signer> SignatureBuilder<'a, S> {
     }
 
     pub async fn build(self) -> Result<Write> {
-        let mut write = self.write_builder.build()?;
-
-        if let Some(attesters) = &self.attesters {
-            let payload = Payload {
-                descriptor_cid: cid::from_value(&write.descriptor)?,
-            };
-            let signature = JwsBuilder::new().payload(payload).build(attesters[0]).await?;
-            write.attestation = Some(signature);
-        }
+        let mut write = if let Some(attestation_builder) = self.attestation_builder {
+            attestation_builder.build().await?
+        } else {
+            self.write_builder.unwrap().build()?
+        };
 
         write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer).await?;
 
@@ -873,8 +872,8 @@ impl WriteBuilder {
 
     /// Set signer.
     #[must_use]
-    pub fn signer<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
-        SignatureBuilder::new(self, signer)
+    pub const fn signer<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
+        SignatureBuilder::from_write(self, signer)
     }
 
     /// Returns a new [`WriteBuilder`]
