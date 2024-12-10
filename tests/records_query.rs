@@ -51,7 +51,9 @@ async fn return_values() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(stream.clone()))
         .data_format("awesome_data_format")
-        .build(&alice_keyring, Some(&[&bob_keyring]))
+        .add_attester(&bob_keyring)
+        .sign(&alice_keyring)
+        .build()
         .await
         .expect("should create write");
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
@@ -102,7 +104,7 @@ async fn find_matches() {
             builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
         }
 
-        let write = builder.build(&alice_keyring, None).await.expect("should create write");
+        let write = builder.build_v1(&alice_keyring, None).await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
@@ -156,7 +158,7 @@ async fn encoded_data() {
             builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
         }
 
-        let write = builder.build(&alice_keyring, None).await.expect("should create write");
+        let write = builder.build_v1(&alice_keyring, None).await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }

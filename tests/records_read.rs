@@ -22,7 +22,7 @@ async fn owner_records() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 

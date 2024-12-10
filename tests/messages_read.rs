@@ -33,7 +33,7 @@ async fn read_message() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
         .published(true)
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -168,7 +168,7 @@ async fn forbidden() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader.clone()))
-        .build(&bob_keyring, None)
+        .build_v1(&bob_keyring, None)
         .await
         .expect("should create write");
 
@@ -204,7 +204,7 @@ async fn data_lt_threshold() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -250,7 +250,7 @@ async fn data_gt_threshold() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -296,7 +296,7 @@ async fn no_data_after_update() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -314,7 +314,7 @@ async fn no_data_after_update() {
 
     let write = WriteBuilder::from(write)
         .data(WriteData::Reader(reader))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should update write");
 
@@ -463,7 +463,7 @@ async fn invalid_interface() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
         .published(true)
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -525,7 +525,7 @@ async fn permissive_grant() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
         .published(true)
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -647,7 +647,7 @@ async fn protocol_grant() {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
         })
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -683,7 +683,7 @@ async fn protocol_grant() {
             protocol_path: "foo".to_string(),
         })
         .permission_grant_id(&carol_grant.record_id)
-        .build(&carol_keyring, None)
+        .build_v1(&carol_keyring, None)
         .await
         .expect("should create write");
 
@@ -818,7 +818,7 @@ async fn protocol_grant() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -876,7 +876,7 @@ async fn invalid_protocol_grant() {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
         })
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 
@@ -969,7 +969,7 @@ async fn delete_with_no_write() {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
         })
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
 

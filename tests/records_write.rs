@@ -23,7 +23,7 @@ async fn overwrite_older() {
 
     let initial_write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
     let record_id = initial_write.record_id.clone();
@@ -56,7 +56,7 @@ async fn overwrite_older() {
 
     let write = WriteBuilder::from(initial_write)
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .build(&alice_keyring, None)
+        .build_v1(&alice_keyring, None)
         .await
         .expect("should create write");
     let record_id = write.record_id.clone();
