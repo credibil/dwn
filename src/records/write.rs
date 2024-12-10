@@ -20,7 +20,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
-use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
+use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
 use crate::records::DataStream;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsQuery};
@@ -733,91 +733,142 @@ pub struct WriteBuilder {
     existing_write: Option<Write>,
 }
 
-pub struct AttestationBuilder<'a, S: Signer> {
+pub struct AttestationBuilder<'a, K: Keyring> {
     write_builder: WriteBuilder,
-    attesters: Vec<&'a S>,
+    attesters: Vec<&'a K>,
 }
 
-impl<'a, S: Signer> AttestationBuilder<'a, S> {
-    const fn from(write_builder: WriteBuilder) -> Self {
+impl<K: Keyring> From<WriteBuilder> for AttestationBuilder<'_, K> {
+    fn from(write_builder: WriteBuilder) -> Self {
         Self {
             write_builder,
             attesters: vec![],
         }
     }
+}
 
-    pub fn add_attester(mut self, attester: &'a S) -> Self {
+impl<'a, K: Keyring> AttestationBuilder<'a, K> {
+    pub fn add_attester(mut self, attester: &'a K) -> Self {
         self.attesters.push(attester);
         self
     }
 
-    /// Set signer.
-    #[must_use]
-    pub const fn signer(self, signer: &'a S) -> SignatureBuilder<'a, S> {
-        SignatureBuilder::from_attestation(self, signer)
-    }
-
+    /// Builds a `Write` message with attesation, but no encryption or signature.
     pub async fn build(self) -> Result<Write> {
         let mut write = self.write_builder.build()?;
 
         let payload = Payload {
             descriptor_cid: cid::from_value(&write.descriptor)?,
         };
-        let signature = JwsBuilder::new().payload(payload).build(self.attesters[0]).await?;
-        write.attestation = Some(signature);
+        let attestation = JwsBuilder::new().payload(payload).build(self.attesters[0]).await?;
+        write.attestation = Some(attestation);
 
         Ok(write)
     }
-}
 
-pub struct EncryptionBuilder<'a, C: Cipher> {
-    write_builder: WriteBuilder,
-    input: EncryptionInput,
-    cipher: &'a C,
-}
-
-impl<'a, C: Cipher> EncryptionBuilder<'a, C> {
-    /// Set cipher.
+    /// Sets encryption properties and returns an `EncryptionBuilder` that wraps
+    /// the attestion builder.
     #[must_use]
-    pub fn encrypter(self, input: &EncryptionInput, cipher: &'a C) -> Self {
+    pub const fn encrypter(
+        self, input: EncryptionInput, cipher: &'a K,
+    ) -> EncryptionBuilder<'a, K> {
+        EncryptionBuilder::from_attester(self, input, cipher)
+    }
+
+    /// Sets signature properties and returns an `SignatureBuilder` that wraps
+    /// the attestion builder.
+    #[must_use]
+    pub const fn signer(self, signer: &'a K) -> SignatureBuilder<'a, K> {
+        SignatureBuilder::from_attester(self, signer)
+    }
+}
+
+pub struct EncryptionBuilder<'a, K: Keyring> {
+    builder: EncryptFrom<'a, K>,
+    input: Option<EncryptionInput>,
+    cipher: &'a K,
+}
+
+enum EncryptFrom<'a, K: Keyring> {
+    Write(WriteBuilder),
+    Attestation(AttestationBuilder<'a, K>),
+}
+
+impl<'a, K: Keyring> EncryptionBuilder<'a, K> {
+    const fn from_writer(builder: WriteBuilder, input: EncryptionInput, cipher: &'a K) -> Self {
         Self {
-            write_builder: self.write_builder,
-            input: input.clone(),
+            builder: EncryptFrom::Write(builder),
+            input: Some(input),
             cipher,
         }
     }
 
+    const fn from_attester(
+        builder: AttestationBuilder<'a, K>, input: EncryptionInput, cipher: &'a K,
+    ) -> Self {
+        Self {
+            builder: EncryptFrom::Attestation(builder),
+            input: Some(input),
+            cipher,
+        }
+    }
+
+    /// Builds a `Write` message with encryption and optionally attestation,
+    /// but no signature.
     #[allow(clippy::unused_async)]
     pub async fn build(self) -> Result<Write> {
-        let write = self.write_builder.build()?;
-        write.encrypt(&self.input, self.cipher)?;
+        let write = match self.builder {
+            EncryptFrom::Write(write_builder) => write_builder.build()?,
+            EncryptFrom::Attestation(attestation_builder) => attestation_builder.build().await?,
+        };
+
+        write.encrypt(&self.input.unwrap(), self.cipher)?;
         Ok(write)
+    }
+
+    /// Sets signature properties and returns an `SignatureBuilder` that wraps
+    /// the encryption builder.
+    #[must_use]
+    pub const fn signer(self, signer: &'a K) -> SignatureBuilder<'a, K> {
+        SignatureBuilder::from_encrypter(self, signer)
     }
 }
 
-pub struct SignatureBuilder<'a, S: Signer> {
-    write_builder: Option<WriteBuilder>,
-    attestation_builder: Option<AttestationBuilder<'a, S>>,
+pub struct SignatureBuilder<'a, K: Keyring> {
+    builder: SignFrom<'a, K>,
     protocol_role: Option<String>,
     permission_grant_id: Option<String>,
-    signer: &'a S,
+    signer: &'a K,
 }
 
-impl<'a, S: Signer> SignatureBuilder<'a, S> {
-    const fn from_write(builder: WriteBuilder, signer: &'a S) -> Self {
+enum SignFrom<'a, K: Keyring> {
+    Write(WriteBuilder),
+    Attestation(AttestationBuilder<'a, K>),
+    Encryption(EncryptionBuilder<'a, K>),
+}
+
+impl<'a, K: Keyring> SignatureBuilder<'a, K> {
+    const fn from_writer(builder: WriteBuilder, signer: &'a K) -> Self {
         Self {
-            write_builder: Some(builder),
-            attestation_builder: None,
+            builder: SignFrom::Write(builder),
             protocol_role: None,
             permission_grant_id: None,
             signer,
         }
     }
 
-    const fn from_attestation(builder: AttestationBuilder<'a, S>, signer: &'a S) -> Self {
+    const fn from_attester(builder: AttestationBuilder<'a, K>, signer: &'a K) -> Self {
         Self {
-            write_builder: None,
-            attestation_builder: Some(builder),
+            builder: SignFrom::Attestation(builder),
+            protocol_role: None,
+            permission_grant_id: None,
+            signer,
+        }
+    }
+
+    const fn from_encrypter(builder: EncryptionBuilder<'a, K>, signer: &'a K) -> Self {
+        Self {
+            builder: SignFrom::Encryption(builder),
             protocol_role: None,
             permission_grant_id: None,
             signer,
@@ -839,10 +890,10 @@ impl<'a, S: Signer> SignatureBuilder<'a, S> {
     }
 
     pub async fn build(self) -> Result<Write> {
-        let mut write = if let Some(attestation_builder) = self.attestation_builder {
-            attestation_builder.build().await?
-        } else {
-            self.write_builder.unwrap().build()?
+        let mut write = match self.builder {
+            SignFrom::Write(write_builder) => write_builder.build()?,
+            SignFrom::Attestation(attestation_builder) => attestation_builder.build().await?,
+            SignFrom::Encryption(encryption_builder) => encryption_builder.build().await?,
         };
 
         write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer).await?;
@@ -854,26 +905,22 @@ impl<'a, S: Signer> SignatureBuilder<'a, S> {
 impl WriteBuilder {
     /// Add an attester.
     #[must_use]
-    pub fn add_attester<S: Signer>(self, attester: &S) -> AttestationBuilder<S> {
+    pub fn add_attester<K: Keyring>(self, attester: &K) -> AttestationBuilder<K> {
         AttestationBuilder::from(self).add_attester(attester)
     }
 
     /// Add an encryption.
     #[must_use]
-    pub const fn encrypter<C: Cipher>(
-        self, input: EncryptionInput, cipher: &C,
-    ) -> EncryptionBuilder<C> {
-        EncryptionBuilder {
-            write_builder: self,
-            input,
-            cipher,
-        }
+    pub const fn encrypter<K: Keyring>(
+        self, input: EncryptionInput, cipher: &K,
+    ) -> EncryptionBuilder<K> {
+        EncryptionBuilder::from_writer(self, input, cipher)
     }
 
     /// Set signer.
     #[must_use]
-    pub const fn signer<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
-        SignatureBuilder::from_write(self, signer)
+    pub const fn signer<K: Keyring>(self, signer: &K) -> SignatureBuilder<K> {
+        SignatureBuilder::from_writer(self, signer)
     }
 
     /// Returns a new [`WriteBuilder`]
