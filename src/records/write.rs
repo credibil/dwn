@@ -719,7 +719,6 @@ struct Payload {
 pub struct WriteBuilder {
     recipient: Option<String>,
     protocol: Option<WriteProtocol>,
-    protocol_role: Option<String>,
     schema: Option<String>,
     tags: Option<Map<String, Value>>,
     record_id: Option<String>,
@@ -731,9 +730,7 @@ pub struct WriteBuilder {
     date_published: Option<DateTime<Utc>>,
     data_format: String,
     delegated_grant: Option<DelegatedGrant>,
-    permission_grant_id: Option<String>,
     existing_write: Option<Write>,
-    // encryption_input: Option<EncryptionInput>,
 }
 
 pub struct AttestationBuilder<'a, S: Signer> {
@@ -749,12 +746,8 @@ impl<'a, S: Signer> AttestationBuilder<'a, S> {
 
     /// Set signer.
     #[must_use]
-    pub fn sign(self, signer: &'a S) -> SignatureBuilder<'a, S> {
-        SignatureBuilder {
-            write_builder: self.write_builder,
-            signer,
-            attestors: Some(self.attesters),
-        }
+    pub fn signer(self, signer: &'a S) -> SignatureBuilder<'a, S> {
+        SignatureBuilder::new(self.write_builder, signer).attesters(self.attesters)
     }
 
     pub async fn build(self) -> Result<Write> {
@@ -779,7 +772,7 @@ pub struct EncryptionBuilder<'a, C: Cipher> {
 impl<'a, C: Cipher> EncryptionBuilder<'a, C> {
     /// Set cipher.
     #[must_use]
-    pub fn encrypt(self, input: &EncryptionInput, cipher: &'a C) -> Self {
+    pub fn encrypter(self, input: &EncryptionInput, cipher: &'a C) -> Self {
         Self {
             write_builder: self.write_builder,
             input: input.clone(),
@@ -797,18 +790,48 @@ impl<'a, C: Cipher> EncryptionBuilder<'a, C> {
 
 pub struct SignatureBuilder<'a, S: Signer> {
     write_builder: WriteBuilder,
-    attestors: Option<Vec<&'a S>>,
+    protocol_role: Option<String>,
+    permission_grant_id: Option<String>,
+    attesters: Option<Vec<&'a S>>,
     signer: &'a S,
 }
 
-impl<S: Signer> SignatureBuilder<'_, S> {
-    pub async fn build(self) -> Result<Write> {
-        let protocol_role = self.write_builder.protocol_role.clone();
-        let permission_grant_id = self.write_builder.permission_grant_id.clone();
+impl<'a, S: Signer> SignatureBuilder<'a, S> {
+    fn new(builder: WriteBuilder, signer: &'a S) -> Self {
+        Self {
+            protocol_role: None,
+            permission_grant_id: None,
+            attesters: None,
+            write_builder: builder,
+            signer,
+        }
+    }
 
+    // Set attesters when initiated from `AttestationBuilder`.
+    #[must_use]
+    fn attesters(mut self, attesters: Vec<&'a S>) -> Self {
+        self.attesters = Some(attesters);
+        self
+    }
+
+    /// Specify a protocol role for the record.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
+        self
+    }
+
+    /// Specifies the permission grant ID.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
+        self
+    }
+
+    pub async fn build(self) -> Result<Write> {
         let mut write = self.write_builder.build()?;
 
-        if let Some(attesters) = &self.attestors {
+        if let Some(attesters) = &self.attesters {
             let payload = Payload {
                 descriptor_cid: cid::from_value(&write.descriptor)?,
             };
@@ -816,7 +839,7 @@ impl<S: Signer> SignatureBuilder<'_, S> {
             write.attestation = Some(signature);
         }
 
-        write.sign_as_author(permission_grant_id, protocol_role, self.signer).await?;
+        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer).await?;
 
         Ok(write)
     }
@@ -834,7 +857,7 @@ impl WriteBuilder {
 
     /// Add an encryption.
     #[must_use]
-    pub const fn encrypt<C: Cipher>(
+    pub const fn encrypter<C: Cipher>(
         self, input: EncryptionInput, cipher: &C,
     ) -> EncryptionBuilder<C> {
         EncryptionBuilder {
@@ -846,12 +869,8 @@ impl WriteBuilder {
 
     /// Set signer.
     #[must_use]
-    pub const fn sign<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
-        SignatureBuilder {
-            write_builder: self,
-            signer,
-            attestors: None,
-        }
+    pub fn signer<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
+        SignatureBuilder::new(self, signer)
     }
 
     /// Returns a new [`WriteBuilder`]
@@ -891,13 +910,6 @@ impl WriteBuilder {
     #[must_use]
     pub fn protocol(mut self, protocol: WriteProtocol) -> Self {
         self.protocol = Some(protocol);
-        self
-    }
-
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
-        self.protocol_role = Some(protocol_role.into());
         self
     }
 
@@ -970,133 +982,6 @@ impl WriteBuilder {
         self.delegated_grant = Some(delegated_grant);
         self
     }
-
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    // /// Build the write message.
-    // ///
-    // /// # Errors
-    // /// LATER: Add errors
-    // pub async fn build_v1<K: Keyring>(
-    //     self, keyring: &K, attesters: Option<&[&K]>,
-    // ) -> Result<Write> {
-    //     let mut write = if let Some(existing_write) = &self.existing_write {
-    //         existing_write.clone()
-    //     } else {
-    //         let mut write = Write {
-    //             descriptor: WriteDescriptor {
-    //                 base: Descriptor {
-    //                     interface: Interface::Records,
-    //                     method: Method::Write,
-    //                     message_timestamp: self.message_timestamp,
-    //                 },
-    //                 date_created: self.date_created.unwrap_or_else(Utc::now),
-    //                 recipient: self.recipient,
-    //                 ..WriteDescriptor::default()
-    //             },
-    //             ..Write::default()
-    //         };
-
-    //         // immutable properties
-    //         if let Some(write_protocol) = self.protocol {
-    //             let normalized = utils::clean_url(&write_protocol.protocol)?;
-    //             write.descriptor.protocol = Some(normalized);
-    //             write.descriptor.protocol_path = Some(write_protocol.protocol_path);
-    //         }
-    //         if let Some(s) = self.schema {
-    //             write.descriptor.schema = Some(utils::clean_url(&s)?);
-    //         }
-    //         // parent_id == first segment of  `parent_context_id`
-    //         if let Some(context_id) = self.parent_context_id {
-    //             let parent_id =
-    //                 context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-    //             write.descriptor.parent_id = parent_id;
-    //         }
-
-    //         write
-    //     };
-
-    //     write.descriptor.base.message_timestamp = self.message_timestamp;
-    //     write.descriptor.data_format = self.data_format;
-
-    //     // record_id
-    //     if let Some(record_id) = self.record_id {
-    //         write.record_id = record_id;
-    //     }
-    //     // tags
-    //     if let Some(tags) = self.tags {
-    //         write.descriptor.tags = Some(tags);
-    //     }
-
-    //     // published, date_published
-    //     if let Some(published) = self.published {
-    //         write.descriptor.published = Some(published);
-    //     }
-    //     if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
-    //         write.descriptor.date_published =
-    //             Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
-    //     }
-
-    //     match self.data {
-    //         WriteData::Bytes(data) => {
-    //             // store data in `encoded_data` if data is small enough
-    //             // otherwise, convert to data stream
-    //             // if data.len() <= data::MAX_ENCODED_SIZE {
-    //             //     write.descriptor.data_cid = cid::from_value(&data)?;
-    //             //     write.descriptor.data_size = data.len();
-    //             //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
-    //             // } else {
-    //             let stream = DataStream::from(data);
-    //             let (data_cid, data_size) = stream.compute_cid()?;
-    //             write.descriptor.data_cid = data_cid;
-    //             write.descriptor.data_size = data_size;
-    //             write.data_stream = Some(stream);
-    //             // }
-    //         }
-    //         WriteData::Reader(reader) => {
-    //             let (data_cid, data_size) = reader.compute_cid()?;
-    //             write.descriptor.data_cid = data_cid;
-    //             write.descriptor.data_size = data_size;
-    //             write.data_stream = Some(reader);
-    //         }
-    //         WriteData::Cid { data_cid, data_size } => {
-    //             write.descriptor.data_cid = data_cid;
-    //             write.descriptor.data_size = data_size;
-    //         }
-    //     };
-
-    //     write.authorization = Authorization {
-    //         author_delegated_grant: self.delegated_grant,
-    //         ..Authorization::default()
-    //     };
-
-    //     // attestation
-    //     // FIXME: add support for multiple attesters
-    //     if let Some(attesters) = &attesters {
-    //         let payload = Payload {
-    //             descriptor_cid: cid::from_value(&write.descriptor)?,
-    //         };
-
-    //         let signer = attesters[0];
-    //         let signature = JwsBuilder::new().payload(payload).build(signer).await?;
-    //         write.attestation = Some(signature);
-    //     }
-
-    //     // encryption
-    //     if let Some(ecryption_input) = &self.encryption_input {
-    //         write.encrypt(ecryption_input, keyring)?;
-    //     }
-
-    //     // sign message
-    //     write.sign_as_author(self.permission_grant_id, self.protocol_role, keyring).await?;
-
-    //     Ok(write)
-    // }
 
     /// Builds a Write message from builder inputs.
     ///

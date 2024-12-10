@@ -52,7 +52,7 @@ async fn return_values() {
         .data(WriteData::Reader(stream.clone()))
         .data_format("awesome_data_format")
         .add_attester(&bob_keyring)
-        .sign(&alice_keyring)
+        .signer(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -104,7 +104,7 @@ async fn find_matches() {
             builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
         }
 
-        let write = builder.sign(&alice_keyring).build().await.expect("should create write");
+        let write = builder.signer(&alice_keyring).build().await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
@@ -158,7 +158,7 @@ async fn encoded_data() {
             builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
         }
 
-        let write = builder.sign(&alice_keyring).build().await.expect("should create write");
+        let write = builder.signer(&alice_keyring).build().await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
