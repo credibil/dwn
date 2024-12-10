@@ -35,7 +35,8 @@ async fn flat_space() {
     let bob_msg = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(bob_data)))
         .published(true)
-        .build_v1(&bob_keyring, None)
+        .sign(&bob_keyring)
+        .build()
         .await
         .expect("should create write");
 

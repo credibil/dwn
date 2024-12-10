@@ -20,7 +20,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
-use crate::provider::{BlockStore, EventLog, EventStream, Keyring, MessageStore, Provider};
+use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::DataStream;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsQuery};
@@ -733,8 +733,7 @@ pub struct WriteBuilder {
     delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
     existing_write: Option<Write>,
-    encryption_input: Option<EncryptionInput>,
-    // attesters: Option<Vec<&'a dyn Signer>>,
+    // encryption_input: Option<EncryptionInput>,
 }
 
 pub struct AttestationBuilder<'a, S: Signer> {
@@ -771,6 +770,30 @@ impl<'a, S: Signer> AttestationBuilder<'a, S> {
     }
 }
 
+pub struct EncryptionBuilder<'a, C: Cipher> {
+    write_builder: WriteBuilder,
+    input: EncryptionInput,
+    cipher: &'a C,
+}
+
+impl<'a, C: Cipher> EncryptionBuilder<'a, C> {
+    /// Set cipher.
+    #[must_use]
+    pub fn encrypt(self, input: &EncryptionInput, cipher: &'a C) -> EncryptionBuilder<'a, C> {
+        EncryptionBuilder {
+            write_builder: self.write_builder,
+            input: input.clone(),
+            cipher,
+        }
+    }
+
+    pub async fn build(self) -> Result<Write> {
+        let write = self.write_builder.build()?;
+        write.encrypt(&self.input, self.cipher)?;
+        Ok(write)
+    }
+}
+
 pub struct SignatureBuilder<'a, S: Signer> {
     write_builder: WriteBuilder,
     attestors: Option<Vec<&'a S>>,
@@ -798,11 +821,6 @@ impl<S: Signer> SignatureBuilder<'_, S> {
     }
 }
 
-// pub struct EncryptionBuilder<C: Cipher> {
-//     write_builder: WriteBuilder,
-//     attesters: Option<Vec<S>>,
-// }
-
 impl WriteBuilder {
     /// Add an attester.
     #[must_use]
@@ -810,6 +828,16 @@ impl WriteBuilder {
         AttestationBuilder {
             write_builder: self,
             attesters: vec![attester],
+        }
+    }
+
+    /// Add an encryption.
+    #[must_use]
+    pub fn encrypt<C: Cipher>(self, input: EncryptionInput, cipher: &C) -> EncryptionBuilder<C> {
+        EncryptionBuilder {
+            write_builder: self,
+            input,
+            cipher,
         }
     }
 
@@ -823,20 +851,11 @@ impl WriteBuilder {
         }
     }
 
-    // #[must_use]
-    // pub fn encrypt<C: Cipher>(
-    //     self, input: EncryptionInput, cipher: C,
-    // ) -> EncryptionBuilder<C> {
-    //     EncryptionBuilder::from(self).add_attester(attester)
-    // }
-
     /// Returns a new [`WriteBuilder`]
     #[must_use]
     pub fn new() -> Self {
         let now = Utc::now();
 
-        // Self::default()
-        // set defaults
         Self {
             date_created: Some(now),
             message_timestamp: now,
@@ -850,8 +869,6 @@ impl WriteBuilder {
     pub fn from(existing: Write) -> Self {
         let now = Utc::now();
 
-        // Self::default()
-        // set defaults
         Self {
             date_created: Some(now),
             message_timestamp: now,
@@ -951,13 +968,6 @@ impl WriteBuilder {
         self
     }
 
-    /// Specifies whether the record should be encrypted.
-    #[must_use]
-    pub fn encryption_input(mut self, encryption_input: EncryptionInput) -> Self {
-        self.encryption_input = Some(encryption_input);
-        self
-    }
-
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
@@ -965,132 +975,125 @@ impl WriteBuilder {
         self
     }
 
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn existing(mut self, existing_write: Write) -> Self {
-        self.existing_write = Some(existing_write);
-        self
-    }
+    // /// Build the write message.
+    // ///
+    // /// # Errors
+    // /// LATER: Add errors
+    // pub async fn build_v1<K: Keyring>(
+    //     self, keyring: &K, attesters: Option<&[&K]>,
+    // ) -> Result<Write> {
+    //     let mut write = if let Some(existing_write) = &self.existing_write {
+    //         existing_write.clone()
+    //     } else {
+    //         let mut write = Write {
+    //             descriptor: WriteDescriptor {
+    //                 base: Descriptor {
+    //                     interface: Interface::Records,
+    //                     method: Method::Write,
+    //                     message_timestamp: self.message_timestamp,
+    //                 },
+    //                 date_created: self.date_created.unwrap_or_else(Utc::now),
+    //                 recipient: self.recipient,
+    //                 ..WriteDescriptor::default()
+    //             },
+    //             ..Write::default()
+    //         };
 
-    /// Build the write message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build_v1<K: Keyring>(
-        self, keyring: &K, attesters: Option<&[&K]>,
-    ) -> Result<Write> {
-        let mut write = if let Some(existing_write) = &self.existing_write {
-            existing_write.clone()
-        } else {
-            let mut write = Write {
-                descriptor: WriteDescriptor {
-                    base: Descriptor {
-                        interface: Interface::Records,
-                        method: Method::Write,
-                        message_timestamp: self.message_timestamp,
-                    },
-                    date_created: self.date_created.unwrap_or_else(Utc::now),
-                    recipient: self.recipient,
-                    ..WriteDescriptor::default()
-                },
-                ..Write::default()
-            };
+    //         // immutable properties
+    //         if let Some(write_protocol) = self.protocol {
+    //             let normalized = utils::clean_url(&write_protocol.protocol)?;
+    //             write.descriptor.protocol = Some(normalized);
+    //             write.descriptor.protocol_path = Some(write_protocol.protocol_path);
+    //         }
+    //         if let Some(s) = self.schema {
+    //             write.descriptor.schema = Some(utils::clean_url(&s)?);
+    //         }
+    //         // parent_id == first segment of  `parent_context_id`
+    //         if let Some(context_id) = self.parent_context_id {
+    //             let parent_id =
+    //                 context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
+    //             write.descriptor.parent_id = parent_id;
+    //         }
 
-            // immutable properties
-            if let Some(write_protocol) = self.protocol {
-                let normalized = utils::clean_url(&write_protocol.protocol)?;
-                write.descriptor.protocol = Some(normalized);
-                write.descriptor.protocol_path = Some(write_protocol.protocol_path);
-            }
-            if let Some(s) = self.schema {
-                write.descriptor.schema = Some(utils::clean_url(&s)?);
-            }
-            // parent_id == first segment of  `parent_context_id`
-            if let Some(context_id) = self.parent_context_id {
-                let parent_id =
-                    context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-                write.descriptor.parent_id = parent_id;
-            }
+    //         write
+    //     };
 
-            write
-        };
+    //     write.descriptor.base.message_timestamp = self.message_timestamp;
+    //     write.descriptor.data_format = self.data_format;
 
-        write.descriptor.base.message_timestamp = self.message_timestamp;
-        write.descriptor.data_format = self.data_format;
+    //     // record_id
+    //     if let Some(record_id) = self.record_id {
+    //         write.record_id = record_id;
+    //     }
+    //     // tags
+    //     if let Some(tags) = self.tags {
+    //         write.descriptor.tags = Some(tags);
+    //     }
 
-        // record_id
-        if let Some(record_id) = self.record_id {
-            write.record_id = record_id;
-        }
-        // tags
-        if let Some(tags) = self.tags {
-            write.descriptor.tags = Some(tags);
-        }
+    //     // published, date_published
+    //     if let Some(published) = self.published {
+    //         write.descriptor.published = Some(published);
+    //     }
+    //     if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
+    //         write.descriptor.date_published =
+    //             Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
+    //     }
 
-        // published, date_published
-        if let Some(published) = self.published {
-            write.descriptor.published = Some(published);
-        }
-        if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
-            write.descriptor.date_published =
-                Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
-        }
+    //     match self.data {
+    //         WriteData::Bytes(data) => {
+    //             // store data in `encoded_data` if data is small enough
+    //             // otherwise, convert to data stream
+    //             // if data.len() <= data::MAX_ENCODED_SIZE {
+    //             //     write.descriptor.data_cid = cid::from_value(&data)?;
+    //             //     write.descriptor.data_size = data.len();
+    //             //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
+    //             // } else {
+    //             let stream = DataStream::from(data);
+    //             let (data_cid, data_size) = stream.compute_cid()?;
+    //             write.descriptor.data_cid = data_cid;
+    //             write.descriptor.data_size = data_size;
+    //             write.data_stream = Some(stream);
+    //             // }
+    //         }
+    //         WriteData::Reader(reader) => {
+    //             let (data_cid, data_size) = reader.compute_cid()?;
+    //             write.descriptor.data_cid = data_cid;
+    //             write.descriptor.data_size = data_size;
+    //             write.data_stream = Some(reader);
+    //         }
+    //         WriteData::Cid { data_cid, data_size } => {
+    //             write.descriptor.data_cid = data_cid;
+    //             write.descriptor.data_size = data_size;
+    //         }
+    //     };
 
-        match self.data {
-            WriteData::Bytes(data) => {
-                // store data in `encoded_data` if data is small enough
-                // otherwise, convert to data stream
-                // if data.len() <= data::MAX_ENCODED_SIZE {
-                //     write.descriptor.data_cid = cid::from_value(&data)?;
-                //     write.descriptor.data_size = data.len();
-                //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
-                // } else {
-                let stream = DataStream::from(data);
-                let (data_cid, data_size) = stream.compute_cid()?;
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-                write.data_stream = Some(stream);
-                // }
-            }
-            WriteData::Reader(reader) => {
-                let (data_cid, data_size) = reader.compute_cid()?;
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-                write.data_stream = Some(reader);
-            }
-            WriteData::Cid { data_cid, data_size } => {
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-            }
-        };
+    //     write.authorization = Authorization {
+    //         author_delegated_grant: self.delegated_grant,
+    //         ..Authorization::default()
+    //     };
 
-        write.authorization = Authorization {
-            author_delegated_grant: self.delegated_grant,
-            ..Authorization::default()
-        };
+    //     // attestation
+    //     // FIXME: add support for multiple attesters
+    //     if let Some(attesters) = &attesters {
+    //         let payload = Payload {
+    //             descriptor_cid: cid::from_value(&write.descriptor)?,
+    //         };
 
-        // attestation
-        // FIXME: add support for multiple attesters
-        if let Some(attesters) = &attesters {
-            let payload = Payload {
-                descriptor_cid: cid::from_value(&write.descriptor)?,
-            };
+    //         let signer = attesters[0];
+    //         let signature = JwsBuilder::new().payload(payload).build(signer).await?;
+    //         write.attestation = Some(signature);
+    //     }
 
-            let signer = attesters[0];
-            let signature = JwsBuilder::new().payload(payload).build(signer).await?;
-            write.attestation = Some(signature);
-        }
+    //     // encryption
+    //     if let Some(ecryption_input) = &self.encryption_input {
+    //         write.encrypt(ecryption_input, keyring)?;
+    //     }
 
-        // encryption
-        if let Some(ecryption_input) = &self.encryption_input {
-            write.encrypt(ecryption_input, keyring)?;
-        }
+    //     // sign message
+    //     write.sign_as_author(self.permission_grant_id, self.protocol_role, keyring).await?;
 
-        // sign message
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, keyring).await?;
-
-        Ok(write)
-    }
+    //     Ok(write)
+    // }
 
     /// Builds a Write message from builder inputs.
     pub fn build(self) -> Result<Write> {

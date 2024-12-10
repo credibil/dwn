@@ -45,7 +45,8 @@ async fn configure() {
     let mut write = WriteBuilder::new()
         .data_format("application/octet-stream")
         .data(write_data)
-        .build_v1(&bob_keyring, None)
+        .sign(&bob_keyring)
+        .build()
         .await
         .expect("should create write");
 

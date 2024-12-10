@@ -56,7 +56,8 @@ async fn owner_messages() {
             .schema(&schema)
             .data(WriteData::Reader(reader.clone()))
             .published(true)
-            .build_v1(&alice_keyring, None)
+            .sign(&alice_keyring)
+            .build()
             .await
             .expect("should create write");
 
@@ -90,7 +91,8 @@ async fn owner_messages() {
         .schema(&schema)
         .data(WriteData::Reader(reader))
         .published(true)
-        .build_v1(&alice_keyring, None)
+        .sign(&alice_keyring)
+        .build()
         .await
         .expect("should create write");
 
@@ -239,7 +241,8 @@ async fn match_grant_scope() {
         .protocol(protocol.clone())
         .schema(schema)
         .data(WriteData::Reader(reader))
-        .build_v1(&alice_keyring, None)
+        .sign(&alice_keyring)
+        .build()
         .await
         .expect("should create write");
 
@@ -255,7 +258,8 @@ async fn match_grant_scope() {
 
     let write_rand = WriteBuilder::new()
         .data(WriteData::Reader(reader))
-        .build_v1(&alice_keyring, None)
+        .sign(&alice_keyring)
+        .build()
         .await
         .expect("should create write");
 

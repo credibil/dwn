@@ -461,7 +461,7 @@ impl GrantBuilder {
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
-        let mut write = builder.build_v1(keyring, None).await?;
+        let mut write = builder.sign(keyring).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
 
         Ok(write)
@@ -544,7 +544,7 @@ impl RequestBuilder {
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
-        let mut write = builder.build_v1(keyring, None).await?;
+        let mut write = builder.sign(keyring).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&request_bytes));
 
         Ok(write)
@@ -608,7 +608,7 @@ impl RevocationBuilder {
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
-        let mut write = builder.build_v1(keyring, None).await?;
+        let mut write = builder.sign(keyring).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&revocation_bytes));
 
         Ok(write)
