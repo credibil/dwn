@@ -82,7 +82,7 @@ async-trait = "0.1.83"
 axum = { version = "0.7.9", features = ["macros"] }
 axum-extra = { version = "0.9.6", features = ["typed-header"] }
 base64ct = { version = "1.6.0", features = ["std"] }
-chrono = { version = "0.4.38", features = ["serde"] }
+chrono = { version = "0.4.39", features = ["serde"] }
 cid = "0.11.1"
 derive_more = "1.0.0"
 dwn-test = { path = "crates/dwn-test" }
