@@ -52,7 +52,8 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .build(Some(&alice_keyring))
+        .signer(&alice_keyring)
+        .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");

@@ -215,11 +215,6 @@ pub struct QueryBuilder {
     filter: Option<RecordsFilter>,
     date_sort: Option<Sort>,
     pagination: Option<Pagination>,
-    permission_grant_id: Option<String>,
-    protocol_role: Option<String>,
-    delegated_grant: Option<DelegatedGrant>,
-    // signer: Option<&'a S>,
-    // attesters: Option<Vec<&'a S>>,
 }
 
 impl QueryBuilder {
@@ -255,6 +250,58 @@ impl QueryBuilder {
         self
     }
 
+    /// Set signer.
+    #[must_use]
+    pub const fn signer<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
+        SignatureBuilder::from_query(self, signer)
+    }
+
+    /// Build the write message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn build(self) -> Result<Query> {
+        let Some(filter) = self.filter else {
+            return Err(unexpected!("missing filter"));
+        };
+
+        validate_sort(self.date_sort.as_ref(), &filter)?;
+
+        Ok(Query {
+            descriptor: QueryDescriptor {
+                base: Descriptor {
+                    interface: Interface::Records,
+                    method: Method::Query,
+                    message_timestamp: self.message_timestamp,
+                },
+                filter: filter.normalize()?,
+                date_sort: self.date_sort,
+                pagination: self.pagination,
+            },
+            authorization: None,
+        })
+    }
+}
+
+pub struct SignatureBuilder<'a, S: Signer> {
+    builder: QueryBuilder,
+    protocol_role: Option<String>,
+    permission_grant_id: Option<String>,
+    delegated_grant: Option<DelegatedGrant>,
+    signer: &'a S,
+}
+
+impl<'a, S: Signer> SignatureBuilder<'a, S> {
+    const fn from_query(builder: QueryBuilder, signer: &'a S) -> Self {
+        Self {
+            builder,
+            protocol_role: None,
+            permission_grant_id: None,
+            delegated_grant: None,
+            signer,
+        }
+    }
+
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
@@ -276,50 +323,23 @@ impl QueryBuilder {
         self
     }
 
-    /// Build the write message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self, signer: Option<&impl Signer>) -> Result<Query> {
-        let Some(filter) = self.filter else {
-            return Err(unexpected!("missing filter"));
-        };
+    pub async fn build(self) -> Result<Query> {
+        let mut query = self.builder.build()?;
 
-        validate_sort(self.date_sort.as_ref(), &filter)?;
+        let mut auth_builder =
+            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&query.descriptor)?);
+        if let Some(id) = self.permission_grant_id {
+            auth_builder = auth_builder.permission_grant_id(id);
+        }
+        if let Some(role) = self.protocol_role {
+            auth_builder = auth_builder.protocol_role(role);
+        }
+        if let Some(delegated_grant) = self.delegated_grant {
+            auth_builder = auth_builder.delegated_grant(delegated_grant);
+        }
+        query.authorization = Some(auth_builder.build(self.signer).await?);
 
-        let descriptor = QueryDescriptor {
-            base: Descriptor {
-                interface: Interface::Records,
-                method: Method::Query,
-                message_timestamp: self.message_timestamp,
-            },
-            filter: filter.normalize()?,
-            date_sort: self.date_sort,
-            pagination: self.pagination,
-        };
-
-        // let authorization = if self.authorize.unwrap_or(true) {
-        let authorization = if let Some(signer) = signer {
-            let mut auth_builder =
-                AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-            if let Some(id) = self.permission_grant_id {
-                auth_builder = auth_builder.permission_grant_id(id);
-            }
-            if let Some(role) = self.protocol_role {
-                auth_builder = auth_builder.protocol_role(role);
-            }
-            if let Some(delegated_grant) = self.delegated_grant {
-                auth_builder = auth_builder.delegated_grant(delegated_grant);
-            }
-            Some(auth_builder.build(signer).await?)
-        } else {
-            None
-        };
-
-        Ok(Query {
-            descriptor,
-            authorization,
-        })
+        Ok(query)
     }
 }
 

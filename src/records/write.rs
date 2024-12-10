@@ -734,28 +734,18 @@ pub struct WriteBuilder {
 }
 
 pub struct AttestationBuilder<'a, K: Keyring> {
-    write_builder: WriteBuilder,
-    attesters: Vec<&'a K>,
-}
-
-impl<K: Keyring> From<WriteBuilder> for AttestationBuilder<'_, K> {
-    fn from(write_builder: WriteBuilder) -> Self {
-        Self {
-            write_builder,
-            attesters: vec![],
-        }
-    }
+    builder: WriteBuilder,
+    attesters: &'a [&'a K],
 }
 
 impl<'a, K: Keyring> AttestationBuilder<'a, K> {
-    pub fn add_attester(mut self, attester: &'a K) -> Self {
-        self.attesters.push(attester);
-        self
+    const fn from_write(builder: WriteBuilder, attesters: &'a [&'a K]) -> Self {
+        Self { builder, attesters }
     }
 
     /// Builds a `Write` message with attesation, but no encryption or signature.
     pub async fn build(self) -> Result<Write> {
-        let mut write = self.write_builder.build()?;
+        let mut write = self.builder.build()?;
 
         let payload = Payload {
             descriptor_cid: cid::from_value(&write.descriptor)?,
@@ -772,14 +762,14 @@ impl<'a, K: Keyring> AttestationBuilder<'a, K> {
     pub const fn encrypter(
         self, input: EncryptionInput, cipher: &'a K,
     ) -> EncryptionBuilder<'a, K> {
-        EncryptionBuilder::from_attester(self, input, cipher)
+        EncryptionBuilder::from_attest(self, input, cipher)
     }
 
     /// Sets signature properties and returns an `SignatureBuilder` that wraps
     /// the attestion builder.
     #[must_use]
     pub const fn signer(self, signer: &'a K) -> SignatureBuilder<'a, K> {
-        SignatureBuilder::from_attester(self, signer)
+        SignatureBuilder::from_attest(self, signer)
     }
 }
 
@@ -795,7 +785,7 @@ enum EncryptFrom<'a, K: Keyring> {
 }
 
 impl<'a, K: Keyring> EncryptionBuilder<'a, K> {
-    const fn from_writer(builder: WriteBuilder, input: EncryptionInput, cipher: &'a K) -> Self {
+    const fn from_write(builder: WriteBuilder, input: EncryptionInput, cipher: &'a K) -> Self {
         Self {
             builder: EncryptFrom::Write(builder),
             input: Some(input),
@@ -803,7 +793,7 @@ impl<'a, K: Keyring> EncryptionBuilder<'a, K> {
         }
     }
 
-    const fn from_attester(
+    const fn from_attest(
         builder: AttestationBuilder<'a, K>, input: EncryptionInput, cipher: &'a K,
     ) -> Self {
         Self {
@@ -830,7 +820,7 @@ impl<'a, K: Keyring> EncryptionBuilder<'a, K> {
     /// the encryption builder.
     #[must_use]
     pub const fn signer(self, signer: &'a K) -> SignatureBuilder<'a, K> {
-        SignatureBuilder::from_encrypter(self, signer)
+        SignatureBuilder::from_encrypt(self, signer)
     }
 }
 
@@ -848,7 +838,7 @@ enum SignFrom<'a, K: Keyring> {
 }
 
 impl<'a, K: Keyring> SignatureBuilder<'a, K> {
-    const fn from_writer(builder: WriteBuilder, signer: &'a K) -> Self {
+    const fn from_write(builder: WriteBuilder, signer: &'a K) -> Self {
         Self {
             builder: SignFrom::Write(builder),
             protocol_role: None,
@@ -857,7 +847,7 @@ impl<'a, K: Keyring> SignatureBuilder<'a, K> {
         }
     }
 
-    const fn from_attester(builder: AttestationBuilder<'a, K>, signer: &'a K) -> Self {
+    const fn from_attest(builder: AttestationBuilder<'a, K>, signer: &'a K) -> Self {
         Self {
             builder: SignFrom::Attestation(builder),
             protocol_role: None,
@@ -866,7 +856,7 @@ impl<'a, K: Keyring> SignatureBuilder<'a, K> {
         }
     }
 
-    const fn from_encrypter(builder: EncryptionBuilder<'a, K>, signer: &'a K) -> Self {
+    const fn from_encrypt(builder: EncryptionBuilder<'a, K>, signer: &'a K) -> Self {
         Self {
             builder: SignFrom::Encryption(builder),
             protocol_role: None,
@@ -905,8 +895,10 @@ impl<'a, K: Keyring> SignatureBuilder<'a, K> {
 impl WriteBuilder {
     /// Add an attester.
     #[must_use]
-    pub fn add_attester<K: Keyring>(self, attester: &K) -> AttestationBuilder<K> {
-        AttestationBuilder::from(self).add_attester(attester)
+    pub const fn attesters<'a, K: Keyring>(
+        self, attesters: &'a [&'a K],
+    ) -> AttestationBuilder<'a, K> {
+        AttestationBuilder::from_write(self, attesters)
     }
 
     /// Add an encryption.
@@ -914,13 +906,13 @@ impl WriteBuilder {
     pub const fn encrypter<K: Keyring>(
         self, input: EncryptionInput, cipher: &K,
     ) -> EncryptionBuilder<K> {
-        EncryptionBuilder::from_writer(self, input, cipher)
+        EncryptionBuilder::from_write(self, input, cipher)
     }
 
     /// Set signer.
     #[must_use]
     pub const fn signer<K: Keyring>(self, signer: &K) -> SignatureBuilder<K> {
-        SignatureBuilder::from_writer(self, signer)
+        SignatureBuilder::from_write(self, signer)
     }
 
     /// Returns a new [`WriteBuilder`]

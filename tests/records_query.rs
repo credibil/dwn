@@ -18,7 +18,8 @@ async fn invalid_sort() {
 
     let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().published(false))
-        .build(Some(&alice_keyring))
+        .signer(&alice_keyring)
+        .build()
         .await
         .expect("should create query");
 
@@ -51,7 +52,7 @@ async fn return_values() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(stream.clone()))
         .data_format("awesome_data_format")
-        .add_attester(&bob_keyring)
+        .attesters(&[&bob_keyring])
         .signer(&alice_keyring)
         .build()
         .await
@@ -65,7 +66,8 @@ async fn return_values() {
     let filter = RecordsFilter::new().add_author(ALICE_DID).data_format("awesome_data_format");
     let query = QueryBuilder::new()
         .filter(filter)
-        .build(Some(&alice_keyring))
+        .signer(&alice_keyring)
+        .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -114,7 +116,8 @@ async fn find_matches() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_format("awesome_data_format"))
-        .build(Some(&alice_keyring))
+        .signer(&alice_keyring)
+        .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -129,7 +132,8 @@ async fn find_matches() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_format("awesome_data_format").schema("schema_2"))
-        .build(Some(&alice_keyring))
+        .signer(&alice_keyring)
+        .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
