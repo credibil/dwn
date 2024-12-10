@@ -779,14 +779,15 @@ pub struct EncryptionBuilder<'a, C: Cipher> {
 impl<'a, C: Cipher> EncryptionBuilder<'a, C> {
     /// Set cipher.
     #[must_use]
-    pub fn encrypt(self, input: &EncryptionInput, cipher: &'a C) -> EncryptionBuilder<'a, C> {
-        EncryptionBuilder {
+    pub fn encrypt(self, input: &EncryptionInput, cipher: &'a C) -> Self {
+        Self {
             write_builder: self.write_builder,
             input: input.clone(),
             cipher,
         }
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn build(self) -> Result<Write> {
         let write = self.write_builder.build()?;
         write.encrypt(&self.input, self.cipher)?;
@@ -833,7 +834,9 @@ impl WriteBuilder {
 
     /// Add an encryption.
     #[must_use]
-    pub fn encrypt<C: Cipher>(self, input: EncryptionInput, cipher: &C) -> EncryptionBuilder<C> {
+    pub const fn encrypt<C: Cipher>(
+        self, input: EncryptionInput, cipher: &C,
+    ) -> EncryptionBuilder<C> {
         EncryptionBuilder {
             write_builder: self,
             input,
@@ -1096,6 +1099,9 @@ impl WriteBuilder {
     // }
 
     /// Builds a Write message from builder inputs.
+    ///
+    /// # Errors
+    /// LATER: Add errors
     pub fn build(self) -> Result<Write> {
         let mut write = if let Some(existing_write) = &self.existing_write {
             existing_write.clone()
