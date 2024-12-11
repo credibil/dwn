@@ -242,6 +242,7 @@ impl TryFrom<&Entry> for Write {
 
 impl Write {
     /// Use a builder to create a new [`Write`] message.
+    #[must_use]
     pub fn build() -> WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
         WriteBuilder::new()
     }
@@ -877,8 +878,9 @@ impl WriteBuilder<Existing, Unattested, Unencrypted, Unsigned> {
     }
 }
 
-/// Immutable properties that can only be set for new `Write` records.
-/// N.B. Only possible to set when the result is Unattested, Unencrypted, and Unsigned.
+/// State: New, Unattested, Unencrypted, and Unsigned.
+///
+/// Immutable properties are able be set.
 impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
     /// The datetime the record was created. Defaults to now.
     #[must_use]
@@ -916,9 +918,10 @@ impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
     }
 }
 
-///  Mutable properties properties that can be set for both new and existing
+/// State: Unattested, Unencrypted, and Unsigned.
+///
+///  Mutable properties properties are able to be set for both new and existing
 /// `Write` records.
-/// N.B. Only possible to set when the result is Unattested, Unencrypted, and Unsigned.
 impl<O> WriteBuilder<O, Unattested, Unencrypted, Unsigned> {
     /// Entry data as a CID or raw bytes.
     #[must_use]
@@ -984,10 +987,13 @@ impl<O> WriteBuilder<O, Unattested, Unencrypted, Unsigned> {
     }
 }
 
-/// Add an attester to the builder. Logically (user POV), this can only be done
-/// if the content hasn't been attested, encrypted, or signed yet.
+/// State: Unencrypted and Unsigned.
 impl<'a, O, A> WriteBuilder<O, A, Unencrypted, Unsigned> {
-    /// Specify the attesters for the record.
+    /// Logically (from user POV), have an attester sign the record.
+    ///
+    /// At this point, the builder simply captures the attester for use in the
+    /// final build step. Can only be done if the content hasn't been signed
+    /// or encrypted.
     #[must_use]
     pub fn attest<S: Signer>(
         self, attesters: &'a [&'a S],
@@ -1017,7 +1023,10 @@ impl<'a, O, A> WriteBuilder<O, A, Unencrypted, Unsigned> {
         }
     }
 
-    /// Specify the encrypter for the record.
+    /// Logically (from user POV), encrypt the record.
+    ///
+    /// At this point, the builder simply captures the encrytper for use in the
+    /// final build step. Can only be done if the content hasn't been signed yet.
     #[must_use]
     pub fn encrypt(
         self, encrypter: &'a impl Cipher,
@@ -1048,12 +1057,12 @@ impl<'a, O, A> WriteBuilder<O, A, Unencrypted, Unsigned> {
     }
 }
 
-/// Logically (from user POV), sign the record.
-///
-/// At this point, the builder simply captures the signer for use in the final
-/// build step. Can only be done if the content hasn't been signed yet.
+// State: Unsigned
 impl<'a, O, A, E> WriteBuilder<O, A, E, Unsigned> {
-    /// Specify the signer for the record.
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the final
+    /// build step. Can only be done if the content hasn't been signed yet.
     #[must_use]
     pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<O, A, E, Signed<'a, impl Signer>> {
         WriteBuilder {
@@ -1083,7 +1092,10 @@ impl<'a, O, A, E> WriteBuilder<O, A, E, Unsigned> {
     }
 }
 
-/// Builder can build after the `sign` step (i.e. the Signer is set).
+// State: Signed.
+
+/// Builder is ready to build once the `sign` step is complete (i.e. the Signer
+/// is set).
 impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
     fn into_write(self) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
@@ -1180,6 +1192,7 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
     }
 }
 
+/// State: Unattested, Unencrypted, and Signed.
 impl<O, S: Signer> WriteBuilder<O, Unattested, Unencrypted, Signed<'_, S>> {
     /// Build the `Write` message.
     ///
@@ -1197,7 +1210,7 @@ impl<O, S: Signer> WriteBuilder<O, Unattested, Unencrypted, Signed<'_, S>> {
     }
 }
 
-// A: Signer,
+/// State: Attested, Unencrypted, and Signed.
 impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Unencrypted, Signed<'a, S>> {
     /// Build the `Write` message.
     ///
@@ -1233,6 +1246,7 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Unencrypted, 
     }
 }
 
+/// State: Unattested, Encrypted, and Signed.
 impl<'a, O, E: Cipher, S: Signer> WriteBuilder<O, Unattested, Encrypted<'a, E>, Signed<'a, S>> {
     /// Build the `Write` message.
     ///
@@ -1260,6 +1274,7 @@ impl<'a, O, E: Cipher, S: Signer> WriteBuilder<O, Unattested, Encrypted<'a, E>, 
     }
 }
 
+/// State: Attested, Encrypted, and Signed.
 impl<'a, O, A: Signer, E: Cipher, S: Signer>
     WriteBuilder<O, Attested<'a, A>, Encrypted<'a, E>, Signed<'a, S>>
 {
