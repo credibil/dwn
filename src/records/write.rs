@@ -922,7 +922,7 @@ impl<A, E, S> WriteBuilder<A, E, S> {
         self
     }
 
-    fn to_write(self) -> Result<Write> {
+    fn into_write(self) -> Result<Write> {
         let mut write = if let Some(existing_write) = &self.existing_write {
             existing_write.clone()
         } else {
@@ -1144,7 +1144,7 @@ impl<S: Signer> WriteBuilder<NoAttester, NoEncrypter, SomeSigner<'_, S>> {
         let protocol_role = self.protocol_role.clone();
         let signer = self.signer.0;
 
-        let mut write = self.to_write()?;
+        let mut write = self.into_write()?;
         write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
 
         Ok(write)
@@ -1163,7 +1163,7 @@ impl<'a, A: Signer, S: Signer> WriteBuilder<Attesters<'a, A>, NoEncrypter, SomeS
         let protocol_role = self.protocol_role.clone();
         let signer = self.signer.0;
 
-        let mut write = self.to_write()?;
+        let mut write = self.into_write()?;
 
         let payload = Payload {
             descriptor_cid: cid::from_value(&write.descriptor)?,
@@ -1202,7 +1202,7 @@ impl<'a, A: Signer, S: Signer, C: Cipher>
         let protocol_role = self.protocol_role.clone();
         let signer = self.signer.0;
 
-        let mut write = self.to_write()?;
+        let mut write = self.into_write()?;
 
         let payload = Payload {
             descriptor_cid: cid::from_value(&write.descriptor)?,
