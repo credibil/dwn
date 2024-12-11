@@ -208,100 +208,78 @@ pub struct QueryDescriptor {
 }
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct QueryBuilder {
-    // pub struct QueryBuilder<'a, S: Signer> {
+pub struct QueryBuilder<F, S> {
     message_timestamp: DateTime<Utc>,
-    filter: Option<RecordsFilter>,
+    filter: F,
     date_sort: Option<Sort>,
     pagination: Option<Pagination>,
+    signer: S,
+    protocol_role: Option<String>,
+    permission_grant_id: Option<String>,
+    delegated_grant: Option<DelegatedGrant>,
 }
 
-impl QueryBuilder {
-    // impl<'a, S: Signer> QueryBuilder<'a, S> {
+pub struct NoFilter;
+pub struct NoSigner;
+pub struct SomeSigner<'a, S: Signer>(&'a S);
 
+impl QueryBuilder<NoFilter, NoSigner> {
     /// Returns a new [`QueryBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self {
             message_timestamp: Utc::now(),
-            ..Self::default()
-        }
-    }
-
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn filter(mut self, filter: RecordsFilter) -> Self {
-        self.filter = Some(filter);
-        self
-    }
-
-    /// Determines which date to use when sorting query results.
-    #[must_use]
-    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
-        self.date_sort = Some(date_sort);
-        self
-    }
-
-    /// Sets the limit (size) and offset of the resultset pagination cursor.
-    #[must_use]
-    pub fn pagination(mut self, pagination: Pagination) -> Self {
-        self.pagination = Some(pagination);
-        self
-    }
-
-    /// Set signer.
-    #[must_use]
-    pub const fn signer<S: Signer>(self, signer: &S) -> SignatureBuilder<S> {
-        SignatureBuilder::from_query(self, signer)
-    }
-
-    /// Build the write message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn build(self) -> Result<Query> {
-        let Some(filter) = self.filter else {
-            return Err(unexpected!("missing filter"));
-        };
-
-        validate_sort(self.date_sort.as_ref(), &filter)?;
-
-        Ok(Query {
-            descriptor: QueryDescriptor {
-                base: Descriptor {
-                    interface: Interface::Records,
-                    method: Method::Query,
-                    message_timestamp: self.message_timestamp,
-                },
-                filter: filter.normalize()?,
-                date_sort: self.date_sort,
-                pagination: self.pagination,
-            },
-            authorization: None,
-        })
-    }
-}
-
-pub struct SignatureBuilder<'a, S: Signer> {
-    builder: QueryBuilder,
-    protocol_role: Option<String>,
-    permission_grant_id: Option<String>,
-    delegated_grant: Option<DelegatedGrant>,
-    signer: &'a S,
-}
-
-impl<'a, S: Signer> SignatureBuilder<'a, S> {
-    const fn from_query(builder: QueryBuilder, signer: &'a S) -> Self {
-        Self {
-            builder,
+            filter: NoFilter,
+            date_sort: None,
+            pagination: None,
+            signer: NoSigner,
             protocol_role: None,
             permission_grant_id: None,
             delegated_grant: None,
-            signer,
         }
     }
+}
 
+/// Filter property is not set.
+impl<S> QueryBuilder<NoFilter, S> {
+    /// Sets the filter to use when querying.
+    #[must_use]
+    pub fn filter(self, filter: RecordsFilter) -> QueryBuilder<RecordsFilter, S> {
+        QueryBuilder {
+            filter,
+
+            message_timestamp: self.message_timestamp,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
+            signer: self.signer,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+        }
+    }
+}
+
+/// Signer property is not set.
+impl<'a, F> QueryBuilder<F, NoSigner> {
+    /// Sets the filter to use when querying.
+    #[must_use]
+    pub fn signer<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, SomeSigner<'a, S>> {
+        QueryBuilder {
+            signer: SomeSigner(signer),
+
+            message_timestamp: self.message_timestamp,
+            filter: self.filter,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+        }
+    }
+}
+
+/// Optional properties that can only be set when a Signer is set.
+impl<F, S: Signer> QueryBuilder<F, SomeSigner<'_, S>> {
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
@@ -322,12 +300,72 @@ impl<'a, S: Signer> SignatureBuilder<'a, S> {
         self.delegated_grant = Some(delegated_grant);
         self
     }
+}
 
+// Properties that can be set regardless of Filter or Signer state.
+impl<F, S> QueryBuilder<F, S> {
+    /// Determines which date to use when sorting query results.
+    #[must_use]
+    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
+        self.date_sort = Some(date_sort);
+        self
+    }
+
+    /// Sets the limit (size) and offset of the resultset pagination cursor.
+    #[must_use]
+    pub fn pagination(mut self, pagination: Pagination) -> Self {
+        self.pagination = Some(pagination);
+        self
+    }
+}
+
+// Build without signing
+impl QueryBuilder<RecordsFilter, NoSigner> {
+    /// Build the write message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn build(self) -> Result<Query> {
+        validate_sort(self.date_sort.as_ref(), &self.filter)?;
+
+        Ok(Query {
+            descriptor: QueryDescriptor {
+                base: Descriptor {
+                    interface: Interface::Records,
+                    method: Method::Query,
+                    message_timestamp: self.message_timestamp,
+                },
+                filter: self.filter.normalize()?,
+                date_sort: self.date_sort,
+                pagination: self.pagination,
+            },
+            authorization: None,
+        })
+    }
+}
+
+// Build includes signing
+impl<S: Signer> QueryBuilder<RecordsFilter, SomeSigner<'_, S>> {
+    /// Build the write message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
     pub async fn build(self) -> Result<Query> {
-        let mut query = self.builder.build()?;
+        validate_sort(self.date_sort.as_ref(), &self.filter)?;
+
+        let descriptor = QueryDescriptor {
+            base: Descriptor {
+                interface: Interface::Records,
+                method: Method::Query,
+                message_timestamp: self.message_timestamp,
+            },
+            filter: self.filter.normalize()?,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
+        };
 
         let mut auth_builder =
-            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&query.descriptor)?);
+            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
         if let Some(id) = self.permission_grant_id {
             auth_builder = auth_builder.permission_grant_id(id);
         }
@@ -337,9 +375,12 @@ impl<'a, S: Signer> SignatureBuilder<'a, S> {
         if let Some(delegated_grant) = self.delegated_grant {
             auth_builder = auth_builder.delegated_grant(delegated_grant);
         }
-        query.authorization = Some(auth_builder.build(self.signer).await?);
+        let authorization = Some(auth_builder.build(self.signer.0).await?);
 
-        Ok(query)
+        Ok(Query {
+            descriptor,
+            authorization,
+        })
     }
 }
 
