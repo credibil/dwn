@@ -169,14 +169,3 @@ mod serde {
         rfc3339_micros(date, serializer)
     }
 }
-
-/// Typestate Builder types and functions.
-pub mod typestate {
-    use vercre_infosec::Signer;
-
-    /// Typestate placeholder type for use when Signer has not been set.
-    pub struct NoSigner;
-
-    /// Typestate Signer type for builders wher Signer is set.
-    pub struct SomeSigner<'a, S: Signer>(pub &'a S);
-}

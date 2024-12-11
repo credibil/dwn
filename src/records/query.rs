@@ -14,7 +14,6 @@ use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::typestate::{NoSigner, SomeSigner};
 use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized, unexpected};
 
 /// Process `Query` message.
@@ -220,22 +219,26 @@ pub struct QueryBuilder<F, S> {
     delegated_grant: Option<DelegatedGrant>,
 }
 
-impl Default for QueryBuilder<NoFilter, NoSigner> {
+impl Default for QueryBuilder<Unfiltered, Unsigned> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub struct NoFilter;
+pub struct Unsigned;
+pub struct Signed<'a, S: Signer>(pub &'a S);
 
-impl QueryBuilder<NoFilter, NoSigner> {
+pub struct Unfiltered;
+pub struct Filtered(RecordsFilter);
+
+impl QueryBuilder<Unfiltered, Unsigned> {
     /// Returns a new [`QueryBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self {
             message_timestamp: Utc::now(),
-            filter: NoFilter,
-            signer: NoSigner,
+            filter: Unfiltered,
+            signer: Unsigned,
             date_sort: None,
             pagination: None,
             protocol_role: None,
@@ -245,13 +248,13 @@ impl QueryBuilder<NoFilter, NoSigner> {
     }
 }
 
-/// Filter property is not set.
-impl<S> QueryBuilder<NoFilter, S> {
-    /// Sets the filter to use when querying.
+/// State: Unfiltered.
+impl<S> QueryBuilder<Unfiltered, S> {
+    /// Set the filter to use when querying.
     #[must_use]
-    pub fn filter(self, filter: RecordsFilter) -> QueryBuilder<RecordsFilter, S> {
+    pub fn filter(self, filter: RecordsFilter) -> QueryBuilder<Filtered, S> {
         QueryBuilder {
-            filter,
+            filter: Filtered(filter),
 
             message_timestamp: self.message_timestamp,
             date_sort: self.date_sort,
@@ -264,27 +267,8 @@ impl<S> QueryBuilder<NoFilter, S> {
     }
 }
 
-/// Signer property is not set.
-impl<'a, F> QueryBuilder<F, NoSigner> {
-    /// Sets the filter to use when querying.
-    #[must_use]
-    pub fn sign<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, SomeSigner<'a, S>> {
-        QueryBuilder {
-            signer: SomeSigner(signer),
-
-            message_timestamp: self.message_timestamp,
-            filter: self.filter,
-            date_sort: self.date_sort,
-            pagination: self.pagination,
-            protocol_role: self.protocol_role,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant: self.delegated_grant,
-        }
-    }
-}
-
-/// Optional properties that can only be set when a Signer is set.
-impl<F, S: Signer> QueryBuilder<F, SomeSigner<'_, S>> {
+/// State: Unsigned
+impl<'a, F> QueryBuilder<F, Unsigned> {
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
@@ -305,10 +289,7 @@ impl<F, S: Signer> QueryBuilder<F, SomeSigner<'_, S>> {
         self.delegated_grant = Some(delegated_grant);
         self
     }
-}
 
-// Optional properties that can be set regardless of state.
-impl<F, S> QueryBuilder<F, S> {
     /// Determines which date to use when sorting query results.
     #[must_use]
     pub const fn date_sort(mut self, date_sort: Sort) -> Self {
@@ -322,16 +303,35 @@ impl<F, S> QueryBuilder<F, S> {
         self.pagination = Some(pagination);
         self
     }
+
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the
+    /// final build step.
+    #[must_use]
+    pub fn sign<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, Signed<'a, S>> {
+        QueryBuilder {
+            signer: Signed(signer),
+
+            message_timestamp: self.message_timestamp,
+            filter: self.filter,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+        }
+    }
 }
 
 // Build without signing
-impl QueryBuilder<RecordsFilter, NoSigner> {
+impl QueryBuilder<Filtered, Unsigned> {
     /// Build the write message.
     ///
     /// # Errors
     /// LATER: Add errors
     pub fn build(self) -> Result<Query> {
-        validate_sort(self.date_sort.as_ref(), &self.filter)?;
+        validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
 
         Ok(Query {
             descriptor: QueryDescriptor {
@@ -340,7 +340,7 @@ impl QueryBuilder<RecordsFilter, NoSigner> {
                     method: Method::Query,
                     message_timestamp: self.message_timestamp,
                 },
-                filter: self.filter.normalize()?,
+                filter: self.filter.0.normalize()?,
                 date_sort: self.date_sort,
                 pagination: self.pagination,
             },
@@ -350,13 +350,13 @@ impl QueryBuilder<RecordsFilter, NoSigner> {
 }
 
 // Build includes signing
-impl<S: Signer> QueryBuilder<RecordsFilter, SomeSigner<'_, S>> {
+impl<S: Signer> QueryBuilder<Filtered, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Query> {
-        validate_sort(self.date_sort.as_ref(), &self.filter)?;
+        validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
 
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -364,7 +364,7 @@ impl<S: Signer> QueryBuilder<RecordsFilter, SomeSigner<'_, S>> {
                 method: Method::Query,
                 message_timestamp: self.message_timestamp,
             },
-            filter: self.filter.normalize()?,
+            filter: self.filter.0.normalize()?,
             date_sort: self.date_sort,
             pagination: self.pagination,
         };
