@@ -875,131 +875,8 @@ impl<A, E, S> WriteBuilder<A, E, S> {
         self.data_format = data_format.into();
         self
     }
-}
 
-impl<'a, E, S> WriteBuilder<NoAttesters, E, S> {
-    /// Specify the attesters for the record.
-    #[must_use]
-    pub fn attesters<A: Signer>(
-        self, attesters: &'a [&'a A],
-    ) -> WriteBuilder<Attesters<'a, A>, E, S> {
-        WriteBuilder {
-            attesters: Attesters(attesters),
-            message_timestamp: self.message_timestamp,
-            recipient: self.recipient,
-            protocol: self.protocol,
-            schema: self.schema,
-            tags: self.tags,
-            record_id: self.record_id,
-            parent_context_id: self.parent_context_id,
-            data: self.data,
-            data_format: self.data_format,
-            date_created: self.date_created,
-            published: self.published,
-            date_published: self.date_published,
-            protocol_role: self.protocol_role,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant: self.delegated_grant,
-            existing_write: self.existing_write,
-            signer: self.signer,
-            encrypter: self.encrypter,
-            encryption_input: self.encryption_input,
-        }
-    }
-}
-
-impl<'a, A, S> WriteBuilder<A, NoEncrypter, S> {
-    /// Specify the encrypter for the record.
-    #[must_use]
-    pub fn encrypter(
-        self, encrypter: &'a impl Cipher,
-    ) -> WriteBuilder<A, Encrypter<'a, impl Cipher>, S> {
-        WriteBuilder {
-            encrypter: Encrypter(encrypter),
-            encryption_input: self.encryption_input,
-            message_timestamp: self.message_timestamp,
-            recipient: self.recipient,
-            protocol: self.protocol,
-            schema: self.schema,
-            tags: self.tags,
-            record_id: self.record_id,
-            parent_context_id: self.parent_context_id,
-            data: self.data,
-            data_format: self.data_format,
-            date_created: self.date_created,
-            published: self.published,
-            date_published: self.date_published,
-            protocol_role: self.protocol_role,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant: self.delegated_grant,
-            existing_write: self.existing_write,
-            signer: self.signer,
-            attesters: self.attesters,
-        }
-    }
-}
-
-impl<'a, A, E> WriteBuilder<A, E, NoSigner> {
-    /// Specify the signer for the record.
-    #[must_use]
-    pub fn signer(
-        self, signer: &'a impl Signer,
-    ) -> WriteBuilder<A, E, SomeSigner<'a, impl Signer>> {
-        WriteBuilder {
-            signer: SomeSigner(signer),
-
-            message_timestamp: self.message_timestamp,
-            recipient: self.recipient,
-            protocol: self.protocol,
-            schema: self.schema,
-            tags: self.tags,
-            record_id: self.record_id,
-            parent_context_id: self.parent_context_id,
-            data: self.data,
-            data_format: self.data_format,
-            date_created: self.date_created,
-            published: self.published,
-            date_published: self.date_published,
-            protocol_role: self.protocol_role,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant: self.delegated_grant,
-            existing_write: self.existing_write,
-            attesters: self.attesters,
-            encrypter: self.encrypter,
-            encryption_input: self.encryption_input,
-        }
-    }
-}
-
-impl<A, E, S: Signer> WriteBuilder<A, E, SomeSigner<'_, S>> {
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
-        self.protocol_role = Some(protocol_role.into());
-        self
-    }
-
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    /// The delegated grant used with this record.
-    #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
-        self.delegated_grant = Some(delegated_grant);
-        self
-    }
-}
-
-impl<S: Signer> WriteBuilder<NoAttesters, NoEncrypter, SomeSigner<'_, S>> {
-    /// Build the `Write` message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self) -> Result<Write> {
+    fn to_write(self) -> Result<Write> {
         let mut write = if let Some(existing_write) = &self.existing_write {
             existing_write.clone()
         } else {
@@ -1096,10 +973,139 @@ impl<S: Signer> WriteBuilder<NoAttesters, NoEncrypter, SomeSigner<'_, S>> {
             ..Authorization::default()
         };
 
-        // if self.encrypter.is_some() {
-        //     write.encrypt(&self.encryption_input.unwrap(), self.encrypter.unwrap().0)?;
-        // }
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        Ok(write)
+    }
+}
+
+impl<'a, E, S> WriteBuilder<NoAttesters, E, S> {
+    /// Specify the attesters for the record.
+    #[must_use]
+    pub fn attesters<A: Signer>(
+        self, attesters: &'a [&'a A],
+    ) -> WriteBuilder<Attesters<'a, A>, E, S> {
+        WriteBuilder {
+            attesters: Attesters(attesters),
+            message_timestamp: self.message_timestamp,
+            recipient: self.recipient,
+            protocol: self.protocol,
+            schema: self.schema,
+            tags: self.tags,
+            record_id: self.record_id,
+            parent_context_id: self.parent_context_id,
+            data: self.data,
+            data_format: self.data_format,
+            date_created: self.date_created,
+            published: self.published,
+            date_published: self.date_published,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+            existing_write: self.existing_write,
+            signer: self.signer,
+            encrypter: self.encrypter,
+            encryption_input: self.encryption_input,
+        }
+    }
+}
+
+impl<'a, A, S> WriteBuilder<A, NoEncrypter, S> {
+    /// Specify the encrypter for the record.
+    #[must_use]
+    pub fn encrypter(
+        self, encrypter: &'a impl Cipher,
+    ) -> WriteBuilder<A, Encrypter<'a, impl Cipher>, S> {
+        WriteBuilder {
+            encrypter: Encrypter(encrypter),
+            encryption_input: self.encryption_input,
+            message_timestamp: self.message_timestamp,
+            recipient: self.recipient,
+            protocol: self.protocol,
+            schema: self.schema,
+            tags: self.tags,
+            record_id: self.record_id,
+            parent_context_id: self.parent_context_id,
+            data: self.data,
+            data_format: self.data_format,
+            date_created: self.date_created,
+            published: self.published,
+            date_published: self.date_published,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+            existing_write: self.existing_write,
+            signer: self.signer,
+            attesters: self.attesters,
+        }
+    }
+}
+
+impl<'a, A, E> WriteBuilder<A, E, NoSigner> {
+    /// Specify the signer for the record.
+    #[must_use]
+    pub fn signer(
+        self, signer: &'a impl Signer,
+    ) -> WriteBuilder<A, E, SomeSigner<'a, impl Signer>> {
+        WriteBuilder {
+            signer: SomeSigner(signer),
+
+            message_timestamp: self.message_timestamp,
+            recipient: self.recipient,
+            protocol: self.protocol,
+            schema: self.schema,
+            tags: self.tags,
+            record_id: self.record_id,
+            parent_context_id: self.parent_context_id,
+            data: self.data,
+            data_format: self.data_format,
+            date_created: self.date_created,
+            published: self.published,
+            date_published: self.date_published,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+            existing_write: self.existing_write,
+            encryption_input: self.encryption_input,
+            attesters: self.attesters,
+            encrypter: self.encrypter,
+        }
+    }
+}
+
+impl<A, E, S: Signer> WriteBuilder<A, E, SomeSigner<'_, S>> {
+    /// Specify a protocol role for the record.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
+        self
+    }
+
+    /// Specifies the permission grant ID.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
+        self
+    }
+
+    /// The delegated grant used with this record.
+    #[must_use]
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
+        self.delegated_grant = Some(delegated_grant);
+        self
+    }
+}
+
+impl<S: Signer> WriteBuilder<NoAttesters, NoEncrypter, SomeSigner<'_, S>> {
+    /// Build the `Write` message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn build(self) -> Result<Write> {
+        let permission_grant_id = self.permission_grant_id.clone();
+        let protocol_role = self.protocol_role.clone();
+        let signer = self.signer.0;
+
+        let mut write = self.to_write()?;
+        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
 
         Ok(write)
     }
@@ -1111,103 +1117,30 @@ impl<'a, A: Signer, S: Signer> WriteBuilder<Attesters<'a, A>, NoEncrypter, SomeS
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
-        let mut write = if let Some(existing_write) = &self.existing_write {
-            existing_write.clone()
-        } else {
-            let mut write = Write {
-                descriptor: WriteDescriptor {
-                    base: Descriptor {
-                        interface: Interface::Records,
-                        method: Method::Write,
-                        message_timestamp: self.message_timestamp,
-                    },
-                    date_created: self.date_created.unwrap_or_else(Utc::now),
-                    recipient: self.recipient,
-                    ..WriteDescriptor::default()
-                },
-                ..Write::default()
-            };
+        let attesters = self.attesters.0;
+        let delegated_grant = self.delegated_grant.clone();
+        let permission_grant_id = self.permission_grant_id.clone();
+        let protocol_role = self.protocol_role.clone();
+        let signer = self.signer.0;
 
-            // immutable properties
-            if let Some(write_protocol) = self.protocol {
-                let normalized = utils::clean_url(&write_protocol.protocol)?;
-                write.descriptor.protocol = Some(normalized);
-                write.descriptor.protocol_path = Some(write_protocol.protocol_path);
-            }
-            if let Some(s) = self.schema {
-                write.descriptor.schema = Some(utils::clean_url(&s)?);
-            }
-            // parent_id == first segment of  `parent_context_id`
-            if let Some(context_id) = self.parent_context_id {
-                let parent_id =
-                    context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-                write.descriptor.parent_id = parent_id;
-            }
-
-            write
-        };
-
-        write.descriptor.base.message_timestamp = self.message_timestamp;
-        write.descriptor.data_format = self.data_format;
-
-        // record_id
-        if let Some(record_id) = self.record_id {
-            write.record_id = record_id;
-        }
-        // tags
-        if let Some(tags) = self.tags {
-            write.descriptor.tags = Some(tags);
-        }
-
-        // published, date_published
-        if let Some(published) = self.published {
-            write.descriptor.published = Some(published);
-        }
-        if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
-            write.descriptor.date_published =
-                Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
-        }
-
-        match self.data {
-            WriteData::Bytes(data) => {
-                // store data in `encoded_data` if data is small enough
-                // otherwise, convert to data stream
-                // if data.len() <= data::MAX_ENCODED_SIZE {
-                //     write.descriptor.data_cid = cid::from_value(&data)?;
-                //     write.descriptor.data_size = data.len();
-                //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
-                // } else {
-                let stream = DataStream::from(data);
-                let (data_cid, data_size) = stream.compute_cid()?;
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-                write.data_stream = Some(stream);
-                // }
-            }
-            WriteData::Reader(reader) => {
-                let (data_cid, data_size) = reader.compute_cid()?;
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-                write.data_stream = Some(reader);
-            }
-            WriteData::Cid { data_cid, data_size } => {
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-            }
-        };
+        let mut write = self.to_write()?;
 
         let payload = Payload {
             descriptor_cid: cid::from_value(&write.descriptor)?,
         };
-        let attestation = JwsBuilder::new().payload(payload).build(self.attesters.0[0]).await?;
+
+        let Some(attester) = attesters.first() else {
+            return Err(unexpected!("attesters is empty"));
+        };
+        let attestation = JwsBuilder::new().payload(payload).build(*attester).await?;
         write.attestation = Some(attestation);
 
         write.authorization = Authorization {
-            author_delegated_grant: self.delegated_grant,
+            author_delegated_grant: delegated_grant,
             ..Authorization::default()
         };
 
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
 
         Ok(write)
     }
@@ -1221,108 +1154,33 @@ impl<'a, A: Signer, S: Signer, C: Cipher>
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
-        let mut write = if let Some(existing_write) = &self.existing_write {
-            existing_write.clone()
-        } else {
-            let mut write = Write {
-                descriptor: WriteDescriptor {
-                    base: Descriptor {
-                        interface: Interface::Records,
-                        method: Method::Write,
-                        message_timestamp: self.message_timestamp,
-                    },
-                    date_created: self.date_created.unwrap_or_else(Utc::now),
-                    recipient: self.recipient,
-                    ..WriteDescriptor::default()
-                },
-                ..Write::default()
-            };
+        let encryption_input = self.encryption_input.clone();
+        let attesters = self.attesters.0;
+        let encrypter = self.encrypter.0;
+        let delegated_grant = self.delegated_grant.clone();
+        let permission_grant_id = self.permission_grant_id.clone();
+        let protocol_role = self.protocol_role.clone();
+        let signer = self.signer.0;
 
-            // immutable properties
-            if let Some(write_protocol) = self.protocol {
-                let normalized = utils::clean_url(&write_protocol.protocol)?;
-                write.descriptor.protocol = Some(normalized);
-                write.descriptor.protocol_path = Some(write_protocol.protocol_path);
-            }
-            if let Some(s) = self.schema {
-                write.descriptor.schema = Some(utils::clean_url(&s)?);
-            }
-            // parent_id == first segment of  `parent_context_id`
-            if let Some(context_id) = self.parent_context_id {
-                let parent_id =
-                    context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-                write.descriptor.parent_id = parent_id;
-            }
-
-            write
-        };
-
-        write.descriptor.base.message_timestamp = self.message_timestamp;
-        write.descriptor.data_format = self.data_format;
-
-        // record_id
-        if let Some(record_id) = self.record_id {
-            write.record_id = record_id;
-        }
-        // tags
-        if let Some(tags) = self.tags {
-            write.descriptor.tags = Some(tags);
-        }
-
-        // published, date_published
-        if let Some(published) = self.published {
-            write.descriptor.published = Some(published);
-        }
-        if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
-            write.descriptor.date_published =
-                Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
-        }
-
-        match self.data {
-            WriteData::Bytes(data) => {
-                // store data in `encoded_data` if data is small enough
-                // otherwise, convert to data stream
-                // if data.len() <= data::MAX_ENCODED_SIZE {
-                //     write.descriptor.data_cid = cid::from_value(&data)?;
-                //     write.descriptor.data_size = data.len();
-                //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
-                // } else {
-                let stream = DataStream::from(data);
-                let (data_cid, data_size) = stream.compute_cid()?;
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-                write.data_stream = Some(stream);
-                // }
-            }
-            WriteData::Reader(reader) => {
-                let (data_cid, data_size) = reader.compute_cid()?;
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-                write.data_stream = Some(reader);
-            }
-            WriteData::Cid { data_cid, data_size } => {
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-            }
-        };
+        let mut write = self.to_write()?;
 
         let payload = Payload {
             descriptor_cid: cid::from_value(&write.descriptor)?,
         };
 
-        let Some(attester) = self.attesters.0.first() else {
+        let Some(attester) = attesters.first() else {
             return Err(unexpected!("attesters is empty"));
         };
         let attestation = JwsBuilder::new().payload(payload).build(*attester).await?;
         write.attestation = Some(attestation);
 
         write.authorization = Authorization {
-            author_delegated_grant: self.delegated_grant,
+            author_delegated_grant: delegated_grant,
             ..Authorization::default()
         };
 
-        write.encrypt(&self.encryption_input.unwrap_or_default(), self.encrypter.0)?;
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        write.encrypt(&encryption_input.unwrap_or_default(), encrypter)?;
+        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
 
         Ok(write)
     }
