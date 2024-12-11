@@ -6,7 +6,7 @@ use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{QueryBuilder, RecordsFilter, Sort, WriteBuilder, WriteData};
+use vercre_dwn::records::{QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData};
 use vercre_dwn::{Error, endpoint};
 
 // Should return a status of BadRequest (400) when querying for unpublished records
@@ -49,7 +49,7 @@ async fn return_values() {
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    let write = WriteBuilder::new()
+    let write = Write::build()
         .data(WriteData::Reader(stream.clone()))
         .data_format("awesome_data_format")
         .attest(&[&bob_keyring])

@@ -691,8 +691,8 @@ async fn protocol_grant() {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
         })
-        .sign(&carol_keyring)
         .permission_grant_id(&carol_grant.record_id)
+        .sign(&carol_keyring)
         .build()
         .await
         .expect("should create write");
