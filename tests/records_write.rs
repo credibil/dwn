@@ -23,7 +23,7 @@ async fn overwrite_older() {
 
     let initial_write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -38,7 +38,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let read = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(record_id))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create read");
@@ -58,7 +58,7 @@ async fn overwrite_older() {
 
     let write = WriteBuilder::from(initial_write)
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -72,7 +72,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let read = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(record_id))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create read");

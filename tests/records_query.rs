@@ -18,7 +18,7 @@ async fn invalid_sort() {
 
     let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().published(false))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create query");
@@ -52,8 +52,8 @@ async fn return_values() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(stream.clone()))
         .data_format("awesome_data_format")
-        .attesters(&[&bob_keyring])
-        .signer(&alice_keyring)
+        .attest(&[&bob_keyring])
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -66,7 +66,7 @@ async fn return_values() {
     let filter = RecordsFilter::new().add_author(ALICE_DID).data_format("awesome_data_format");
     let query = QueryBuilder::new()
         .filter(filter)
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create query");
@@ -106,7 +106,7 @@ async fn find_matches() {
             builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
         }
 
-        let write = builder.signer(&alice_keyring).build().await.expect("should create write");
+        let write = builder.sign(&alice_keyring).build().await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
@@ -116,7 +116,7 @@ async fn find_matches() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_format("awesome_data_format"))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create query");
@@ -132,7 +132,7 @@ async fn find_matches() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_format("awesome_data_format").schema("schema_2"))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create query");
@@ -162,7 +162,7 @@ async fn encoded_data() {
             builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
         }
 
-        let write = builder.signer(&alice_keyring).build().await.expect("should create write");
+        let write = builder.sign(&alice_keyring).build().await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }

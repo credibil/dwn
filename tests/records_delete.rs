@@ -28,7 +28,7 @@ async fn delete_record() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -41,7 +41,7 @@ async fn delete_record() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should find write");
@@ -96,7 +96,7 @@ async fn delete_data() {
     // --------------------------------------------------
     let alice_write1 = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -109,7 +109,7 @@ async fn delete_data() {
     // --------------------------------------------------
     let alice_write2 = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -122,7 +122,7 @@ async fn delete_data() {
     // --------------------------------------------------
     let bob_write1 = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&bob_keyring)
+        .sign(&bob_keyring)
         .build()
         .await
         .expect("should create write");
@@ -135,7 +135,7 @@ async fn delete_data() {
     // --------------------------------------------------
     let bob_write2 = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&bob_keyring)
+        .sign(&bob_keyring)
         .build()
         .await
         .expect("should create write");
@@ -245,7 +245,7 @@ async fn newer_version() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -259,7 +259,7 @@ async fn newer_version() {
 
     let write = WriteBuilder::from(write.clone())
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -299,7 +299,7 @@ async fn rewrite_data() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -323,7 +323,7 @@ async fn rewrite_data() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -365,7 +365,7 @@ async fn anyone_delete() {
             protocol: definition.protocol,
             protocol_path: "doc".to_string(),
         })
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -421,7 +421,7 @@ async fn ancestor_recipient() {
             protocol: definition.protocol.clone(),
             protocol_path: "post".to_string(),
         })
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -440,7 +440,7 @@ async fn ancestor_recipient() {
             protocol_path: "post/tag".to_string(),
         })
         .parent_context_id(chat.context_id.unwrap())
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -511,7 +511,7 @@ async fn direct_recipient() {
             protocol: definition.protocol.clone(),
             protocol_path: "post".to_string(),
         })
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -580,7 +580,7 @@ async fn ancestor_author() {
             protocol: definition.protocol.clone(),
             protocol_path: "post".to_string(),
         })
-        .signer(&bob_keyring)
+        .sign(&bob_keyring)
         .build()
         .await
         .expect("should create write");
@@ -599,7 +599,7 @@ async fn ancestor_author() {
             protocol_path: "post/comment".to_string(),
         })
         .parent_context_id(post.context_id.unwrap())
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -670,7 +670,7 @@ async fn context_role() {
             protocol: definition.protocol.clone(),
             protocol_path: "thread".to_string(),
         })
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -692,7 +692,7 @@ async fn context_role() {
             protocol_path: "thread/admin".to_string(),
         })
         .parent_context_id(&thread_context_id)
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -713,7 +713,7 @@ async fn context_role() {
             protocol_path: "thread/chat".to_string(),
         })
         .parent_context_id(&thread_context_id)
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -785,7 +785,7 @@ async fn root_role() {
             protocol: definition.protocol.clone(),
             protocol_path: "admin".to_string(),
         })
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -805,7 +805,7 @@ async fn root_role() {
             protocol: definition.protocol.clone(),
             protocol_path: "chat".to_string(),
         })
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -855,7 +855,7 @@ async fn forbidden() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -939,7 +939,7 @@ async fn index_additional() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .schema("http://test_schema")
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -992,7 +992,7 @@ async fn log_delete() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -1039,7 +1039,7 @@ async fn delete_updates() {
 
     let write1 = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -1049,7 +1049,7 @@ async fn delete_updates() {
 
     let write2 = WriteBuilder::from(write1.clone())
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");

@@ -268,7 +268,7 @@ impl<S> QueryBuilder<NoFilter, S> {
 impl<'a, F> QueryBuilder<F, NoSigner> {
     /// Sets the filter to use when querying.
     #[must_use]
-    pub fn signer<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, SomeSigner<'a, S>> {
+    pub fn sign<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, SomeSigner<'a, S>> {
         QueryBuilder {
             signer: SomeSigner(signer),
 

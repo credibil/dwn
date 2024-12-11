@@ -24,7 +24,7 @@ use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider}
 use crate::records::DataStream;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsQuery};
-// use crate::typestate::{NoSigner, SomeSigner};
+// use crate::typestate::{NoSigner, ASigner};
 use crate::{
     Descriptor, Error, Interface, Method, Range, Result, data, forbidden, unexpected, utils,
 };
@@ -796,7 +796,7 @@ pub struct Encrypter<'a, C: Cipher>(pub &'a C);
 pub struct NoSigner;
 
 /// Typestate Signer type for builders wher Signer is set.
-pub struct SomeSigner<'a, S: Signer>(pub &'a S);
+pub struct ASigner<'a, S: Signer>(pub &'a S);
 
 impl WriteBuilder<NoAttester, NoEncrypter, NoSigner> {
     /// Returns a new [`WriteBuilder`]
@@ -1020,9 +1020,7 @@ impl<A, E, S> WriteBuilder<A, E, S> {
 impl<'a, E, S> WriteBuilder<NoAttester, E, S> {
     /// Specify the attesters for the record.
     #[must_use]
-    pub fn attesters<A: Signer>(
-        self, attesters: &'a [&'a A],
-    ) -> WriteBuilder<Attesters<'a, A>, E, S> {
+    pub fn attest<A: Signer>(self, attesters: &'a [&'a A]) -> WriteBuilder<Attesters<'a, A>, E, S> {
         WriteBuilder {
             attesters: Attesters(attesters),
             message_timestamp: self.message_timestamp,
@@ -1051,7 +1049,7 @@ impl<'a, E, S> WriteBuilder<NoAttester, E, S> {
 impl<'a, A, S> WriteBuilder<A, NoEncrypter, S> {
     /// Specify the encrypter for the record.
     #[must_use]
-    pub fn encrypter(
+    pub fn encrypt(
         self, encrypter: &'a impl Cipher,
     ) -> WriteBuilder<A, Encrypter<'a, impl Cipher>, S> {
         WriteBuilder {
@@ -1082,11 +1080,9 @@ impl<'a, A, S> WriteBuilder<A, NoEncrypter, S> {
 impl<'a, A, E> WriteBuilder<A, E, NoSigner> {
     /// Specify the signer for the record.
     #[must_use]
-    pub fn signer(
-        self, signer: &'a impl Signer,
-    ) -> WriteBuilder<A, E, SomeSigner<'a, impl Signer>> {
+    pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<A, E, ASigner<'a, impl Signer>> {
         WriteBuilder {
-            signer: SomeSigner(signer),
+            signer: ASigner(signer),
 
             message_timestamp: self.message_timestamp,
             recipient: self.recipient,
@@ -1111,7 +1107,7 @@ impl<'a, A, E> WriteBuilder<A, E, NoSigner> {
     }
 }
 
-impl<A, E, S: Signer> WriteBuilder<A, E, SomeSigner<'_, S>> {
+impl<A, E, S: Signer> WriteBuilder<A, E, ASigner<'_, S>> {
     /// Specify a protocol role for the record.
     #[must_use]
     pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
@@ -1134,7 +1130,7 @@ impl<A, E, S: Signer> WriteBuilder<A, E, SomeSigner<'_, S>> {
     }
 }
 
-impl<S: Signer> WriteBuilder<NoAttester, NoEncrypter, SomeSigner<'_, S>> {
+impl<S: Signer> WriteBuilder<NoAttester, NoEncrypter, ASigner<'_, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1151,7 +1147,7 @@ impl<S: Signer> WriteBuilder<NoAttester, NoEncrypter, SomeSigner<'_, S>> {
     }
 }
 
-impl<'a, A: Signer, S: Signer> WriteBuilder<Attesters<'a, A>, NoEncrypter, SomeSigner<'a, S>> {
+impl<'a, A: Signer, S: Signer> WriteBuilder<Attesters<'a, A>, NoEncrypter, ASigner<'a, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1187,7 +1183,7 @@ impl<'a, A: Signer, S: Signer> WriteBuilder<Attesters<'a, A>, NoEncrypter, SomeS
 }
 
 impl<'a, A: Signer, S: Signer, C: Cipher>
-    WriteBuilder<Attesters<'a, A>, Encrypter<'a, C>, SomeSigner<'a, S>>
+    WriteBuilder<Attesters<'a, A>, Encrypter<'a, C>, ASigner<'a, S>>
 {
     /// Build the `Write` message.
     ///

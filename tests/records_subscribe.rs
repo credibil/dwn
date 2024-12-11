@@ -36,7 +36,7 @@ async fn owner_events() {
 
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(data.to_vec())))
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
@@ -52,7 +52,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .signer(&alice_keyring)
+        .sign(&alice_keyring)
         .build()
         .await
         .expect("should create query");
