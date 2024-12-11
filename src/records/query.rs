@@ -14,6 +14,7 @@ use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
+use crate::typestate::{NoSigner, SomeSigner};
 use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized, unexpected};
 
 /// Process `Query` message.
@@ -219,9 +220,13 @@ pub struct QueryBuilder<F, S> {
     delegated_grant: Option<DelegatedGrant>,
 }
 
+impl Default for QueryBuilder<NoFilter, NoSigner> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct NoFilter;
-pub struct NoSigner;
-pub struct SomeSigner<'a, S: Signer>(&'a S);
 
 impl QueryBuilder<NoFilter, NoSigner> {
     /// Returns a new [`QueryBuilder`]
@@ -230,9 +235,9 @@ impl QueryBuilder<NoFilter, NoSigner> {
         Self {
             message_timestamp: Utc::now(),
             filter: NoFilter,
+            signer: NoSigner,
             date_sort: None,
             pagination: None,
-            signer: NoSigner,
             protocol_role: None,
             permission_grant_id: None,
             delegated_grant: None,
@@ -302,7 +307,7 @@ impl<F, S: Signer> QueryBuilder<F, SomeSigner<'_, S>> {
     }
 }
 
-// Properties that can be set regardless of Filter or Signer state.
+// Optional properties that can be set regardless of state.
 impl<F, S> QueryBuilder<F, S> {
     /// Determines which date to use when sorting query results.
     #[must_use]
