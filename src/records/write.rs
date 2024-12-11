@@ -709,6 +709,52 @@ pub struct EncryptionKeyInput {
     pub algorithm: EncryptionAlgorithm,
 }
 
+/// Encryption output.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptionProperty {
+    algorithm: EncryptionAlgorithm,
+    initialization_vector: String,
+    key_encryption: Vec<EncryptedKey>,
+}
+
+/// Encrypted key.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names)]
+pub struct EncryptedKey {
+    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
+    /// of the root public key used to encrypt the symmetric encryption key.
+    root_key_id: String,
+
+    /// The actual derived public key.
+    derived_public_key: PublicKeyJwk,
+    derivation_scheme: DerivationScheme,
+    algorithm: EncryptionAlgorithm,
+    initialization_vector: String,
+    ephemeral_public_key: PublicKeyJwk,
+    message_authentication_code: String,
+    encrypted_key: String,
+}
+
+/// Key derivation schemes.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DerivationScheme {
+    /// Key derivation using the `dataFormat` value for Flat-space records.
+    #[default]
+    DataFormats,
+
+    /// Key derivation using protocol context.
+    ProtocolContext,
+
+    /// Key derivation using the protocol path.
+    ProtocolPath,
+
+    /// Key derivation using the `schema` value for Flat-space records.
+    Schemas,
+}
+
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Payload {
@@ -740,7 +786,7 @@ pub struct WriteBuilder<A, E, S> {
     encrypter: E,
 }
 
-pub struct NoAttesters;
+pub struct NoAttester;
 pub struct Attesters<'a, S: Signer>(pub &'a [&'a S]);
 
 pub struct NoEncrypter;
@@ -752,7 +798,7 @@ pub struct NoSigner;
 /// Typestate Signer type for builders wher Signer is set.
 pub struct SomeSigner<'a, S: Signer>(pub &'a S);
 
-impl WriteBuilder<NoAttesters, NoEncrypter, NoSigner> {
+impl WriteBuilder<NoAttester, NoEncrypter, NoSigner> {
     /// Returns a new [`WriteBuilder`]
     #[must_use]
     pub fn new() -> Self {
@@ -764,7 +810,7 @@ impl WriteBuilder<NoAttesters, NoEncrypter, NoSigner> {
             data: WriteData::default(),
             data_format: "application/json".to_string(),
             signer: NoSigner,
-            attesters: NoAttesters,
+            attesters: NoAttester,
             encrypter: NoEncrypter,
             recipient: None,
             protocol: None,
@@ -791,7 +837,7 @@ impl WriteBuilder<NoAttesters, NoEncrypter, NoSigner> {
     }
 }
 
-impl Default for WriteBuilder<NoAttesters, NoEncrypter, NoSigner> {
+impl Default for WriteBuilder<NoAttester, NoEncrypter, NoSigner> {
     fn default() -> Self {
         Self::new()
     }
@@ -962,12 +1008,6 @@ impl<A, E, S> WriteBuilder<A, E, S> {
             }
         };
 
-        // let payload = Payload {
-        //     descriptor_cid: cid::from_value(&write.descriptor)?,
-        // };
-        // let attestation = JwsBuilder::new().payload(payload).build(self.attesters[0]).await?;
-        // write.attestation = Some(attestation);
-
         write.authorization = Authorization {
             author_delegated_grant: self.delegated_grant,
             ..Authorization::default()
@@ -977,7 +1017,7 @@ impl<A, E, S> WriteBuilder<A, E, S> {
     }
 }
 
-impl<'a, E, S> WriteBuilder<NoAttesters, E, S> {
+impl<'a, E, S> WriteBuilder<NoAttester, E, S> {
     /// Specify the attesters for the record.
     #[must_use]
     pub fn attesters<A: Signer>(
@@ -1094,7 +1134,7 @@ impl<A, E, S: Signer> WriteBuilder<A, E, SomeSigner<'_, S>> {
     }
 }
 
-impl<S: Signer> WriteBuilder<NoAttesters, NoEncrypter, SomeSigner<'_, S>> {
+impl<S: Signer> WriteBuilder<NoAttester, NoEncrypter, SomeSigner<'_, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1184,52 +1224,6 @@ impl<'a, A: Signer, S: Signer, C: Cipher>
 
         Ok(write)
     }
-}
-
-/// Encryption output.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EncryptionProperty {
-    algorithm: EncryptionAlgorithm,
-    initialization_vector: String,
-    key_encryption: Vec<EncryptedKey>,
-}
-
-/// Encrypted key.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(clippy::struct_field_names)]
-pub struct EncryptedKey {
-    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
-    /// of the root public key used to encrypt the symmetric encryption key.
-    root_key_id: String,
-
-    /// The actual derived public key.
-    derived_public_key: PublicKeyJwk,
-    derivation_scheme: DerivationScheme,
-    algorithm: EncryptionAlgorithm,
-    initialization_vector: String,
-    ephemeral_public_key: PublicKeyJwk,
-    message_authentication_code: String,
-    encrypted_key: String,
-}
-
-/// Key derivation schemes.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum DerivationScheme {
-    /// Key derivation using the `dataFormat` value for Flat-space records.
-    #[default]
-    DataFormats,
-
-    /// Key derivation using protocol context.
-    ProtocolContext,
-
-    /// Key derivation using the protocol path.
-    ProtocolPath,
-
-    /// Key derivation using the `schema` value for Flat-space records.
-    Schemas,
 }
 
 // Computes the deterministic Entry ID of the message.
