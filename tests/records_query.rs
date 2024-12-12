@@ -6,8 +6,11 @@ use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData};
+use vercre_dwn::records::{
+    QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData, WriteProtocol,
+};
 use vercre_dwn::{Error, authorization, endpoint};
 
 // Should return a status of BadRequest (400) when querying for unpublished records
@@ -349,3 +352,139 @@ async fn attester_filter() {
     assert_eq!(reply.status.code, StatusCode::OK);
     assert!(reply.body.is_none());
 }
+
+// Should be able to query by author.
+#[tokio::test]
+async fn author_filter() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice and Bob write a record each.
+    // --------------------------------------------------
+    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let alice_write = Write::build()
+        .data(WriteData::Reader(stream.clone()))
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let bob_write = Write::build()
+        .data(WriteData::Reader(stream.clone()))
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice queries for all records within the protocol.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .schema("post")
+                .data_format("application/json"),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Alice queries for Bob's records within the protocol.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .add_author(BOB_DID)
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .schema("post")
+                .data_format("application/json"),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, bob_write.record_id);
+
+    // --------------------------------------------------
+    // Alice queries both author's records.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .add_author(ALICE_DID)
+                .add_author(BOB_DID)
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .schema("post")
+                .data_format("application/json"),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+}
+
+// // Should be able to query by recipient.
+// #[tokio::test]
+// async fn recipient_filter() {
+//     let provider = ProviderImpl::new().await.expect("should create provider");
+//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+//     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+// }

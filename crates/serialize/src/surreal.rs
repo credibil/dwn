@@ -152,7 +152,7 @@ impl QuerySerializer for RecordsQuery {
         }
 
         if let Some(recipient) = &self.recipient {
-            sql.push_str(&quota("descriptor.recipient", recipient));
+            sql.push_str(&one_or_many("descriptor.recipient", recipient));
         }
 
         if let Some(date_created) = &self.date_created {
@@ -336,31 +336,13 @@ fn one_or_many(field: &str, clause: &Quota<String>) -> String {
         }
         Quota::Many(values) => {
             let mut sql = String::new();
-            sql.push_str(&format!(" AND {field} IN ("));
+            sql.push_str(&format!(" AND (1=1"));
             for value in values {
-                sql.push_str(&format!("'{value}',"));
+                sql.push_str(&format!(" OR {field}='{value}'"));
             }
-            sql.pop(); // remove trailing comma
             sql.push_str(")");
             sql
         }
     }
 }
 
-fn quota(field: &str, clause: &Quota<String>) -> String {
-    match clause {
-        Quota::One(value) => {
-            format!(" AND {field}='{value}'")
-        }
-        Quota::Many(values) => {
-            let mut sql = String::new();
-            sql.push_str(&format!(" AND {field} IN ("));
-            for value in values {
-                sql.push_str(&format!("'{value}',"));
-            }
-            sql.pop(); // remove trailing comma
-            sql.push_str(")");
-            sql
-        }
-    }
-}
