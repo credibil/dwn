@@ -1097,7 +1097,7 @@ impl<'a, O, A, E> WriteBuilder<O, A, E, Unsigned> {
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
 impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
-    fn into_write(self) -> Result<Write> {
+    fn to_write(&self) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
             write.clone()
         } else {
@@ -1109,23 +1109,23 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
                         message_timestamp: self.message_timestamp,
                     },
                     date_created: self.date_created,
-                    recipient: self.recipient,
+                    recipient: self.recipient.clone(),
                     ..WriteDescriptor::default()
                 },
                 ..Write::default()
             };
 
             // immutable properties
-            if let Some(write_protocol) = self.protocol {
+            if let Some(write_protocol) = self.protocol.clone() {
                 let normalized = utils::clean_url(&write_protocol.protocol)?;
                 write.descriptor.protocol = Some(normalized);
                 write.descriptor.protocol_path = Some(write_protocol.protocol_path);
             }
-            if let Some(s) = self.schema {
+            if let Some(s) = self.schema.clone() {
                 write.descriptor.schema = Some(utils::clean_url(&s)?);
             }
             // parent_id == first segment of  `parent_context_id`
-            if let Some(context_id) = self.parent_context_id {
+            if let Some(context_id) = self.parent_context_id.clone() {
                 let parent_id =
                     context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
                 write.descriptor.parent_id = parent_id;
@@ -1135,14 +1135,14 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
         };
 
         write.descriptor.base.message_timestamp = self.message_timestamp;
-        write.descriptor.data_format = self.data_format;
+        write.descriptor.data_format = self.data_format.clone();
 
         // record_id
-        if let Some(record_id) = self.record_id {
+        if let Some(record_id) = self.record_id.clone() {
             write.record_id = record_id;
         }
         // tags
-        if let Some(tags) = self.tags {
+        if let Some(tags) = self.tags.clone() {
             write.descriptor.tags = Some(tags);
         }
 
@@ -1155,7 +1155,7 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
                 Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
         }
 
-        match self.data {
+        match &self.data {
             WriteData::Bytes(data) => {
                 // store data in `encoded_data` if data is small enough
                 // otherwise, convert to data stream
@@ -1164,7 +1164,7 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
                 //     write.descriptor.data_size = data.len();
                 //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
                 // } else {
-                let stream = DataStream::from(data);
+                let stream = DataStream::from(data.clone());
                 let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
@@ -1175,20 +1175,32 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
                 let (data_cid, data_size) = reader.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
-                write.data_stream = Some(reader);
+                write.data_stream = Some(reader.clone());
             }
             WriteData::Cid { data_cid, data_size } => {
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
+                write.descriptor.data_cid = data_cid.clone();
+                write.descriptor.data_size = data_size.clone();
             }
         };
 
         write.authorization = Authorization {
-            author_delegated_grant: self.delegated_grant,
+            author_delegated_grant: self.delegated_grant.clone(),
             ..Authorization::default()
         };
 
         Ok(write)
+    }
+}
+
+impl<'a, O, A: Signer, E, S: Signer> WriteBuilder<O, Attested<'a, A>, E, Signed<'_, S>> {
+    async fn attestation(&self, descriptor: &WriteDescriptor) -> Result<Jws> {
+        let payload = Payload {
+            descriptor_cid: cid::from_value(descriptor)?,
+        };
+        let Some(attester) = self.attesters.0.first() else {
+            return Err(unexpected!("attesters is empty"));
+        };
+        Ok(JwsBuilder::new().payload(payload).build(*attester).await?)
     }
 }
 
@@ -1199,13 +1211,8 @@ impl<O, S: Signer> WriteBuilder<O, Unattested, Unencrypted, Signed<'_, S>> {
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
-        let permission_grant_id = self.permission_grant_id.clone();
-        let protocol_role = self.protocol_role.clone();
-        let signer = self.signer.0;
-
-        let mut write = self.into_write()?;
-        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
-
+        let mut write = self.to_write()?;
+        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
         Ok(write)
     }
 }
@@ -1217,31 +1224,9 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Unencrypted, 
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
-        let attesters = self.attesters.0;
-        let delegated_grant = self.delegated_grant.clone();
-        let permission_grant_id = self.permission_grant_id.clone();
-        let protocol_role = self.protocol_role.clone();
-        let signer = self.signer.0;
-
-        let mut write = self.into_write()?;
-
-        let payload = Payload {
-            descriptor_cid: cid::from_value(&write.descriptor)?,
-        };
-
-        let Some(attester) = attesters.first() else {
-            return Err(unexpected!("attesters is empty"));
-        };
-        let attestation = JwsBuilder::new().payload(payload).build(*attester).await?;
-        write.attestation = Some(attestation);
-
-        write.authorization = Authorization {
-            author_delegated_grant: delegated_grant,
-            ..Authorization::default()
-        };
-
-        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
-
+        let mut write = self.to_write()?;
+        write.attestation = Some(self.attestation(&write.descriptor).await?);
+        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
         Ok(write)
     }
 }
@@ -1253,23 +1238,9 @@ impl<'a, O, E: Cipher, S: Signer> WriteBuilder<O, Unattested, Encrypted<'a, E>, 
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
-        let encryption_input = self.encryption_input.clone();
-        let encrypter = self.encrypter.0;
-        let delegated_grant = self.delegated_grant.clone();
-        let permission_grant_id = self.permission_grant_id.clone();
-        let protocol_role = self.protocol_role.clone();
-        let signer = self.signer.0;
-
-        let mut write = self.into_write()?;
-
-        write.authorization = Authorization {
-            author_delegated_grant: delegated_grant,
-            ..Authorization::default()
-        };
-
-        write.encrypt(&encryption_input.unwrap_or_default(), encrypter)?;
-        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
-
+        let mut write = self.to_write()?;
+        write.encrypt(&self.encryption_input.unwrap_or_default(), self.encrypter.0)?;
+        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
         Ok(write)
     }
 }
@@ -1283,34 +1254,10 @@ impl<'a, O, A: Signer, E: Cipher, S: Signer>
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
-        let encryption_input = self.encryption_input.clone();
-        let attesters = self.attesters.0;
-        let encrypter = self.encrypter.0;
-        let delegated_grant = self.delegated_grant.clone();
-        let permission_grant_id = self.permission_grant_id.clone();
-        let protocol_role = self.protocol_role.clone();
-        let signer = self.signer.0;
-
-        let mut write = self.into_write()?;
-
-        let payload = Payload {
-            descriptor_cid: cid::from_value(&write.descriptor)?,
-        };
-
-        let Some(attester) = attesters.first() else {
-            return Err(unexpected!("attesters is empty"));
-        };
-        let attestation = JwsBuilder::new().payload(payload).build(*attester).await?;
-        write.attestation = Some(attestation);
-
-        write.authorization = Authorization {
-            author_delegated_grant: delegated_grant,
-            ..Authorization::default()
-        };
-
-        write.encrypt(&encryption_input.unwrap_or_default(), encrypter)?;
-        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
-
+        let mut write = self.to_write()?;
+        write.attestation = Some(self.attestation(&write.descriptor).await?);
+        write.encrypt(&self.encryption_input.unwrap_or_default(), self.encrypter.0)?;
+        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
         Ok(write)
     }
 }
