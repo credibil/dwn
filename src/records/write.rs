@@ -1135,7 +1135,7 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
         };
 
         write.descriptor.base.message_timestamp = self.message_timestamp;
-        write.descriptor.data_format = self.data_format.clone();
+        write.descriptor.data_format.clone_from(&self.data_format);
 
         // record_id
         if let Some(record_id) = self.record_id.clone() {
@@ -1178,8 +1178,8 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
                 write.data_stream = Some(reader.clone());
             }
             WriteData::Cid { data_cid, data_size } => {
-                write.descriptor.data_cid = data_cid.clone();
-                write.descriptor.data_size = data_size.clone();
+                write.descriptor.data_cid.clone_from(data_cid);
+                write.descriptor.data_size = *data_size;
             }
         };
 
@@ -1192,8 +1192,8 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
     }
 }
 
-impl<'a, O, A: Signer, E, S: Signer> WriteBuilder<O, Attested<'a, A>, E, Signed<'_, S>> {
-    async fn attestation(&self, descriptor: &WriteDescriptor) -> Result<Jws> {
+impl<O, A: Signer, E, S: Signer> WriteBuilder<O, Attested<'_, A>, E, Signed<'_, S>> {
+    async fn attestation(self, descriptor: &WriteDescriptor) -> Result<Jws> {
         let payload = Payload {
             descriptor_cid: cid::from_value(descriptor)?,
         };
@@ -1224,9 +1224,13 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Unencrypted, 
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
+        let signer = self.signer.0;
+        let protocol_role = self.protocol_role.clone();
+        let permission_grant_id = self.permission_grant_id.clone();
+
         let mut write = self.to_write()?;
         write.attestation = Some(self.attestation(&write.descriptor).await?);
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
         Ok(write)
     }
 }
@@ -1239,6 +1243,8 @@ impl<'a, O, E: Cipher, S: Signer> WriteBuilder<O, Unattested, Encrypted<'a, E>, 
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
         let mut write = self.to_write()?;
+
+        // FIXME: move these methods away from Write to  WriteBuilder
         write.encrypt(&self.encryption_input.unwrap_or_default(), self.encrypter.0)?;
         write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
         Ok(write)
@@ -1254,10 +1260,16 @@ impl<'a, O, A: Signer, E: Cipher, S: Signer>
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
+        let signer = self.signer.0;
+        let protocol_role = self.protocol_role.clone();
+        let permission_grant_id = self.permission_grant_id.clone();
+        let encrypter = self.encrypter.0;
+        let encryption_input = self.encryption_input.clone();
+
         let mut write = self.to_write()?;
         write.attestation = Some(self.attestation(&write.descriptor).await?);
-        write.encrypt(&self.encryption_input.unwrap_or_default(), self.encrypter.0)?;
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        write.encrypt(&encryption_input.unwrap_or_default(), encrypter)?;
+        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
         Ok(write)
     }
 }
