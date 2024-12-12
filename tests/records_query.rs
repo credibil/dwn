@@ -222,3 +222,46 @@ async fn no_encoded_data() {
     let entry = &entries[0];
     assert!(entry.write.encoded_data.is_none());
 }
+
+// Should return `initial_write` when RecordsWrite is not initial write.
+#[tokio::test]
+async fn initial_write() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes 2 records.
+    // --------------------------------------------------
+    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let write = Write::build()
+        .data(WriteData::Reader(stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // update existing record
+    let write =
+        WriteBuilder::from(write).sign(&alice_keyring).build().await.expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice queries for record, expecting to get `initial_write` in reply.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    let entry = &entries[0];
+    assert!(entry.initial_write.is_some());
+}

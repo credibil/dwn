@@ -68,17 +68,25 @@ pub async fn handle(
     for record in records {
         let write: Write = record.try_into()?;
 
-        let initial_write = if write.is_initial()? {
-            let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true);
-            let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
-            let mut initial_write: Write = (&records[0]).try_into()?;
-            initial_write.encoded_data = None;
-            Some(initial_write)
-        } else {
-            None
-        };
+        // short-circuit when the record is an initial write
+        if write.is_initial()? {
+            entries.push(QueryReplyEntry {
+                write,
+                initial_write: None,
+            });
+            continue;
+        }
 
-        entries.push(QueryReplyEntry { write, initial_write });
+        // get the initial write for the returned `RecordsWrite`
+        let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true);
+        let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
+        let mut initial_write: Write = (&records[0]).try_into()?;
+        initial_write.encoded_data = None;
+
+        entries.push(QueryReplyEntry {
+            write,
+            initial_write: Some(initial_write),
+        });
     }
 
     Ok(Reply {

@@ -328,7 +328,7 @@ impl Write {
             (signer.verification_method().await?.split('#').next().map(ToString::to_string), None)
         };
 
-        // compute `record_id` if not given at construction time
+        // compute `record_id` when not provided
         if self.record_id.is_empty() {
             self.record_id =
                 entry_id(self.descriptor.clone(), author_did.clone().unwrap_or_default())?;
