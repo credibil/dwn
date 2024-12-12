@@ -1,6 +1,6 @@
 //! Messages Subscribe
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
+use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
@@ -8,7 +8,7 @@ use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData};
-use vercre_dwn::{Error, endpoint};
+use vercre_dwn::{Error, authorization, endpoint};
 
 // Should return a status of BadRequest (400) when querying for unpublished records
 // with sort date set to `Sort::Publishedxxx`.
@@ -264,4 +264,88 @@ async fn initial_write() {
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
     assert!(entry.initial_write.is_some());
+}
+
+// Should be able to query by attester.
+#[tokio::test]
+async fn attester_filter() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice writes 2 records, 1 attested by her and the other by Bob.
+    // --------------------------------------------------
+    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let write = Write::build()
+        .data(WriteData::Reader(stream.clone()))
+        .attest(&[&alice_keyring])
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write = Write::build()
+        .data(WriteData::Reader(stream.clone()))
+        .schema("schema_2")
+        .attest(&[&bob_keyring])
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Query by attester.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().attester(ALICE_DID))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    let entry = &entries[0];
+
+    let attester = authorization::signer_did(&entry.write.attestation.as_ref().unwrap()).unwrap();
+    assert_eq!(attester, ALICE_DID);
+
+    // --------------------------------------------------
+    // Query by another attester + schema.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().attester(BOB_DID).schema("schema_2"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    let entry = &entries[0];
+
+    let attester = authorization::signer_did(&entry.write.attestation.as_ref().unwrap()).unwrap();
+    assert_eq!(attester, BOB_DID);
+
+    // --------------------------------------------------
+    // Check that 3rd attester will return no results.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().attester(CAROL_DID))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
 }
