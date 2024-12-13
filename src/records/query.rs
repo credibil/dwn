@@ -14,7 +14,7 @@ use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorized, unexpected};
+use crate::{Descriptor, Interface, Method, Result, forbidden, unauthorized, unexpected};
 
 /// Process `Query` message.
 ///
@@ -23,39 +23,42 @@ use crate::{Descriptor, Interface, Method, Quota, Result, forbidden, unauthorize
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
-    let mut filter = query.descriptor.filter.clone();
+    let mut records_query = RecordsQuery::from(query.clone());
 
     // authorize messages querying for private records
-    if !filter.published.unwrap_or_default() {
+    if !query.descriptor.filter.published.unwrap_or_default() {
         query.authorize(owner, provider).await?;
         query.validate()?;
 
+        // add non-owner filters
         let Some(authzn) = &query.authorization else {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
-
-        // non-owner queries
         if author != owner {
-            // when query.author is in filter.author || filter.author is None
-            filter.author = Some(Quota::One(author.clone()));
+            // recreate filters to include query author as record author or recipient
+            records_query.filters = vec![];
 
-            // when query.recipient is in filter.recipient || filter.recipient is None
-            filter.recipient = Some(Quota::One(author));
+            // 'build_unpublished_records_BY_query_author_filter'
+            let filter = query.descriptor.filter.clone();
+            records_query = records_query.add_filter(filter.add_author(&author).published(false));
 
-            // when filter.protocol_role
-            // let Some(authzn) = &query.authorization else {
-            //     return Err(forbidden!("missing authorization"));
-            // };
-            // if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
-            //     // nothing to do
-            // }
+            // 'build_unpublished_records_FOR_query_author_filter'
+            let filter = query.descriptor.filter.clone();
+            records_query =
+                records_query.add_filter(filter.add_recipient(&author).published(false));
+
+            // 'build_unpublished_protocol_authorized_filter'
+            // when authorized by a protocol role, author can query any unpublished record
+            if authzn.jws_payload()?.protocol_role.is_some() {
+                let filter = query.descriptor.filter.clone();
+                records_query = records_query.add_filter(filter.published(false));
+            }
         }
     }
 
     // get the latest active `RecordsWrite` records
-    let rq = RecordsQuery::from(query);
-    let (records, _) = MessageStore::query(provider, owner, &rq.into()).await?;
+    let (records, _) = MessageStore::query(provider, owner, &records_query.into()).await?;
 
     // short-circuit when no records found
     if records.is_empty() {
