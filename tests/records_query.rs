@@ -844,4 +844,18 @@ async fn unpublished_filter() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Alice unsuccessfully queries for unpublished records.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(false))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    assert!(reply.body.is_none());
 }
