@@ -800,33 +800,48 @@ async fn unpublished_filter() {
 
     assert!(reply.body.is_none());
 
-    // // --------------------------------------------------
-    // // Alice publishes the unpublished record.
-    // // --------------------------------------------------
-    // let published = WriteBuilder::from(unpublished)
-    //     .published(true)
-    //     .sign(&alice_keyring)
-    //     .build()
-    //     .await
-    //     .expect("should create write");
-    // let reply =
-    //     endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
-    // assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    // --------------------------------------------------
+    // Alice publishes the unpublished record.
+    // --------------------------------------------------
+    let published = WriteBuilder::from(unpublished)
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    // // --------------------------------------------------
-    // // Alice (owner) queries for published record.
-    // // --------------------------------------------------
-    // let query = QueryBuilder::new()
-    //     .filter(RecordsFilter::new().schema("post").published(true))
-    //     .sign(&alice_keyring)
-    //     .build()
-    //     .await
-    //     .expect("should create query");
-    // let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
-    // assert_eq!(reply.status.code, StatusCode::OK);
+    // --------------------------------------------------
+    // Bob queries without setting `published` filter.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post"))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
 
-    // let query_reply = reply.body.expect("should have reply");
-    // let entries = query_reply.entries.expect("should have entries");
-    // assert_eq!(entries.len(), 1);
-    // assert_eq!(entries[0].write.record_id, published.record_id);
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+
+   // --------------------------------------------------
+    // Bob queries using the `published` filter.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(true))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
 }

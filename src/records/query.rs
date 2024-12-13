@@ -25,30 +25,34 @@ pub async fn handle(
 ) -> Result<Reply<QueryReply>> {
     let mut records_query = RecordsQuery::from(query.clone());
 
-    // authorize messages querying for private records
+    // authorize query when filter is no explicitly set to `published`
     if !query.descriptor.filter.published.unwrap_or_default() {
         query.authorize(owner, provider).await?;
         query.validate()?;
 
-        // add non-owner filters
+        // when requestor (query message author) is not web node owner,
+        // recreate filters to include query author as record author or recipient
         let Some(authzn) = &query.authorization else {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
         if author != owner {
-            // recreate filters to include query author as record author or recipient
             records_query.filters = vec![];
 
-            // 'build_unpublished_records_BY_query_author_filter'
+            // when published is unset, set it to true
+            if query.descriptor.filter.published.is_none() {
+                records_query = records_query.add_filter(RecordsFilter::new().published(true));
+            }
+
+            // clone query filter and add author
             let filter = query.descriptor.filter.clone();
             records_query = records_query.add_filter(filter.add_author(&author).published(false));
 
-            // 'build_unpublished_records_FOR_query_author_filter'
+            // clone query filter and add author as recipient
             let filter = query.descriptor.filter.clone();
             records_query =
                 records_query.add_filter(filter.add_recipient(&author).published(false));
 
-            // 'build_unpublished_protocol_authorized_filter'
             // when authorized by a protocol role, author can query any unpublished record
             if authzn.jws_payload()?.protocol_role.is_some() {
                 let filter = query.descriptor.filter.clone();
