@@ -10,8 +10,8 @@ use crate::protocols::{
 };
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, Subscribe, Write, write};
-use crate::store::RecordsQuery;
-use crate::{Range, Result, forbidden};
+use crate::store::{RecordsFilter, RecordsQuery};
+use crate::{Result, forbidden};
 
 /// Protocol-based authorization.
 pub struct Protocol<'a> {
@@ -223,7 +223,7 @@ impl Protocol<'_> {
         }
 
         // build query to fetch the invoked role record
-        let mut query = RecordsQuery::new()
+        let mut filter = RecordsFilter::new()
             .protocol(self.protocol)
             .protocol_path(&protocol_role)
             .add_recipient(author);
@@ -239,11 +239,14 @@ impl Protocol<'_> {
             let parent_segments = context_id.split('/').collect::<Vec<&str>>();
             let parent = parent_segments[..role_segments].join("/");
 
-            query = query
-                .context_id(Range::new(Some(parent.clone()), Some(format!("{parent}\u{ffff}"))));
+            // FIXME: convert `context_id` to range inside `store` module
+            // filter = filter
+            //     .context_id(Range::new(Some(parent.clone()), Some(format!("{parent}\u{ffff}"))));
+            filter = filter.context_id(&parent);
         }
 
         // check the invoked role record exists
+        let query = RecordsQuery::new().add_filter(filter);
         let (records, _) = store.query(owner, &query.into()).await?;
         if records.is_empty() {
             return Err(forbidden!("unable to find records for role"));

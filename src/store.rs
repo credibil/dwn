@@ -2,7 +2,7 @@
 
 use std::ops::Deref;
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -11,7 +11,7 @@ pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, Sort, TagFilter};
-use crate::{Descriptor, Method, Quota, Range, Result, authorization, messages, protocols};
+use crate::{Descriptor, Method, Result, authorization, messages, protocols};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -207,36 +207,16 @@ impl From<protocols::Query> for ProtocolsQuery {
 /// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
 #[derive(Clone, Debug)]
 pub struct RecordsQuery {
-    /// Filter records by `method`.
+    /// Filter records using one or more filters OR'ed together.
+    pub filters: Vec<RecordsFilter>,
+
+    /// Method of to use when querying records. Defaults to `RecordsWrite`, but
+    /// can be set to `RecordsDelete` or None (for both).
     pub method: Option<Method>,
 
-    /// Filter records by `record_id`.
-    pub record_id: Option<String>,
-
-    /// Filter records by `parent_id`.
-    pub parent_id: Option<String>,
-
-    /// Filter records by `context_id`.
-    pub context_id: Option<Range<String>>,
-
-    /// Filter records by or more `recipient`s.
-    pub recipient: Option<Quota<String>>,
-
-    /// Filter records by `protocol`.
-    pub protocol: Option<String>,
-
-    /// Filter records by `protocol_path`.
-    pub protocol_path: Option<String>,
-
-    /// Filter records by `date_created`.
-    pub date_created: Option<Range<DateTime<Utc>>>,
-
-    /// Include records with the `archive` flag (initial write that has been
-    /// superseded).
+    /// Include records with the `archive` flag (i.e. include initial write for
+    /// updated records).
     pub include_archived: bool,
-
-    /// Filter records by `filter`.
-    pub filter: Option<RecordsFilter>,
 
     /// Sort options.
     pub sort: Option<Sort>,
@@ -251,14 +231,7 @@ impl Default for RecordsQuery {
             method: Some(Method::Write),
             include_archived: false,
             sort: Some(Sort::default()),
-            record_id: None,
-            parent_id: None,
-            context_id: None,
-            recipient: None,
-            protocol: None,
-            protocol_path: None,
-            date_created: None,
-            filter: None,
+            filters: vec![],
             pagination: None,
         }
     }
@@ -271,55 +244,8 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) fn record_id(mut self, record_id: impl Into<String>) -> Self {
-        self.record_id = Some(record_id.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn parent_id(mut self, parent_id: impl Into<String>) -> Self {
-        self.parent_id = Some(parent_id.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn context_id(mut self, context_id: Range<String>) -> Self {
-        self.context_id = Some(context_id);
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
-        match self.recipient {
-            Some(Quota::One(value)) => {
-                self.recipient = Some(Quota::Many(vec![value, recipient.into()]));
-            }
-            Some(Quota::Many(mut values)) => {
-                values.push(recipient.into());
-                self.recipient = Some(Quota::Many(values));
-            }
-            None => {
-                self.recipient = Some(Quota::One(recipient.into()));
-            }
-        }
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
-        self.protocol = Some(protocol.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn protocol_path(mut self, protocol_path: impl Into<String>) -> Self {
-        self.protocol_path = Some(protocol_path.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) const fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
-        self.date_created = Some(date_created);
+    pub(crate) fn add_filter(mut self, filter: RecordsFilter) -> Self {
+        self.filters.push(filter);
         self
     }
 
@@ -346,7 +272,7 @@ impl RecordsQuery {
 impl From<records::Query> for RecordsQuery {
     fn from(query: records::Query) -> Self {
         Self {
-            filter: Some(query.descriptor.filter),
+            filters: vec![query.descriptor.filter],
             sort: query.descriptor.date_sort,
             pagination: query.descriptor.pagination,
             ..Self::default()
@@ -357,7 +283,7 @@ impl From<records::Query> for RecordsQuery {
 impl From<records::Read> for RecordsQuery {
     fn from(read: records::Read) -> Self {
         Self {
-            filter: Some(read.descriptor.filter),
+            filters: vec![read.descriptor.filter],
             ..Self::default()
         }
     }

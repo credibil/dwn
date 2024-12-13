@@ -10,8 +10,8 @@ use crate::protocols::{
 };
 use crate::provider::MessageStore;
 use crate::records::Write;
-use crate::store::RecordsQuery;
-use crate::{Range, Result, forbidden, schema, utils};
+use crate::store::{RecordsFilter, RecordsQuery};
+use crate::{Result, forbidden, schema, utils};
 
 /// Verify the integrity of `RecordsWrite` messages using a protocol.
 pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
@@ -128,7 +128,8 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
         return Err(forbidden!("missing protocol"));
     };
 
-    let query = RecordsQuery::new().record_id(parent_id).protocol(protocol);
+    let query = RecordsQuery::new()
+        .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol));
     let (records, _) = store.query(owner, &query.into()).await?;
     if records.is_empty() {
         return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
@@ -173,7 +174,7 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
     };
 
     // if this is not the root record, add a prefix filter to the query
-    let mut query = RecordsQuery::new()
+    let mut filter = RecordsFilter::new()
         .protocol(protocol)
         .protocol_path(protocol_path)
         .add_recipient(recipient);
@@ -181,12 +182,15 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
     if let Some(parent_context) =
         write.context_id.as_ref().and_then(|context_id| context_id.rsplit_once('/').map(|x| x.0))
     {
-        query = query.context_id(Range::new(
-            Some(parent_context.to_string()),
-            Some(format!("{parent_context}\u{ffff}")),
-        ));
+        // FIXME: implement Range query in `store`
+        // query = query.context_id(Range::new(
+        //     Some(parent_context.to_string()),
+        //     Some(format!("{parent_context}\u{ffff}")),
+        // ));
+        filter = filter.context_id(parent_context);
     };
 
+    let query = RecordsQuery::new().add_filter(filter);
     let (entries, _) = store.query(owner, &query.into()).await?;
     for entry in entries {
         let Some(w) = entry.as_write() else {

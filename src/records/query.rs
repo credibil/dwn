@@ -37,14 +37,19 @@ pub async fn handle(
 
         // non-owner queries
         if author != owner {
-            // when query.author is in filter.author or filter.author is empty/None,
+            // when query.author is in filter.author || filter.author is None
             filter.author = Some(Quota::One(author.clone()));
 
-            // when query.author is in filter.recipient || filter.recipient is
-            // empty/None, set filter.recipient = query.author
+            // when query.recipient is in filter.recipient || filter.recipient is None
             filter.recipient = Some(Quota::One(author));
 
-            // when filter.protocol_role ??
+            // when filter.protocol_role
+            // let Some(authzn) = &query.authorization else {
+            //     return Err(forbidden!("missing authorization"));
+            // };
+            // if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
+            //     // nothing to do
+            // }
         }
     }
 
@@ -78,7 +83,9 @@ pub async fn handle(
         }
 
         // get the initial write for the returned `RecordsWrite`
-        let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true);
+        let query = RecordsQuery::new()
+            .add_filter(RecordsFilter::new().record_id(&write.record_id))
+            .include_archived(true);
         let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
         let mut initial_write: Write = (&records[0]).try_into()?;
         initial_write.encoded_data = None;

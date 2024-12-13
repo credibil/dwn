@@ -103,6 +103,18 @@ impl<T: Clone> Quota<T> {
     }
 }
 
+impl<T> From<T> for Quota<T> {
+    fn from(value: T) -> Self {
+        Self::One(value)
+    }
+}
+
+impl<T> From<Vec<T>> for Quota<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self::Many(value)
+    }
+}
+
 /// Range filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Range<T> {

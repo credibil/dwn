@@ -27,6 +27,10 @@ use crate::{Quota, Range, Result, utils};
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordsFilter {
+    /// Whether the record is published.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub published: Option<bool>,
+
     /// Records matching the specified author.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<Quota<String>>,
@@ -47,14 +51,6 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol_path: Option<String>,
 
-    /// Whether the record is published.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
-
-    /// Records with the specified context.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
-
     /// Records with the specified schema.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
@@ -66,6 +62,10 @@ pub struct RecordsFilter {
     /// The CID of the parent object .
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+
+    /// Records with the specified context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
 
     /// Match records with the specified tags.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -229,6 +229,13 @@ impl RecordsFilter {
         self
     }
 
+    /// Specify a protocol schema on the filter.
+    #[must_use]
+    pub fn schema(mut self, schema: impl Into<String>) -> Self {
+        self.schema = Some(schema.into());
+        self
+    }
+
     /// Add a published flag to the filter.
     #[must_use]
     pub const fn published(mut self, published: bool) -> Self {
@@ -240,13 +247,6 @@ impl RecordsFilter {
     #[must_use]
     pub fn context_id(mut self, context_id: impl Into<String>) -> Self {
         self.context_id = Some(context_id.into());
-        self
-    }
-
-    /// Add a schema to the filter.
-    #[must_use]
-    pub fn schema(mut self, schema: impl Into<String>) -> Self {
-        self.schema = Some(schema.into());
         self
     }
 

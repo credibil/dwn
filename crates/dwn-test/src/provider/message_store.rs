@@ -12,6 +12,10 @@ pub(crate) const TABLE: &str = "message";
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
+
+        // let json = serde_json::to_string(entry)?;
+        // println!("json: {}\n", json);
+
         let _: Option<Entry> = self.db.update((TABLE, entry.cid()?)).content(entry).await?;
         Ok(())
     }
@@ -20,7 +24,7 @@ impl MessageStore for ProviderImpl {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
         let sql = QuerySerializer::serialize(query);
-        println!("query: {}", sql);
+        // println!("sql: {}\n", sql);
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         let entries: Vec<Entry> = response.take(0)?;
 

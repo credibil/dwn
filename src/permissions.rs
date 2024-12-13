@@ -12,14 +12,14 @@ pub use self::grant::{
 };
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
-use crate::store::RecordsQuery;
+use crate::store::{RecordsFilter, RecordsQuery};
 use crate::{Interface, Method, Result, forbidden};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
-    let query = RecordsQuery::new().record_id(grant_id);
+    let query = RecordsQuery::new().add_filter(RecordsFilter::new().record_id(grant_id));
     let (entries, _) = store.query(owner, &query.into()).await?;
 
     let Some(entry) = entries.first() else {

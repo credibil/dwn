@@ -49,7 +49,7 @@ async fn return_values() {
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
-    // Alice writes a record.
+    // Alice creates a record.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
@@ -99,7 +99,7 @@ async fn find_matches() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice writes 3 records.
+    // Alice creates 3 records.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
@@ -155,7 +155,7 @@ async fn encoded_data() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice writes a record.
+    // Alice creates a record.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
@@ -193,7 +193,7 @@ async fn no_encoded_data() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice writes a record.
+    // Alice creates a record.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
@@ -233,7 +233,7 @@ async fn initial_write() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice writes 2 records.
+    // Alice creates 2 records.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = Write::build()
@@ -277,7 +277,7 @@ async fn attester_filter() {
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
-    // Alice writes 2 records, 1 attested by her and the other by Bob.
+    // Alice creates 2 records, 1 attested by her and the other by Bob.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = Write::build()
@@ -481,10 +481,352 @@ async fn author_filter() {
     assert_eq!(entries.len(), 2);
 }
 
-// // Should be able to query by recipient.
-// #[tokio::test]
-// async fn recipient_filter() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-//     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-// }
+// Should query by recipient.
+#[tokio::test]
+async fn recipient_filter() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates 2 records.
+    // --------------------------------------------------
+    let alice_bob = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_bob.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let alice_carol = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_carol.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice queries for all records within the protocol.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .schema("post")
+                .data_format("application/json"),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Alice queries for record where Bob is the recipient.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .add_recipient(BOB_DID)
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .schema("post")
+                .data_format("application/json"),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, alice_bob.record_id);
+
+    // --------------------------------------------------
+    // Alice queries for record where Carol is the recipient.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .add_recipient(CAROL_DID)
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .schema("post")
+                .data_format("application/json"),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, alice_carol.record_id);
+
+    // --------------------------------------------------
+    // Alice queries both recipients.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .add_recipient(BOB_DID)
+                .add_recipient(CAROL_DID)
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .schema("post")
+                .data_format("application/json"),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+}
+
+// Should query for published records.
+#[tokio::test]
+async fn published_filter() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 2 records: 1 published and 1 unpublished.
+    // --------------------------------------------------
+    let published = Write::build()
+        .schema("post")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let unpublished = Write::build()
+        .schema("post")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, unpublished.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice (owner) queries for published record.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(true))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, published.record_id);
+
+    // --------------------------------------------------
+    // Bob (not owner) queries for published record.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(true))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, published.record_id);
+
+    // --------------------------------------------------
+    // Anonymous query for published record.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(true))
+        .build()
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, published.record_id);
+
+    // --------------------------------------------------
+    // Alice publishes the unpublished record.
+    // --------------------------------------------------
+    let published = WriteBuilder::from(unpublished)
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice (owner) queries for published records.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(true))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Anonymous query for published record.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(true))
+        .build()
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+}
+
+// Should not be able to query for unpublished records when not authorized.
+#[tokio::test]
+async fn unpublished_filter() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 2 records: 1 published and 1 unpublished.
+    // --------------------------------------------------
+    let published = Write::build()
+        .schema("post")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let unpublished = Write::build()
+        .schema("post")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, unpublished.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob unsuccessfully queries for unpublished record.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(false))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    assert!(reply.body.is_none());
+
+    // // --------------------------------------------------
+    // // Alice publishes the unpublished record.
+    // // --------------------------------------------------
+    // let published = WriteBuilder::from(unpublished)
+    //     .published(true)
+    //     .sign(&alice_keyring)
+    //     .build()
+    //     .await
+    //     .expect("should create write");
+    // let reply =
+    //     endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
+    // assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // // --------------------------------------------------
+    // // Alice (owner) queries for published record.
+    // // --------------------------------------------------
+    // let query = QueryBuilder::new()
+    //     .filter(RecordsFilter::new().schema("post").published(true))
+    //     .sign(&alice_keyring)
+    //     .build()
+    //     .await
+    //     .expect("should create query");
+    // let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    // assert_eq!(reply.status.code, StatusCode::OK);
+
+    // let query_reply = reply.body.expect("should have reply");
+    // let entries = query_reply.entries.expect("should have entries");
+    // assert_eq!(entries.len(), 1);
+    // assert_eq!(entries[0].write.record_id, published.record_id);
+}

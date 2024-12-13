@@ -964,7 +964,7 @@ async fn index_additional() {
     // --------------------------------------------------
     let query = store::RecordsQuery {
         method: Some(Method::Delete),
-        filter: Some(RecordsFilter::new().schema("http://test_schema")),
+        filters: vec![RecordsFilter::new().schema("http://test_schema")],
         include_archived: true,
         ..store::RecordsQuery::default()
     };

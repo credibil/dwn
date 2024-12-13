@@ -27,17 +27,20 @@ impl QuerySerializer for MessagesQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let mut sql = "SELECT * FROM type::table($table) WHERE 1=1 AND".to_string();
+        let mut sql = "SELECT * FROM type::table($table) WHERE 1=1".to_string();
 
-        for filter in &self.filters {
-            sql.push_str(&format!(" ({filter}) OR", filter = QuerySerializer::serialize(filter)));
-        }
-
-        if let Some(stripped) = sql.strip_suffix(" OR") {
-            sql = stripped.to_string();
-        }
-        if let Some(stripped) = sql.strip_suffix(" AND") {
-            sql = stripped.to_string();
+        if !self.filters.is_empty() {
+            sql.push_str(" AND (");
+            for filter in &self.filters {
+                sql.push_str(&format!(
+                    " ({filter}) OR",
+                    filter = QuerySerializer::serialize(filter)
+                ));
+            }
+            if let Some(stripped) = sql.strip_suffix(" OR") {
+                sql = stripped.to_string();
+            }
+            sql.push_str(")");
         }
 
         sql.push_str(" ORDER BY descriptor.messageTimestamp COLLATE ASC");
@@ -62,8 +65,8 @@ impl QuerySerializer for MessagesFilter {
         // N.B. adding a protocol tag ensures message queries with a protocol
         // filter will return associated grants
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!(" AND (descriptor.definition.protocol='{protocol}'"));
-            sql.push_str(&format!(" OR descriptor.tags.protocol='{protocol}')"));
+            sql.push_str(&format!(" AND (descriptor.definition.protocol = '{protocol}'"));
+            sql.push_str(&format!(" OR descriptor.tags.protocol = '{protocol}')"));
         }
 
         if let Some(timestamp) = &self.message_timestamp {
@@ -86,18 +89,22 @@ impl QuerySerializer for ProtocolsQuery {
     fn serialize(&self) -> Self::Output {
         let mut sql = format!(
             "SELECT * FROM type::table($table)
-            WHERE descriptor.interface='{interface}'
-            AND descriptor.method='{method}'",
+            WHERE descriptor.interface = '{interface}'
+            AND descriptor.method = '{method}'",
             interface = Interface::Protocols,
             method = Method::Configure
         );
 
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!(" AND descriptor.definition.protocol='{protocol}'"));
+            sql.push_str(&format!(" AND descriptor.definition.protocol = '{protocol}'"));
         }
 
         if let Some(published) = &self.published {
-            sql.push_str(&format!(" AND descriptor.definition.published = {published}"));
+            if *published {
+                sql.push_str(" AND descriptor.definition.published = true");
+            } else {
+                sql.push_str(" AND (!descriptor.published OR descriptor.published = false)");
+            }
         }
 
         sql.push_str(" ORDER BY descriptor.messageTimestamp COLLATE ASC");
@@ -110,70 +117,33 @@ impl QuerySerializer for RecordsQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let min_date = &DateTime::<Utc>::MIN_UTC;
-        let max_date = &Utc::now();
+        // let min_date = &DateTime::<Utc>::MIN_UTC;
+        // let max_date = &Utc::now();
 
         let mut sql = format!(
-            "SELECT * FROM type::table($table) WHERE descriptor.interface='{interface}'",
+            "SELECT * FROM type::table($table) WHERE descriptor.interface = '{interface}'",
             interface = Interface::Records
         );
 
         if !self.include_archived {
-            sql.push_str(&format!(" AND archived = false"));
+            sql.push_str(" AND (!archived OR archived = false)");
         }
-
         if let Some(method) = &self.method {
-            sql.push_str(&format!(" AND descriptor.method='{method}'"));
+            sql.push_str(&format!(" AND descriptor.method = '{method}'"));
         }
 
-        if let Some(record_id) = &self.record_id {
-            sql.push_str(&format!(" AND recordId='{record_id}'"));
-        }
-
-        if let Some(parent_id) = &self.parent_id {
-            sql.push_str(&format!(" AND descriptor.parentId='{parent_id}'"));
-        }
-
-        if let Some(context_id) = &self.context_id {
-            let min_ctx = &"\u{0000}".to_string();
-            let max_ctx = &"\u{ffff}".to_string();
-
-            let min = context_id.min.as_ref().unwrap_or(min_ctx);
-            let max = context_id.max.as_ref().unwrap_or(max_ctx);
-            sql.push_str(&format!(" AND (contextId >= '{min}' AND contextId <= '{max}')"));
-        }
-
-        if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!(" AND descriptor.protocol='{protocol}'"));
-        }
-
-        if let Some(protocol_path) = &self.protocol_path {
-            sql.push_str(&format!(" AND descriptor.protocolPath='{protocol_path}'"));
-        }
-
-        if let Some(recipient) = &self.recipient {
-            sql.push_str(&one_or_many("descriptor.recipient", recipient));
-        }
-
-        if let Some(date_created) = &self.date_created {
-            let from = date_created
-                .min
-                .as_ref()
-                .unwrap_or(min_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            let to = date_created
-                .max
-                .as_ref()
-                .unwrap_or(max_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            sql.push_str(&format!(
-                " AND (descriptor.dateCreated >= '{from}' AND descriptor.dateCreated <='{to}')"
-            ));
-        }
-
-        // include `RecordsFilter` sql
-        if let Some(filter) = &self.filter {
-            sql.push_str(&format!("{}", QuerySerializer::serialize(filter)));
+        if !self.filters.is_empty() {
+            sql.push_str(" AND (");
+            for filter in &self.filters {
+                sql.push_str(&format!(
+                    " ({filter}) OR",
+                    filter = QuerySerializer::serialize(filter)
+                ));
+            }
+            if let Some(stripped) = sql.strip_suffix(" OR") {
+                sql = stripped.to_string();
+            }
+            sql.push_str(")");
         }
 
         // sorting
@@ -210,13 +180,26 @@ impl QuerySerializer for RecordsFilter {
         let min_date = &DateTime::<Utc>::MIN_UTC;
         let max_date = &Utc::now();
 
-        let mut sql = String::new();
+        let mut sql = String::from("1=1");
 
         if let Some(record_id) = &self.record_id {
-            sql.push_str(&format!(" AND recordId='{record_id}'"));
+            sql.push_str(&format!(" AND recordId = '{record_id}'"));
         }
+        if let Some(parent_id) = &self.parent_id {
+            sql.push_str(&format!(" AND descriptor.parentId = '{parent_id}'"));
+        }
+        // if let Some(context_id) = &self.context_id {
+        //     sql.push_str(&format!(" AND contextId = '{context_id}'"));
+        // }
         if let Some(context_id) = &self.context_id {
-            sql.push_str(&format!(" AND contextId='{context_id}'"));
+            // let min_ctx = &"\u{0000}".to_string();
+            // let max_ctx = &"\u{ffff}".to_string();
+            // let min = context_id.min.as_ref().unwrap_or(min_ctx);
+            // let max = context_id.max.as_ref().unwrap_or(max_ctx);
+
+            sql.push_str(&format!(
+                " AND (contextId >= '{context_id}' AND contextId <= '{context_id}\u{ffff}')"
+            ));
         }
 
         // descriptor fields
@@ -224,22 +207,26 @@ impl QuerySerializer for RecordsFilter {
             sql.push_str(&one_or_many("descriptor.recipient", recipient));
         }
         if let Some(protocol) = &self.protocol {
-            sql.push_str(&format!(" AND descriptor.protocol='{protocol}'"));
+            sql.push_str(&format!(" AND descriptor.protocol = '{protocol}'"));
         }
         if let Some(protocol_path) = &self.protocol_path {
-            sql.push_str(&format!(" AND descriptor.protocolPath='{protocol_path}'"));
+            sql.push_str(&format!(" AND descriptor.protocolPath = '{protocol_path}'"));
         }
         if let Some(published) = &self.published {
-            sql.push_str(&format!(" AND descriptor.published = {published}"));
+            if *published {
+                sql.push_str(&format!(" AND descriptor.published = true"));
+            } else {
+                sql.push_str(&format!(
+                    " AND (!descriptor.published OR descriptor.published = false)"
+                ));
+            }
         }
         if let Some(schema) = &self.schema {
-            sql.push_str(&format!(" AND descriptor.schema='{schema}'"));
+            sql.push_str(&format!(" AND descriptor.schema = '{schema}'"));
         }
-        if let Some(parent_id) = &self.parent_id {
-            sql.push_str(&format!(" AND descriptor.parentId='{parent_id}'"));
-        }
+
         if let Some(data_format) = &self.data_format {
-            sql.push_str(&format!(" AND descriptor.dataFormat='{data_format}'"));
+            sql.push_str(&format!(" AND descriptor.dataFormat = '{data_format}'"));
         }
         if let Some(data_size) = &self.data_size {
             sql.push_str(&format!(
@@ -249,7 +236,7 @@ impl QuerySerializer for RecordsFilter {
             ));
         }
         if let Some(data_cid) = &self.data_cid {
-            sql.push_str(&format!(" AND descriptor.dataCid='{data_cid}'"));
+            sql.push_str(&format!(" AND descriptor.dataCid = '{data_cid}'"));
         }
         if let Some(date_created) = &self.date_created {
             let from = date_created
@@ -263,7 +250,7 @@ impl QuerySerializer for RecordsFilter {
                 .unwrap_or(max_date)
                 .to_rfc3339_opts(SecondsFormat::Micros, true);
             sql.push_str(&format!(
-                " AND (descriptor.dateCreated >= '{from}' descriptor.dateCreated <= '{to}')"
+                " AND (descriptor.dateCreated >= '{from}' AND descriptor.dateCreated <= '{to}')"
             ));
         }
         if let Some(date_published) = &self.date_published {
@@ -287,7 +274,7 @@ impl QuerySerializer for RecordsFilter {
             sql.push_str(&one_or_many("author", author));
         }
         if let Some(attester) = &self.attester {
-            sql.push_str(&format!(" AND attester='{attester}'"));
+            sql.push_str(&format!(" AND attester = '{attester}'"));
         }
         if let Some(tags) = &self.tags {
             for (property, filter) in tags {
@@ -335,6 +322,9 @@ fn one_or_many(field: &str, clause: &Quota<String>) -> String {
             format!(" AND {field}='{value}'")
         }
         Quota::Many(values) => {
+            // Check whether any value in an array equals another value.
+            // SELECT * FROM {field} ?= {value};
+
             let mut sql = String::new();
             sql.push_str(&format!(" AND (1=1"));
             for value in values {
@@ -345,4 +335,3 @@ fn one_or_many(field: &str, clause: &Quota<String>) -> String {
         }
     }
 }
-

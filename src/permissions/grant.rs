@@ -13,7 +13,7 @@ use crate::records::{
     WriteProtocol,
 };
 use crate::serde::rfc3339_micros;
-use crate::store::RecordsQuery;
+use crate::store::{RecordsFilter, RecordsQuery};
 use crate::{Descriptor, Interface, Result, forbidden, unexpected, utils};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -277,7 +277,9 @@ impl Grant {
         }
 
         // check if grant has been revoked — using latest revocation message
-        let query = RecordsQuery::new().parent_id(&self.id).protocol_path(REVOCATION_PATH);
+        let query = RecordsQuery::new()
+            .add_filter(RecordsFilter::new().parent_id(&self.id).protocol_path(REVOCATION_PATH));
+
         let (entries, _) = store.query(grantor, &query.into()).await?;
         if let Some(oldest) = entries.first().cloned() {
             if oldest.descriptor().message_timestamp.lt(timestamp) {

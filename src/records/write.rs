@@ -23,7 +23,7 @@ use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::DataStream;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{Entry, EntryType, RecordsQuery};
+use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
 // use crate::typestate::{Unsigned, Signed};
 use crate::{
     Descriptor, Error, Interface, Method, Range, Result, data, forbidden, unexpected, utils,
@@ -1290,7 +1290,10 @@ async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Entry>> {
     // N.B. unset method in order to get Write and Delete messages
-    let query = RecordsQuery::new().record_id(record_id).include_archived(true).method(None);
+    let query = RecordsQuery::new()
+        .add_filter(RecordsFilter::new().record_id(record_id))
+        .include_archived(true)
+        .method(None);
     let (entries, _) = store.query(owner, &query.into()).await.unwrap();
     Ok(entries)
 }
@@ -1414,7 +1417,9 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
         min: Some(message_timestamp),
         max: None,
     };
-    let query = RecordsQuery::new().record_id(grant_id).date_created(date_range);
+    let query = RecordsQuery::new()
+        .add_filter(RecordsFilter::new().record_id(grant_id).date_created(date_range));
+
     let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
 
     // delete matching messages

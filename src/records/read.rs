@@ -79,7 +79,9 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let initial_write = if write.is_initial()? {
         None
     } else {
-        let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true);
+        let query = RecordsQuery::new()
+            .add_filter(RecordsFilter::new().record_id(&write.record_id))
+            .include_archived(true);
         let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
         if records.is_empty() {
             return Err(unexpected!("initial write not found"));
