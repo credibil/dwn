@@ -1,9 +1,8 @@
 //! # Surreal Database
 
-use chrono::{DateTime, SecondsFormat, Utc};
 use vercre_dwn::store::{
-    MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
-    TagFilter,
+    Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
+    TagFilter, Upper,
 };
 use vercre_dwn::{Interface, Method, Quota};
 
@@ -69,14 +68,30 @@ impl QuerySerializer for MessagesFilter {
             sql.push_str(&format!(" OR descriptor.tags.protocol = '{protocol}')"));
         }
 
-        if let Some(timestamp) = &self.message_timestamp {
-            let min = &DateTime::<Utc>::MIN_UTC;
-            let max = &Utc::now();
-            let from =
-                timestamp.min.as_ref().unwrap_or(min).to_rfc3339_opts(SecondsFormat::Micros, true);
-            let to =
-                timestamp.max.as_ref().unwrap_or(max).to_rfc3339_opts(SecondsFormat::Micros, true);
-            sql.push_str(&format!(" AND (descriptor.messageTimestamp >= '{from}' AND descriptor.messageTimestamp <= '{to}')"));
+        if let Some(ts_range) = &self.message_timestamp {
+            sql.push_str(" AND (");
+            let and = if ts_range.upper.is_some() { " AND " } else { "" };
+
+            match ts_range.lower {
+                Some(Lower::GreaterThan(lower)) => {
+                    sql.push_str(&format!("descriptor.messageTimestamp > '{lower}'{and}"));
+                }
+                Some(Lower::GreaterThanOrEqual(lower)) => {
+                    sql.push_str(&format!("descriptor.messageTimestamp >= '{lower}'{and}"));
+                }
+                None => {}
+            }
+            match ts_range.upper {
+                Some(Upper::LessThan(upper)) => {
+                    sql.push_str(&format!("descriptor.messageTimestamp < '{upper}'"));
+                }
+                Some(Upper::LessThanOrEqual(upper)) => {
+                    sql.push_str(&format!("descriptor.messageTimestamp <= '{upper}'"));
+                }
+                None => {}
+            }
+
+            sql.push_str(")");
         }
         sql
     }
@@ -177,9 +192,6 @@ impl QuerySerializer for RecordsFilter {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        let min_date = &DateTime::<Utc>::MIN_UTC;
-        let max_date = &Utc::now();
-
         let mut sql = String::from("1=1");
 
         if let Some(record_id) = &self.record_id {
@@ -228,45 +240,84 @@ impl QuerySerializer for RecordsFilter {
         if let Some(data_format) = &self.data_format {
             sql.push_str(&format!(" AND descriptor.dataFormat = '{data_format}'"));
         }
-        if let Some(data_size) = &self.data_size {
-            sql.push_str(&format!(
-                " AND (descriptor.dataSize >= {min} AND descriptor.dataSize <= {max})",
-                min = data_size.min.unwrap_or(0),
-                max = data_size.max.unwrap_or(usize::MAX)
-            ));
+        if let Some(size_range) = &self.data_size {
+            sql.push_str(" AND (");
+            let and = if size_range.upper.is_some() { " AND " } else { "" };
+
+            match size_range.lower {
+                Some(Lower::GreaterThan(lower)) => {
+                    sql.push_str(&format!("descriptor.dataSize > {lower}{and}"));
+                }
+                Some(Lower::GreaterThanOrEqual(lower)) => {
+                    sql.push_str(&format!("descriptor.dataSize >= {lower}{and}"));
+                }
+                None => {}
+            }
+            match size_range.upper {
+                Some(Upper::LessThan(upper)) => {
+                    sql.push_str(&format!("descriptor.dataSize < {upper}"));
+                }
+                Some(Upper::LessThanOrEqual(upper)) => {
+                    sql.push_str(&format!("descriptor.dataSize <= {upper}"));
+                }
+                None => {}
+            }
+
+            sql.push_str(")");
         }
         if let Some(data_cid) = &self.data_cid {
             sql.push_str(&format!(" AND descriptor.dataCid = '{data_cid}'"));
         }
-        if let Some(date_created) = &self.date_created {
-            let from = date_created
-                .min
-                .as_ref()
-                .unwrap_or(min_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            let to = date_created
-                .max
-                .as_ref()
-                .unwrap_or(max_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            sql.push_str(&format!(
-                " AND (descriptor.dateCreated >= '{from}' AND descriptor.dateCreated <= '{to}')"
-            ));
+        if let Some(ts_range) = &self.date_created {
+            sql.push_str(" AND (");
+            let and = if ts_range.upper.is_some() { " AND " } else { "" };
+
+            match ts_range.lower {
+                Some(Lower::GreaterThan(lower)) => {
+                    sql.push_str(&format!("descriptor.dateCreated > '{lower}'{and}"));
+                }
+                Some(Lower::GreaterThanOrEqual(lower)) => {
+                    sql.push_str(&format!("descriptor.dateCreated >= '{lower}'{and}"));
+                }
+                None => {}
+            }
+            match ts_range.upper {
+                Some(Upper::LessThan(upper)) => {
+                    sql.push_str(&format!("descriptor.dateCreated < '{upper}'"));
+                }
+                Some(Upper::LessThanOrEqual(upper)) => {
+                    sql.push_str(&format!("descriptor.dateCreated <= '{upper}'"));
+                }
+                None => {}
+            }
+
+            sql.push_str(")");
         }
-        if let Some(date_published) = &self.date_published {
-            let from = date_published
-                .min
-                .as_ref()
-                .unwrap_or(min_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            let to = date_published
-                .max
-                .as_ref()
-                .unwrap_or(max_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            sql.push_str(&format!(
-                " AND (descriptor.datePublished >= '{from}' AND descriptor.datePublished <='{to}')"
-            ));
+
+        if let Some(ts_range) = &self.date_published {
+            sql.push_str(" AND (");
+            let and = if ts_range.upper.is_some() { " AND " } else { "" };
+
+            match ts_range.lower {
+                Some(Lower::GreaterThan(lower)) => {
+                    sql.push_str(&format!("descriptor.datePublished > '{lower}'{and}"));
+                }
+                Some(Lower::GreaterThanOrEqual(lower)) => {
+                    sql.push_str(&format!("descriptor.datePublished >= '{lower}'{and}"));
+                }
+                None => {}
+            }
+            match ts_range.upper {
+                Some(Upper::LessThan(upper)) => {
+                    sql.push_str(&format!("descriptor.datePublished < '{upper}'"));
+                }
+                Some(Upper::LessThanOrEqual(upper)) => {
+                    sql.push_str(&format!("descriptor.datePublished <= '{upper}'"));
+                }
+                None => {}
+            }
+
+            sql.push_str(")");
         }
 
         // index fields
@@ -281,18 +332,28 @@ impl QuerySerializer for RecordsFilter {
                 sql.push_str(&format!(" AND tags.{property} {}", filter.serialize()));
             }
         }
-        if let Some(date_updated) = &self.date_updated {
-            let from = date_updated
-                .min
-                .as_ref()
-                .unwrap_or(min_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            let to = date_updated
-                .max
-                .as_ref()
-                .unwrap_or(max_date)
-                .to_rfc3339_opts(SecondsFormat::Micros, true);
-            sql.push_str(&format!(" AND (dateUpdated >= '{from}' AND dateUpdated <= '{to}')"));
+        if let Some(ts_range) = &self.date_updated {
+            sql.push_str(" AND (");
+            let and = if ts_range.upper.is_some() { " AND " } else { "" };
+
+            match ts_range.lower {
+                Some(Lower::GreaterThan(lower)) => {
+                    sql.push_str(&format!("descriptor.dateUpdated > '{lower}'{and}"));
+                }
+                Some(Lower::GreaterThanOrEqual(lower)) => {
+                    sql.push_str(&format!("descriptor.dateUpdated >= '{lower}'{and}"));
+                }
+                None => {}
+            }
+            match ts_range.upper {
+                Some(Upper::LessThan(upper)) => {
+                    sql.push_str(&format!("descriptor.dateUpdated < '{upper}'"));
+                }
+                Some(Upper::LessThanOrEqual(upper)) => {
+                    sql.push_str(&format!("descriptor.dateUpdated <= '{upper}'"));
+                }
+                None => {}
+            }
         }
 
         sql
@@ -307,9 +368,29 @@ impl QuerySerializer for TagFilter {
         match self {
             Self::StartsWith(value) => format!(" LIKE '{value}%'"),
             Self::Range(range) => {
-                let min = range.min.unwrap_or(0);
-                let max = range.max.unwrap_or(usize::MAX);
-                format!(" BETWEEN {min} AND {max}")
+                let mut sql = String::new();
+                let and = if range.upper.is_some() { " AND " } else { "" };
+
+                match range.lower {
+                    Some(Lower::GreaterThan(lower)) => {
+                        sql.push_str(&format!("descriptor.dateUpdated > '{lower}'{and}"));
+                    }
+                    Some(Lower::GreaterThanOrEqual(lower)) => {
+                        sql.push_str(&format!("descriptor.dateUpdated >= '{lower}'{and}"));
+                    }
+                    None => {}
+                }
+                match range.upper {
+                    Some(Upper::LessThan(upper)) => {
+                        sql.push_str(&format!("descriptor.dateUpdated < '{upper}'"));
+                    }
+                    Some(Upper::LessThanOrEqual(upper)) => {
+                        sql.push_str(&format!("descriptor.dateUpdated <= '{upper}'"));
+                    }
+                    None => {}
+                }
+
+                sql
             }
             Self::Equal(value) => format!("= '{value}'"),
         }

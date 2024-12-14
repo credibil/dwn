@@ -19,7 +19,7 @@ pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub use self::write::{DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol};
 pub use crate::data::DataStream;
-use crate::{Quota, Range, Result, utils};
+use crate::{Quota, RangeFilter, Result, utils};
 
 // TODO: add builder for RecordsFilter
 
@@ -77,7 +77,7 @@ pub struct RecordsFilter {
 
     /// Records with a size within the range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_size: Option<Range<usize>>,
+    pub data_size: Option<RangeFilter<usize>>,
 
     /// CID of the data.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,15 +85,15 @@ pub struct RecordsFilter {
 
     /// Filter messages created within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<Range<DateTime<Utc>>>,
+    pub date_created: Option<RangeFilter<DateTime<Utc>>>,
 
     /// Filter messages published within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<Range<DateTime<Utc>>>,
+    pub date_published: Option<RangeFilter<DateTime<Utc>>>,
 
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_updated: Option<Range<DateTime<Utc>>>,
+    pub date_updated: Option<RangeFilter<DateTime<Utc>>>,
 }
 
 impl RecordsFilter {
@@ -154,7 +154,7 @@ pub enum TagFilter {
     StartsWith(String),
 
     /// Filter tags by range.
-    Range(Range<usize>),
+    Range(RangeFilter<usize>),
 
     /// Filter by a specific value.
     Equal(Value),
@@ -286,7 +286,7 @@ impl RecordsFilter {
 
     /// Add a data size to the filter.
     #[must_use]
-    pub const fn data_size(mut self, data_size: Range<usize>) -> Self {
+    pub const fn data_size(mut self, data_size: RangeFilter<usize>) -> Self {
         self.data_size = Some(data_size);
         self
     }
@@ -300,21 +300,21 @@ impl RecordsFilter {
 
     /// Add a date created to the filter.
     #[must_use]
-    pub const fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
+    pub const fn date_created(mut self, date_created: RangeFilter<DateTime<Utc>>) -> Self {
         self.date_created = Some(date_created);
         self
     }
 
     /// Add a date published to the filter.
     #[must_use]
-    pub const fn date_published(mut self, date_published: Range<DateTime<Utc>>) -> Self {
+    pub const fn date_published(mut self, date_published: RangeFilter<DateTime<Utc>>) -> Self {
         self.date_published = Some(date_published);
         self
     }
 
     /// Add a date updated to the filter.
     #[must_use]
-    pub const fn date_updated(mut self, date_updated: Range<DateTime<Utc>>) -> Self {
+    pub const fn date_updated(mut self, date_updated: RangeFilter<DateTime<Utc>>) -> Self {
         self.date_updated = Some(date_updated);
         self
     }

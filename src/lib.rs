@@ -117,20 +117,102 @@ impl<T> From<Vec<T>> for Quota<T> {
 
 /// Range filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Range<T> {
-    /// The minimum value.
+pub struct Range<T: PartialOrd> {
+    /// The range's minimum value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min: Option<T>,
 
-    /// The maximum value.
+    /// The range's maximum value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<T>,
 }
 
-impl<T> Range<T> {
+/// Range filter.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct RangeFilter<T: PartialOrd> {
+    /// The filter's lower bound.
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lower: Option<Lower<T>>,
+
+    /// The filter's upper bound.
+    #[serde(flatten)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upper: Option<Upper<T>>,
+}
+
+/// Range lower bound comparision options.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Lower<T: PartialOrd> {
+    /// Lower bound compare is greater than the specified value.
+    #[serde(rename = "gt")]
+    GreaterThan(T),
+
+    /// Lower bound compare is greater than or equal to.
+    #[serde(rename = "gte")]
+    GreaterThanOrEqual(T),
+}
+
+impl<T: PartialOrd + Default> Default for Lower<T> {
+    fn default() -> Self {
+        Self::GreaterThan(T::default())
+    }
+}
+
+/// Range upper bound comparision options.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Upper<T: PartialOrd> {
+    /// Lower bound compare is greater than the specified value.
+    #[serde(rename = "lt")]
+    LessThan(T),
+
+    /// Lower bound compare is greater than or equal to.
+    #[serde(rename = "lte")]
+    LessThanOrEqual(T),
+}
+
+impl<T: PartialOrd + Default> Default for Upper<T> {
+    fn default() -> Self {
+        Self::LessThan(T::default())
+    }
+}
+
+impl<T: PartialOrd> RangeFilter<T> {
     /// Create a new range filter.
-    pub const fn new(min: Option<T>, max: Option<T>) -> Self {
-        Self { min, max }
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            lower: None,
+            upper: None,
+        }
+    }
+
+    /// Specify a 'greater-than' lower bound for the filter.
+    #[must_use]
+    pub fn gt(mut self, gt: T) -> Self {
+        self.lower = Some(Lower::GreaterThan(gt));
+        self
+    }
+
+    /// Specify a 'greater-than-or-equal' lower bound for the filter.
+    #[must_use]
+    pub fn ge(mut self, ge: T) -> Self {
+        self.lower = Some(Lower::GreaterThanOrEqual(ge));
+        self
+    }
+
+    /// Specify a 'less-than' upper bound for the filter.
+    #[must_use]
+    pub fn lt(mut self, lt: T) -> Self {
+        self.upper = Some(Upper::LessThan(lt));
+        self
+    }
+
+    /// Specify a 'less-than-or-equal' upper bound for the filter.
+    #[must_use]
+    pub fn le(mut self, le: T) -> Self {
+        self.upper = Some(Upper::LessThanOrEqual(le));
+        self
     }
 
     /// Check if the range contains the value.
@@ -138,18 +220,20 @@ impl<T> Range<T> {
     where
         T: PartialOrd,
     {
-        if let Some(min) = &self.min
-            && value < min
-        {
-            return false;
-        }
-        if let Some(max) = &self.max
-            && value > max
-        {
+        let lower_ok = match &self.lower {
+            Some(Lower::GreaterThan(lower)) => value > lower,
+            Some(Lower::GreaterThanOrEqual(lower)) => value >= lower,
+            None => true,
+        };
+        if !lower_ok {
             return false;
         }
 
-        true
+        match &self.upper {
+            Some(Upper::LessThan(upper)) => value < upper,
+            Some(Upper::LessThanOrEqual(upper)) => value <= upper,
+            None => true,
+        }
     }
 }
 

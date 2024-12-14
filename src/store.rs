@@ -12,6 +12,7 @@ pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, Sort, TagFilter};
 use crate::{Descriptor, Method, Result, authorization, messages, protocols};
+pub use crate::{Lower, RangeFilter, Upper};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).

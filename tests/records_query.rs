@@ -11,7 +11,7 @@ use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{
     QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData, WriteProtocol,
 };
-use vercre_dwn::{Error, authorization, endpoint};
+use vercre_dwn::{Error, RangeFilter, authorization, endpoint};
 
 // Should return a status of BadRequest (400) when querying for unpublished records
 // with sort date set to `Sort::Publishedxxx`.
@@ -43,7 +43,7 @@ async fn invalid_sort() {
 
 // Should return `record_id`, `descriptor`, `authorization` and `attestation` fields.
 #[tokio::test]
-async fn return_values() {
+async fn response() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -94,7 +94,7 @@ async fn return_values() {
 
 // Should return matching records.
 #[tokio::test]
-async fn find_matches() {
+async fn matches() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
@@ -197,10 +197,9 @@ async fn no_encoded_data() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
 
     let write = Write::build()
-        .data(WriteData::Reader(stream.clone()))
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -271,7 +270,7 @@ async fn initial_write() {
 
 // Should be able to query by attester.
 #[tokio::test]
-async fn attester_filter() {
+async fn attester() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -355,7 +354,7 @@ async fn attester_filter() {
 
 // Should be able to query by author.
 #[tokio::test]
-async fn author_filter() {
+async fn author() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -483,7 +482,7 @@ async fn author_filter() {
 
 // Should query by recipient.
 #[tokio::test]
-async fn recipient_filter() {
+async fn recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
@@ -633,7 +632,7 @@ async fn recipient_filter() {
 
 // Should query for published records.
 #[tokio::test]
-async fn published_filter() {
+async fn published() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -757,7 +756,7 @@ async fn published_filter() {
 
 // Should not be able to query for unpublished records when not authorized.
 #[tokio::test]
-async fn unpublished_filter() {
+async fn unpublished() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -829,7 +828,7 @@ async fn unpublished_filter() {
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
-   // --------------------------------------------------
+    // --------------------------------------------------
     // Bob queries using the `published` filter.
     // --------------------------------------------------
     let query = QueryBuilder::new()
@@ -858,4 +857,106 @@ async fn unpublished_filter() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     assert!(reply.body.is_none());
+}
+
+// Should be able to query for a record by data_cid.
+#[tokio::test]
+async fn data_cid() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates a record.
+    // --------------------------------------------------
+    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+
+    let write = Write::build()
+        .data(WriteData::Reader(stream))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice queries using the `data_cid` filter.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_cid(write.descriptor.data_cid))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+}
+
+// Should be able to query for a record by data_size (half-open range).
+#[tokio::test]
+async fn data_size() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 3 records with varying data sizes.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let write10 = Write::build()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write10.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let mut data = [0u8; 50];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let write50 = Write::build()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write50.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let mut data = [0u8; 100];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let write100 = Write::build()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write100.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice queries using `data_size` greate than 10.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(10).lt(60)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
 }
