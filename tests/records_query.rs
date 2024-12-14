@@ -898,7 +898,7 @@ async fn data_cid() {
 
 // Should be able to query for a record by data_size (half-open range).
 #[tokio::test]
-async fn data_size() {
+async fn dat_size_part_range() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
@@ -945,7 +945,120 @@ async fn data_size() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice queries using `data_size` greate than 10.
+    // Greater than 10.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(10)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Less than 100.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().lt(100)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Greater than or equal to 10.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 3);
+
+    // --------------------------------------------------
+    // Less than or equal to 10.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().le(100)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 3);
+}
+
+// Should be able to query for a record by data_size (open or closed range).
+#[tokio::test]
+async fn data_size_full_range() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 3 records with varying data sizes.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let write10 = Write::build()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write10.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let mut data = [0u8; 50];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let write50 = Write::build()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write50.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let mut data = [0u8; 100];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let write100 = Write::build()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write100.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Greater than 10, less than 60.
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(10).lt(60)))
@@ -959,4 +1072,52 @@ async fn data_size() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
+
+    // --------------------------------------------------
+    // Greater than or equal to 10, less than 60.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10).lt(60)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+
+    // --------------------------------------------------
+    // Greater than 50, less than or equal to 100.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(50).le(100)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+
+    // --------------------------------------------------
+    // Greater than or equal to 10, less than or equal to 100.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10).le(100)))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 3);
 }

@@ -132,9 +132,6 @@ impl QuerySerializer for RecordsQuery {
     type Output = String;
 
     fn serialize(&self) -> Self::Output {
-        // let min_date = &DateTime::<Utc>::MIN_UTC;
-        // let max_date = &Utc::now();
-
         let mut sql = format!(
             "SELECT * FROM type::table($table) WHERE descriptor.interface = '{interface}'",
             interface = Interface::Records
