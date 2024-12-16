@@ -24,13 +24,9 @@ impl Serializer {
     pub fn output(&self) -> &str {
         &self.output
     }
-}
 
-/// Serialize `MessagesQuery` to Surreal SQL.
-impl crate::Serializer for Serializer {
-    type Clause = Self;
-
-    fn or_clause(&mut self) -> &mut Self::Clause {
+    // Code common to both clause methods.
+    fn add_clause(&mut self) {
         if !self.has_clause {
             self.output.push_str(" WHERE ");
         }
@@ -43,6 +39,15 @@ impl crate::Serializer for Serializer {
             current.initial = false;
         }
         self.output.push_str("(");
+    }
+}
+
+/// Serialize `MessagesQuery` to Surreal SQL.
+impl crate::Serializer for Serializer {
+    type Clause = Self;
+
+    fn or_clause(&mut self) -> &mut Self::Clause {
+        self.add_clause();
 
         self.clauses.push(SqlClause {
             conjunction: String::from(" OR "),
@@ -52,18 +57,7 @@ impl crate::Serializer for Serializer {
     }
 
     fn and_clause(&mut self) -> &mut Self::Clause {
-        if !self.has_clause {
-            self.output.push_str(" WHERE ");
-        }
-        self.has_clause = true;
-
-        if let Some(current) = self.clauses.last_mut() {
-            if !current.initial {
-                self.output.push_str(&current.conjunction);
-            }
-            current.initial = false;
-        }
-        self.output.push_str("(");
+        self.add_clause();
 
         self.clauses.push(SqlClause {
             conjunction: String::from(" AND "),

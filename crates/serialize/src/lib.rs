@@ -1,8 +1,9 @@
 #![allow(missing_docs)]
+// TODO: Add documentation
 
 //! # Serialize
 
-pub mod engine;
+mod engine;
 pub mod surrealdb;
 
 use anyhow::Result;
