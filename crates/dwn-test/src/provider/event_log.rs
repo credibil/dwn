@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use serde_json::Value;
 use vercre_dwn::event::Event;
 use vercre_dwn::provider::EventLog;
@@ -14,7 +13,6 @@ use crate::provider::NAMESPACE;
 
 const TABLE: &str = "event_log";
 
-#[async_trait]
 impl EventLog for ProviderImpl {
     async fn append(&self, owner: &str, event: &Event) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;

@@ -1,13 +1,11 @@
 use std::str::FromStr;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use blockstore::Blockstore as _;
 use vercre_dwn::provider::BlockStore;
 
 use super::ProviderImpl;
 
-#[async_trait]
 impl BlockStore for ProviderImpl {
     async fn put(&self, owner: &str, cid: &str, block: &[u8]) -> Result<()> {
         // HACK: convert libipld CID to blockstore CID

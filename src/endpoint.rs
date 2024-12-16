@@ -4,7 +4,6 @@
 
 use std::fmt::Debug;
 
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
@@ -23,7 +22,6 @@ pub async fn handle<T>(
 }
 
 /// Methods common to all messages.
-#[async_trait]
 pub trait Message: Serialize + Clone + Debug + Send + Sync {
     /// The message's inner reply type.
     type Reply;
@@ -41,25 +39,31 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
     fn authorization(&self) -> Option<&Authorization>;
 
     /// Handle the message.
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>>;
+    fn handle(
+        self, owner: &str, provider: &impl Provider,
+    ) -> impl Future<Output = Result<Reply<Self::Reply>>> + Send;
 
     /// Validate the message. This is a generic validation common to all messages.
     /// Message-specific validation is done in the message handler.
-    async fn validate(&self, _owner: &str, provider: &impl Provider) -> Result<()> {
-        // if !tenant_gate.active(owner)? {
-        //     return Err(Error::Unauthorized("tenant not active"));
-        // }
+    fn validate(
+        &self, _owner: &str, provider: &impl Provider,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async {
+            // if !tenant_gate.active(owner)? {
+            //     return Err(Error::Unauthorized("tenant not active"));
+            // }
 
-        schema::validate(self)?;
+            schema::validate(self)?;
 
-        // authenticate the requestor
-        if let Some(authzn) = self.authorization() {
-            if let Err(e) = authzn.authenticate(provider.clone()).await {
-                return Err(unauthorized!("failed to authenticate: {e}"));
+            // authenticate the requestor
+            if let Some(authzn) = self.authorization() {
+                if let Err(e) = authzn.authenticate(provider.clone()).await {
+                    return Err(unauthorized!("failed to authenticate: {e}"));
+                }
             }
-        }
 
-        Ok(())
+            Ok(())
+        }
     }
 }
 

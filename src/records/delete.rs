@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -87,7 +86,6 @@ pub struct Delete {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Delete {
     type Reply = DeleteReply;
 
@@ -134,7 +132,6 @@ impl TryFrom<&Entry> for Delete {
     }
 }
 
-#[async_trait]
 impl Task for Delete {
     async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         delete(owner, self, provider).await

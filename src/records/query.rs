@@ -2,7 +2,6 @@
 //!
 //! `Query` is a message type used to query a record in the web node.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -127,7 +126,6 @@ pub struct Query {
     pub authorization: Option<Authorization>,
 }
 
-#[async_trait]
 impl Message for Query {
     type Reply = QueryReply;
 

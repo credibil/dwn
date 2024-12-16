@@ -2,7 +2,6 @@
 //!
 //! `Subscribe` is a message type used to subscribe a record in the web node.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::{StreamExt, future};
 use http::StatusCode;
@@ -70,7 +69,6 @@ pub struct Subscribe {
     pub authorization: Option<Authorization>,
 }
 
-#[async_trait]
 impl Message for Subscribe {
     type Reply = SubscribeReply;
 

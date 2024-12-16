@@ -2,8 +2,11 @@
 //!
 //! Serializer is used by DWN to generate queries native to the database(s).
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 
+use crate::records::DateRange;
 use crate::store::{
     Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
     TagFilter, Upper,
@@ -88,6 +91,9 @@ pub enum Dir {
 /// `Serialize` is used to provide overridable query serialization.
 pub trait Serialize {
     /// Serialize a DWN query using the given `Serializer`.
+    ///
+    /// # Errors
+    /// LATER: Add errors
     fn serialize<S: Serializer>(&self, serializer: &mut S) -> Result<()>;
 }
 
@@ -95,9 +101,9 @@ pub trait Serialize {
 impl Serialize for Query {
     fn serialize<S: Serializer>(&self, serializer: &mut S) -> Result<()> {
         match self {
-            Query::Messages(query) => query.serialize(serializer),
-            Query::Protocols(query) => query.serialize(serializer),
-            Query::Records(query) => query.serialize(serializer),
+            Self::Messages(query) => query.serialize(serializer),
+            Self::Protocols(query) => query.serialize(serializer),
+            Self::Records(query) => query.serialize(serializer),
         }
     }
 }
@@ -219,7 +225,7 @@ impl Serialize for RecordsQuery {
             for filter in &self.filters {
                 filter.serialize(filters_or)?;
             }
-            filters_or.close()
+            filters_or.close();
         }
 
         outer_and.close();
@@ -328,55 +334,13 @@ impl Serialize for RecordsFilter {
             outer_and.condition("descriptor.dataCid", Op::Eq, Value::Str(data_cid));
         }
         if let Some(date_range) = &self.date_created {
-            let field = "descriptor.dateCreated";
-            let range_and = outer_and.and_clause();
-            match date_range.lower {
-                Some(lower) => {
-                    range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                None => {}
-            }
-            match date_range.upper {
-                Some(upper) => {
-                    range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                None => {}
-            }
-            range_and.close();
+            serialize_date_range("descriptor.dateCreated", date_range, outer_and);
         }
         if let Some(date_range) = &self.date_published {
-            let field = "descriptor.datePublished";
-            let range_and = outer_and.and_clause();
-            match date_range.lower {
-                Some(lower) => {
-                    range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                None => {}
-            }
-            match date_range.upper {
-                Some(upper) => {
-                    range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                None => {}
-            }
-            range_and.close();
+            serialize_date_range("descriptor.datePublished", date_range, outer_and);
         }
         if let Some(date_range) = &self.date_updated {
-            let field = "descriptor.dateUpdated";
-            let range_and = outer_and.and_clause();
-            match date_range.lower {
-                Some(lower) => {
-                    range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                None => {}
-            }
-            match date_range.upper {
-                Some(upper) => {
-                    range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                None => {}
-            }
-            range_and.close();
+            serialize_date_range("descriptor.dateUpdated", date_range, outer_and);
         }
 
         // index fields
@@ -399,48 +363,63 @@ impl Serialize for RecordsFilter {
         }
 
         if let Some(tags) = &self.tags {
-            let tags_and = outer_and.and_clause();
-            for (property, filter) in tags {
-                let field = &format!("tags.{property}");
-
-                match filter {
-                    TagFilter::StartsWith(value) => {
-                        tags_and.condition(field, Op::Like, Value::Str(&format!("{value}%")));
-                    }
-                    TagFilter::Equal(_value) => {
-                        // FIXME: match value type
-                        //tags_and.condition(field, Op::Eq, Value::Str(value))
-                    }
-                    TagFilter::Range(range) => {
-                        let range_and = tags_and.and_clause();
-                        match range.lower {
-                            Some(Lower::GreaterThan(lower)) => {
-                                range_and.condition(field, Op::Gt, Value::Int(lower));
-                            }
-                            Some(Lower::GreaterThanOrEqual(lower)) => {
-                                range_and.condition(field, Op::Ge, Value::Int(lower));
-                            }
-                            None => {}
-                        }
-                        match range.upper {
-                            Some(Upper::LessThan(upper)) => {
-                                range_and.condition(field, Op::Lt, Value::Int(upper));
-                            }
-                            Some(Upper::LessThanOrEqual(upper)) => {
-                                range_and.condition(field, Op::Le, Value::Int(upper));
-                            }
-                            None => {}
-                        }
-                        range_and.close();
-                    }
-                }
-            }
-            tags_and.close()
+            serialize_tags(tags, outer_and);
         }
 
         outer_and.close();
         Ok(())
     }
+}
+
+fn serialize_date_range<S: Serializer>(field: &str, date_range: &DateRange, serializer: &mut S) {
+    let range_and = serializer.and_clause();
+    if let Some(lower) = date_range.lower {
+        range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
+    }
+    if let Some(upper) = date_range.upper {
+        range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
+    }
+    range_and.close();
+}
+
+fn serialize_tags<S: Serializer>(tags: &BTreeMap<String, TagFilter>, serializer: &mut S) {
+    let tags_and = serializer.and_clause();
+    for (property, filter) in tags {
+        let field = &format!("tags.{property}");
+
+        match filter {
+            TagFilter::StartsWith(value) => {
+                tags_and.condition(field, Op::Like, Value::Str(&format!("{value}%")));
+            }
+            TagFilter::Equal(_value) => {
+                // FIXME: match value type
+                //tags_and.condition(field, Op::Eq, Value::Str(value))
+            }
+            TagFilter::Range(range) => {
+                let range_and = tags_and.and_clause();
+                match range.lower {
+                    Some(Lower::GreaterThan(lower)) => {
+                        range_and.condition(field, Op::Gt, Value::Int(lower));
+                    }
+                    Some(Lower::GreaterThanOrEqual(lower)) => {
+                        range_and.condition(field, Op::Ge, Value::Int(lower));
+                    }
+                    None => {}
+                }
+                match range.upper {
+                    Some(Upper::LessThan(upper)) => {
+                        range_and.condition(field, Op::Lt, Value::Int(upper));
+                    }
+                    Some(Upper::LessThanOrEqual(upper)) => {
+                        range_and.condition(field, Op::Le, Value::Int(upper));
+                    }
+                    None => {}
+                }
+                range_and.close();
+            }
+        }
+    }
+    tags_and.close();
 }
 
 #[cfg(test)]

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use futures::stream::StreamExt;
 use vercre_dwn::event::{Event, Subscriber};
 use vercre_dwn::provider::EventStream;
@@ -8,7 +7,6 @@ use crate::provider::ProviderImpl;
 
 const SUBJECT: &str = "events";
 
-#[async_trait]
 impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
     async fn subscribe(&self, owner: &str) -> Result<Subscriber> {

@@ -5,7 +5,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -97,7 +96,6 @@ pub struct Configure {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Configure {
     type Reply = ConfigureReply;
 

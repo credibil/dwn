@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Result, anyhow};
-// use async_trait::async_trait;
+//
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{SecretKey, Signer as _, SigningKey};
 use vercre_dwn::provider::{KeyStore, Keyring};
@@ -82,7 +82,6 @@ impl KeyStore for ProviderImpl {
 
 impl Keyring for KeyringImpl {}
 
-// #[async_trait]
 impl Signer for KeyringImpl {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
@@ -112,7 +111,6 @@ impl Signer for KeyringImpl {
     }
 }
 
-// #[async_trait]
 impl Cipher for KeyringImpl {
     async fn encrypt(&self, _plaintext: &[u8], _recipient_public_key: &[u8]) -> Result<Vec<u8>> {
         todo!()

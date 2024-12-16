@@ -5,7 +5,6 @@
 use std::collections::VecDeque;
 use std::io::Read;
 
-use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat;
 use chrono::{DateTime, Utc};
@@ -178,7 +177,6 @@ pub struct Write {
     pub data_stream: Option<DataStream>,
 }
 
-#[async_trait]
 impl Message for Write {
     type Reply = WriteReply;
 

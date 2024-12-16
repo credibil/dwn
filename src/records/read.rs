@@ -2,7 +2,6 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
-use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
@@ -123,7 +122,6 @@ pub struct Read {
     pub authorization: Option<Authorization>,
 }
 
-#[async_trait]
 impl Message for Read {
     type Reply = ReadReply;
 

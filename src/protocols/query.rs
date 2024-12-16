@@ -1,6 +1,5 @@
 //! # Protocols Query
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -73,7 +72,6 @@ pub struct Query {
     pub authorization: Option<Authorization>,
 }
 
-#[async_trait]
 impl Message for Query {
     type Reply = QueryReply;
 

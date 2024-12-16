@@ -2,7 +2,6 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::{StreamExt, future};
 use http::StatusCode;
@@ -58,7 +57,6 @@ pub struct Subscribe {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Subscribe {
     type Reply = SubscribeReply;
 

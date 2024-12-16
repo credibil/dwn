@@ -1,5 +1,4 @@
 use anyhow::Result;
-use async_trait::async_trait;
 use vercre_dwn::provider::{Entry, MessageStore, Query};
 use vercre_dwn::store::Cursor;
 use vercre_dwn::store::serializer::Serialize;
@@ -9,7 +8,6 @@ use super::ProviderImpl;
 use crate::provider::NAMESPACE;
 pub(crate) const TABLE: &str = "message";
 
-#[async_trait]
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
