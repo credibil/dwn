@@ -1199,7 +1199,6 @@ async fn date_created_range() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
-
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
     assert_eq!(entries[1].write.record_id, write_2024.record_id);
 
@@ -1221,7 +1220,6 @@ async fn date_created_range() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
-
     assert_eq!(entries[0].write.record_id, write_2022.record_id);
     assert_eq!(entries[1].write.record_id, write_2023.record_id);
 
@@ -1246,7 +1244,6 @@ async fn date_created_range() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
-
     assert_eq!(entries[0].write.record_id, write_2024.record_id);
 
     // --------------------------------------------------
@@ -1268,7 +1265,6 @@ async fn date_created_range() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
-
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
 }
 
@@ -1321,7 +1317,7 @@ async fn published_unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Confirm range before un-publishing.
+    // Confirm range before unpublishing.
     // --------------------------------------------------
     let last_2022 = DateTime::parse_from_rfc3339("2022-12-31T00:00:00-00:00").unwrap();
 
@@ -1338,4 +1334,311 @@ async fn published_unpublished() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+
+    // --------------------------------------------------
+    // Confirm published before unpublishing.
+    // --------------------------------------------------
+    // owner-requested date range
+    let owner_range = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply =
+        endpoint::handle(ALICE_DID, owner_range.clone(), &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    // owner-requested date range
+    let owner_published = QueryBuilder::new()
+        .filter(RecordsFilter::new().published(true))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, owner_published.clone(), &provider)
+        .await
+        .expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 3);
+
+    // anonymous request date range
+    let anon_range = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
+        .date_sort(Sort::CreatedAscending)
+        .build()
+        .expect("should create query");
+    let reply =
+        endpoint::handle(ALICE_DID, anon_range.clone(), &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+
+    // anonymous `published` filter
+    let anon_published = QueryBuilder::new()
+        .filter(RecordsFilter::new().published(true))
+        .date_sort(Sort::CreatedAscending)
+        .build()
+        .expect("should create query");
+    let reply =
+        endpoint::handle(ALICE_DID, anon_range.clone(), &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+
+    // --------------------------------------------------
+    // Confirm published before unpublishing.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().published(true))
+        .build()
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 3);
+
+    // --------------------------------------------------
+    // Unpublish.
+    // --------------------------------------------------
+    let unwrite_2022 = WriteBuilder::from(write_2022)
+        .published(false)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, unwrite_2022.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let unwrite_2023 = WriteBuilder::from(write_2023)
+        .published(false)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, unwrite_2023.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let unwrite_2024 = WriteBuilder::from(write_2024)
+        .published(false)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, unwrite_2024.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Earlier anonymous requests should return no results.
+    // --------------------------------------------------
+    // published date range filter
+    let reply = endpoint::handle(ALICE_DID, anon_range, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+
+    // published 'true' filter
+    let reply = endpoint::handle(ALICE_DID, anon_published, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+
+    // --------------------------------------------------
+    // Earlier anonymous requests should return no results.
+    // --------------------------------------------------
+    // published date range filter
+    let reply = endpoint::handle(ALICE_DID, owner_range, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+
+    // published 'true' filter
+    let reply =
+        endpoint::handle(ALICE_DID, owner_published, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+}
+
+// Should be able to query by date published.
+#[tokio::test]
+async fn date_published() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 3 records with varying created dates.
+    // --------------------------------------------------
+    let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
+    let write_2022 = Write::build()
+        .date_created(first_2022.into())
+        .published(true)
+        .date_published(first_2022.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2022.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
+    let write_2023 = Write::build()
+        .date_created(first_2023.into())
+        .published(true)
+        .date_published(first_2023.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2023.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
+    let write_2024 = Write::build()
+        .date_created(first_2024.into())
+        .published(true)
+        .date_published(first_2024.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2024.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // From (greater than).
+    // --------------------------------------------------
+    let last_2022 = DateTime::parse_from_rfc3339("2022-12-31T00:00:00-00:00").unwrap();
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+    assert_eq!(entries[1].write.record_id, write_2024.record_id);
+
+    // --------------------------------------------------
+    // To (less than).
+    // --------------------------------------------------
+    let last_2023 = DateTime::parse_from_rfc3339("2023-12-31T00:00:00-00:00").unwrap();
+
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_published(DateRange::new().lt(last_2023.into())))
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2022.record_id);
+    assert_eq!(entries[1].write.record_id, write_2023.record_id);
+
+    // --------------------------------------------------
+    // From and To (between).
+    // --------------------------------------------------
+    let last_2024 = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
+
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .date_published(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
+        )
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, write_2024.record_id);
+
+    // --------------------------------------------------
+    // Edge case where value equals `from` and `to`
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .date_published(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
+        )
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+
+    // --------------------------------------------------
+    // Anonymous request should return  results.
+    // --------------------------------------------------
+    let anon_range = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
+        .date_sort(Sort::CreatedAscending)
+        .build()
+        .expect("should create query");
+    let reply =
+        endpoint::handle(ALICE_DID, anon_range.clone(), &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+
+    // --------------------------------------------------
+    // Non-owner request should return  results.
+    // --------------------------------------------------
+    let anon_range = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
+        .date_sort(Sort::CreatedAscending)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply =
+        endpoint::handle(ALICE_DID, anon_range.clone(), &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
 }

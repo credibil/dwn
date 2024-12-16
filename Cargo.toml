@@ -30,7 +30,7 @@ cid.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 futures.workspace = true
 http.workspace = true
-jsonschema = { version = "0.26.1", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.26.2", default-features = false, features = ["resolve-file"] }
 libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true

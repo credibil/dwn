@@ -24,8 +24,19 @@ pub async fn handle(
 ) -> Result<Reply<QueryReply>> {
     let mut records_query = RecordsQuery::from(query.clone());
 
-    // authorize query when filter is no explicitly set to `published`
-    if !query.descriptor.filter.published.unwrap_or_default() {
+    let mut published = query.descriptor.filter.published.unwrap_or_default();
+
+    // when date_published is set, automatically set `published` to true
+    if !published && query.descriptor.filter.date_published.is_some() {
+        let Some(filter) = records_query.filters.first_mut() else {
+            return Err(unexpected!("missing filter"));
+        };
+        filter.published = Some(true);
+        published = true;
+    }
+
+    // authorize query when filter is not explicitly set to `published`
+    if !published {
         query.authorize(owner, provider).await?;
         query.validate()?;
 
