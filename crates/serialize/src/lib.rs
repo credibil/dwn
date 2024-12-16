@@ -23,11 +23,11 @@ pub trait Serializer {
     /// The type of clause used by the serializer.
     type Clause: Clause;
 
-    /// Create a new query clause that uses an OR conjunction to join clause
+    /// Creates a new query clause that uses an OR conjunction to join clause
     /// conditions.
     fn or_clause(&mut self) -> &mut Self::Clause;
 
-    /// Create a new query clause that uses an AND conjunction to join clause
+    /// Creates a new query clause that uses an AND conjunction to join clause
     /// conditions.
     fn and_clause(&mut self) -> &mut Self::Clause;
 
@@ -40,7 +40,7 @@ pub trait Clause: Serializer {
     /// Adds a condition to the clause.
     fn condition(&mut self, field: &str, op: Op, value: Value);
 
-    /// Close the clause.
+    /// Closes the clause.
     fn close(&mut self);
 }
 

@@ -1,5 +1,6 @@
 //! Messages Subscribe
 
+use chrono::DateTime;
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -9,7 +10,7 @@ use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{
-    QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData, WriteProtocol,
+    DateRange, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData, WriteProtocol,
 };
 use vercre_dwn::{Error, RangeFilter, authorization, endpoint};
 
@@ -1136,4 +1137,65 @@ async fn data_size_full_range() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
+}
+
+// Should be able to query for records where date_created is within a specfied range.
+#[tokio::test]
+async fn date_created_range() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 3 records with varying created dates.
+    // --------------------------------------------------
+    let date_created = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
+    let write22 = Write::build()
+        .date_created(date_created.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write22.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let date_created = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
+    let write23 = Write::build()
+        .date_created(date_created.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write23.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let date_created = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
+    let write24 = Write::build()
+        .date_created(date_created.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write24.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Less than.
+    // --------------------------------------------------
+    let less_than = DateTime::parse_from_rfc3339("2023-12-31T00:00:00-00:00").unwrap();
+
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_created(DateRange::new().lt(less_than.into())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
 }

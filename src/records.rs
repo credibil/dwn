@@ -19,6 +19,7 @@ pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub use self::write::{DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol};
 pub use crate::data::DataStream;
+use crate::serde::rfc3339_micros_opt;
 use crate::{Quota, RangeFilter, Result, utils};
 
 // TODO: add builder for RecordsFilter
@@ -85,15 +86,15 @@ pub struct RecordsFilter {
 
     /// Filter messages created within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<RangeFilter<DateTime<Utc>>>,
+    pub date_created: Option<DateRange>,
 
     /// Filter messages published within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<RangeFilter<DateTime<Utc>>>,
+    pub date_published: Option<DateRange>,
 
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_updated: Option<RangeFilter<DateTime<Utc>>>,
+    pub date_updated: Option<DateRange>,
 }
 
 impl RecordsFilter {
@@ -109,6 +110,63 @@ impl RecordsFilter {
             if let Some(schema) = &self.schema { Some(utils::clean_url(schema)?) } else { None };
 
         Ok(filter)
+    }
+}
+
+/// Range filter.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct DateRange {
+    /// The filter's lower bound.
+    #[serde(rename = "from")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(serialize_with = "rfc3339_micros_opt")]
+    pub lower: Option<DateTime<Utc>>,
+
+    /// The filter's upper bound.
+    #[serde(rename = "to")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(serialize_with = "rfc3339_micros_opt")]
+    pub upper: Option<DateTime<Utc>>,
+}
+
+impl DateRange {
+    /// Create a new range filter.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            lower: None,
+            upper: None,
+        }
+    }
+
+    /// Specify a 'greater-than' lower bound for the filter.
+    #[must_use]
+    pub fn gt(mut self, gt: DateTime<Utc>) -> Self {
+        self.lower = Some(gt);
+        self
+    }
+
+    /// Specify a 'less-than' upper bound for the filter.
+    #[must_use]
+    pub fn lt(mut self, lt: DateTime<Utc>) -> Self {
+        self.upper = Some(lt);
+        self
+    }
+
+    /// Check if the range contains the value.
+    pub fn contains(&self, value: &DateTime<Utc>) -> bool {
+        if let Some(lower) = &self.lower {
+            if value < lower {
+                return false;
+            }
+        }
+        if let Some(upper) = &self.upper {
+            if value > upper {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -300,21 +358,21 @@ impl RecordsFilter {
 
     /// Add a date created to the filter.
     #[must_use]
-    pub const fn date_created(mut self, date_created: RangeFilter<DateTime<Utc>>) -> Self {
+    pub const fn date_created(mut self, date_created: DateRange) -> Self {
         self.date_created = Some(date_created);
         self
     }
 
     /// Add a date published to the filter.
     #[must_use]
-    pub const fn date_published(mut self, date_published: RangeFilter<DateTime<Utc>>) -> Self {
+    pub const fn date_published(mut self, date_published: DateRange) -> Self {
         self.date_published = Some(date_published);
         self
     }
 
     /// Add a date updated to the filter.
     #[must_use]
-    pub const fn date_updated(mut self, date_updated: RangeFilter<DateTime<Utc>>) -> Self {
+    pub const fn date_updated(mut self, date_updated: DateRange) -> Self {
         self.date_updated = Some(date_updated);
         self
     }

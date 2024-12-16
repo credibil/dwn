@@ -243,70 +243,52 @@ impl Serialize for RecordsFilter {
         if let Some(data_cid) = &self.data_cid {
             outer_and.condition("descriptor.dataCid", Op::Eq, Value::Str(data_cid));
         }
-        if let Some(ts_range) = &self.date_created {
+        if let Some(date_range) = &self.date_created {
             let field = "descriptor.dateCreated";
             let range_and = outer_and.and_clause();
-            match ts_range.lower {
-                Some(Lower::GreaterThan(lower)) => {
+            match date_range.lower {
+                Some(lower) => {
                     range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                Some(Lower::GreaterThanOrEqual(lower)) => {
-                    range_and.condition(field, Op::Ge, Value::Str(&lower.to_string()));
                 }
                 None => {}
             }
-            match ts_range.upper {
-                Some(Upper::LessThan(upper)) => {
+            match date_range.upper {
+                Some(upper) => {
                     range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                Some(Upper::LessThanOrEqual(upper)) => {
-                    range_and.condition(field, Op::Le, Value::Str(&upper.to_string()));
                 }
                 None => {}
             }
             range_and.close();
         }
-        if let Some(ts_range) = &self.date_published {
+        if let Some(date_range) = &self.date_published {
             let field = "descriptor.datePublished";
             let range_and = outer_and.and_clause();
-            match ts_range.lower {
-                Some(Lower::GreaterThan(lower)) => {
+            match date_range.lower {
+                Some(lower) => {
                     range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                Some(Lower::GreaterThanOrEqual(lower)) => {
-                    range_and.condition(field, Op::Ge, Value::Str(&lower.to_string()));
                 }
                 None => {}
             }
-            match ts_range.upper {
-                Some(Upper::LessThan(upper)) => {
+            match date_range.upper {
+                Some(upper) => {
                     range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                Some(Upper::LessThanOrEqual(upper)) => {
-                    range_and.condition(field, Op::Le, Value::Str(&upper.to_string()));
                 }
                 None => {}
             }
             range_and.close();
         }
-        if let Some(ts_range) = &self.date_updated {
+        if let Some(date_range) = &self.date_updated {
             let field = "descriptor.dateUpdated";
             let range_and = outer_and.and_clause();
-            match ts_range.lower {
-                Some(Lower::GreaterThan(lower)) => {
+            match date_range.lower {
+                Some(lower) => {
                     range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                Some(Lower::GreaterThanOrEqual(lower)) => {
-                    range_and.condition(field, Op::Ge, Value::Str(&lower.to_string()));
                 }
                 None => {}
             }
-            match ts_range.upper {
-                Some(Upper::LessThan(upper)) => {
+            match date_range.upper {
+                Some(upper) => {
                     range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                Some(Upper::LessThanOrEqual(upper)) => {
-                    range_and.condition(field, Op::Le, Value::Str(&upper.to_string()));
                 }
                 None => {}
             }

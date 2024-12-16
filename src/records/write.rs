@@ -21,13 +21,11 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::DataStream;
+use crate::records::{DataStream, DateRange};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
 // use crate::typestate::{Unsigned, Signed};
-use crate::{
-    Descriptor, Error, Interface, Method, RangeFilter, Result, data, forbidden, unexpected, utils,
-};
+use crate::{Descriptor, Error, Interface, Method, Result, data, forbidden, unexpected, utils};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -1413,7 +1411,7 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     };
     let message_timestamp = write.descriptor.base.message_timestamp;
 
-    let lt = RangeFilter::new().lt(message_timestamp);
+    let lt = DateRange::new().lt(message_timestamp);
     let query =
         RecordsQuery::new().add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
 
