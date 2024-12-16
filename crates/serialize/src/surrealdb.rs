@@ -2,8 +2,9 @@
 use crate::{Clause, Dir, Op, Value};
 
 pub struct Serializer {
-    pub output: String,
-    pub clauses: Vec<SqlClause>,
+    has_clause: bool,
+    output: String,
+    clauses: Vec<SqlClause>,
 }
 
 pub struct SqlClause {
@@ -11,11 +12,30 @@ pub struct SqlClause {
     pub initial: bool,
 }
 
+impl Serializer {
+    pub fn new() -> Self {
+        Self {
+            has_clause: false,
+            output: String::from("SELECT * FROM type::table($table)"),
+            clauses: vec![],
+        }
+    }
+
+    pub fn output(&self) -> &str {
+        &self.output
+    }
+}
+
 /// Serialize `MessagesQuery` to Surreal SQL.
 impl crate::Serializer for Serializer {
     type Clause = Self;
 
     fn or_clause(&mut self) -> &mut Self::Clause {
+        if !self.has_clause {
+            self.output.push_str(" WHERE ");
+        }
+        self.has_clause = true;
+
         if let Some(current) = self.clauses.last_mut() {
             if !current.initial {
                 self.output.push_str(&current.conjunction);
@@ -32,6 +52,11 @@ impl crate::Serializer for Serializer {
     }
 
     fn and_clause(&mut self) -> &mut Self::Clause {
+        if !self.has_clause {
+            self.output.push_str(" WHERE ");
+        }
+        self.has_clause = true;
+
         if let Some(current) = self.clauses.last_mut() {
             if !current.initial {
                 self.output.push_str(&current.conjunction);

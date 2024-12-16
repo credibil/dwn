@@ -382,12 +382,9 @@ mod tests {
             // published: None,
         });
 
-        let mut serializer = Serializer {
-            output: "SELECT * FROM type::table($table) WHERE ".to_string(),
-            clauses: vec![],
-        };
+        let mut serializer = Serializer::new();
 
         query.serialize(&mut serializer).unwrap();
-        println!("{}", serializer.output);
+        println!("{}", serializer.output());
     }
 }

@@ -19,12 +19,9 @@ impl MessageStore for ProviderImpl {
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Cursor)> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
-        let mut serializer = surrealdb::Serializer {
-            output: "SELECT * FROM type::table($table) WHERE ".to_string(),
-            clauses: vec![],
-        };
+        let mut serializer = surrealdb::Serializer::new();
         query.serialize(&mut serializer).unwrap();
-        let sql = serializer.output;
+        let sql = serializer.output();
         // println!("{sql}");
 
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
