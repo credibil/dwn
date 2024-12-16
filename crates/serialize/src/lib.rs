@@ -1,8 +1,13 @@
+#![allow(missing_docs)]
+
 //! # Serialize
 
-pub mod surreal;
+pub mod engine;
+pub mod surrealdb;
 
-/// `QuerySerializer` is used to provide overridable query serialization.
+use anyhow::Result;
+
+/// `Serialize` is used to provide overridable query serialization.
 ///
 /// The default implementation serializes the query to a SQL string, but can be
 /// overridden by implementers to provide custom serialization. For example, a
@@ -23,10 +28,39 @@ pub mod surreal;
 ///     }
 /// }
 /// ```
-pub trait QuerySerializer {
-    /// The output type of the serialization.
-    type Output;
+pub trait Serialize {
+    fn serialize<S: Serializer>(&self, serializer: &mut S) -> Result<()>;
+}
 
-    /// Serialize the query to the output type.
-    fn serialize(&self) -> Self::Output;
+pub trait Serializer {
+    type Clause: Clause;
+
+    fn or_clause(&mut self) -> &mut Self::Clause;
+    fn and_clause(&mut self) -> &mut Self::Clause;
+    fn order(&mut self, field: &str, sort: Dir);
+}
+
+pub trait Clause: Serializer {
+    fn add(&mut self, field: &str, op: Op, value: Value);
+    fn close(&mut self);
+}
+
+pub enum Value<'a> {
+    Bool(bool),
+    Int(usize),
+    Str(&'a str),
+}
+
+pub enum Op {
+    Eq,
+    Ge,
+    Gt,
+    Le,
+    Lt,
+    Like,
+}
+
+pub enum Dir {
+    Asc,
+    Desc,
 }

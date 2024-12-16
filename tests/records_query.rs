@@ -786,6 +786,22 @@ async fn unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
+    // Alice queries for the unpublished record.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("post").published(false))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+
+    // --------------------------------------------------
     // Bob unsuccessfully queries for unpublished record.
     // --------------------------------------------------
     let query = QueryBuilder::new()

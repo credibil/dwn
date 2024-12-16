@@ -6,7 +6,7 @@ use serde_json::Value;
 use vercre_dwn::event::Event;
 use vercre_dwn::provider::EventLog;
 use vercre_dwn::store::{Cursor, Query};
-use vercre_serialize::QuerySerializer;
+use vercre_serialize::{Serialize, surrealdb};
 
 use super::ProviderImpl;
 use crate::provider::NAMESPACE;
@@ -27,7 +27,15 @@ impl EventLog for ProviderImpl {
     }
 
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Cursor)> {
-        let sql = query.serialize();
+        self.db.use_ns(NAMESPACE).use_db(owner).await?;
+
+        let mut serializer = surrealdb::Serializer {
+            output: "SELECT * FROM type::table($table) WHERE ".to_string(),
+            clauses: vec![],
+        };
+        query.serialize(&mut serializer).unwrap();
+        let sql = serializer.output;
+
         let mut response = self.db.query(&sql).bind(("table", TABLE)).await?;
         let events: Vec<Event> = response.take(0)?;
         Ok((events, Cursor::default()))

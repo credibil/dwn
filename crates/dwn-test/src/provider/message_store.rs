@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use vercre_dwn::provider::{Entry, MessageStore, Query};
 use vercre_dwn::store::Cursor;
-use vercre_serialize::QuerySerializer;
+use vercre_serialize::{Serialize, surrealdb};
 
 use super::ProviderImpl;
 use crate::provider::NAMESPACE;
@@ -12,10 +12,6 @@ pub(crate) const TABLE: &str = "message";
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-
-        // let json = serde_json::to_string(entry)?;
-        // println!("json: {}\n", json);
-
         let _: Option<Entry> = self.db.update((TABLE, entry.cid()?)).content(entry).await?;
         Ok(())
     }
@@ -23,10 +19,18 @@ impl MessageStore for ProviderImpl {
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Cursor)> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
-        let sql = QuerySerializer::serialize(query);
-        // println!("sql: {}\n", sql);
+        let mut serializer = surrealdb::Serializer {
+            output: "SELECT * FROM type::table($table) WHERE ".to_string(),
+            clauses: vec![],
+        };
+        query.serialize(&mut serializer).unwrap();
+        let sql = serializer.output;
+        // println!("{sql}");
+
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         let entries: Vec<Entry> = response.take(0)?;
+
+        Ok((entries, Cursor::default()))
 
         // let pagination = Some(Pagination::default());
 
@@ -56,8 +60,6 @@ impl MessageStore for ProviderImpl {
         //         },
         //     ));
         // }
-
-        Ok((entries, Cursor::default()))
     }
 
     async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Entry>> {
