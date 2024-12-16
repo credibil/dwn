@@ -1,18 +1,23 @@
-// use std::collections::VecDeque;
+//! # SurrealDB
+
 use crate::{Clause, Dir, Op, Value};
 
+/// SurrealDB `Serializer` implements `Serializer` to generate Surreal SQL queries.
 pub struct Serializer {
     has_clause: bool,
     output: String,
     clauses: Vec<SqlClause>,
 }
 
+/// SqlClause is used to store the conjunction and condition state of a clause.
 pub struct SqlClause {
-    pub conjunction: String,
-    pub initial: bool,
+    conjunction: String,
+    has_condition: bool,
 }
 
 impl Serializer {
+    /// Create a new `Serializer` with the minimum output required to query a
+    /// SurrealDB database.
     pub fn new() -> Self {
         Self {
             has_clause: false,
@@ -21,24 +26,37 @@ impl Serializer {
         }
     }
 
+    /// Returns the generated SQL query.
     pub fn output(&self) -> &str {
         &self.output
     }
 
-    // Code common to both clause methods.
+    // Logic common to both clause methods.
     fn add_clause(&mut self) {
+        // add the WHERE keyword when this is the first clause
         if !self.has_clause {
             self.output.push_str(" WHERE ");
         }
         self.has_clause = true;
 
+        // only add a conjunction when the current clause already has a condition
         if let Some(current) = self.clauses.last_mut() {
-            if !current.initial {
+            if current.has_condition {
                 self.output.push_str(&current.conjunction);
             }
-            current.initial = false;
+            current.has_condition = true;
         }
         self.output.push_str("(");
+    }
+}
+
+impl SqlClause {
+    /// Create a new `SqlClause` with the given conjunction.
+    pub fn new(conjunction: impl Into<String>) -> Self {
+        Self {
+            conjunction: conjunction.into(),
+            has_condition: false,
+        }
     }
 }
 
@@ -48,21 +66,13 @@ impl crate::Serializer for Serializer {
 
     fn or_clause(&mut self) -> &mut Self::Clause {
         self.add_clause();
-
-        self.clauses.push(SqlClause {
-            conjunction: String::from(" OR "),
-            initial: true,
-        });
+        self.clauses.push(SqlClause::new(" OR "));
         self
     }
 
     fn and_clause(&mut self) -> &mut Self::Clause {
         self.add_clause();
-
-        self.clauses.push(SqlClause {
-            conjunction: String::from(" AND "),
-            initial: true,
-        });
+        self.clauses.push(SqlClause::new(" AND "));
         self
     }
 
@@ -74,14 +84,14 @@ impl crate::Serializer for Serializer {
     }
 }
 
-/// Serialize `MessagesFilter` to Surreal SQL.
 impl Clause for Serializer {
-    fn add(&mut self, field: &str, op: Op, value: Value) {
-        let clause = self.clauses.last_mut().unwrap();
-        if !clause.initial {
-            self.output.push_str(&clause.conjunction);
+    fn condition(&mut self, field: &str, op: Op, value: Value) {
+        // only add a conjunction when the current clause already has a condition
+        let current = self.clauses.last_mut().unwrap();
+        if current.has_condition {
+            self.output.push_str(&current.conjunction);
         }
-        clause.initial = false;
+        current.has_condition = true;
 
         let op = match op {
             Op::Eq => " = ",
