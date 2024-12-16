@@ -2,7 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use vercre_dwn::provider::{Entry, MessageStore, Query};
 use vercre_dwn::store::Cursor;
-use vercre_serialize::{Serialize, surrealdb};
+use vercre_dwn::store::serializer::Serialize;
+use vercre_serialize::surrealdb;
 
 use super::ProviderImpl;
 use crate::provider::NAMESPACE;
@@ -19,7 +20,7 @@ impl MessageStore for ProviderImpl {
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Cursor)> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
-        let mut serializer = surrealdb::Serializer::new();
+        let mut serializer = surrealdb::Sql::new();
         query.serialize(&mut serializer).unwrap();
         let sql = serializer.output();
         // println!("{sql}");

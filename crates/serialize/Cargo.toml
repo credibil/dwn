@@ -20,10 +20,6 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow.workspace = true
-chrono.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 vercre-dwn = { path = "../.." }
 
 [dev-dependencies]

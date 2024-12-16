@@ -1,11 +1,95 @@
+//! # Serializer
+//!
+//! Serializer is used by DWN to generate queries native to the database(s).
+
 use anyhow::Result;
-use vercre_dwn::store::{
+
+use crate::store::{
     Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
     TagFilter, Upper,
 };
-use vercre_dwn::{Interface, Method, Quota};
+use crate::{Interface, Method, Quota};
 
-use crate::{Clause, Dir, Op, Serialize, Serializer, Value};
+/// Serializer is used by DWN to generate queries native to the database(s)
+/// selected when implementing a DWN node.
+///
+/// The `Serializer` trait is intended to be used to generate one or more query
+/// clauses concatenated using AND/OR conjunctions. In turn a clause may can
+/// contain one or more conditions concatenated using an AND/OR conjunction.
+///
+/// A condition consists of a field, operator, and value.
+pub trait Serializer {
+    /// The type of clause used by the serializer.
+    type Clause: Clause;
+
+    /// Creates a new query clause that uses an OR conjunction to join clause
+    /// conditions.
+    fn or_clause(&mut self) -> &mut Self::Clause;
+
+    /// Creates a new query clause that uses an AND conjunction to join clause
+    /// conditions.
+    fn and_clause(&mut self) -> &mut Self::Clause;
+
+    /// Specifies an ordering clause to use for query results.
+    fn order(&mut self, field: &str, sort: Dir);
+}
+
+/// A `Clause` is used to generate a query clause contain one or more conditions.
+pub trait Clause: Serializer {
+    /// Adds a condition to the clause.
+    fn condition(&mut self, field: &str, op: Op, value: Value);
+
+    /// Closes the clause.
+    fn close(&mut self);
+}
+
+/// A `Value` is used to represent a condition value.
+pub enum Value<'a> {
+    /// A boolean value.
+    Bool(bool),
+
+    /// An integer value.
+    Int(usize),
+
+    /// A string value.
+    Str(&'a str),
+}
+
+/// An `Op` is used to represent a condition operator.
+pub enum Op {
+    /// Equal to.
+    Eq,
+
+    /// Greater than.
+    Gt,
+
+    /// Greater than or equal to.
+    Ge,
+
+    /// Less than.
+    Lt,
+
+    /// Less than or equal to.
+    Le,
+
+    /// Like.
+    Like,
+}
+
+/// A `Dir` is used to represent a sort direction.
+pub enum Dir {
+    /// Sort ascending.
+    Asc,
+
+    /// Sort descending.
+    Desc,
+}
+
+/// `Serialize` is used to provide overridable query serialization.
+pub trait Serialize {
+    /// Serialize a DWN query using the given `Serializer`.
+    fn serialize<S: Serializer>(&self, serializer: &mut S) -> Result<()>;
+}
 
 /// Serialize a supported DWN query to Surreal SQL.
 impl Serialize for Query {
@@ -361,8 +445,8 @@ impl Serialize for RecordsFilter {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
-    use crate::surrealdb::Serializer;
 
     #[test]
     fn test_serialize() {
@@ -372,9 +456,128 @@ mod tests {
             // published: None,
         });
 
-        let mut serializer = Serializer::new();
+        let mut serializer = Sql::new();
 
         query.serialize(&mut serializer).unwrap();
         println!("{}", serializer.output());
+    }
+
+    /// Sql `Serializer` implements `Serializer` to generate Surreal SQL queries.
+    pub struct Sql {
+        has_clause: bool,
+        output: String,
+        clauses: Vec<SqlClause>,
+    }
+
+    /// SqlClause is used to store the conjunction and condition state of a clause.
+    pub struct SqlClause {
+        conjunction: String,
+        has_condition: bool,
+    }
+
+    impl Sql {
+        /// Create a new `Serializer` with the minimum output required to query a
+        /// SurrealDB database.
+        pub fn new() -> Self {
+            Self {
+                has_clause: false,
+                output: String::from("SELECT * FROM type::table($table)"),
+                clauses: vec![],
+            }
+        }
+
+        /// Returns the generated SQL query.
+        pub fn output(&self) -> &str {
+            &self.output
+        }
+
+        // Logic common to both clause methods.
+        fn add_clause(&mut self) {
+            // add the WHERE keyword when this is the first clause
+            if !self.has_clause {
+                self.output.push_str(" WHERE ");
+            }
+            self.has_clause = true;
+
+            // only add a conjunction when the current clause already has a condition
+            if let Some(current) = self.clauses.last_mut() {
+                if current.has_condition {
+                    self.output.push_str(&current.conjunction);
+                }
+                current.has_condition = true;
+            }
+            self.output.push_str("(");
+        }
+    }
+
+    impl SqlClause {
+        /// Create a new `SqlClause` with the given conjunction.
+        pub fn new(conjunction: impl Into<String>) -> Self {
+            Self {
+                conjunction: conjunction.into(),
+                has_condition: false,
+            }
+        }
+    }
+
+    /// Serialize `MessagesQuery` to Surreal SQL.
+    impl Serializer for Sql {
+        type Clause = Self;
+
+        fn or_clause(&mut self) -> &mut Self::Clause {
+            self.add_clause();
+            self.clauses.push(SqlClause::new(" OR "));
+            self
+        }
+
+        fn and_clause(&mut self) -> &mut Self::Clause {
+            self.add_clause();
+            self.clauses.push(SqlClause::new(" AND "));
+            self
+        }
+
+        fn order(&mut self, field: &str, sort: Dir) {
+            match sort {
+                Dir::Asc => self.output.push_str(&format!(" ORDER BY {field} COLLATE ASC")),
+                Dir::Desc => self.output.push_str(&format!(" ORDER BY {field} COLLATE DESC")),
+            }
+        }
+    }
+
+    impl Clause for Sql {
+        fn condition(&mut self, field: &str, op: Op, value: Value) {
+            // only add a conjunction when the current clause already has a condition
+            let current = self.clauses.last_mut().unwrap();
+            if current.has_condition {
+                self.output.push_str(&current.conjunction);
+            }
+            current.has_condition = true;
+
+            let op = match op {
+                Op::Eq => " = ",
+                Op::Gt => " > ",
+                Op::Ge => " >= ",
+                Op::Lt => " < ",
+                Op::Le => " <= ",
+                Op::Like => " LIKE ",
+            };
+
+            match value {
+                Value::Str(s) => self.output.push_str(&format!("{field}{op}'{s}'")),
+                Value::Int(i) => self.output.push_str(&format!("{field}{op}{i}")),
+                Value::Bool(b) => {
+                    if b {
+                        self.output.push_str(&format!("{field} = true"))
+                    } else {
+                        self.output.push_str(&format!("(!{field} OR {field} = false)"))
+                    }
+                }
+            }
+        }
+
+        fn close(&mut self) {
+            self.clauses.pop();
+            self.output.push_str(")");
+        }
     }
 }

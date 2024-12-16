@@ -1147,10 +1147,7 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
         // published, date_published
         if let Some(published) = self.published {
             write.descriptor.published = Some(published);
-        }
-        if write.descriptor.published.unwrap_or_default() && self.date_published.is_none() {
-            write.descriptor.date_published =
-                Some(write.descriptor.date_published.unwrap_or_else(Utc::now));
+            write.descriptor.date_published = Some(self.date_published.unwrap_or_else(Utc::now));
         }
 
         match &self.data {

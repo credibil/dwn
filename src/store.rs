@@ -1,11 +1,14 @@
 //! # Store
 
+pub mod serializer;
+
 use std::ops::Deref;
 
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
 use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;

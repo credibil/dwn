@@ -5,8 +5,9 @@ use async_trait::async_trait;
 use serde_json::Value;
 use vercre_dwn::event::Event;
 use vercre_dwn::provider::EventLog;
+use vercre_dwn::store::serializer::Serialize;
 use vercre_dwn::store::{Cursor, Query};
-use vercre_serialize::{Serialize, surrealdb};
+use vercre_serialize::surrealdb;
 
 use super::ProviderImpl;
 use crate::provider::NAMESPACE;
@@ -29,7 +30,7 @@ impl EventLog for ProviderImpl {
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Cursor)> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
-        let mut serializer = surrealdb::Serializer::new();
+        let mut serializer = surrealdb::Sql::new();
         query.serialize(&mut serializer).unwrap();
         let sql = serializer.output();
 

@@ -1,9 +1,9 @@
 //! # SurrealDB
 
-use crate::{Clause, Dir, Op, Value};
+use vercre_dwn::store::serializer::{Clause, Dir, Op, Serializer, Value};
 
 /// SurrealDB `Serializer` implements `Serializer` to generate Surreal SQL queries.
-pub struct Serializer {
+pub struct Sql {
     has_clause: bool,
     output: String,
     clauses: Vec<SqlClause>,
@@ -15,7 +15,7 @@ pub struct SqlClause {
     has_condition: bool,
 }
 
-impl Serializer {
+impl Sql {
     /// Create a new `Serializer` with the minimum output required to query a
     /// SurrealDB database.
     pub fn new() -> Self {
@@ -61,7 +61,7 @@ impl SqlClause {
 }
 
 /// Serialize `MessagesQuery` to Surreal SQL.
-impl crate::Serializer for Serializer {
+impl Serializer for Sql {
     type Clause = Self;
 
     fn or_clause(&mut self) -> &mut Self::Clause {
@@ -84,7 +84,7 @@ impl crate::Serializer for Serializer {
     }
 }
 
-impl Clause for Serializer {
+impl Clause for Sql {
     fn condition(&mut self, field: &str, op: Op, value: Value) {
         // only add a conjunction when the current clause already has a condition
         let current = self.clauses.last_mut().unwrap();

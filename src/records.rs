@@ -141,19 +141,20 @@ impl DateRange {
 
     /// Specify a 'greater-than' lower bound for the filter.
     #[must_use]
-    pub fn gt(mut self, gt: DateTime<Utc>) -> Self {
+    pub const fn gt(mut self, gt: DateTime<Utc>) -> Self {
         self.lower = Some(gt);
         self
     }
 
     /// Specify a 'less-than' upper bound for the filter.
     #[must_use]
-    pub fn lt(mut self, lt: DateTime<Utc>) -> Self {
+    pub const fn lt(mut self, lt: DateTime<Utc>) -> Self {
         self.upper = Some(lt);
         self
     }
 
     /// Check if the range contains the value.
+    #[must_use]
     pub fn contains(&self, value: &DateTime<Utc>) -> bool {
         if let Some(lower) = &self.lower {
             if value < lower {
