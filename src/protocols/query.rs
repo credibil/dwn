@@ -38,7 +38,7 @@ pub async fn handle(
         store_query.published = Some(true);
     };
 
-    let (records, _) = MessageStore::query(provider, owner, &store_query.into()).await?;
+    let records = MessageStore::query(provider, owner, &store_query.into()).await?;
 
     // unpack messages
     let mut entries = vec![];
@@ -115,7 +115,7 @@ pub(super) async fn fetch_config(
     };
 
     // execute query
-    let (messages, _) = store.query(owner, &query.into()).await?;
+    let messages = store.query(owner, &query.into()).await?;
     if messages.is_empty() {
         return Ok(None);
     }

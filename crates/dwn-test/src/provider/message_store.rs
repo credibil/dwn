@@ -1,6 +1,5 @@
 use anyhow::Result;
 use vercre_dwn::provider::{Entry, MessageStore, Query};
-use vercre_dwn::store::Cursor;
 use vercre_dwn::store::serializer::Serialize;
 use vercre_serialize::surrealdb;
 
@@ -19,45 +18,16 @@ impl MessageStore for ProviderImpl {
         Ok(())
     }
 
-    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Cursor)> {
+    async fn query(&self, owner: &str, query: &Query) -> Result<Vec<Entry>> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
 
         let mut serializer = surrealdb::Sql::new();
         query.serialize(&mut serializer).unwrap();
         let sql = serializer.output();
-        println!("{sql}");
+        // println!("{sql}");
 
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
-        let entries: Vec<Entry> = response.take(0)?;
-
-        Ok((entries, Cursor::default()))
-
-        // // no pagination
-        // let Some(pagination) = &pagination else {
-        //     return Ok((entries, Cursor::default()));
-        // };
-
-        // pagination
-        // let limit = pagination.limit.unwrap_or_default();
-        // if limit < entries.len() {
-        //     // remove last entry and set cursor to the second-to-last entry
-        //     entries = entries.as_slice()[0..pagination.limit.unwrap_or_default()].to_vec();
-
-        //     let last_entry = entries.last().unwrap();
-        //     let message_cid = last_entry.cid()?;
-
-        //     // value is the value from the field sorted on
-        //     // let field = query.sort_on();
-        //     // let value = last_entry.get(field).unwrap_or_default();
-
-        //     return Ok((
-        //         entries,
-        //         Cursor {
-        //             message_cid,
-        //             sort_value: "".to_string(),
-        //         },
-        //     ));
-        // }
+        response.take(0).map_err(|e| e.into())
     }
 
     async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Entry>> {
@@ -73,6 +43,7 @@ impl MessageStore for ProviderImpl {
 
     async fn purge(&self) -> Result<()> {
         // self.db.use_ns(NAMESPACE);
+        // TODO: Implement purge
         Ok(())
     }
 }

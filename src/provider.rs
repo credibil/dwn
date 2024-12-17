@@ -1,6 +1,6 @@
 //! # Provider
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Cipher, KeyOps, Signer};
 
@@ -68,9 +68,63 @@ pub trait MessageStore: Send + Sync {
     fn put(&self, owner: &str, record: &Entry) -> impl Future<Output = Result<()>> + Send;
 
     /// Queries the underlying store for matches to the provided SQL WHERE clause.
-    fn query(
+    fn query(&self, owner: &str, query: &Query) -> impl Future<Output = Result<Vec<Entry>>> + Send;
+
+    /// Queries the underlying store for matches to the provided SQL WHERE clause.
+    fn paginated_query(
         &self, owner: &str, query: &Query,
-    ) -> impl Future<Output = Result<(Vec<Entry>, Cursor)>> + Send;
+    ) -> impl Future<Output = Result<(Vec<Entry>, Option<Cursor>)>> + Send {
+        async move {
+            let entries = self.query(owner, query).await?;
+
+            // no pagination
+            let Query::Records(query) = query else {
+                return Ok((entries, None));
+            };
+            // no pagination
+            let Some(pagination) = &query.pagination else {
+                return Ok((entries, None));
+            };
+            // sorted on?
+            let Some(sort_field) = &query.sort else {
+                return Ok((entries, None));
+            };
+            // additional results?
+            let limit = pagination.limit.unwrap_or(entries.len());
+            if entries.len() <= limit {
+                return Ok((entries, None));
+            }
+
+            // page offset
+            let offset = if let Some(cursor) = &pagination.cursor {
+                // find starting point
+                let Some(index) =
+                    entries.iter().position(|e| e.cid().ok().as_ref() == Some(&cursor.message_cid))
+                else {
+                    return Err(anyhow!("cursor `message_cid` is invalid"));
+                };
+                index
+            } else {
+                0
+            };
+
+            // capture page
+            let curr_page = entries.as_slice()[offset..offset + limit].to_vec();
+
+            // starting point for the next page (using `message_cid`)
+            let Some(next_entry) = entries.get(offset + limit) else {
+                return Ok((curr_page, None));
+            };
+
+            Ok((
+                curr_page,
+                Some(Cursor {
+                    message_cid: next_entry.cid()?,
+                    sort_value: sort_field.to_string(),
+                }),
+            ))
+        }
+    }
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.

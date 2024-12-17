@@ -78,8 +78,9 @@ pub async fn handle(
         }
     }
 
-    // get the latest active `RecordsWrite` records
-    let (records, _) = MessageStore::query(provider, owner, &records_query.into()).await?;
+    // fetch records matching query criteria
+    let (records, cursor) =
+        MessageStore::paginated_query(provider, owner, &records_query.into()).await?;
 
     // short-circuit when no records found
     if records.is_empty() {
@@ -110,7 +111,7 @@ pub async fn handle(
         let query = RecordsQuery::new()
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
             .include_archived(true);
-        let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
+        let records = MessageStore::query(provider, owner, &query.into()).await?;
         let mut initial_write: Write = (&records[0]).try_into()?;
         initial_write.encoded_data = None;
 
@@ -127,7 +128,7 @@ pub async fn handle(
         },
         body: Some(QueryReply {
             entries: Some(entries),
-            cursor: None,
+            cursor,
         }),
     })
 }

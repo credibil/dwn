@@ -130,7 +130,7 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
 
     let query = RecordsQuery::new()
         .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol));
-    let (records, _) = store.query(owner, &query.into()).await?;
+    let records= store.query(owner, &query.into()).await?;
     if records.is_empty() {
         return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
     }
@@ -191,7 +191,7 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
     };
 
     let query = RecordsQuery::new().add_filter(filter);
-    let (entries, _) = store.query(owner, &query.into()).await?;
+    let entries = store.query(owner, &query.into()).await?;
     for entry in entries {
         let Some(w) = entry.as_write() else {
             return Err(forbidden!("expected `RecordsWrite` message"));

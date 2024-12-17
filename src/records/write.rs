@@ -1310,7 +1310,7 @@ async fn existing_entries(
         .add_filter(RecordsFilter::new().record_id(record_id))
         .include_archived(true)
         .method(None);
-    let (entries, _) = store.query(owner, &query.into()).await.unwrap();
+    let entries = store.query(owner, &query.into()).await.unwrap();
     Ok(entries)
 }
 
@@ -1433,7 +1433,7 @@ async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> 
     let query =
         RecordsQuery::new().add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
 
-    let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    let records = MessageStore::query(provider, owner, &query.into()).await?;
 
     // delete matching messages
     for record in records {

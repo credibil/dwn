@@ -2034,7 +2034,7 @@ async fn date_sort() {
         .sign(&alice_keyring)
         .build()
         .await
-        .expect("should) create write");
+        .expect("should create write");
     let reply =
         endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -2086,11 +2086,7 @@ async fn date_sort() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedAscending)
-        .pagination(Pagination {
-            limit: Some(1),
-            offset: Some(0),
-            cursor: None,
-        })
+        .pagination(Pagination::new().limit(1))
         .sign(&alice_keyring)
         .build()
         .await
@@ -2109,11 +2105,16 @@ async fn date_sort() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedAscending)
-        .pagination(Pagination::new(1))
+        .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
         .sign(&alice_keyring)
         .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2.record_id);
 }

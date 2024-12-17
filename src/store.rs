@@ -331,36 +331,46 @@ pub struct Pagination {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
 
-    /// The offset from the start of the result set from which to start when
-    /// determining the page of results to return.
-    #[serde(skip)]
-    pub offset: Option<usize>,
-
     /// Cursor created form the previous page of results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
+    // /// The offset from the start of the result set from which to start when
+    // /// determining the page of results to return.
+    // #[serde(skip)]
+    // pub offset: Option<usize>,
 }
 
 impl Pagination {
     /// Create a new `Pagination` instance.
     #[must_use]
-    pub fn new(limit: usize) -> Self {
+    pub const fn new() -> Self {
         Self {
-            limit: Some(limit),
-            offset: None,
+            limit: None,
             cursor: None,
+            // offset: None,
         }
     }
 
-    /// Create a new `Pagination` instance with a cursor.
+    /// Set the limit.
     #[must_use]
-    pub fn from(cursor: Cursor) -> Self {
-        Self {
-            limit: None,
-            offset: None,
-            cursor: Some(cursor),
-        }
+    pub const fn limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
     }
+
+    /// Set the cursor.
+    #[must_use]
+    pub fn cursor(mut self, cursor: Cursor) -> Self {
+        self.cursor = Some(cursor);
+        self
+    }
+
+    // /// Set the offset.
+    // #[must_use]
+    // pub const fn offset(mut self, offset: usize) -> Self {
+    //     self.offset = Some(offset);
+    //     self
+    // }
 }
 
 /// Pagination cursor containing data from the last entry returned in the

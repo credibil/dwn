@@ -23,7 +23,7 @@ use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected}
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = RecordsQuery::from(read.clone());
-    let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    let entries = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching record".to_string()));
     }
@@ -81,7 +81,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         let query = RecordsQuery::new()
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
             .include_archived(true);
-        let (records, _) = MessageStore::query(provider, owner, &query.into()).await?;
+        let records = MessageStore::query(provider, owner, &query.into()).await?;
         if records.is_empty() {
             return Err(unexpected!("initial write not found"));
         }

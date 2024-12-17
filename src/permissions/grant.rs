@@ -280,7 +280,7 @@ impl Grant {
         let query = RecordsQuery::new()
             .add_filter(RecordsFilter::new().parent_id(&self.id).protocol_path(REVOCATION_PATH));
 
-        let (entries, _) = store.query(grantor, &query.into()).await?;
+        let entries = store.query(grantor, &query.into()).await?;
         if let Some(oldest) = entries.first().cloned() {
             if oldest.descriptor().message_timestamp.lt(timestamp) {
                 return Err(forbidden!("grant has been revoked"));
