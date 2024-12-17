@@ -12,6 +12,7 @@ use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{
     DateRange, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteData, WriteProtocol,
 };
+use vercre_dwn::store::Pagination;
 use vercre_dwn::{Error, RangeFilter, authorization, endpoint};
 
 // Should return a status of BadRequest (400) when querying for unpublished records
@@ -1966,4 +1967,153 @@ async fn attestation() {
         ".payload" => "[payload]",
         ".signatures[0].signature" => "[signature]",
     });
+}
+
+// Should exclude unpublished records when sorting on `date_published`.
+#[tokio::test]
+async fn exclude_unpublished() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 2 records, 1 published the other unpublished.
+    // --------------------------------------------------
+    let published = Write::build()
+        .schema("schema")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should) create write");
+    let reply =
+        endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let unpublished = Write::build()
+        .schema("schema")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, unpublished.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Sorting by `date_published` should not include unpublished records.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("schema"))
+        .date_sort(Sort::PublishedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, published.record_id);
+}
+
+// Should sort records if `date_sort` is specified (with and without a cursor).
+#[tokio::test]
+async fn date_sort() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 3 records.
+    // --------------------------------------------------
+    let write_1 = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"write_1".to_vec())))
+        .schema("schema")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should) create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_2 = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"write_2".to_vec())))
+        .schema("schema")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_3 = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"write_3".to_vec())))
+        .schema("schema")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_3.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Sort by `CreatedAscending`.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("schema"))
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 3);
+    assert_eq!(entries[0].write.record_id, write_1.record_id);
+    assert_eq!(entries[1].write.record_id, write_2.record_id);
+
+    // --------------------------------------------------
+    // Combine sorting with a cursor.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("schema"))
+        .date_sort(Sort::CreatedAscending)
+        .pagination(Pagination {
+            limit: Some(1),
+            offset: Some(0),
+            cursor: None,
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, write_1.record_id);
+
+    // --------------------------------------------------
+    // Use previous reply's cursor to fetch remaining records.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("schema"))
+        .date_sort(Sort::CreatedAscending)
+        .pagination(Pagination::new(1))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
 }

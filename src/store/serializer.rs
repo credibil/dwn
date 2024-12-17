@@ -33,8 +33,11 @@ pub trait Serializer {
     /// conditions.
     fn and_clause(&mut self) -> &mut Self::Clause;
 
-    /// Specifies an ordering clause to use for query results.
+    /// Sets an ordering clause to use for query results.
     fn order(&mut self, field: &str, sort: Dir);
+
+    /// Sets a limit and offset to limit the number of results returned.
+    fn limit(&mut self, limit: usize, offset: usize);
 }
 
 /// A `Clause` is used to generate a query clause contain one or more conditions.
@@ -243,15 +246,10 @@ impl Serialize for RecordsQuery {
         }
 
         // FIXME: pagination
-        // if let Some(pagination) = &self.pagination {
-        //     if let Some(limit) = pagination.limit {
-        //         sql.push_str(&format!(" LIMIT {limit}"));
-        //     }
-
-        //     if let Some(offset) = pagination.offset {
-        //         sql.push_str(&format!(" START {offset}"));
-        //     }
-        // }
+        if let Some(pagination) = &self.pagination {
+            serializer
+                .limit(pagination.limit.unwrap_or_default(), pagination.offset.unwrap_or_default());
+        }
 
         Ok(())
     }
@@ -522,6 +520,11 @@ mod tests {
                 Dir::Asc => self.output.push_str(&format!(" ORDER BY {field} COLLATE ASC")),
                 Dir::Desc => self.output.push_str(&format!(" ORDER BY {field} COLLATE DESC")),
             }
+        }
+
+        fn limit(&mut self, limit: usize, offset: usize) {
+            self.output.push_str(&format!(" LIMIT {limit}"));
+            self.output.push_str(&format!(" START {offset}"));
         }
     }
 

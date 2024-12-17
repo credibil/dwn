@@ -82,6 +82,11 @@ impl Serializer for Sql {
             Dir::Desc => self.output.push_str(&format!(" ORDER BY {field} COLLATE DESC")),
         }
     }
+
+    fn limit(&mut self, limit: usize, offset: usize) {
+        self.output.push_str(&format!(" LIMIT {limit}"));
+        self.output.push_str(&format!(" START {offset}"));
+    }
 }
 
 impl Clause for Sql {

@@ -25,7 +25,7 @@ impl MessageStore for ProviderImpl {
         let mut serializer = surrealdb::Sql::new();
         query.serialize(&mut serializer).unwrap();
         let sql = serializer.output();
-        // println!("{sql}");
+        println!("{sql}");
 
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         let entries: Vec<Entry> = response.take(0)?;

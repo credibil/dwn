@@ -24,19 +24,26 @@ pub async fn handle(
 ) -> Result<Reply<QueryReply>> {
     let mut records_query = RecordsQuery::from(query.clone());
 
-    let mut published = query.descriptor.filter.published.unwrap_or_default();
+    let mut published = query.descriptor.filter.published;
 
-    // when date_published is set, automatically set `published` to true
-    if !published && query.descriptor.filter.date_published.is_some() {
+    // when the `published` flag is unset and the query uses published-related
+    // settings, set the `published` flag to true
+    if published.is_none() {
         let Some(filter) = records_query.filters.first_mut() else {
             return Err(unexpected!("missing filter"));
         };
-        filter.published = Some(true);
-        published = true;
+
+        if query.descriptor.filter.date_published.is_some()
+            || (query.descriptor.date_sort == Some(Sort::PublishedAscending)
+                || query.descriptor.date_sort == Some(Sort::PublishedDescending))
+        {
+            filter.published = Some(true);
+            published = Some(true);
+        }
     }
 
     // authorize query when filter is not explicitly set to `published`
-    if !published {
+    if !published.unwrap_or_default() {
         query.authorize(owner, provider).await?;
         query.validate()?;
 
@@ -212,7 +219,14 @@ impl Query {
     }
 
     fn validate(&self) -> Result<()> {
-        validate_sort(self.descriptor.date_sort.as_ref(), &self.descriptor.filter)?;
+        if !self.descriptor.filter.published.unwrap_or_default()
+            && (self.descriptor.date_sort == Some(Sort::PublishedAscending)
+                || self.descriptor.date_sort == Some(Sort::PublishedDescending))
+        {
+            return Err(unexpected!(
+                "cannot sort by `date_published` when querying for unpublished records"
+            ));
+        }
 
         Ok(())
     }
@@ -362,7 +376,7 @@ impl QueryBuilder<Filtered, Unsigned> {
     /// # Errors
     /// LATER: Add errors
     pub fn build(self) -> Result<Query> {
-        validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
+        // validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
 
         Ok(Query {
             descriptor: QueryDescriptor {
@@ -387,8 +401,6 @@ impl<S: Signer> QueryBuilder<Filtered, Signed<'_, S>> {
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Query> {
-        validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
-
         let descriptor = QueryDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
@@ -418,20 +430,4 @@ impl<S: Signer> QueryBuilder<Filtered, Signed<'_, S>> {
             authorization,
         })
     }
-}
-
-fn validate_sort(sort: Option<&Sort>, filter: &RecordsFilter) -> Result<()> {
-    let Some(sort) = sort else {
-        return Ok(());
-    };
-
-    if !filter.published.unwrap_or_default()
-        && (sort == &Sort::PublishedAscending || sort == &Sort::PublishedDescending)
-    {
-        return Err(unexpected!(
-            "cannot sort by `date_published` when querying for unpublished records"
-        ));
-    }
-
-    Ok(())
 }

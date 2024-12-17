@@ -113,7 +113,7 @@ impl From<&Write> for Entry {
         }
 
         // --------------------------------------------------------------------
-        // N.B. unneeded as we can use `message_timestamp` as the `dateUpdated` field
+        // HACK: `dateUpdated` should not be needed as we use `message_timestamp`
         // let date_updated =
         //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
         // record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
@@ -339,6 +339,28 @@ pub struct Pagination {
     /// Cursor created form the previous page of results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
+}
+
+impl Pagination {
+    /// Create a new `Pagination` instance.
+    #[must_use]
+    pub fn new(limit: usize) -> Self {
+        Self {
+            limit: Some(limit),
+            offset: None,
+            cursor: None,
+        }
+    }
+
+    /// Create a new `Pagination` instance with a cursor.
+    #[must_use]
+    pub fn from(cursor: Cursor) -> Self {
+        Self {
+            limit: None,
+            offset: None,
+            cursor: Some(cursor),
+        }
+    }
 }
 
 /// Pagination cursor containing data from the last entry returned in the
