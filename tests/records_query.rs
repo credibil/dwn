@@ -1545,7 +1545,6 @@ async fn date_published() {
     // To (less than).
     // --------------------------------------------------
     let last_2023 = DateTime::parse_from_rfc3339("2023-12-31T00:00:00-00:00").unwrap();
-
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().lt(last_2023.into())))
         .date_sort(Sort::CreatedAscending)
@@ -1566,7 +1565,6 @@ async fn date_published() {
     // From and To (between).
     // --------------------------------------------------
     let last_2024 = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
-
     let query = QueryBuilder::new()
         .filter(
             RecordsFilter::new()
@@ -1640,5 +1638,180 @@ async fn date_published() {
     let query_reply = reply.body.expect("should have reply");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+}
+
+// Should be able to query by date updated.
+#[tokio::test]
+async fn date_updated() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 3 records with varying created dates.
+    // --------------------------------------------------
+    let first_2021 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00-00:00").unwrap();
+
+    let write_1 = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"write_1".to_vec())))
+        .message_timestamp(first_2021.into())
+        .date_created(first_2021.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_2 = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"write_2".to_vec())))
+        .message_timestamp(first_2021.into())
+        .date_created(first_2021.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_3 = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"write_3".to_vec())))
+        .message_timestamp(first_2021.into())
+        .date_created(first_2021.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_3.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Publish records (thereby updating them)
+    // --------------------------------------------------
+    let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
+    let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
+    let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
+
+    let write_2022 = WriteBuilder::from(write_1)
+        .message_timestamp(first_2022.into())
+        .published(true)
+        .date_published(first_2022.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2022.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_2023 = WriteBuilder::from(write_2)
+        .message_timestamp(first_2023.into())
+        .published(true)
+        .date_published(first_2023.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2023.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_2024 = WriteBuilder::from(write_3)
+        .message_timestamp(first_2024.into())
+        .published(true)
+        .date_published(first_2024.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2024.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // From (greater than).
+    // --------------------------------------------------
+    let last_2022 = DateTime::parse_from_rfc3339("2022-12-31T00:00:00-00:00").unwrap();
+    let last_2023 = DateTime::parse_from_rfc3339("2023-12-31T00:00:00-00:00").unwrap();
+    let last_2024 = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
+
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_updated(DateRange::new().gt(last_2022.into())))
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+    assert_eq!(entries[1].write.record_id, write_2024.record_id);
+
+    // --------------------------------------------------
+    // To (less than).
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_updated(DateRange::new().lt(last_2023.into())))
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].write.record_id, write_2022.record_id);
+    assert_eq!(entries[1].write.record_id, write_2023.record_id);
+
+    // --------------------------------------------------
+    // From and To (between).
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .date_updated(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
+        )
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, write_2024.record_id);
+
+    // --------------------------------------------------
+    // Edge case where value equals `from` and `to`
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .date_updated(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
+        )
+        .date_sort(Sort::CreatedAscending)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
 }

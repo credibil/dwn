@@ -4,7 +4,6 @@ pub mod serializer;
 
 use std::ops::Deref;
 
-use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -113,9 +112,12 @@ impl From<&Write> for Entry {
             record.indexes.insert("attester".to_string(), Value::String(attester));
         }
 
-        let date_updated =
-            write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
-        record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
+        // --------------------------------------------------------------------
+        // N.B. unneeded as we can use message_timestamp as the `dateUpdated` field
+        // let date_updated =
+        //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
+        // record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
+        // --------------------------------------------------------------------
 
         if let Some(tags) = &write.descriptor.tags {
             let mut tag_map = Map::new();

@@ -340,7 +340,9 @@ impl Serialize for RecordsFilter {
             serialize_date_range("descriptor.datePublished", date_range, outer_and);
         }
         if let Some(date_range) = &self.date_updated {
-            serialize_date_range("descriptor.dateUpdated", date_range, outer_and);
+            // N.B. `dateUpdated` is set in the Write record's auxilary indexes in `store.rs`
+            // serialize_date_range("dateUpdated", date_range, outer_and);
+            serialize_date_range("descriptor.messageTimestamp", date_range, outer_and);
         }
 
         // index fields

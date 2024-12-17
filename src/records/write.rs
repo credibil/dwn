@@ -824,7 +824,6 @@ impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
             attesters: Unattested,
             encrypter: Unencrypted,
             origin: New,
-
             recipient: None,
             protocol: None,
             schema: None,
@@ -857,7 +856,6 @@ impl WriteBuilder<Existing, Unattested, Unencrypted, Unsigned> {
             signer: Unsigned,
             attesters: Unattested,
             encrypter: Unencrypted,
-
             recipient: None,
             protocol: None,
             schema: None,
@@ -878,12 +876,12 @@ impl WriteBuilder<Existing, Unattested, Unencrypted, Unsigned> {
 ///
 /// Immutable properties are able be set.
 impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
-    /// The datetime the record was created. Defaults to now.
-    #[must_use]
-    pub const fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
-        self.date_created = date_created;
-        self
-    }
+    // /// The datetime the record was created. Defaults to now.
+    // #[must_use]
+    // pub const fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
+    //     self.date_created = date_created;
+    //     self
+    // }
 
     /// Set a protocol for the record.
     #[must_use]
@@ -954,13 +952,6 @@ impl<O> WriteBuilder<O, Unattested, Unencrypted, Unsigned> {
         self
     }
 
-    /// The datetime the record was published. Defaults to now.
-    #[must_use]
-    pub const fn date_published(mut self, date_published: DateTime<Utc>) -> Self {
-        self.date_published = Some(date_published);
-        self
-    }
-
     /// Specify a protocol role for the record.
     #[must_use]
     pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
@@ -979,6 +970,33 @@ impl<O> WriteBuilder<O, Unattested, Unencrypted, Unsigned> {
     #[must_use]
     pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
         self.delegated_grant = Some(delegated_grant);
+        self
+    }
+
+    // ----------------------------------------------------------------
+    // Methods soley enabled for testing
+    // ----------------------------------------------------------------
+    /// Override message timestamp.
+    #[cfg(debug_assertions)]
+    #[must_use]
+    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+        self.message_timestamp = message_timestamp;
+        self
+    }
+
+    /// Override date created.
+    #[cfg(debug_assertions)]
+    #[must_use]
+    pub const fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
+        self.date_created = date_created;
+        self
+    }
+
+    /// Override date published.
+    #[cfg(debug_assertions)]
+    #[must_use]
+    pub const fn date_published(mut self, date_published: DateTime<Utc>) -> Self {
+        self.date_published = Some(date_published);
         self
     }
 }
