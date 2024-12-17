@@ -29,7 +29,7 @@ impl MessageStore for ProviderImpl {
 
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         let entries: Vec<Entry> = response.take(0)?;
-        
+
         Ok((entries, Cursor::default()))
 
         // // no pagination

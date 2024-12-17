@@ -1815,3 +1815,155 @@ async fn date_updated() {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
 }
+
+// Should be able use range and exact match queries together.
+#[tokio::test]
+async fn range_and_match() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 3 records with varying created dates.
+    // --------------------------------------------------
+    let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
+    let write_2022 = Write::build()
+        .date_created(first_2022.into())
+        .schema("2022And2023Schema")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2022.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
+    let write_2023 = Write::build()
+        .date_created(first_2023.into())
+        .schema("2022And2023Schema")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2023.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
+    let write_2024 = Write::build()
+        .date_created(first_2024.into())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2024.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Range and match.
+    // --------------------------------------------------
+    let last_2022 = DateTime::parse_from_rfc3339("2022-12-31T00:00:00-00:00").unwrap();
+    let last_2024 = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
+
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .schema("2022And2023Schema")
+                .date_created(DateRange::new().gt(last_2022.into()).lt(last_2024.into())),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, write_2023.record_id);
+}
+
+// Should include `authorization` in returned records.
+#[tokio::test]
+async fn authorization() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates a record.
+    // --------------------------------------------------
+    let write = Write::build()
+        .schema("schema")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice queries for the record, expecting to find `authorization` property.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("schema"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+
+    assert_snapshot!("authorization", entries[0].write.authorization, {
+        ".signature.payload" => "[payload]",
+        ".signature.signatures[0].signature" => "[signature]",
+        // ".attestation.payload" => "[payload]",
+        // ".attestation.signatures[0].signature" => "[signature]",
+    });
+}
+
+// Should include `attestation` in returned records.
+#[tokio::test]
+async fn attestation() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates a record.
+    // --------------------------------------------------
+    let write = Write::build()
+        .schema("schema")
+        .attest(&[&alice_keyring])
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice queries for the record, expecting to find `authorization` property.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("schema"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+
+    assert_snapshot!("attestation", entries[0].write.attestation, {
+        ".payload" => "[payload]",
+        ".signatures[0].signature" => "[signature]",
+    });
+}

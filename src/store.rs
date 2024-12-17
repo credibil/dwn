@@ -113,7 +113,7 @@ impl From<&Write> for Entry {
         }
 
         // --------------------------------------------------------------------
-        // N.B. unneeded as we can use message_timestamp as the `dateUpdated` field
+        // N.B. unneeded as we can use `message_timestamp` as the `dateUpdated` field
         // let date_updated =
         //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
         // record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
