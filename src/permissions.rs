@@ -21,7 +21,7 @@ pub(crate) async fn fetch_grant(
 ) -> Result<Grant> {
     let query = RecordsQuery::new().add_filter(RecordsFilter::new().record_id(grant_id));
     let entries = store.query(owner, &query.into()).await?;
-    
+
     let Some(entry) = entries.first() else {
         return Err(forbidden!("no grant found"));
     };

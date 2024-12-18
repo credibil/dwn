@@ -34,7 +34,7 @@ pub trait Serializer {
     fn and_clause(&mut self) -> &mut Self::Clause;
 
     /// Sets an ordering clause to use for query results.
-    fn order(&mut self, field: &str, sort: Dir);
+    fn order(&mut self, fields: &[SortField]);
 
     // /// Sets a limit and offset to limit the number of results returned.
     // fn limit(&mut self, limit: usize, offset: usize);
@@ -82,13 +82,13 @@ pub enum Op {
     Like,
 }
 
-/// A `Dir` is used to represent a sort direction.
-pub enum Dir {
+/// `SortField` represents a sort field and direction.
+pub enum SortField<'a> {
     /// Sort ascending.
-    Asc,
+    Asc(&'a str),
 
     /// Sort descending.
-    Desc,
+    Desc(&'a str),
 }
 
 /// `Serialize` is used to provide overridable query serialization.
@@ -134,7 +134,7 @@ impl Serialize for ProtocolsQuery {
         }
         outer_and.close();
 
-        serializer.order("descriptor.messageTimestamp", Dir::Asc);
+        serializer.order(&[SortField::Asc("descriptor.messageTimestamp")]);
 
         Ok(())
     }
@@ -151,7 +151,7 @@ impl Serialize for MessagesQuery {
             outer_or.close();
         }
 
-        serializer.order("descriptor.messageTimestamp", Dir::Asc);
+        serializer.order(&[SortField::Asc("descriptor.messageTimestamp")]);
 
         Ok(())
     }
@@ -233,19 +233,25 @@ impl Serialize for RecordsQuery {
 
         outer_and.close();
 
-        // sorting
+        // sorting - sort field + `message_cid` as a tiebreaker
         if let Some(sort) = &self.sort {
             match sort {
                 Sort::CreatedAscending | Sort::PublishedAscending | Sort::TimestampAscending => {
-                    serializer.order(&format!("descriptor.{sort}"), Dir::Asc);
+                    serializer.order(&[
+                        SortField::Asc(&format!("descriptor.{sort}")),
+                        SortField::Asc("messageCid"),
+                    ]);
                 }
                 Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending => {
-                    serializer.order(&format!("descriptor.{sort}"), Dir::Desc);
+                    serializer.order(&[
+                        SortField::Desc(&format!("descriptor.{sort}")),
+                        SortField::Desc("messageCid"),
+                    ]);
                 }
             }
         }
 
-        // FIXME: pagination
+        // LATER: implement pagination here if spec changes to `limit` and `offset`
         // if let Some(pagination) = &self.pagination {
         //     serializer
         //         .limit(pagination.limit.unwrap_or_default(), pagination.offset.unwrap_or_default());
@@ -515,10 +521,13 @@ mod tests {
             self
         }
 
-        fn order(&mut self, field: &str, sort: Dir) {
-            match sort {
-                Dir::Asc => self.output.push_str(&format!(" ORDER BY {field} COLLATE ASC")),
-                Dir::Desc => self.output.push_str(&format!(" ORDER BY {field} COLLATE DESC")),
+        fn order(&mut self, sort_fields: &[SortField]) {
+            self.output.push_str(" ORDER BY ");
+            for field in sort_fields {
+                match field {
+                    SortField::Asc(f) => self.output.push_str(&format!("{f} ASC, ")),
+                    SortField::Desc(f) => self.output.push_str(&format!("{f} DESC, ")),
+                }
             }
         }
 

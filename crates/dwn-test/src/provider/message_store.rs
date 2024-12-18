@@ -25,7 +25,6 @@ impl MessageStore for ProviderImpl {
         query.serialize(&mut serializer).unwrap();
         let sql = serializer.output();
         // println!("{sql}");
-
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         response.take(0).map_err(|e| e.into())
     }

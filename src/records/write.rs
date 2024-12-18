@@ -1166,7 +1166,8 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
         }
         // date_published - need to unset if `published` is false
         if write.descriptor.published.unwrap_or_default() {
-            write.descriptor.date_published = Some(self.date_published.unwrap_or_else(Utc::now));
+            write.descriptor.date_published =
+                Some(self.date_published.unwrap_or(self.message_timestamp));
         } else {
             write.descriptor.date_published = None;
         }

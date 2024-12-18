@@ -1,6 +1,6 @@
 //! # SurrealDB
 
-use vercre_dwn::store::serializer::{Clause, Dir, Op, Serializer, Value};
+use vercre_dwn::store::serializer::{Clause, Op, Serializer, SortField, Value};
 
 /// SurrealDB `Serializer` implements `Serializer` to generate Surreal SQL queries.
 pub struct Sql {
@@ -76,13 +76,20 @@ impl Serializer for Sql {
         self
     }
 
-    fn order(&mut self, field: &str, sort: Dir) {
-        match sort {
-            Dir::Asc => self.output.push_str(&format!(" ORDER BY {field} COLLATE ASC")),
-            Dir::Desc => self.output.push_str(&format!(" ORDER BY {field} COLLATE DESC")),
+    fn order(&mut self, sort_fields: &[SortField]) {
+        self.output.push_str(" ORDER BY ");
+        for field in sort_fields {
+            match field {
+                SortField::Asc(f) => self.output.push_str(&format!("{f} ASC,")),
+                SortField::Desc(f) => self.output.push_str(&format!("{f} DESC,")),
+            }
         }
+
+        // remove trailing comma
+        self.output.pop();
     }
 
+    // LATER: use database for pagination when spec allows
     // fn limit(&mut self, limit: usize, offset: usize) {
     //     self.output.push_str(&format!(" LIMIT {limit}"));
     //     self.output.push_str(&format!(" START {offset}"));

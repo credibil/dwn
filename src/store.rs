@@ -94,6 +94,7 @@ impl Deref for Entry {
     }
 }
 
+// LATER: perhaps should be TryFrom?
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         let mut record = Self {
@@ -106,6 +107,9 @@ impl From<&Write> for Entry {
             "author".to_string(),
             Value::String(write.authorization.author().unwrap_or_default()),
         );
+        record
+            .indexes
+            .insert("messageCid".to_string(), Value::String(write.cid().unwrap_or_default()));
 
         if let Some(attestation) = &write.attestation {
             let attester = authorization::signer_did(attestation).unwrap_or_default();
@@ -113,7 +117,7 @@ impl From<&Write> for Entry {
         }
 
         // --------------------------------------------------------------------
-        // HACK: `dateUpdated` should not be needed as we use `message_timestamp`
+        // LATER: `dateUpdated` should not be needed as we use `message_timestamp`
         // let date_updated =
         //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
         // record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));

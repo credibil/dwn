@@ -11,7 +11,7 @@ pub use crate::tasks::ResumableTask;
 
 /// Issuer Provider trait.
 pub trait Provider:
-    MessageStore + BlockStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver + Clone
+    MessageStore + BlockStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver
 {
 }
 
@@ -67,10 +67,10 @@ pub trait MessageStore: Send + Sync {
     /// Store a message in the underlying store.
     fn put(&self, owner: &str, record: &Entry) -> impl Future<Output = Result<()>> + Send;
 
-    /// Queries the underlying store for matches to the provided SQL WHERE clause.
+    /// Queries the underlying store for matches to the provided query.
     fn query(&self, owner: &str, query: &Query) -> impl Future<Output = Result<Vec<Entry>>> + Send;
 
-    /// Queries the underlying store for matches to the provided SQL WHERE clause.
+    /// Queries the underlying store returning the current page of results.
     fn paginated_query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Entry>, Option<Cursor>)>> + Send {
@@ -90,7 +90,7 @@ pub trait MessageStore: Send + Sync {
                 return Ok((entries, None));
             };
             // additional results?
-            let limit = pagination.limit.unwrap_or(entries.len());
+            let mut limit = pagination.limit.unwrap_or(entries.len());
             if entries.len() <= limit {
                 return Ok((entries, None));
             }
@@ -107,6 +107,11 @@ pub trait MessageStore: Send + Sync {
             } else {
                 0
             };
+
+            // don't blow upper bound
+            if offset + limit > entries.len() {
+                limit = entries.len() - offset;
+            }
 
             // capture page
             let curr_page = entries.as_slice()[offset..offset + limit].to_vec();
