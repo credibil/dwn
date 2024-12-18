@@ -1,6 +1,6 @@
 //! Messages Subscribe
 
-use chrono::DateTime;
+use chrono::{DateTime, Duration};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -2397,7 +2397,6 @@ async fn sort_identical() {
 
 // Should paginate all records in ascending order.
 #[tokio::test]
-#[ignore]
 async fn paginate_ascending() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
@@ -2405,10 +2404,14 @@ async fn paginate_ascending() {
     // --------------------------------------------------
     // Alice creates 12 records.
     // --------------------------------------------------
-    // let timestamp = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
     let mut writes = vec![];
+    let mut date_created = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
+
     for i in 0..12 {
+        date_created -= Duration::days(1);
+
         let write = Write::build()
+            .date_created(date_created.into())
             .data(WriteData::Reader(DataStream::from(format!("write_{}", i).into_bytes())))
             .schema("schema")
             .published(true)
@@ -2423,7 +2426,7 @@ async fn paginate_ascending() {
     }
 
     // --------------------------------------------------
-    // PublishedDescending: sort with pagination.
+    // CreatedAscending: sort with pagination.
     // --------------------------------------------------
     let mut all_entries = vec![];
     let mut cursor = None;
@@ -2453,9 +2456,76 @@ async fn paginate_ascending() {
         }
     }
 
-    // all entries should be returned in correct order
+    // all entries should be returned in correct order (opposite of created order)
     assert_eq!(all_entries.len(), 12);
-    for (i, entry) in all_entries.iter().enumerate() {
-        assert_eq!(entry.write.record_id, writes[i].record_id);
+    for i in (0..12).rev() {
+        assert_eq!(all_entries[i].write.record_id, writes[11 - i].record_id);
+    }
+}
+
+// Should paginate all records in descending order.
+#[tokio::test]
+async fn paginate_descending() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice creates 12 records.
+    // --------------------------------------------------
+    let mut writes = vec![];
+    let mut date_created = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
+
+    for i in 0..12 {
+        date_created += Duration::days(1);
+
+        let write = Write::build()
+            .data(WriteData::Reader(DataStream::from(format!("write_{}", i).into_bytes())))
+            .schema("schema")
+            .published(true)
+            .sign(&alice_keyring)
+            .build()
+            .await
+            .expect("should create write");
+        let reply =
+            endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+        assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        writes.push(write);
+    }
+
+    // --------------------------------------------------
+    // PublishedDescending: sort with pagination.
+    // --------------------------------------------------
+    let mut all_entries = vec![];
+    let mut cursor = None;
+
+    loop {
+        let query = QueryBuilder::new()
+            .filter(RecordsFilter::new().schema("schema"))
+            .date_sort(Sort::CreatedDescending)
+            .pagination(Pagination {
+                limit: Some(5),
+                cursor,
+            })
+            .sign(&alice_keyring)
+            .build()
+            .await
+            .expect("should create query");
+        let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+        assert_eq!(reply.status.code, StatusCode::OK);
+
+        let query_reply = reply.body.expect("should have reply");
+        let entries = query_reply.entries.expect("should have entries");
+
+        all_entries.extend(entries.clone());
+        cursor = query_reply.cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+
+    // all entries should be returned in correct order (opposite of created order)
+    assert_eq!(all_entries.len(), 12);
+    for i in (0..12).rev() {
+        assert_eq!(all_entries[i].write.record_id, writes[11 - i].record_id);
     }
 }
