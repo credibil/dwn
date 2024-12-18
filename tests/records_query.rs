@@ -2529,3 +2529,51 @@ async fn paginate_descending() {
         assert_eq!(all_entries[i].write.record_id, writes[11 - i].record_id);
     }
 }
+
+// Should allow an anonymous query to return published records.
+#[tokio::test]
+async fn anonymous() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Create records.
+    // --------------------------------------------------
+    let write_1 = Write::build()
+        .schema("http://schema1")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_2 = Write::build()
+        .schema("http://schema2")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Query anonymously.
+    // --------------------------------------------------
+    let early_date = DateTime::parse_from_rfc3339("2000-01-01T00:00:00-00:00").unwrap();
+
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().date_created(DateRange::new().gt(early_date.into())))
+        .build()
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.record_id, write_1.record_id);
+}

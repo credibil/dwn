@@ -22,28 +22,18 @@ use crate::{Descriptor, Interface, Method, Result, forbidden, unauthorized, unex
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
-    let mut records_query = RecordsQuery::from(query.clone());
+    let mut query = query;
 
-    let mut published = query.descriptor.filter.published;
-
-    // when the `published` flag is unset and the query uses published-related
-    // settings, set the `published` flag to true
-    if published.is_none() {
-        let Some(filter) = records_query.filters.first_mut() else {
-            return Err(unexpected!("missing filter"));
-        };
-
-        if query.descriptor.filter.date_published.is_some()
-            || (query.descriptor.date_sort == Some(Sort::PublishedAscending)
-                || query.descriptor.date_sort == Some(Sort::PublishedDescending))
-        {
-            filter.published = Some(true);
-            published = Some(true);
-        }
+    // query for published records only?
+    let published_only = query.published_only();
+    if published_only {
+        query.descriptor.filter.published = Some(true);
     }
 
+    let mut records_query = RecordsQuery::from(query.clone());
+
     // authorize query when filter is not explicitly set to `published`
-    if !published.unwrap_or_default() {
+    if !published_only {
         query.authorize(owner, provider).await?;
         query.validate()?;
 
@@ -230,6 +220,26 @@ impl Query {
         }
 
         Ok(())
+    }
+
+    // when the `published` flag is unset and the query uses published-related
+    // settings, set the `published` flag to true
+    fn published_only(&self) -> bool {
+        if let Some(published) = self.descriptor.filter.published {
+            return published;
+        }
+        if self.descriptor.filter.date_published.is_some() {
+            return true;
+        }
+        if self.descriptor.date_sort == Some(Sort::PublishedAscending)
+            || self.descriptor.date_sort == Some(Sort::PublishedDescending)
+        {
+            return true;
+        }
+        if self.authorization.is_none() {
+            return true;
+        }
+        false
     }
 }
 
