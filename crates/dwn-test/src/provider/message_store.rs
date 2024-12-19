@@ -40,9 +40,8 @@ impl MessageStore for ProviderImpl {
         Ok(())
     }
 
+    // TODO: Implement purge
     async fn purge(&self) -> Result<()> {
-        // self.db.use_ns(NAMESPACE);
-        // TODO: Implement purge
-        Ok(())
+        todo!("implement purge")
     }
 }

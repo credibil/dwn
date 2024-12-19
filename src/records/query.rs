@@ -43,24 +43,28 @@ pub async fn handle(
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
+
         if author != owner {
             records_query.filters = vec![];
 
-            // when published is unset, set it to true
+            // Current filter: set `published` to true when None
             if query.descriptor.filter.published.is_none() {
-                records_query = records_query.add_filter(RecordsFilter::new().published(true));
+                let filter = query.descriptor.filter.clone();
+                records_query = records_query.add_filter(filter.published(true));
             }
 
-            // clone query filter and add author
-            let filter = query.descriptor.filter.clone();
+            // New filter: copy query filter remove authors except `author`
+            let mut filter = query.descriptor.filter.clone();
+            filter.author = None;
             records_query = records_query.add_filter(filter.add_author(&author).published(false));
 
-            // clone query filter and add author as recipient
-            let filter = query.descriptor.filter.clone();
+            // New filter: copy query filter and remove recipients except author
+            let mut filter = query.descriptor.filter.clone();
+            filter.recipient = None;
             records_query =
                 records_query.add_filter(filter.add_recipient(&author).published(false));
 
-            // when authorized by a protocol role, author can query any unpublished record
+            // New filter: author can query any record when authorized by a role
             if authzn.jws_payload()?.protocol_role.is_some() {
                 let filter = query.descriptor.filter.clone();
                 records_query = records_query.add_filter(filter.published(false));

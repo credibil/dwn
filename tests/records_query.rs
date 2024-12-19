@@ -482,9 +482,9 @@ async fn author() {
     assert_eq!(entries.len(), 2);
 }
 
-// Should query by recipient.
+// Should allow web node owner to query by recipient.
 #[tokio::test]
-async fn recipient() {
+async fn owner_recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
@@ -503,7 +503,7 @@ async fn recipient() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates 2 records.
+    // Alice creates 2 records, 1 for Bob and 1 for Carol.
     // --------------------------------------------------
     let alice_bob = Write::build()
         .recipient(BOB_DID)
@@ -2482,6 +2482,7 @@ async fn paginate_descending() {
             .data(WriteData::Reader(DataStream::from(format!("write_{}", i).into_bytes())))
             .schema("schema")
             .published(true)
+            .date_created(date_created.into())
             .sign(&alice_keyring)
             .build()
             .await
@@ -2576,4 +2577,718 @@ async fn anonymous() {
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_1.record_id);
+}
+
+// Should only return records meant for the specified recipient(s).
+#[tokio::test]
+async fn recipient_query() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates 2 records each for Bob and Carol; 2 public, 2 private.
+    // --------------------------------------------------
+    let alice_bob_private = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_bob_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let alice_bob_public = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_bob_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let alice_carol_private = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_carol_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let alice_carol_public = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_carol_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol creates 2 records each for Alice and Bob; 2 public, 2 private.
+    // --------------------------------------------------
+    let carol_alice_private = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_alice_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let carol_alice_public = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_alice_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let carol_bob_private = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_bob_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let carol_bob_public = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .published(true)
+        .data_format("application/json")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_bob_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob creates 2 records each for Alice and Carol; 2 public, 2 private.
+    // --------------------------------------------------
+    let bob_alice_private = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_alice_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let bob_alice_public = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_alice_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let bob_carol_private = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_carol_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let bob_carol_public = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_carol_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob queries for messages with himself and Alice as recipients.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_recipient(BOB_DID)
+                .add_recipient(ALICE_DID),
+        )
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Bob should be able to see 7 messages
+    assert_eq!(entries.len(), 7);
+    assert!(entries.iter().any(|e| e.write.record_id == alice_bob_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_bob_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_alice_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == alice_bob_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_alice_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_alice_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_bob_public.record_id));
+
+    // --------------------------------------------------
+    // Carol queries for messages with herself as recipient.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_recipient(CAROL_DID),
+        )
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Carol should be able to see 4 messages
+    assert_eq!(entries.len(), 4);
+    assert!(entries.iter().any(|e| e.write.record_id == alice_carol_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_carol_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == alice_carol_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_carol_public.record_id));
+
+    // --------------------------------------------------
+    // Alice queries for published records with herself and Bob as recipients.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_recipient(ALICE_DID)
+                .add_recipient(BOB_DID)
+                .published(true),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Carol should be able to see 4 messages
+    assert_eq!(entries.len(), 4);
+    assert!(entries.iter().any(|e| e.write.record_id == bob_alice_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_alice_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == alice_bob_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_bob_public.record_id));
+
+    // --------------------------------------------------
+    // Carol queries for private messages with herself and Alice as recipients.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_recipient(CAROL_DID)
+                .add_recipient(ALICE_DID)
+                .published(false),
+        )
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Carol should be able to see 3 messages
+    assert_eq!(entries.len(), 3);
+    assert!(entries.iter().any(|e| e.write.record_id == alice_carol_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_carol_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_alice_private.record_id));
+}
+
+// Should only return records authored by the specified author(s).
+#[tokio::test]
+async fn author_query() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol.
+    // --------------------------------------------------
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates 2 records each for Bob and Carol: 2 public, 2 private.
+    // --------------------------------------------------
+    let alice_bob_private = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_bob_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let alice_bob_public = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_bob_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let alice_carol_private = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_carol_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let alice_carol_public = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, alice_carol_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol creates 2 records each for Alice and Bob: 2 public, 2 private.
+    // --------------------------------------------------
+    let carol_alice_private = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_alice_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let carol_alice_public = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_alice_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let carol_bob_private = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_bob_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let carol_bob_public = Write::build()
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .published(true)
+        .data_format("application/json")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, carol_bob_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob creates 2 records each for Alice and Carol: 2 public, 2 private.
+    // --------------------------------------------------
+    let bob_alice_private = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_alice_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let bob_alice_public = Write::build()
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_alice_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let bob_carol_private = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_carol_private.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let bob_carol_public = Write::build()
+        .recipient(CAROL_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .data_format("application/json")
+        .published(true)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_carol_public.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob queries for messages with himself and Alice as authors.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_author(BOB_DID)
+                .add_author(ALICE_DID),
+        )
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Bob should be able to see 7 messages
+    assert_eq!(entries.len(), 7);
+    assert!(entries.iter().any(|e| e.write.record_id == alice_bob_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_alice_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_carol_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == alice_bob_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == alice_carol_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_alice_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_carol_public.record_id));
+
+    // --------------------------------------------------
+    // Carol queries for messages with herself as author.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_author(CAROL_DID),
+        )
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Carol should be able to see 4 messages
+    assert_eq!(entries.len(), 4);
+    assert!(entries.iter().any(|e| e.write.record_id == carol_alice_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_bob_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_alice_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_bob_public.record_id));
+
+    // --------------------------------------------------
+    // Alice queries for published records with herself and Bob as authors.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_author(ALICE_DID)
+                .add_author(BOB_DID)
+                .published(true),
+        )
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Carol should be able to see 4 messages
+    assert_eq!(entries.len(), 4);
+    assert!(entries.iter().any(|e| e.write.record_id == alice_bob_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == alice_carol_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_alice_public.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == bob_carol_public.record_id));
+
+    // --------------------------------------------------
+    // Carol queries for private messages with herself and Alice as recipients.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://allow-any.xyz")
+                .protocol_path("post")
+                .add_author(CAROL_DID)
+                .add_author(ALICE_DID)
+                .published(false),
+        )
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+
+    // Carol should be able to see 3 messages
+    assert_eq!(entries.len(), 3);
+    assert!(entries.iter().any(|e| e.write.record_id == alice_carol_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_alice_private.record_id));
+    assert!(entries.iter().any(|e| e.write.record_id == carol_bob_private.record_id));
 }

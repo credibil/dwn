@@ -53,6 +53,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
             //     return Err(Error::Unauthorized("tenant not active"));
             // }
 
+            #[cfg(debug_assertions)]
             schema::validate(self)?;
 
             // authenticate the requestor
