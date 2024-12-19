@@ -13,7 +13,7 @@ use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{Descriptor, Interface, Method, Result, forbidden, unauthorized, unexpected};
+use crate::{Descriptor, Interface, Method, Result, forbidden, unauthorized, unexpected, utils};
 
 /// Process `Query` message.
 ///
@@ -22,59 +22,29 @@ use crate::{Descriptor, Interface, Method, Result, forbidden, unauthorized, unex
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
-    let mut query = query;
+    query.validate()?;
 
-    // query for published records only?
-    let published_only = query.published_only();
-    if published_only {
+    let store_query = if query.only_published() {
+        // correct filter when querying soley for published records
+        let mut query = query;
         query.descriptor.filter.published = Some(true);
-    }
-
-    let mut records_query = RecordsQuery::from(query.clone());
-
-    // authorize query when filter is not explicitly set to `published`
-    if !published_only {
+        RecordsQuery::from(query)
+    } else {
         query.authorize(owner, provider).await?;
-        query.validate()?;
-
-        // when requestor (query message author) is not web node owner,
-        // recreate filters to include query author as record author or recipient
         let Some(authzn) = &query.authorization else {
             return Err(forbidden!("missing authorization"));
         };
-        let author = authzn.author()?;
 
-        if author != owner {
-            records_query.filters = vec![];
-
-            // Current filter: set `published` to true when None
-            if query.descriptor.filter.published.is_none() {
-                let filter = query.descriptor.filter.clone();
-                records_query = records_query.add_filter(filter.published(true));
-            }
-
-            // New filter: copy query filter remove authors except `author`
-            let mut filter = query.descriptor.filter.clone();
-            filter.author = None;
-            records_query = records_query.add_filter(filter.add_author(&author).published(false));
-
-            // New filter: copy query filter and remove recipients except author
-            let mut filter = query.descriptor.filter.clone();
-            filter.recipient = None;
-            records_query =
-                records_query.add_filter(filter.add_recipient(&author).published(false));
-
-            // New filter: author can query any record when authorized by a role
-            if authzn.jws_payload()?.protocol_role.is_some() {
-                let filter = query.descriptor.filter.clone();
-                records_query = records_query.add_filter(filter.published(false));
-            }
+        if authzn.author()? == owner {
+            RecordsQuery::from(query)
+        } else {
+            query.into_non_owner()?
         }
-    }
+    };
 
     // fetch records matching query criteria
     let (records, cursor) =
-        MessageStore::paginated_query(provider, owner, &records_query.into()).await?;
+        MessageStore::paginated_query(provider, owner, &store_query.into()).await?;
 
     // short-circuit when no records found
     if records.is_empty() {
@@ -214,9 +184,19 @@ impl Query {
     }
 
     fn validate(&self) -> Result<()> {
-        if !self.descriptor.filter.published.unwrap_or_default()
-            && (self.descriptor.date_sort == Some(Sort::PublishedAscending)
-                || self.descriptor.date_sort == Some(Sort::PublishedDescending))
+        if let Some(protocol) = &self.descriptor.filter.protocol {
+            utils::validate_url(protocol)?;
+        }
+
+        let Some(published) = self.descriptor.filter.published else {
+            return Ok(());
+        };
+        if published {
+            return Ok(());
+        }
+
+        if self.descriptor.date_sort == Some(Sort::PublishedAscending)
+            || self.descriptor.date_sort == Some(Sort::PublishedDescending)
         {
             return Err(unexpected!(
                 "cannot sort by `date_published` when querying for unpublished records"
@@ -228,7 +208,7 @@ impl Query {
 
     // when the `published` flag is unset and the query uses published-related
     // settings, set the `published` flag to true
-    fn published_only(&self) -> bool {
+    fn only_published(&self) -> bool {
         if let Some(published) = self.descriptor.filter.published {
             return published;
         }
@@ -244,6 +224,43 @@ impl Query {
             return true;
         }
         false
+    }
+
+    // when requestor (message author) is not web node owner,
+    // recreate filters to include query author as record author or recipient
+    fn into_non_owner(self) -> Result<RecordsQuery> {
+        let mut store_query = RecordsQuery::from(self.clone());
+
+        let Some(authzn) = &self.authorization else {
+            return Err(forbidden!("missing authorization"));
+        };
+        let author = authzn.author()?;
+
+        store_query.filters = vec![];
+
+        // New filter: copy query filter  and set `published` to true
+        if self.descriptor.filter.published.is_none() {
+            let filter = self.descriptor.filter.clone();
+            store_query = store_query.add_filter(filter.published(true));
+        }
+
+        // New filter: copy query filter remove authors except `author`
+        let mut filter = self.descriptor.filter.clone();
+        filter.author = None;
+        store_query = store_query.add_filter(filter.add_author(&author).published(false));
+
+        // New filter: copy query filter and remove recipients except author
+        let mut filter = self.descriptor.filter.clone();
+        filter.recipient = None;
+        store_query = store_query.add_filter(filter.add_recipient(&author).published(false));
+
+        // New filter: author can query any record when authorized by a role
+        if authzn.jws_payload()?.protocol_role.is_some() {
+            let filter = self.descriptor.filter.clone();
+            store_query = store_query.add_filter(filter.published(false));
+        }
+
+        Ok(store_query)
     }
 }
 

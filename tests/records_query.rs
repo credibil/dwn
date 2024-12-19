@@ -3664,15 +3664,20 @@ async fn bad_protocol() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice fetches her record.
+    // Alice fetches a record using a filter with a bad protocol URL.
     // -------------------------------------------------
-    let query = QueryBuilder::new()
+    let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("example.com/"))
         .sign(&alice_keyring)
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
-    assert_eq!(reply.status.code, StatusCode::OK);
 
+    // builder corrects invalid protocols
+    query.descriptor.filter.protocol = Some("example.com/".to_string());
+
+    let Err(Error::BadRequest(msg)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should return BadRequest");
+    };
+    assert_eq!(msg, "invalid URL: example.com/");
 }
