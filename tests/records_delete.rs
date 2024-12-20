@@ -760,8 +760,8 @@ async fn root_role() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
-    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())

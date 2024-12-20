@@ -444,7 +444,10 @@ mod tests {
         let mut serializer = Sql::new();
 
         query.serialize(&mut serializer).unwrap();
-        println!("{}", serializer.output());
+        assert_eq!(
+            serializer.output(),
+            "SELECT * FROM type::table($table) WHERE (descriptor.interface = 'Protocols' AND descriptor.method = 'Configure' AND descriptor.definition.protocol = 'dwn' AND (!descriptor.definition.published OR descriptor.definition.published = false)) ORDER BY descriptor.messageTimestamp ASC"
+        );
     }
 
     /// Sql `Serializer` implements `Serializer` to generate Surreal SQL queries.
@@ -525,10 +528,11 @@ mod tests {
             self.output.push_str(" ORDER BY ");
             for field in sort_fields {
                 match field {
-                    SortField::Asc(f) => self.output.push_str(&format!("{f} ASC, ")),
-                    SortField::Desc(f) => self.output.push_str(&format!("{f} DESC, ")),
+                    SortField::Asc(f) => self.output.push_str(&format!("{f} ASC,")),
+                    SortField::Desc(f) => self.output.push_str(&format!("{f} DESC,")),
                 }
             }
+            self.output.pop();
         }
 
         // fn limit(&mut self, limit: usize, offset: usize) {

@@ -182,6 +182,14 @@ impl From<Vec<u8>> for DataStream {
     }
 }
 
+impl From<&[u8]> for DataStream {
+    fn from(data: &[u8]) -> Self {
+        Self {
+            buffer: data.to_vec(),
+        }
+    }
+}
+
 // impl TryFrom<DataStream> for Vec<u8> {
 //     type Error = Error;
 

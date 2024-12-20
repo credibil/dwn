@@ -309,8 +309,8 @@ impl Write {
     /// # Errors
     /// LATER: Add errors
     pub async fn sign_as_author(
-        &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
-        signer: &impl Signer,
+        &mut self, parent_context_id: Option<String>, permission_grant_id: Option<String>,
+        protocol_role: Option<String>, signer: &impl Signer,
     ) -> Result<()> {
         let (author_did, delegated_grant_id) = if let Some(grant) =
             &self.authorization.author_delegated_grant
@@ -332,8 +332,8 @@ impl Write {
 
         // compute `context_id` if this is a protocol-space record
         if self.descriptor.protocol.is_some() {
-            self.context_id = if let Some(parent_id) = &self.descriptor.parent_id {
-                Some(format!("{parent_id}/{}", self.record_id))
+            self.context_id = if let Some(parent_context_id) = parent_context_id {
+                Some(format!("{parent_context_id}/{}", self.record_id))
             } else {
                 Some(self.record_id.clone())
             };
@@ -1135,16 +1135,14 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
                 write.descriptor.protocol = Some(normalized);
                 write.descriptor.protocol_path = Some(write_protocol.protocol_path);
             }
-            if let Some(s) = self.schema.clone() {
-                write.descriptor.schema = Some(utils::clean_url(&s)?);
+            if let Some(s) = &self.schema {
+                write.descriptor.schema = Some(utils::clean_url(s)?);
             }
-            // parent_id == first segment of  `parent_context_id`
-            if let Some(context_id) = self.parent_context_id.clone() {
-                let parent_id =
-                    context_id.split('/').find(|s| !s.is_empty()).map(ToString::to_string);
-                write.descriptor.parent_id = parent_id;
+            // parent_id == last segment of  `parent_context_id`
+            if let Some(parent_context_id) = &self.parent_context_id {
+                write.descriptor.parent_id =
+                    parent_context_id.split('/').last().map(ToString::to_string);
             }
-
             write
         };
 
@@ -1229,7 +1227,14 @@ impl<O, S: Signer> WriteBuilder<O, Unattested, Unencrypted, Signed<'_, S>> {
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
         let mut write = self.to_write()?;
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        write
+            .sign_as_author(
+                self.parent_context_id,
+                self.permission_grant_id,
+                self.protocol_role,
+                self.signer.0,
+            )
+            .await?;
         Ok(write)
     }
 }
@@ -1242,12 +1247,13 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Unencrypted, 
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
         let signer = self.signer.0;
+        let parent_context_id = self.parent_context_id.clone();
         let protocol_role = self.protocol_role.clone();
         let permission_grant_id = self.permission_grant_id.clone();
 
         let mut write = self.to_write()?;
         write.attestation = Some(self.attestation(&write.descriptor).await?);
-        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
+        write.sign_as_author(parent_context_id, permission_grant_id, protocol_role, signer).await?;
         Ok(write)
     }
 }
@@ -1263,7 +1269,14 @@ impl<'a, O, E: Cipher, S: Signer> WriteBuilder<O, Unattested, Encrypted<'a, E>, 
 
         // FIXME: move these methods away from Write to  WriteBuilder
         write.encrypt(&self.encryption_input.unwrap_or_default(), self.encrypter.0)?;
-        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        write
+            .sign_as_author(
+                self.parent_context_id,
+                self.permission_grant_id,
+                self.protocol_role,
+                self.signer.0,
+            )
+            .await?;
         Ok(write)
     }
 }
@@ -1278,6 +1291,7 @@ impl<'a, O, A: Signer, E: Cipher, S: Signer>
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
         let signer = self.signer.0;
+        let parent_context_id = self.parent_context_id.clone();
         let protocol_role = self.protocol_role.clone();
         let permission_grant_id = self.permission_grant_id.clone();
         let encrypter = self.encrypter.0;
@@ -1286,7 +1300,7 @@ impl<'a, O, A: Signer, E: Cipher, S: Signer>
         let mut write = self.to_write()?;
         write.attestation = Some(self.attestation(&write.descriptor).await?);
         write.encrypt(&encryption_input.unwrap_or_default(), encrypter)?;
-        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
+        write.sign_as_author(parent_context_id, permission_grant_id, protocol_role, signer).await?;
         Ok(write)
     }
 }

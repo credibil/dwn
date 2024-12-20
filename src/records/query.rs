@@ -174,10 +174,14 @@ impl Query {
         }
 
         // verify protocol when request invokes a protocol role
-        if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
-            let protocol =
+        if authzn.jws_payload()?.protocol_role.is_some() {
+            let Some(protocol) = &self.descriptor.filter.protocol else {
+                return Err(unexpected!("missing protocol"));
+            };
+            // verify protocol role is authorized
+            let verifier =
                 Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
-            return protocol.permit_query(owner, self, provider).await;
+            return verifier.permit_query(owner, self, provider).await;
         }
 
         Ok(())
@@ -186,6 +190,9 @@ impl Query {
     fn validate(&self) -> Result<()> {
         if let Some(protocol) = &self.descriptor.filter.protocol {
             utils::validate_url(protocol)?;
+        }
+        if let Some(schema) = &self.descriptor.filter.schema {
+            utils::validate_url(schema)?;
         }
 
         let Some(published) = self.descriptor.filter.published else {
@@ -256,7 +263,8 @@ impl Query {
 
         // New filter: author can query any record when authorized by a role
         if authzn.jws_payload()?.protocol_role.is_some() {
-            let filter = self.descriptor.filter.clone();
+            let mut filter = self.descriptor.filter.clone();
+            filter.published = Some(false);
             store_query = store_query.add_filter(filter.published(false));
         }
 

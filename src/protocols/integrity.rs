@@ -128,15 +128,18 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
         return Err(forbidden!("missing protocol"));
     };
 
+    // fetch the parent record
     let query = RecordsQuery::new()
         .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol));
     let records = store.query(owner, &query.into()).await?;
     if records.is_empty() {
-        return Err(forbidden!("unable to find Write Record for parent_id {parent_id}"));
+        return Err(forbidden!("unable to find Write record for `parent_id` {parent_id}"));
     }
-
-    let Some(parent) = &records[0].as_write() else {
-        return Err(forbidden!("expected `RecordsWrite` message"));
+    let Some(record) = &records.first() else {
+        return Err(forbidden!("expected to find parent message"));
+    };
+    let Some(parent) = record.as_write() else {
+        return Err(forbidden!("expected parent to be a `RecordsWrite` message"));
     };
 
     // verify protocol_path is a child of the parent message's protocol_path
@@ -147,14 +150,17 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
         return Err(forbidden!("invalid `protocol_path`"));
     }
 
-    // verifying context_id is a child of the parent's context_id
-    let Some(context_id) = &write.context_id else {
-        return Err(forbidden!("missing context_id"));
-    };
+    // verifying `context_id` is a child of the parent's `context_id`
+    // e.g. 'bafkreicx24'
     let Some(parent_context_id) = &parent.context_id else {
-        return Err(forbidden!("missing parent context_id"));
+        return Err(forbidden!("missing parent `context_id`"));
     };
-    if context_id != &format!("{parent_context_id}/{}", write.record_id) {
+    // e.g. 'bafkreicx24/bafkreibejby'
+    let Some(context_id) = &write.context_id else {
+        return Err(forbidden!("missing `context_id`"));
+    };
+    // compare the parent section `context_id` with the parent's `context_id`
+    if context_id[..parent_context_id.len()] != *parent_context_id {
         return Err(forbidden!("invalid `context_id`"));
     }
 
