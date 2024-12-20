@@ -1,4 +1,4 @@
-//! Message Query
+//! Protocols Query
 //!
 //! This test demonstrates how a web node owner create differnt types of
 //! messages and subsequently query for them.
