@@ -249,7 +249,7 @@ impl Protocol<'_> {
         let query = RecordsQuery::new().add_filter(filter);
         let records = store.query(owner, &query.into()).await?;
         if records.is_empty() {
-            return Err(forbidden!("unable to find records for role"));
+            return Err(forbidden!("unable to find record for role"));
         }
 
         Ok(())
