@@ -3924,7 +3924,7 @@ async fn context_id() {
     assert!(record_ids.contains(&&baz_1.record_id));
 }
 
-// Should not try protocol authorization if protocol_role is not set.
+// Should not use protocol authorization if protocol_role is not set.
 #[tokio::test]
 async fn protocol_no_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -4038,9 +4038,9 @@ async fn protocol_no_role() {
     assert_eq!(entries[0].write.record_id, chat_bob.record_id);
 }
 
-// Should allow root-level role authorized queries.
+// Should allow queries authorized using a root-level role.
 #[tokio::test]
-async fn protocol_root_role() {
+async fn protocol_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -4048,8 +4048,8 @@ async fn protocol_root_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
-    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .build(&alice_keyring)
@@ -4062,7 +4062,7 @@ async fn protocol_root_role() {
     // --------------------------------------------------
     // Alice writes a 'friend' role record with Bob as recipient.
     // --------------------------------------------------
-    let friend_role = Write::build()
+    let bob_friend = Write::build()
         .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
@@ -4074,7 +4074,7 @@ async fn protocol_root_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(ALICE_DID, friend_role.clone(), &provider).await.expect("should write");
+        endpoint::handle(ALICE_DID, bob_friend.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4118,7 +4118,7 @@ async fn protocol_root_role() {
     assert_eq!(entries.len(), 3);
 
     // --------------------------------------------------
-    // Bob queries without invoking protocol role and only unpublished records.
+    // Bob uses his friend role and an 'unpublished' filter to query for records.
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(
@@ -4128,6 +4128,111 @@ async fn protocol_root_role() {
                 .published(false),
         )
         .protocol_role("friend")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let query_reply = reply.body.expect("should have reply");
+    let entries = query_reply.entries.expect("should have entries");
+    assert_eq!(entries.len(), 3);
+}
+
+// Should allow queries authorize using a context role.
+#[tokio::test]
+async fn context_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a friend protocol.
+    // --------------------------------------------------
+    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a thread.
+    // --------------------------------------------------
+    let thread = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a 'participant' role record with Bob as recipient.
+    // --------------------------------------------------
+    let participant_role = Write::build()
+        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, participant_role.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes 3 chat records.
+    // --------------------------------------------------
+    for _ in 0..3 {
+        let chat = Write::build()
+            .data(WriteData::Reader(DataStream::from(
+                b"Bob can read this because he is a friend".to_vec(),
+            )))
+            .recipient(ALICE_DID)
+            .protocol(WriteProtocol {
+                protocol: "http://thread-role.xyz".to_string(),
+                protocol_path: "thread/chat".to_string(),
+            })
+            .parent_context_id(thread.context_id.as_ref().unwrap())
+            .published(false)
+            .sign(&alice_keyring)
+            .build()
+            .await
+            .expect("should create write");
+        let reply =
+            endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+        assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    }
+
+    // --------------------------------------------------
+    // Bob uses his 'friend' role to query for chat records.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol("http://thread-role.xyz")
+                .protocol_path("thread/chat")
+                .context_id(thread.context_id.unwrap()),
+        )
+        .protocol_role("thread/participant")
         .sign(&bob_keyring)
         .build()
         .await
