@@ -1,4 +1,4 @@
-//! Messages Subscribe
+//! Records Query
 
 use chrono::{DateTime, Duration, Utc};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
