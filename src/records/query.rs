@@ -181,7 +181,7 @@ impl Query {
             let Some(protocol_path) = &self.descriptor.filter.protocol_path else {
                 return Err(unexpected!("missing `protocol_path`"));
             };
-            if protocol_path.contains("/") && self.descriptor.filter.context_id.is_none() {
+            if protocol_path.contains('/') && self.descriptor.filter.context_id.is_none() {
                 return Err(unexpected!("missing `context_id`"));
             }
 

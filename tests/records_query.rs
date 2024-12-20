@@ -1924,8 +1924,6 @@ async fn authorization() {
     assert_snapshot!("authorization", entries[0].write.authorization, {
         ".signature.payload" => "[payload]",
         ".signature.signatures[0].signature" => "[signature]",
-        // ".attestation.payload" => "[payload]",
-        // ".attestation.signatures[0].signature" => "[signature]",
     });
 }
 
@@ -4566,4 +4564,47 @@ async fn no_context_role() {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "unable to find record for role");
+}
+
+// Should return a status of Unauthorized (401) when signature check fails.
+#[tokio::test]
+async fn bad_signature() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let mut query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("http://schema"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+
+    query.authorization.as_mut().unwrap().signature.signatures[0].signature =
+        "badsignature".to_string();
+
+    let Err(Error::Unauthorized(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be Unauthorized");
+    };
+    assert!(e.starts_with("failed to authenticate: "));
+}
+
+// Should return a status of BadRequest (400) when the message cannot be parsed.
+#[tokio::test]
+async fn bad_message() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let mut query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("http://schema"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+
+    query.descriptor.filter = RecordsFilter::default();
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert!(e.starts_with("validation failed for "));
 }
