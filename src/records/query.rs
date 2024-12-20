@@ -178,10 +178,13 @@ impl Query {
             let Some(protocol) = &self.descriptor.filter.protocol else {
                 return Err(unexpected!("missing protocol"));
             };
-            if self.descriptor.filter.context_id.is_none() {
+            let Some(protocol_path) = &self.descriptor.filter.protocol_path else {
+                return Err(unexpected!("missing `protocol_path`"));
+            };
+            if protocol_path.contains("/") && self.descriptor.filter.context_id.is_none() {
                 return Err(unexpected!("missing `context_id`"));
             }
-            
+
             // verify protocol role is authorized
             let verifier =
                 Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
@@ -194,10 +197,6 @@ impl Query {
     fn validate(&self) -> Result<()> {
         if let Some(protocol) = &self.descriptor.filter.protocol {
             utils::validate_url(protocol)?;
-
-            if self.descriptor.filter.protocol_path.is_none() {
-                return Err(unexpected!("missing `protocol_path`"));
-            }
         }
 
         if let Some(schema) = &self.descriptor.filter.schema {
