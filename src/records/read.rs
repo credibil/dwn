@@ -240,39 +240,56 @@ pub struct ReadDescriptor {
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub struct ReadBuilder {
+pub struct ReadBuilder<F, S> {
     message_timestamp: DateTime<Utc>,
-    filter: RecordsFilter,
+    filter: F,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
-    authorize: Option<bool>,
+    signer: S,
 }
 
-impl ReadBuilder {
+pub struct Unsigned;
+pub struct Signed<'a, S: Signer>(pub &'a S);
+
+pub struct Unfiltered;
+pub struct Filtered(RecordsFilter);
+
+impl Default for ReadBuilder<Unfiltered, Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ReadBuilder<Unfiltered, Unsigned> {
     /// Returns a new [`ReadBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self {
             message_timestamp: Utc::now(),
-            ..Self::default()
+            filter: Unfiltered,
+            permission_grant_id: None,
+            protocol_role: None,
+            delegated_grant: None,
+            signer: Unsigned,
         }
     }
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn filter(mut self, filter: RecordsFilter) -> Self {
-        self.filter = filter;
-        self
+    pub fn filter(self, filter: RecordsFilter) -> ReadBuilder<Filtered, Unsigned> {
+        ReadBuilder {
+            message_timestamp: self.message_timestamp,
+            filter: Filtered(filter),
+            permission_grant_id: self.permission_grant_id,
+            protocol_role: self.protocol_role,
+            delegated_grant: self.delegated_grant,
+            signer: Unsigned,
+        }
     }
+}
 
-    // /// The datetime the record was created. Defaults to now.
-    // #[must_use]
-    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-    //     self.message_timestamp = Some(message_timestamp);
-    //     self
-    // }
-
+impl<'a, F> ReadBuilder<F, Unsigned> {
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
@@ -280,12 +297,12 @@ impl ReadBuilder {
         self
     }
 
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub const fn authorize(mut self, authorize: bool) -> Self {
-        self.authorize = Some(authorize);
-        self
-    }
+    // /// Specify a protocol role for the record.
+    // #[must_use]
+    // pub const fn authorize(mut self, authorize: bool) -> Self {
+    //     self.authorize = Some(authorize);
+    //     self
+    // }
 
     /// Specify a protocol role for the record.
     #[must_use]
@@ -301,40 +318,75 @@ impl ReadBuilder {
         self
     }
 
-    /// Build the write message.
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the
+    /// final build step.
+    #[must_use]
+    pub fn sign<S: Signer>(self, signer: &'a S) -> ReadBuilder<F, Signed<'a, S>> {
+        ReadBuilder {
+            message_timestamp: self.message_timestamp,
+            filter: self.filter,
+            permission_grant_id: self.permission_grant_id,
+            protocol_role: self.protocol_role,
+            delegated_grant: self.delegated_grant,
+            signer: Signed(signer),
+        }
+    }
+}
+
+impl ReadBuilder<Filtered, Unsigned> {
+    /// Build and return an anonymous (unsigned) Read message.
     ///
     /// # Errors
     /// LATER: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Read> {
+    pub fn build(self) -> Result<Read> {
         let descriptor = ReadDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
                 method: Method::Read,
                 message_timestamp: self.message_timestamp,
             },
-            filter: self.filter.normalize()?,
-        };
-
-        let authorization = if self.authorize.unwrap_or(true) {
-            let mut auth_builder =
-                AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-            if let Some(id) = self.permission_grant_id {
-                auth_builder = auth_builder.permission_grant_id(id);
-            }
-            if let Some(role) = self.protocol_role {
-                auth_builder = auth_builder.protocol_role(role);
-            }
-            if let Some(delegated_grant) = self.delegated_grant {
-                auth_builder = auth_builder.delegated_grant(delegated_grant);
-            }
-            Some(auth_builder.build(signer).await?)
-        } else {
-            None
+            filter: self.filter.0,
         };
 
         Ok(Read {
             descriptor,
-            authorization,
+            authorization: None,
+        })
+    }
+}
+
+impl<S: Signer> ReadBuilder<Filtered, Signed<'_, S>> {
+    /// Build the write message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn build(self) -> Result<Read> {
+        let descriptor = ReadDescriptor {
+            base: Descriptor {
+                interface: Interface::Records,
+                method: Method::Read,
+                message_timestamp: self.message_timestamp,
+            },
+            filter: self.filter.0.normalize()?,
+        };
+
+        let mut auth_builder =
+            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
+        if let Some(id) = self.permission_grant_id {
+            auth_builder = auth_builder.permission_grant_id(id);
+        }
+        if let Some(role) = self.protocol_role {
+            auth_builder = auth_builder.protocol_role(role);
+        }
+        if let Some(delegated_grant) = self.delegated_grant {
+            auth_builder = auth_builder.delegated_grant(delegated_grant);
+        }
+
+        Ok(Read {
+            descriptor,
+            authorization: Some(auth_builder.build(self.signer.0).await?),
         })
     }
 }

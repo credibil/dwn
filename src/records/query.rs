@@ -306,16 +306,10 @@ pub struct QueryBuilder<F, S> {
     filter: F,
     date_sort: Option<Sort>,
     pagination: Option<Pagination>,
-    signer: S,
     protocol_role: Option<String>,
     permission_grant_id: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
-}
-
-impl Default for QueryBuilder<Unfiltered, Unsigned> {
-    fn default() -> Self {
-        Self::new()
-    }
+    signer: S,
 }
 
 pub struct Unsigned;
@@ -323,6 +317,12 @@ pub struct Signed<'a, S: Signer>(pub &'a S);
 
 pub struct Unfiltered;
 pub struct Filtered(RecordsFilter);
+
+impl Default for QueryBuilder<Unfiltered, Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl QueryBuilder<Unfiltered, Unsigned> {
     /// Returns a new [`QueryBuilder`]
@@ -339,16 +339,12 @@ impl QueryBuilder<Unfiltered, Unsigned> {
             delegated_grant: None,
         }
     }
-}
 
-/// State: Unfiltered.
-impl<S> QueryBuilder<Unfiltered, S> {
     /// Set the filter to use when querying.
     #[must_use]
-    pub fn filter(self, filter: RecordsFilter) -> QueryBuilder<Filtered, S> {
+    pub fn filter(self, filter: RecordsFilter) -> QueryBuilder<Filtered, Unsigned> {
         QueryBuilder {
             filter: Filtered(filter),
-
             message_timestamp: self.message_timestamp,
             date_sort: self.date_sort,
             pagination: self.pagination,

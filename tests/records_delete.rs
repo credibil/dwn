@@ -157,8 +157,12 @@ async fn delete_data() {
 
     // ensure the second record's data is unaffected
     let filter = RecordsFilter::new().record_id(&alice_write2.record_id);
-    let read =
-        ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should find write");
+    let read = ReadBuilder::new()
+        .filter(filter)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should find write");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -186,8 +190,12 @@ async fn delete_data() {
 
     // ensure the second record has been deleted
     let filter = RecordsFilter::new().record_id(&alice_write2.record_id);
-    let read =
-        ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should find write");
+    let read = ReadBuilder::new()
+        .filter(filter)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should find write");
 
     let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be NotFound");
@@ -198,8 +206,12 @@ async fn delete_data() {
     // Bob's record is unaffected.
     // --------------------------------------------------
     let filter = RecordsFilter::new().record_id(&bob_write1.record_id);
-    let read =
-        ReadBuilder::new().filter(filter).build(&bob_keyring).await.expect("should find write");
+    let read = ReadBuilder::new()
+        .filter(filter)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should find write");
     let reply = endpoint::handle(BOB_DID, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
