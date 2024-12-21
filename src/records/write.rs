@@ -1329,8 +1329,7 @@ async fn existing_entries(
     Ok(entries)
 }
 
-// Fetches the first and last `records::Write` messages associated for the
-// `record_id`.
+// Fetches the initial_write record associated for `record_id`.
 pub async fn initial_write(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Option<Write>> {

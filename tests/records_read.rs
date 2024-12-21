@@ -503,10 +503,10 @@ async fn no_anonymous() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Alice configures a social media protocol.
+    // Alice configures an email protocol.
     // --------------------------------------------------
-    let social_media = include_bytes!("../crates/dwn-test/protocols/email.json");
-    let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
+    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .build(&alice_keyring)
@@ -517,7 +517,7 @@ async fn no_anonymous() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice writes a message.
+    // Alice writes an email.
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(b"foo".to_vec())))
@@ -547,40 +547,328 @@ async fn no_anonymous() {
     assert_eq!(e, "read not authorized");
 }
 
-// // Should allow read using ancestor recipient rule.
-// #[tokio::test]
-// async fn ancestor_recipient() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should allow read using recipient rule.
+#[tokio::test]
+async fn allow_recipient() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
 
-// // Should allow read using ancestor author rule.
-// #[tokio::test]
-// async fn ancestor_author() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice configures an email protocol.
+    // --------------------------------------------------
+    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-// // Should support using a filter when there is only a single result.
-// #[tokio::test]
-// async fn filter_single() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice writes an email to Bob.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Hello Bob!".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-// // Should return an exception when using a filter returns multiple results.
-// #[tokio::test]
-// async fn filter_many() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Bob reads the email.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
 
-// // Should allow using a root-level role to authorize reads.
-// #[tokio::test]
-// async fn root_role() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+
+    // --------------------------------------------------
+    // Carol attempts to read the email.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
+}
+
+// Should allow read using ancestor author rule.
+#[tokio::test]
+async fn allow_author() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures an email protocol.
+    // --------------------------------------------------
+    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob writes an email to Alice.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Hello Alice!".to_vec())))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads his email.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+
+    // --------------------------------------------------
+    // Carol attempts to read the email.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
+}
+
+// Should support using a filter when there is only a single result.
+#[tokio::test]
+async fn filter_one() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a nested protocol.
+    // --------------------------------------------------
+    let nested = include_bytes!("../crates/dwn-test/protocols/nested.json");
+    let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a message to a nested protocol.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"foo".to_vec())))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://nested.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .schema("foo")
+        .data_format("text/plain")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice reads the message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().protocol("http://nested.xyz").protocol_path("foo"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+}
+
+// Should return a status of BadRequest (400) when using a filter returns multiple results.
+#[tokio::test]
+async fn filter_many() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a nested protocol.
+    // --------------------------------------------------
+    let nested = include_bytes!("../crates/dwn-test/protocols/nested.json");
+    let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes 2 messages to a nested protocol.
+    // --------------------------------------------------
+    for _ in 0..2 {
+        let write = WriteBuilder::new()
+            .data(WriteData::Reader(DataStream::from(b"foo".to_vec())))
+            .recipient(ALICE_DID)
+            .protocol(WriteProtocol {
+                protocol: "http://nested.xyz".to_string(),
+                protocol_path: "foo".to_string(),
+            })
+            .schema("foo")
+            .data_format("text/plain")
+            .sign(&alice_keyring)
+            .build()
+            .await
+            .expect("should create write");
+        let reply =
+            endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+        assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    }
+
+    // --------------------------------------------------
+    // Alice attempts to read one of the messages.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().protocol("http://nested.xyz").protocol_path("foo"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "multiple messages exist");
+}
+
+// Should allow using a root-level role to authorize reads.
+#[tokio::test]
+async fn root_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a nested protocol.
+    // --------------------------------------------------
+    let friend = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes 2 messages to the protocol.
+    // --------------------------------------------------
+    let bob_friend = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Bob is my friend".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "friend".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_friend.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let chat = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(
+            b"Bob can read this because he is a friend".to_vec(),
+        )))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "chat".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads Alice's chat message.
+    // --------------------------------------------------
+    // let read = ReadBuilder::new()
+    //     .filter(RecordsFilter::new().record_id(chat.record_id))
+    //     .sign(&bob_keyring)
+    //     .build()
+    //     .await
+    //     .expect("should create read");
+    // let reply =
+    //     endpoint::handle(ALICE_DID, read, &provider).await.expect("should configure protocol");
+    // assert_eq!(reply.status.code, StatusCode::OK);
+}
 
 // // Should not allow reads when protocol path does not point to an active role record.
 // #[tokio::test]
