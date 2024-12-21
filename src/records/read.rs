@@ -33,7 +33,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         return Err(unexpected!("multiple messages exist"));
     }
 
-    // if record is deleted, return as NotFound 
+    // if record is deleted, return as NotFound
     if entries[0].descriptor().method == Method::Delete {
         let Some(delete) = entries[0].as_delete() else {
             return Err(unexpected!("expected `RecordsDelete` message"));
@@ -50,22 +50,22 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         read.authorize(owner, &write, provider).await?;
 
         // FIXME: return optional body for NotFound error
-        return Err(Error::NotFound("record is deleted".to_string()));
+        // return Err(Error::NotFound("record is deleted".to_string()));
 
-        // return Ok(Reply {
-        //     status: Status {
-        //         code: StatusCode::NOT_FOUND.as_u16(),
-        //         detail: None,
-        //     },
-        //     body: Some(ReadReply {
-        //         entry: ReadReplyEntry {
-        //             records_delete: Some(delete.clone()),
-        //             initial_write: Some(write),
-        //             records_write: None,
-        //             data: None,
-        //         },
-        //     }),
-        // });
+        return Ok(Reply {
+            status: Status {
+                code: StatusCode::NOT_FOUND.as_u16(),
+                detail: None,
+            },
+            body: Some(ReadReply {
+                entry: ReadReplyEntry {
+                    records_delete: Some(delete.clone()),
+                    initial_write: Some(write),
+                    records_write: None,
+                    data: None,
+                },
+            }),
+        });
     }
 
     let mut write = Write::try_from(&entries[0])?;

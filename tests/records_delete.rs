@@ -195,14 +195,12 @@ async fn delete_data() {
         .build()
         .await
         .expect("should find write");
-
-    // let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should be not found");
-    // assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
-
-    let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
-        panic!("should be NotFound");
-    };
-    assert_eq!(e, "record is deleted");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should be not found");
+    assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
+    // let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+    //     panic!("should be NotFound");
+    // };
+    // assert_eq!(e, "record is deleted");
 
     // --------------------------------------------------
     // Bob's record is unaffected.
