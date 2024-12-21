@@ -185,13 +185,29 @@ pub struct ReadReplyEntry {
 
 impl Read {
     async fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
-        let Some(authzn) = &self.authorization else {
+        // authorization not required for published data
+        if write.descriptor.published.unwrap_or_default() {
             return Ok(());
+        }
+
+        let Some(authzn) = &self.authorization else {
+            return Err(forbidden!("read not authorized"));
         };
         let author = authzn.author()?;
 
-        // authorization not required for published data
-        if write.descriptor.published.unwrap_or_default() {
+        // owner can read records on their DWN
+        if author == owner {
+            return Ok(());
+        }
+
+        // recipient can read records they received
+        if let Some(recipient) = &write.descriptor.recipient {
+            if &author == recipient {
+                return Ok(());
+            }
+        }
+        // author can read records they authored
+        if author == write.authorization.author()? {
             return Ok(());
         }
 
@@ -199,23 +215,6 @@ impl Read {
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = delegated_grant.to_grant()?;
             grant.verify_scope(write)?;
-        }
-
-        // owner can read records they authored
-        if author == owner {
-            return Ok(());
-        }
-
-        // recipient can read
-        if let Some(recipient) = &write.descriptor.recipient {
-            if &author == recipient {
-                return Ok(());
-            }
-        }
-
-        // author can read
-        if author == write.authorization.author()? {
-            return Ok(());
         }
 
         // verify grant
@@ -228,7 +227,7 @@ impl Read {
         // verify protocol role and action
         if let Some(protocol) = &write.descriptor.protocol {
             let protocol = Protocol::new(protocol);
-            protocol.permit_read(owner, self, store).await?;
+            protocol.permit_read(owner, self, &write, store).await?;
             return Ok(());
         }
 

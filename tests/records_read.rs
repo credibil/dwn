@@ -245,8 +245,23 @@ async fn non_author_deleted_write() {
     // --------------------------------------------------
     // Alice configures a protocol allowing anyone to write.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
-    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let def_json = serde_json::json!({
+        "published" : true,
+        "protocol"  : "https://example.com/foo",
+        "types"     : {
+            "foo": {}
+        },
+        "structure": {
+            "foo": {
+                "$actions": [{
+                    "who" : "anyone",
+                    "can" : ["create", "delete"]
+                }]
+            }
+        }
+    });
+    let definition: Definition = serde_json::from_value(def_json).expect("should deserialize");
+
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .build(&alice_keyring)
@@ -262,10 +277,9 @@ async fn non_author_deleted_write() {
     let write = WriteBuilder::new()
         .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
         .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+            protocol: "https://example.com/foo".to_string(),
+            protocol_path: "foo".to_string(),
         })
-        .schema("post")
         .sign(&bob_keyring)
         .build()
         .await
@@ -296,36 +310,242 @@ async fn non_author_deleted_write() {
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(e, "missing protocol");
+    assert_eq!(e, "action not permitted");
 }
 
-// // Should allow non-owners to read records they have authored.
-// #[tokio::test]
-// async fn non_owner_author() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should allow non-owners to read records they have authored.
+#[tokio::test]
+async fn non_owner_author() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
 
-// // Should include intial write for updated records.
-// #[tokio::test]
-// async fn include_initial_write() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice configures a protocol allowing anyone to write.
+    // --------------------------------------------------
+    let def_json = serde_json::json!({
+        "published" : true,
+        "protocol"  : "https://example.com/foo",
+        "types"     : {
+            "foo": {}
+        },
+        "structure": {
+            "foo": {
+                "$actions": [{
+                    "who" : "anyone",
+                    "can" : ["create"]
+                }]
+            }
+        }
+    });
+    let definition: Definition = serde_json::from_value(def_json).expect("should deserialize");
 
-// // Should allow anyone to read when using `allow-anyone` rule.
-// #[tokio::test]
-// async fn allow_anyone() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-// // Should not allow anonymous reads when there is no `allow-anyone` rule.
-// #[tokio::test]
-// async fn anonymous_no_allow_anyone() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Bob writes a record to Alice's web node.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .protocol(WriteProtocol {
+            protocol: "https://example.com/foo".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads his record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+
+    // --------------------------------------------------
+    // Carol attempts to read the record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
+}
+
+// Should include intial write for updated records.
+#[tokio::test]
+async fn initial_write_included() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record and then an update.
+    // --------------------------------------------------
+    let write_1 = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let write_2 = WriteBuilder::from(write_1)
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice reads her record which includes the `initial_write`.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write_2.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.initial_write.is_some());
+}
+
+// Should allow anyone to read when using `allow-anyone` rule.
+#[tokio::test]
+async fn allow_anyone() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a social media protocol.
+    // --------------------------------------------------
+    let social_media = include_bytes!("../crates/dwn-test/protocols/social-media.json");
+    let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice saves an image.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"cafe-aesthetic.jpg".to_vec())))
+        .protocol(WriteProtocol {
+            protocol: "http://social-media.xyz".to_string(),
+            protocol_path: "image".to_string(),
+        })
+        .schema("imageSchema")
+        .data_format("image/jpeg")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads the image.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+}
+
+// Should not allow anonymous reads when there is no `allow-anyone` rule.
+#[tokio::test]
+async fn no_anonymous() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a social media protocol.
+    // --------------------------------------------------
+    let social_media = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a message.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"foo".to_vec())))
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // An anonymous users attempts to read the message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .build()
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "read not authorized");
+}
 
 // // Should allow read using ancestor recipient rule.
 // #[tokio::test]

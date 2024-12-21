@@ -19,6 +19,8 @@ pub struct Protocol<'a> {
     context_id: Option<&'a String>,
 }
 
+// FIXME: use typestate builder pattern to enforce correct usage for each record
+// type and reduce args passed to each permit_* method
 impl<'a> Protocol<'a> {
     /// Create a new `Protocol` instance.
     #[must_use]
@@ -106,11 +108,10 @@ impl Record {
     async fn rule_set(&self, owner: &str, store: &impl MessageStore) -> Result<RuleSet> {
         let protocol_path = match self {
             Self::Write(write) => &write.descriptor.protocol_path,
-            Self::Read(read) => &read.descriptor.filter.protocol_path,
             Self::Query(query) => &query.descriptor.filter.protocol_path,
             Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol_path,
-            Self::Delete(_) => {
-                unimplemented!("delete's protocol is provided by initial write record");
+            Self::Read(_) | Self::Delete(_) => {
+                unimplemented!("protocol is provided by initial write record");
             }
         };
 
@@ -151,13 +152,17 @@ impl Protocol<'_> {
     /// # Errors
     /// LATER: Add errors
     pub async fn permit_read(
-        &self, owner: &str, read: &Read, store: &impl MessageStore,
+        &self, owner: &str, read: &Read, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
-        let record: Record = read.into();
-        let rule_set = record.rule_set(owner, store).await?;
+        // Read record does not contain protocol information so we get it from
+        // the initial write record.
+        let write_record: Record = write.into();
+        let rule_set = write_record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await
+        let read_record: Record = read.into();
+
+        self.allow_role(owner, &read_record, write_record.protocol()?, store).await?;
+        self.allow_action(owner, &read_record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Query` and `records::Subscribe`
