@@ -268,7 +268,8 @@ impl Protocol<'_> {
         // build record chain
         let record_chain = match record {
             Record::Write(write) => {
-                if write::initial_write(owner, &write.record_id, store).await?.is_some() {
+                // if write::initial_write(owner, &write.record_id, store).await?.is_some() {
+                if !write.is_initial()? {
                     self.record_chain(owner, &write.record_id, store).await?
                 } else if let Some(parent_id) = &write.descriptor.parent_id {
                     self.record_chain(owner, parent_id, store).await?
@@ -276,10 +277,10 @@ impl Protocol<'_> {
                     vec![]
                 }
             }
-            Record::Query(_) | Record::Subscribe(_) | Record::Read(_) => Vec::new(),
             Record::Delete(delete) => {
                 self.record_chain(owner, &delete.descriptor.record_id, store).await?
             }
+            Record::Query(_) | Record::Subscribe(_) | Record::Read(_) => Vec::new(),
         };
 
         let Some(authzn) = record.authorization() else {
@@ -385,7 +386,6 @@ impl Protocol<'_> {
             }
             Record::Read(_) => Ok(vec![Action::Read]),
             Record::Query(_) => Ok(vec![Action::Query]),
-            // Method::Read => Ok(vec![Action::Read]),
             Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
             Record::Delete(delete) => {
                 let Some(initial) =
@@ -411,7 +411,7 @@ impl Protocol<'_> {
                 }
 
                 Ok(actions)
-            } // Method::Configure => Err(forbidden!("configure method not allowed")),
+            }
         }
     }
 }

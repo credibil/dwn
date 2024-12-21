@@ -806,7 +806,7 @@ async fn filter_many() {
 async fn root_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
     // Alice configures a nested protocol.
