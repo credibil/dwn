@@ -139,7 +139,7 @@ async fn verify_scope(
             EntryType::Write(write) => write.clone(),
             EntryType::Delete(delete) => {
                 let entry =
-                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?;
+                    write::initial_write(owner, &delete.descriptor.record_id, store).await?;
                 let Some(write) = entry else {
                     return Err(forbidden!("message failed scope authorization"));
                 };

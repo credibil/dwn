@@ -184,7 +184,6 @@ async fn delete_data() {
         .build(&alice_keyring)
         .await
         .expect("should create delete");
-
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
@@ -197,10 +196,13 @@ async fn delete_data() {
         .await
         .expect("should find write");
 
+    // let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should be not found");
+    // assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
+
     let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be NotFound");
     };
-    assert_eq!(e, "no matching record");
+    assert_eq!(e, "record is deleted");
 
     // --------------------------------------------------
     // Bob's record is unaffected.

@@ -263,7 +263,7 @@ impl Protocol<'_> {
         // build record chain
         let record_chain = match record {
             Record::Write(write) => {
-                if write::initial_entry(owner, &write.record_id, store).await?.is_some() {
+                if write::initial_write(owner, &write.record_id, store).await?.is_some() {
                     self.record_chain(owner, &write.record_id, store).await?
                 } else if let Some(parent_id) = &write.descriptor.parent_id {
                     self.record_chain(owner, parent_id, store).await?
@@ -342,7 +342,7 @@ impl Protocol<'_> {
         let mut current_id = Some(record_id.to_owned());
 
         while let Some(record_id) = &current_id {
-            let Some(initial) = write::initial_entry(owner, record_id, store).await? else {
+            let Some(initial) = write::initial_write(owner, record_id, store).await? else {
                 return Err(forbidden!(
                     "no parent found with ID {record_id} when constructing record chain"
                 ));
@@ -368,7 +368,7 @@ impl Protocol<'_> {
                 if write.is_initial()? {
                     return Ok(vec![Action::Create]);
                 }
-                let Some(initial) = write::initial_entry(owner, &write.record_id, store).await?
+                let Some(initial) = write::initial_write(owner, &write.record_id, store).await?
                 else {
                     return Ok(Vec::new());
                 };
@@ -384,7 +384,7 @@ impl Protocol<'_> {
             Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
             Record::Delete(delete) => {
                 let Some(initial) =
-                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?
+                    write::initial_write(owner, &delete.descriptor.record_id, store).await?
                 else {
                     return Ok(Vec::new());
                 };

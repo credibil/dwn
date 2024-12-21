@@ -296,9 +296,11 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(unexpected!("initial write is not earliest message"));
     }
 
-    // FIXME: need to copy initial write indexes to delete message
+    // FIXME: need to copy ALL initial write fields and indexes to delete message
     // save the delete message using same indexes as the initial write
-    let initial = Entry::from(&write);
+    let mut initial = Entry::from(&write);
+    initial.indexes.insert("recordId".to_string(), Value::String(write.record_id.clone()));
+
     let mut entry = Entry::from(delete);
     entry.indexes.extend(initial.indexes);
 

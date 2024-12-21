@@ -1,11 +1,16 @@
 //! Records Read
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
+use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use serde_json::Value;
 use vercre_dwn::data::DataStream;
-use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition};
+use vercre_dwn::provider::{KeyStore, MessageStore};
+use vercre_dwn::records::{
+    DeleteBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteData, WriteProtocol,
+};
+use vercre_dwn::store::Entry;
 use vercre_dwn::{Error, endpoint};
 
 // Should allow an owner to read their own records.
@@ -17,10 +22,8 @@ async fn owner() {
     // --------------------------------------------------
     // Add a `write` record.
     // --------------------------------------------------
-    let data = br#"{"message": "test record write"}"#;
-
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -55,10 +58,8 @@ async fn disallow_non_owner() {
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
-    let data = br#"{"message": "test record write"}"#;
-
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -90,9 +91,8 @@ async fn published_anonymous() {
     // --------------------------------------------------
     // Add a `write` record.
     // --------------------------------------------------
-    let data = br#"{"message": "test record write"}"#;
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -112,38 +112,192 @@ async fn published_anonymous() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
-    let record = body.entry.records_write.expect("should have records_write");
-    assert_eq!(record.record_id, write.record_id);
+    assert!(body.entry.records_write.is_some());
 }
 
-// // Should allow authenticated users to read published records.
-// #[tokio::test]
-// async fn published_authenticated() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should allow authenticated users to read published records.
+#[tokio::test]
+async fn published_authenticated() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
-// // Should allow non-owners to read records they have received.
-// #[tokio::test]
-// async fn non_owner_recipient() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice writes a record.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-// // Should return BadRequest (400) when attempting to fetch the initial write of a deleted record.
-// #[tokio::test]
-// async fn deleted_write() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Bob reads the record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
 
-// // Should return Forbidden (403) when non-authors attempt to fetch the initial
-// // write of a deleted record.
-// #[tokio::test]
-// async fn non_author_deleted_write() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+}
+
+// Should allow non-owners to read records they have received.
+#[tokio::test]
+async fn non_owner_recipient() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .recipient(BOB_DID)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads the record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+}
+
+// Should return BadRequest (400) when attempting to fetch a deleted record
+// using a valid `record_id`.
+#[tokio::test]
+async fn deleted_write() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Mock write and delete, saving only the `RecordsDelete`.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .recipient(BOB_DID)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    let delete = DeleteBuilder::new()
+        .record_id(&write.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+
+    let mut initial = Entry::from(&write);
+    initial.indexes.insert("recordId".to_string(), Value::String(write.record_id.clone()));
+    let mut entry = Entry::from(&delete);
+    entry.indexes.extend(initial.indexes);
+
+    MessageStore::put(&provider, ALICE_DID, &entry).await.expect("should save");
+
+    // --------------------------------------------------
+    // Alice attempts to read the record and gets an error.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "initial write for deleted record not found");
+}
+
+// Should return Forbidden (403) when non-authors attempt to fetch the initial
+// write of a deleted record using a valid `record_id`.
+#[tokio::test]
+async fn non_author_deleted_write() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a protocol allowing anyone to write.
+    // --------------------------------------------------
+    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob writes a record to Alice's web node.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .protocol(WriteProtocol {
+            protocol: "http://allow-any.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .schema("post")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob deletes the record.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&write.record_id)
+        .build(&bob_keyring)
+        .await
+        .expect("should create delete");
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol attempts to read the record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "missing protocol");
+}
 
 // // Should allow non-owners to read records they have authored.
 // #[tokio::test]

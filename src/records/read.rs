@@ -12,7 +12,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
+use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write, write};
 use crate::store::RecordsQuery;
 use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
@@ -22,7 +22,9 @@ use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected}
 /// LATER: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(read.clone());
+    let mut query = RecordsQuery::from(read.clone());
+    query.method = None;
+
     let entries = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching record".to_string()));
@@ -31,31 +33,39 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         return Err(unexpected!("multiple messages exist"));
     }
 
-    // if the matched message is a `RecordsDelete`, mark as not-found and return
-    // both the RecordsDelete and the initial RecordsWrite
+    // if record is deleted, return as NotFound 
     if entries[0].descriptor().method == Method::Delete {
-        // FIXME: implement this
+        let Some(delete) = entries[0].as_delete() else {
+            return Err(unexpected!("expected `RecordsDelete` message"));
+        };
+        let Ok(initial_write) =
+            write::initial_write(owner, &delete.descriptor.record_id, provider).await
+        else {
+            return Err(unexpected!("initial write for deleted record not found"));
+        };
+        let Some(write) = initial_write else {
+            return Err(unexpected!("initial write for deleted record not found"));
+        };
 
-        //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
-        //   if initial_write.is_none() {
-        //     return Err(unexpected!("Initial write for deleted record not found"));
-        //   }
+        read.authorize(owner, &write, provider).await?;
 
-        //   // perform authorization before returning the delete and initial write messages
-        //   const parsedInitialWrite = await RecordsWrite.parse(initial_write);
-        //
-        // if let Err(e)= RecordsReadHandler.authorizeRecordsRead(tenant, recordsRead, parsedInitialWrite, this.messageStore){
-        //     // return messageReplyFromError(error, 401);
-        //     return Err(e);
-        // }
-        //
-        // return {
-        //     status : { code: 404, detail: 'Not Found' },
-        //     entry  : {
-        //       recordsDelete: recordsDeleteMessage,
-        //       initialWrite
-        //     }
-        // }
+        // FIXME: return optional body for NotFound error
+        return Err(Error::NotFound("record is deleted".to_string()));
+
+        // return Ok(Reply {
+        //     status: Status {
+        //         code: StatusCode::NOT_FOUND.as_u16(),
+        //         detail: None,
+        //     },
+        //     body: Some(ReadReply {
+        //         entry: ReadReplyEntry {
+        //             records_delete: Some(delete.clone()),
+        //             initial_write: Some(write),
+        //             records_write: None,
+        //             data: None,
+        //         },
+        //     }),
+        // });
     }
 
     let mut write = Write::try_from(&entries[0])?;

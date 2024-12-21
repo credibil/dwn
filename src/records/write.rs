@@ -1331,7 +1331,7 @@ async fn existing_entries(
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-pub async fn initial_entry(
+pub async fn initial_write(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Option<Write>> {
     let entries = existing_entries(owner, record_id, store).await?;
