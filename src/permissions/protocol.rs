@@ -20,7 +20,7 @@ pub struct Protocol<'a> {
 }
 
 // FIXME: use typestate builder pattern to enforce correct usage for each record
-// type and reduce args passed to each permit_* method
+// type and reduce args passed to permit_* methods
 impl<'a> Protocol<'a> {
     /// Create a new `Protocol` instance.
     #[must_use]

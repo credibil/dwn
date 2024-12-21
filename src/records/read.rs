@@ -225,9 +225,9 @@ impl Read {
         }
 
         // verify protocol role and action
-        if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = Protocol::new(protocol);
-            protocol.permit_read(owner, self, &write, store).await?;
+        if let Some(protocol_id) = &write.descriptor.protocol {
+            let protocol = Protocol::new(protocol_id);
+            protocol.permit_read(owner, self, write, store).await?;
             return Ok(());
         }
 
