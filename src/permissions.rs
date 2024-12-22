@@ -60,6 +60,7 @@ pub enum Scope {
         protocol: String,
 
         /// Records scope options.
+        #[serde(flatten)]
         #[serde(skip_serializing_if = "Option::is_none")]
         options: Option<RecordsOptions>,
     },

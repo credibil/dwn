@@ -197,6 +197,7 @@ async fn delete_data() {
         .expect("should find write");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should be not found");
     assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
+    // TODO: uncomment when NotFound error supports body with initial_write and delete records
     // let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
     //     panic!("should be NotFound");
     // };

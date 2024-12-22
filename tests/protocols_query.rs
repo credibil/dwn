@@ -591,9 +591,6 @@ async fn incorrect_grantor() {
         .build(&alice_keyring)
         .await
         .expect("should create grant");
-
-    let carol_grant_id = carol_grant.record_id.clone();
-
     let reply =
         endpoint::handle(ALICE_DID, carol_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -601,7 +598,7 @@ async fn incorrect_grantor() {
     // --------------------------------------------------
     // Bob (for some unknown reason) stores the grant on his web node.
     // --------------------------------------------------
-    let mut grant = carol_grant;
+    let mut grant = carol_grant.clone();
     grant.sign_as_owner(&bob_keyring).await.expect("should sign");
 
     let reply = endpoint::handle(BOB_DID, grant, &provider).await.expect("should write");
@@ -611,7 +608,7 @@ async fn incorrect_grantor() {
     //  Carol attempts (and fails) to use her grant to gain access to Bob's protocols.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .permission_grant_id(carol_grant_id)
+        .permission_grant_id(carol_grant.record_id)
         .build(&carol_keyring)
         .await
         .expect("should build");
