@@ -3,11 +3,12 @@
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use rand::RngCore;
 use serde_json::Value;
-use vercre_dwn::data::DataStream;
+use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
-use vercre_dwn::provider::{KeyStore, MessageStore};
+use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
     DeleteBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteData, WriteProtocol,
 };
@@ -1777,40 +1778,195 @@ async fn invalid_grant_protocol_path() {
     assert_eq!(e, "grant and record `protocol_path`s do not match");
 }
 
-// // Should return NotFound (404) when record does not exist.
-// #[tokio::test]
-// async fn record_not_found() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should return a status of NotFound (404) when record does not exist.
+#[tokio::test]
+async fn record_not_found() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-// // Should return NotFound (404) when record has been deleted.
-// #[tokio::test]
-// async fn record_deleted() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id("non-existent-record".to_string()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be NotFound");
+    };
+    assert_eq!(e, "no matching record");
+}
 
-// // Should return NotFound (404) when record data blocks have been deleted.
-// #[tokio::test]
-// async fn data_blocks_deleted() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should return NotFound (404) when record has been deleted.
+#[tokio::test]
+async fn record_deleted() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-// // Should not get data from block store when record has `encoded_data`.
-// #[tokio::test]
-// async fn encoded_data() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice writes then  deletes a record.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-// // Should get data from block store when record does not have `encoded_data`.
-// #[tokio::test]
-// async fn no_encoded_data() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    let delete = DeleteBuilder::new()
+        .record_id(&write.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts to read the deleted record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    // TODO: convert to a NotFound error.
+    // let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+    //     panic!("should be NotFound");
+    // };
+    // assert_eq!(e, "no matching record");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
+}
+
+// Should return NotFound (404) when record data blocks have been deleted.
+#[tokio::test]
+async fn data_blocks_deleted() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record and then deletes its data from BlockStore.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // delete record's data
+    BlockStore::delete(&provider, ALICE_DID, &write.descriptor.data_cid)
+        .await
+        .expect("should delete block");
+
+    // --------------------------------------------------
+    // Alice attempts to read the record with deleted data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be NotFound");
+    };
+    assert_eq!(e, "no data found");
+}
+
+// Should not get data from block store when record has `encoded_data`.
+#[tokio::test]
+async fn encoded_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record and then deletes data from BlockStore.
+    // --------------------------------------------------
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"data small enough to be encoded".to_vec())))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // deleting BlockStore data has no effect as the record uses encoded data
+    BlockStore::delete(&provider, ALICE_DID, &write.descriptor.data_cid)
+        .await
+        .expect("should delete block");
+
+    // --------------------------------------------------
+    // Alice reads the record with encoded data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply =
+        endpoint::handle(ALICE_DID, read, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::OK);
+}
+
+// Should get data from block store when record does not have `encoded_data`.
+#[tokio::test]
+async fn block_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record and then deletes its data from BlockStore.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let write = WriteBuilder::new()
+        .data(WriteData::Reader(write_stream.clone()))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice reads the record with block store data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+
+    let Some(read_stream) = body.entry.data else {
+        panic!("should have data");
+    };
+    assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
+}
 
 // // Should decrypt flat-space schema-contained records using a derived key.
 // #[tokio::test]
@@ -1842,16 +1998,45 @@ async fn invalid_grant_protocol_path() {
 //     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 // }
 
-// // Should return Unauthorized (401) for invalid signatures.
-// #[tokio::test]
-// async fn invalid_signature() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should return Unauthorized (401) for invalid signatures.
+#[tokio::test]
+async fn invalid_signature() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-// // Should return BadRequest (400) for unparsable messages.
-// #[tokio::test]
-// async fn invalid_message() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    let mut read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id("somerecordid".to_string()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+
+    read.authorization.as_mut().unwrap().signature.signatures[0].signature =
+        "badsignature".to_string();
+
+    let Err(Error::Unauthorized(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Unauthorized");
+    };
+    assert!(e.starts_with("failed to authenticate: "));
+}
+
+// Should return BadRequest (400) for unparsable messages.
+#[tokio::test]
+async fn invalid_message() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let mut read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id("somerecordid".to_string()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+
+    read.descriptor.filter = RecordsFilter::default();
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert!(e.starts_with("validation failed for "));
+}

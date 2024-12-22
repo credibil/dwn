@@ -79,7 +79,11 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
         Some(DataStream::from(buffer))
     } else {
-        DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
+        let data = DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?;
+        if data.is_none() {
+            return Err(Error::NotFound("no data found".to_string()));
+        }
+        data
     };
 
     write.encoded_data = None;
