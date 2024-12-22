@@ -226,7 +226,8 @@ impl Read {
 
         // verify protocol role and action
         if let Some(protocol_id) = &write.descriptor.protocol {
-            let protocol = Protocol::new(protocol_id);
+            // FIXME: add `parent_id` to protocol builder
+            let protocol = Protocol::new(protocol_id).context_id(write.context_id.as_ref());
             protocol.permit_read(owner, self, write, store).await?;
             return Ok(());
         }

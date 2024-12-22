@@ -806,7 +806,7 @@ async fn filter_many() {
 async fn root_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
     // Alice configures a nested protocol.
@@ -826,7 +826,7 @@ async fn root_role() {
     // Alice writes 2 messages to the protocol.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Bob is my friend".to_vec())))
+        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://friend-role.xyz".to_string(),
@@ -859,48 +859,360 @@ async fn root_role() {
     // --------------------------------------------------
     // Bob reads Alice's chat message.
     // --------------------------------------------------
-    // let read = ReadBuilder::new()
-    //     .filter(RecordsFilter::new().record_id(chat.record_id))
-    //     .sign(&bob_keyring)
-    //     .build()
-    //     .await
-    //     .expect("should create read");
-    // let reply =
-    //     endpoint::handle(ALICE_DID, read, &provider).await.expect("should configure protocol");
-    // assert_eq!(reply.status.code, StatusCode::OK);
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(chat.record_id))
+        .protocol_role("friend")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply =
+        endpoint::handle(ALICE_DID, read, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::OK);
 }
 
-// // Should not allow reads when protocol path does not point to an active role record.
-// #[tokio::test]
-// async fn incorrect_protocol_path() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should not allow reads when protocol path does not point to an active role record.
+#[tokio::test]
+async fn invalid_protocol_path() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
-// // Should not allow reads when recipient does not have an active role.
-// #[tokio::test]
-// async fn no_recipient_role() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice configures a nested protocol.
+    // --------------------------------------------------
+    let friend = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-// // Should allow reads when using a valid context role.
-// #[tokio::test]
-// async fn context_role() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice writes a chat message to the protocol.
+    // --------------------------------------------------
+    let chat = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Blah blah blah".to_vec())))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "chat".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-// // Should not allow reads when context role is used in wrong context.
-// #[tokio::test]
-// async fn incorrect_context_role() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Bob attempts to read Alice's chat message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(chat.record_id))
+        .protocol_role("chat")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "protocol path does not match role record type");
+}
+
+// Should not allow reads when recipient does not have an active role.
+#[tokio::test]
+async fn no_recipient_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a nested protocol.
+    // --------------------------------------------------
+    let friend = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a chat message to the protocol.
+    // --------------------------------------------------
+    let chat = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Blah blah blah".to_vec())))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "chat".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts to read Alice's chat message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(chat.record_id))
+        .protocol_role("friend")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "unable to find record for role");
+}
+
+// Should allow reads when using a valid context role.
+#[tokio::test]
+async fn context_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a nested protocol.
+    // --------------------------------------------------
+    let thread = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates a thread.
+    // --------------------------------------------------
+    let thread = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"A new thread".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob as a participant on the thread.
+    // --------------------------------------------------
+    let participant = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, participant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a chat message on the thread.
+    // --------------------------------------------------
+    let chat = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(
+            b"Bob can read this because he is a participant".to_vec(),
+        )))
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/chat".to_string(),
+        })
+        .parent_context_id(thread.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads his participant role record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(
+            RecordsFilter::new()
+                .protocol_path("thread/participant")
+                .add_recipient(BOB_DID)
+                .context_id(thread.context_id.as_ref().unwrap()),
+        )
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply =
+        endpoint::handle(ALICE_DID, read, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    // --------------------------------------------------
+    // Bob reads the thread root record.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(participant.descriptor.parent_id.as_ref().unwrap()))
+        .protocol_role("thread/participant")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply =
+        endpoint::handle(ALICE_DID, read, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    // --------------------------------------------------
+    // Bob uses his participant role to read the chat message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(chat.record_id))
+        .protocol_role("thread/participant")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply =
+        endpoint::handle(ALICE_DID, read, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::OK);
+}
+
+// Should not allow reads when context role is used in wrong context.
+#[tokio::test]
+async fn invalid_context_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a nested protocol.
+    // --------------------------------------------------
+    let thread = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates 2 threads.
+    // --------------------------------------------------
+    let thread_1 = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Thread 1".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, thread_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    let thread_2 = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Thread 2".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, thread_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob as a participant on the thread.
+    // --------------------------------------------------
+    let participant = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread_1.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, participant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a chat message to thread 2.
+    // --------------------------------------------------
+    let chat = WriteBuilder::new()
+        .data(WriteData::Reader(DataStream::from(
+            b"Bob can read this because he is a participant".to_vec(),
+        )))
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/chat".to_string(),
+        })
+        .parent_context_id(thread_2.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob uses his participant role to read the chat message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(chat.record_id))
+        .protocol_role("thread/participant")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "unable to find record for role");
+}
 
 // // Should disallow external party reads when grant has incorrect method scope.
 // #[tokio::test]
-// async fn incorrect_grant_method() {
+// async fn invalid_grant_method() {
 //     let provider = ProviderImpl::new().await.expect("should create provider");
 //     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 // }
@@ -921,7 +1233,7 @@ async fn root_role() {
 
 // // Should not allow reads when grant scope does not match record protocol scope.
 // #[tokio::test]
-// async fn incorrect_grant_protocol() {
+// async fn invalid_grant_protocol() {
 //     let provider = ProviderImpl::new().await.expect("should create provider");
 //     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 // }
@@ -935,7 +1247,7 @@ async fn root_role() {
 
 // // Should not allow reading records within when grant context does not match.
 // #[tokio::test]
-// async fn incorrect_grant_context() {
+// async fn invalid_grant_context() {
 //     let provider = ProviderImpl::new().await.expect("should create provider");
 //     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 // }

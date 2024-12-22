@@ -158,10 +158,13 @@ impl Protocol<'_> {
         // the initial write record.
         let write_record: Record = write.into();
         let rule_set = write_record.rule_set(owner, store).await?;
+        // let ancestor_chain = self.ancestor_chain(owner, &write.record_id, store).await?;
 
         let read_record: Record = read.into();
 
         self.allow_role(owner, &read_record, write_record.protocol()?, store).await?;
+
+        // FIXME: pass ancestor_chain to `allow_action` method
         self.allow_action(owner, &read_record, &rule_set, store).await
     }
 
@@ -265,20 +268,20 @@ impl Protocol<'_> {
     async fn allow_action(
         &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
     ) -> Result<()> {
-        // build record chain
-        let record_chain = match record {
+        // build chain of ancestor records
+        let ancestor_chain = match record {
             Record::Write(write) => {
                 // if write::initial_write(owner, &write.record_id, store).await?.is_some() {
                 if !write.is_initial()? {
-                    self.record_chain(owner, &write.record_id, store).await?
+                    self.ancestor_chain(owner, &write.record_id, store).await?
                 } else if let Some(parent_id) = &write.descriptor.parent_id {
-                    self.record_chain(owner, parent_id, store).await?
+                    self.ancestor_chain(owner, parent_id, store).await?
                 } else {
                     vec![]
                 }
             }
             Record::Delete(delete) => {
-                self.record_chain(owner, &delete.descriptor.record_id, store).await?
+                self.ancestor_chain(owner, &delete.descriptor.record_id, store).await?
             }
             Record::Query(_) | Record::Subscribe(_) | Record::Read(_) => Vec::new(),
         };
@@ -287,7 +290,7 @@ impl Protocol<'_> {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
-        let role = authzn.jws_payload()?.protocol_role;
+        let invoked_role = authzn.jws_payload()?.protocol_role;
         let allowed_actions = self.allowed_actions(owner, record, store).await?;
         let Some(action_rules) = &rule_set.actions else {
             return Err(forbidden!("no rule defined for action"));
@@ -301,10 +304,8 @@ impl Protocol<'_> {
             if rule.who == Some(Actor::Anyone) {
                 return Ok(());
             }
-
-            // validate role
-            if role.is_some() {
-                if rule.role == role {
+            if invoked_role.is_some() {
+                if rule.role == invoked_role {
                     return Ok(());
                 }
                 continue;
@@ -317,7 +318,7 @@ impl Protocol<'_> {
                 } else {
                     // the incoming message must be a `RecordsDelete` because only
                     // `co-update`, `co-delete`, `co-prune` are allowed recipient actions,
-                    &record_chain[record_chain.len() - 1]
+                    &ancestor_chain[ancestor_chain.len() - 1]
                 };
 
                 if message.descriptor.recipient.as_ref() == Some(&author) {
@@ -327,7 +328,7 @@ impl Protocol<'_> {
             }
 
             // is actor allowed by the current action rule?
-            if check_actor(&author, rule, &record_chain)? {
+            if check_actor(&author, rule, &ancestor_chain)? {
                 return Ok(());
             }
         }
@@ -335,32 +336,29 @@ impl Protocol<'_> {
         Err(forbidden!("action not permitted"))
     }
 
-    // Constructs the chain of EXISTING records in the datastore where the first
-    // record is the root initial `records::Write` of the record chain and last
-    // record is the initial `records::Write` of the descendant record specified.
-    async fn record_chain(
-        &self, owner: &str, record_id: &str, store: &impl MessageStore,
+    // Constructs a chain of ancestor `initial_write` records starting from
+    // `descendant_id` and working backwards.
+    //
+    // e.g. root_initial_write <- ... <- descendant_initial_write
+    // => vec![root_initial_write, ...,descendant_initial_write]
+    async fn ancestor_chain(
+        &self, owner: &str, descendant_id: &str, store: &impl MessageStore,
     ) -> Result<Vec<Write>> {
-        let mut chain = vec![];
+        let mut ancestors = vec![];
+        let mut current_id = Some(descendant_id.to_owned());
 
-        // keep walking up the chain from the inbound message's parent, until there
-        // is no more parent
-        let mut current_id = Some(record_id.to_owned());
-
+        // walk up the ancestor tree until no parent
         while let Some(record_id) = &current_id {
             let Some(initial) = write::initial_write(owner, record_id, store).await? else {
-                return Err(forbidden!(
-                    "no parent found with ID {record_id} when constructing record chain"
-                ));
+                return Err(forbidden!("no initial write record found descendant"));
             };
-
-            chain.push(initial.clone());
+            ancestors.push(initial.clone());
             current_id.clone_from(&initial.descriptor.parent_id);
         }
 
-        // root record first
-        chain.reverse();
-        Ok(chain)
+        // order from root to descendant
+        ancestors.reverse();
+        Ok(ancestors)
     }
 
     // Match `Action`s that authorize the incoming message.
@@ -381,7 +379,6 @@ impl Protocol<'_> {
                 if write.authorization.author()? == initial.authorization.author()? {
                     return Ok(vec![Action::CoUpdate, Action::Update]);
                 }
-
                 Ok(vec![Action::CoUpdate])
             }
             Record::Read(_) => Ok(vec![Action::Read]),
@@ -417,10 +414,10 @@ impl Protocol<'_> {
 }
 
 // Checks for a match with the `who` rule in record chain.
-fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -> Result<bool> {
+fn check_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write]) -> Result<bool> {
     // find a message with matching protocolPath
     let ancestor =
-        record_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
+        ancestor_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
     let Some(ancestor) = ancestor else {
         // reaching this block means there is an issue with the protocol definition
         // this check should happen `protocols::Configure`
