@@ -17,7 +17,10 @@ pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
 pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
-pub use self::write::{DelegatedGrant, Write, WriteBuilder, WriteData, WriteProtocol};
+pub use self::write::{
+    DelegatedGrant, DerivationScheme, EncryptedKey, EncryptionInput, EncryptionKey,
+    EncryptionProperty, Write, WriteBuilder, WriteData, WriteProtocol,
+};
 pub use crate::data::DataStream;
 use crate::serde::rfc3339_micros_opt;
 use crate::{Quota, RangeFilter, Result, utils};

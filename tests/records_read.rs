@@ -1,5 +1,6 @@
 //! Records Read
 
+use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -10,10 +11,13 @@ use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
-    DeleteBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteData, WriteProtocol,
+    DeleteBuilder, DerivationScheme, EncryptedKey, EncryptionInput, EncryptionKey,
+    EncryptionProperty, ReadBuilder, RecordsFilter, WriteBuilder, WriteData, WriteProtocol,
 };
 use vercre_dwn::store::Entry;
-use vercre_dwn::{Error, Method, endpoint};
+use vercre_dwn::{Error, Method, endpoint, hd_key};
+use vercre_infosec::Signer;
+use vercre_infosec::jose::jwe;
 
 // Should allow an owner to read their own records.
 #[tokio::test]
@@ -1968,12 +1972,84 @@ async fn block_data() {
     assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
 }
 
-// // Should decrypt flat-space schema-contained records using a derived key.
-// #[tokio::test]
-// async fn decrypt_schema() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should decrypt flat-space schema-contained records using a derived key.
+#[tokio::test]
+async fn decrypt_schema() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // 0. Generate record data.
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    // Encrypt record data using AES128-GCM.
+    let bob_key = bob_keyring.public_key().await.expect("should get public key");
+    let jwe = jwe::encrypt(&data, &bob_key).expect("should encrypt data");
+
+    let schemas_private_key = hd_key::DerivedPrivateJwk {
+        root_key_id: "key_id".to_string(),
+        derivation_scheme: hd_key::DerivationScheme::Schemas,
+        derivation_path: None,
+        // derived_private_key: alice_keyring.private_key_jwk(),
+        derived_private_key: hd_key::PrivateKeyJwk::default(),
+    };
+
+    let derivation_path =
+        vec![hd_key::DerivationScheme::Schemas.to_string(), "https://some-schema.com".to_string()];
+    let schema_private_key = hd_key::derive_private_key(schemas_private_key, &derivation_path);
+    // let schema_public_key =  Secp256k1.getPublicJwk(schema_private_key.derivedPrivateKey);
+
+    //   const rootPrivateKeyWithDataFormatsScheme: DerivedPrivateJwk = {
+    //     rootKeyId         : alice.keyId,
+    //     derivationScheme  : KeyDerivationScheme.DataFormats,
+    //     derivedPrivateKey : alice.keyPair.privateJwk
+    //   };
+
+    //   const dataFormat = 'some/format';
+    //   const dataFormatDerivationPath = Records.constructKeyDerivationPathUsingDataFormatsScheme(schema, dataFormat);
+    //   const dataFormatDerivedPublicKey = await HdKey.derivePublicKey(rootPrivateKeyWithDataFormatsScheme, dataFormatDerivationPath);
+
+    //   const encryptionInput: EncryptionInput = {
+    //     initializationVector : dataEncryptionInitializationVector,
+    //     key                  : dataEncryptionKey,
+    //     keyEncryptionInputs  : [{
+    //       publicKeyId      : alice.keyId, // reusing signing key for encryption purely as a convenience
+    //       publicKey        : schemaDerivedPublicKey,
+    //       derivationScheme : KeyDerivationScheme.Schemas
+    //     },
+    //     {
+    //       publicKeyId      : alice.keyId, // reusing signing key for encryption purely as a convenience
+    //       publicKey        : dataFormatDerivedPublicKey,
+    //       derivationScheme : KeyDerivationScheme.DataFormats
+    //     }]
+    //   };
+
+    // let iv = Base64UrlUnpadded::decode_vec(&jwe.iv).expect("should decode base64");
+    // let base64_cek = jwe.encrypted_key;
+    // let encrypted_cek = Base64UrlUnpadded::decode_vec(&base64_cek).expect("should decode base64");
+
+    // let enc = EncryptionInput {
+    //     algorithm: jwe::EncryptionAlgorithm::A256Gcm,
+    //     initialization_vector: iv,
+    //     key: encrypted_cek,
+    //     keys: vec![
+    //         // EncryptionKey {
+    //         //     derivation_scheme: Some(DerivationScheme::Schemas),
+    //         //     //public_key_id: alice_keyring.key_id().to_string(),
+    //         //     public_key: jwe.protected.epk,
+    //         //     algorithm: jwe::CekAlgorithm::EcdhEs,
+    //         // },
+    //         // KeyEncryptionInput {
+    //         //     public_key_id: alice_keyring.key_id().to_string(),
+    //         //     public_key: bob_key,
+    //         //     derivation_scheme: KeyDerivationScheme::DataFormats,
+    //         // },
+    //     ],
+    // };
+
+    // 4. Create Write record
+}
 
 // // Should decrypt flat-space schemaless records using a derived key.
 // #[tokio::test]

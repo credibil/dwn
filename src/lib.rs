@@ -8,6 +8,7 @@ pub mod data;
 pub mod endpoint;
 mod error;
 pub mod event;
+pub mod hd_key;
 pub mod messages;
 pub mod permissions;
 pub mod protocols;

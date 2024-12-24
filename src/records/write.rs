@@ -11,7 +11,8 @@ use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use vercre_infosec::jose::{EncryptionAlgorithm, Jws, JwsBuilder, PublicKeyJwk};
+use vercre_infosec::jose::jwe::{CekAlgorithm, EncryptionAlgorithm};
+use vercre_infosec::jose::{Jws, JwsBuilder, PublicKeyJwk};
 use vercre_infosec::{Cipher, Signer};
 
 use crate::authorization::{self, Authorization, JwsPayload};
@@ -440,17 +441,20 @@ impl Write {
                 ));
             }
 
-            // NOTE: right now only `ECIES-ES256K` algorithm is supported for asymmetric encryption,
-            // so we will assume that's the algorithm without additional switch/if statements
-
+            // ----------------------------------------------------------------
+            // Populate from JWE
+            // ----------------------------------------------------------------
+            // ** AW: encrypt the CEK using the recipient's public key **
             // let pk_bytes = Secp256k1.publicJwkToBytes(key.public_key);
-            // let output = await Encryption.eciesSecp256k1Encrypt(pk_bytes, input.key);
+            // let encrypted = await Encryption.eciesSecp256k1Encrypt(pk_bytes, input.key);
 
-            //   let encryptedKey = Encoder.bytesToBase64Url(output.ciphertext);
-            //   let ephemeralPublicKey = await Secp256k1.publicKeyToJwk(output.ephemeralPublicKey);
-            //   let keyEncryptionInitializationVector = Encoder.bytesToBase64Url(output.initializationVector);
-            //   let messageAuthenticationCode = Encoder.bytesToBase64Url(output.messageAuthenticationCode);
-            //   let encryptedKeyData= EncryptedKey {
+            // ** AW: create the encrypted key data **
+            // let encryptedKey = Encoder.bytesToBase64Url(encrypted.ciphertext);
+            // let ephemeralPublicKey = await Secp256k1.publicKeyToJwk(encrypted.ephemeralPublicKey);
+            // let keyEncryptionInitializationVector = Encoder.bytesToBase64Url(encrypted.initializationVector);
+            // let messageAuthenticationCode = Encoder.bytesToBase64Url(encrypted.messageAuthenticationCode);
+
+            // let encryptedKeyData = EncryptedKey {
             //     rootKeyId            : key.publicKeyId,
             //     algorithm            : key.algorithm ?? EncryptionAlgorithm.EciesSecp256k1,
             //     derivationScheme     : key.derivationScheme,
@@ -459,6 +463,7 @@ impl Write {
             //     messageAuthenticationCode,
             //     encryptedKey
             //   };
+            // ----------------------------------------------------------------
 
             //   // we need to attach the actual public key if derivation scheme is protocol-context,
             //   // so that the responder to this message is able to encrypt the message/symmetric key using the same protocol-context derived public key,
@@ -635,9 +640,112 @@ pub struct WriteDescriptor {
     pub date_published: Option<DateTime<Utc>>,
 }
 
-/// Protocol.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+/// `EncryptionProperty` contains information about the encryption used when
+/// encrypting a `Write` message. The information is used by the recipient
+/// to decrypt the message.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EncryptionProperty {
+    /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
+    /// Algorithm (JWE header `enc` property).
+    algorithm: EncryptionAlgorithm,
+
+    /// The initialization vector used to encrypt the data.
+    initialization_vector: String,
+
+    /// One or more objects, each containing information about the
+    /// Content Encryption Key (CEK) used to encrypt the data.
+    key_encryption: Vec<EncryptedKey>,
+}
+
+/// The encrypted Content Encryption Key (CEK). Equivalent to the JWE
+/// Encrypted Key (JWE `encrypted_key` property), this is the key used to
+/// encrypt the data.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names)]
+pub struct EncryptedKey {
+    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
+    /// of the root public key used to encrypt the symmetric encryption key.
+    root_key_id: String,
+
+    /// The derived public key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    derived_public_key: Option<PublicKeyJwk>,
+
+    /// The content encryption key (CEK) derivation scheme.
+    derivation_scheme: DerivationScheme,
+
+    /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
+    /// Algorithm (JWE header `enc` property).
+    algorithm: EncryptionAlgorithm,
+
+    /// The initialization vector used to encrypt the data.
+    initialization_vector: String,
+
+    /// The ephemeral public key used to encrypt the data.
+    ephemeral_public_key: PublicKeyJwk,
+
+    /// The message authentication code.
+    message_authentication_code: String,
+
+    /// The encrypted Content Encryption Key (CEK). Equivalent to the JWE
+    /// Encrypted Key (JWE `encrypted_key` property), this is the key used to
+    /// encrypt the data.
+    encrypted_key: String,
+}
+
+/// Key derivation schemes.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DerivationScheme {
+    /// Key derivation using the `dataFormat` value for Flat-space records.
+    #[default]
+    DataFormats,
+
+    /// Key derivation using protocol context.
+    ProtocolContext,
+
+    /// Key derivation using the protocol path.
+    ProtocolPath,
+
+    /// Key derivation using the `schema` value for Flat-space records.
+    Schemas,
+}
+
+/// Options for use when creating a new [`Write`] message.
+pub struct WriteBuilder<O, A, E, S> {
+    message_timestamp: DateTime<Utc>,
+    recipient: Option<String>,
+    protocol: Option<WriteProtocol>,
+    schema: Option<String>,
+    tags: Option<Map<String, Value>>,
+    record_id: Option<String>,
+    parent_context_id: Option<String>,
+    data: WriteData,
+    data_format: String,
+    date_created: DateTime<Utc>,
+    published: Option<bool>,
+    date_published: Option<DateTime<Utc>>,
+    protocol_role: Option<String>,
+    encryption_input: Option<EncryptionInput>,
+    permission_grant_id: Option<String>,
+    delegated_grant: Option<DelegatedGrant>,
+    existing: Option<Write>,
+    origin: O,
+    attesters: A,
+    encrypter: E,
+    signer: S,
+}
+
+impl Default for WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The protocol to use for the Write message.
+#[derive(Clone, Debug, Default)]
 pub struct WriteProtocol {
     /// Entry protocol.
     pub protocol: String,
@@ -647,8 +755,6 @@ pub struct WriteProtocol {
 }
 
 /// Entry data can be raw bytes or CID.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
 pub enum WriteData {
     /// Data is bytes.
     Bytes(Vec<u8>),
@@ -675,124 +781,40 @@ impl Default for WriteData {
 }
 
 /// Encryption settings.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default)]
 pub struct EncryptionInput {
-    /// Encryption algorithm.
+    /// The algorithm to use for encrypting the data. Equivalent to the JWE
+    /// Encryption Algorithm (JWE header `enc` property).
     pub algorithm: EncryptionAlgorithm,
 
-    /// The initialization vector.
-    pub initialization_vector: String,
+    /// The initialization vector to use for encrypting the data.
+    pub initialization_vector: Vec<u8>,
 
-    /// Symmetric key used to encrypt the data.
+    /// The private key used to encrypt the content encryption key (CEK).
     pub key: Vec<u8>,
 
-    /// Array of input that specifies how the symmetric key is encrypted. Each
-    /// entry in the array will result in a unique ciphertext of the symmetric
-    /// key.
-    pub keys: Vec<EncryptionKeyInput>,
+    /// An array of inputs specifying how the CEK key is to be encrypted. Each
+    /// entry in the array will result in a unique ciphertext for the CEK.
+    pub keys: Vec<EncryptionKey>,
 }
 
 /// Encryption key settings.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EncryptionKeyInput {
-    /// Encryption key derivation scheme.
+#[derive(Clone, Debug, Default)]
+pub struct EncryptionKey {
+    /// The content encryption key (CEK) derivation scheme.
     pub derivation_scheme: Option<DerivationScheme>,
 
     /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id) of
-    /// the public key used to encrypt the symmetric key.
+    /// the public key used to encrypt the content encryption key (CEK).
     pub public_key_id: String,
 
-    /// The recipient's public key.
+    /// The recipient's public key to use to derive the shared secret used to
+    /// encrypt the content encryption key (CEK).
     pub public_key: PublicKeyJwk,
 
-    /// The encryption algorithm.
-    pub algorithm: EncryptionAlgorithm,
-}
-
-/// Encryption output.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EncryptionProperty {
-    algorithm: EncryptionAlgorithm,
-    initialization_vector: String,
-    key_encryption: Vec<EncryptedKey>,
-}
-
-/// Encrypted key.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(clippy::struct_field_names)]
-pub struct EncryptedKey {
-    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
-    /// of the root public key used to encrypt the symmetric encryption key.
-    root_key_id: String,
-
-    /// The actual derived public key.
-    derived_public_key: PublicKeyJwk,
-    derivation_scheme: DerivationScheme,
-    algorithm: EncryptionAlgorithm,
-    initialization_vector: String,
-    ephemeral_public_key: PublicKeyJwk,
-    message_authentication_code: String,
-    encrypted_key: String,
-}
-
-/// Key derivation schemes.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum DerivationScheme {
-    /// Key derivation using the `dataFormat` value for Flat-space records.
-    #[default]
-    DataFormats,
-
-    /// Key derivation using protocol context.
-    ProtocolContext,
-
-    /// Key derivation using the protocol path.
-    ProtocolPath,
-
-    /// Key derivation using the `schema` value for Flat-space records.
-    Schemas,
-}
-
-#[derive(Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Payload {
-    descriptor_cid: String,
-}
-
-/// Options for use when creating a new [`Write`] message.
-pub struct WriteBuilder<O, A, E, S> {
-    message_timestamp: DateTime<Utc>,
-    recipient: Option<String>,
-    protocol: Option<WriteProtocol>,
-    schema: Option<String>,
-    tags: Option<Map<String, Value>>,
-    record_id: Option<String>,
-    parent_context_id: Option<String>,
-    data: WriteData,
-    data_format: String,
-    date_created: DateTime<Utc>,
-    published: Option<bool>,
-    date_published: Option<DateTime<Utc>>,
-    protocol_role: Option<String>,
-    encryption_input: Option<EncryptionInput>,
-    permission_grant_id: Option<String>,
-    delegated_grant: Option<DelegatedGrant>,
-    existing: Option<Write>,
-
-    origin: O,
-    attesters: A,
-    encrypter: E,
-    signer: S,
-}
-
-impl Default for WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
-    fn default() -> Self {
-        Self::new()
-    }
+    /// The algorithm used to encrypt or determine the value of the content
+    /// encryption key (CEK).
+    pub algorithm: CekAlgorithm,
 }
 
 // State 'guards' for the WriteBuilder typestate pattern.
@@ -1205,6 +1227,12 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
 
         Ok(write)
     }
+}
+
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Payload {
+    descriptor_cid: String,
 }
 
 impl<O, A: Signer, E, S: Signer> WriteBuilder<O, Attested<'_, A>, E, Signed<'_, S>> {

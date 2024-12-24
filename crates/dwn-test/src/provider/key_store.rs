@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 
 use anyhow::{Result, anyhow};
-//
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{SecretKey, Signer as _, SigningKey};
 use vercre_dwn::provider::{KeyStore, Keyring};
 use vercre_infosec::{Algorithm, Cipher, Signer};
+use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::provider::ProviderImpl;
 
@@ -76,7 +76,7 @@ impl KeyStoreImpl {
 
 impl KeyStore for ProviderImpl {
     fn keyring(&self, identifier: &str) -> Result<impl Keyring> {
-        self.keystore.keyrings.get(identifier).cloned().ok_or_else(|| anyhow!("Keyring not found"))
+        self.keystore.keyrings.get(identifier).cloned().ok_or_else(|| anyhow!("keyring not found"))
     }
 }
 
@@ -86,7 +86,7 @@ impl Signer for KeyringImpl {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
         let secret_key: SecretKey =
-            decoded.try_into().map_err(|_| anyhow!("Invalid secret key"))?;
+            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
         let signing_key: SigningKey = SigningKey::from_bytes(&secret_key);
 
         Ok(signing_key.sign(msg).to_bytes().to_vec())
@@ -95,7 +95,7 @@ impl Signer for KeyringImpl {
     async fn public_key(&self) -> Result<Vec<u8>> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
         let secret_key: SecretKey =
-            decoded.try_into().map_err(|_| anyhow!("Invalid secret key"))?;
+            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
         let signing_key: SigningKey = SigningKey::from_bytes(&secret_key);
 
         Ok(signing_key.verifying_key().as_bytes().to_vec())
@@ -112,15 +112,25 @@ impl Signer for KeyringImpl {
 }
 
 impl Cipher for KeyringImpl {
-    async fn encrypt(&self, _plaintext: &[u8], _recipient_public_key: &[u8]) -> Result<Vec<u8>> {
-        todo!()
+    // FIXME: wrap return in Result<Vec<u8>>
+    fn public_key(&self) -> Vec<u8> {
+        let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key).unwrap();
+        let bytes: [u8; 32] =
+            decoded.try_into().map_err(|_| anyhow!("Invalid secret key")).unwrap();
+
+        // derive x25519 key agreement public key
+        PublicKey::from(bytes).as_bytes().to_vec()
     }
 
-    fn ephemeral_public_key(&self) -> Vec<u8> {
-        todo!()
-    }
+    async fn diffie_hellman(&self, sender_public: &[u8]) -> Result<Vec<u8>> {
+        let sender_key: [u8; 32] = sender_public.try_into()?;
+        let sender_public = PublicKey::from(sender_key);
 
-    async fn decrypt(&self, _ciphertext: &[u8], _sender_public_key: &[u8]) -> Result<Vec<u8>> {
-        todo!()
+        let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
+        let bytes: [u8; 32] = decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
+        let secret_key = StaticSecret::from(bytes);
+
+        let shared_secret = secret_key.diffie_hellman(&sender_public);
+        Ok(shared_secret.as_bytes().to_vec())
     }
 }

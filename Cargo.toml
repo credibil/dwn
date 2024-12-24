@@ -28,13 +28,17 @@ chrono.workspace = true
 ciborium = "0.2.2"
 cid.workspace = true
 derive_more = { workspace = true, features = ["display"] }
+ed25519-dalek.workspace = true
 futures.workspace = true
+hex-literal.workspace = true
+hkdf.workspace = true
 http.workspace = true
-jsonschema = { version = "0.26.2", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.27.0", default-features = false, features = ["resolve-file"] }
 libipld.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror = "2.0.9"
 tokio = { workspace = true, features = ["sync"] }
 uuid = { version = "1.11.0", features = ["fast-rng", "v4"] }
@@ -76,7 +80,7 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.94"
+anyhow = "1.0.95"
 assert_let_bind = "0.1.1"
 async-trait = "0.1.83"
 axum = { version = "0.7.9", features = ["macros"] }
@@ -86,7 +90,10 @@ chrono = { version = "0.4.39", features = ["serde"] }
 cid = "0.11.1"
 derive_more = "1.0.0"
 dwn-test = { path = "crates/dwn-test" }
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
+hex-literal = "0.4.1"
+hkdf = "0.12.4"
 http = "1.2.0"
 insta = { version = "1.41.1", features = ["redactions", "yaml"] }
 libipld = "0.16.0"
@@ -99,8 +106,8 @@ tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 
-# [patch."https://github.com/vercre/infosec.git"]
-# vercre-infosec = { path = "../infosec" }
+[patch."https://github.com/vercre/infosec.git"]
+vercre-infosec = { path = "../infosec" }
 
 [profile.release]
 # Optimize for small code size
