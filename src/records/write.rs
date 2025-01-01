@@ -1021,14 +1021,18 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             write.descriptor.date_published = None;
         }
 
-        // TODO: store data in `encoded_data` if data is small enough
-        // if data.len() <= data::MAX_ENCODED_SIZE {}
-
         match &self.data {
             Data::Stream(stream) => {
                 let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
+
+                // if data_size <= data::MAX_ENCODED_SIZE {
+                //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&stream.buffer));
+                // } else {
+                //     write.data_stream = Some(stream.clone());
+                // }
+
                 write.encryption = stream.encryption();
                 write.data_stream = Some(stream.clone());
             }
