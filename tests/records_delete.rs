@@ -6,12 +6,11 @@ use chrono::Days;
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use vercre_dwn::data::DataStream;
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{EventLog, KeyStore, MessageStore};
 use vercre_dwn::records::{
-    DeleteBuilder, DeleteDescriptor, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder,
-    WriteData, WriteProtocol,
+    Data, DeleteBuilder, DeleteDescriptor, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder,
+    WriteProtocol,
 };
 use vercre_dwn::{Error, Method, endpoint, store};
 
@@ -27,7 +26,7 @@ async fn delete_record() {
     let data = br#"{"record": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -95,7 +94,7 @@ async fn delete_data() {
     // Alice writes a record.
     // --------------------------------------------------
     let alice_write1 = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -108,7 +107,7 @@ async fn delete_data() {
     // Alice writes another record with the same data
     // --------------------------------------------------
     let alice_write2 = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -121,7 +120,7 @@ async fn delete_data() {
     // Bob writes a record with the same data
     // --------------------------------------------------
     let bob_write1 = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&bob_keyring)
         .build()
         .await
@@ -134,7 +133,7 @@ async fn delete_data() {
     // Bob writes another record with the same data
     // --------------------------------------------------
     let bob_write2 = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&bob_keyring)
         .build()
         .await
@@ -257,7 +256,7 @@ async fn newer_version() {
     let data = br#"{"record": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -271,7 +270,7 @@ async fn newer_version() {
     let data = br#"{"record": "test record write again"}"#;
 
     let write = WriteBuilder::from(write.clone())
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -311,7 +310,7 @@ async fn rewrite_data() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -335,7 +334,7 @@ async fn rewrite_data() {
     // Alice writes another record with the same data.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -373,7 +372,7 @@ async fn anyone_delete() {
     let data = br#"{"record": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .protocol(WriteProtocol {
             protocol: definition.protocol,
             protocol_path: "doc".to_string(),
@@ -428,7 +427,7 @@ async fn ancestor_recipient() {
     let data = br#"{"record": "chat write"}"#;
 
     let chat = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
@@ -447,7 +446,7 @@ async fn ancestor_recipient() {
     let data = br#"{"record": "chat tag write"}"#;
 
     let tag = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .protocol(WriteProtocol {
             protocol: definition.protocol,
             protocol_path: "post/tag".to_string(),
@@ -518,7 +517,7 @@ async fn direct_recipient() {
     let data = br#"{"record": "chat write"}"#;
 
     let chat = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
@@ -588,7 +587,7 @@ async fn ancestor_author() {
     let data = br#"{"record": "post write"}"#;
 
     let post = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
             protocol_path: "post".to_string(),
@@ -606,7 +605,7 @@ async fn ancestor_author() {
     let data = br#"{"record": "post comment write"}"#;
 
     let comment = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
             protocol_path: "post/comment".to_string(),
@@ -677,7 +676,7 @@ async fn context_role() {
     let data = br#"{"record": "thread write"}"#;
 
     let thread = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
@@ -698,7 +697,7 @@ async fn context_role() {
     let thread_context_id = thread.context_id.unwrap();
 
     let admin = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
@@ -719,7 +718,7 @@ async fn context_role() {
     let data = br#"{"record": "chat message"}"#;
 
     let chat = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
@@ -792,7 +791,7 @@ async fn root_role() {
     let data = br#"{"record": "Bob admin"}"#;
 
     let admin = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
@@ -812,7 +811,7 @@ async fn root_role() {
     let data = br#"{"record": "a chat message"}"#;
 
     let chat = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: definition.protocol.clone(),
@@ -867,7 +866,7 @@ async fn forbidden() {
     let data = br#"{"record": "a record"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -950,7 +949,7 @@ async fn index_additional() {
     let data = br#"{"record": "a record"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .schema("http://test_schema")
         .sign(&alice_keyring)
         .build()
@@ -1004,7 +1003,7 @@ async fn log_delete() {
     let data = br#"{"record": "a record"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -1051,7 +1050,7 @@ async fn delete_updates() {
     let data = br#"{"record": "a record"}"#;
 
     let write1 = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -1061,7 +1060,7 @@ async fn delete_updates() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write2 = WriteBuilder::from(write1.clone())
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await

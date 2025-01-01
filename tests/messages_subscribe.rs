@@ -14,7 +14,7 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, WriteData};
+use vercre_dwn::records::{WriteBuilder, Data};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // TODO: implement fake provider with no subscription support for this test.
@@ -62,7 +62,7 @@ async fn owner_events() {
     // --------------------------------------------------
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -204,7 +204,7 @@ async fn interface_scope() {
     // 3. write a record to the 'allow-any' protocol
     let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .protocol(vercre_dwn::records::WriteProtocol {
             protocol: definition.protocol.clone(),
             protocol_path: "post".to_string(),
@@ -223,7 +223,7 @@ async fn interface_scope() {
     // 4. write a random record
     let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -411,7 +411,7 @@ async fn protocol_filter() {
     // protocol1
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .protocol(vercre_dwn::records::WriteProtocol {
             protocol: "http://protocol1.xyz".to_string(),
             protocol_path: "post".to_string(),
@@ -430,7 +430,7 @@ async fn protocol_filter() {
     // protocol2
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .protocol(vercre_dwn::records::WriteProtocol {
             protocol: "http://protocol2.xyz".to_string(),
             protocol_path: "post".to_string(),

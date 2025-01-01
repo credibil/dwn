@@ -14,7 +14,7 @@ use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{KeyStore, MessageStore};
-use vercre_dwn::records::{DeleteBuilder, WriteBuilder, WriteData, WriteProtocol};
+use vercre_dwn::records::{DeleteBuilder, WriteBuilder, Data, WriteProtocol};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint, store};
 
 // Bob should be able to read any message in Alice's web node.
@@ -31,7 +31,7 @@ async fn read_message() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -168,7 +168,7 @@ async fn forbidden() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader.clone()))
+        .data(Data::Stream(reader.clone()))
         .sign(&bob_keyring)
         .build()
         .await
@@ -205,7 +205,7 @@ async fn data_lt_threshold() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -252,7 +252,7 @@ async fn data_gt_threshold() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -299,7 +299,7 @@ async fn no_data_after_update() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -318,7 +318,7 @@ async fn no_data_after_update() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::from(write)
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -467,7 +467,7 @@ async fn invalid_interface() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -530,7 +530,7 @@ async fn permissive_grant() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -650,7 +650,7 @@ async fn protocol_grant() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -686,7 +686,7 @@ async fn protocol_grant() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -827,7 +827,7 @@ async fn protocol_grant() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -882,7 +882,7 @@ async fn invalid_protocol_grant() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -976,7 +976,7 @@ async fn delete_with_no_write() {
     let reader = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),

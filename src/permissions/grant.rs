@@ -9,8 +9,7 @@ use super::{ConditionPublication, Conditions, RecordsOptions, Scope};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
-    self, DelegatedGrant, Delete, Query, Read, Subscribe, Write, WriteBuilder, WriteData,
-    WriteProtocol,
+    self, Data, DelegatedGrant, Delete, Query, Read, Subscribe, Write, WriteBuilder, WriteProtocol,
 };
 use crate::serde::rfc3339_micros;
 use crate::store::{RecordsFilter, RecordsQuery};
@@ -453,7 +452,7 @@ impl GrantBuilder {
                 protocol: protocols::PROTOCOL_URI.to_string(),
                 protocol_path: protocols::GRANT_PATH.to_string(),
             })
-            .data(WriteData::Bytes(grant_bytes.clone()));
+            .data(Data::from(grant_bytes.clone()));
 
         // add protocol tag
         // N.B. adding a protocol tag ensures message queries with a protocol
@@ -536,7 +535,7 @@ impl RequestBuilder {
                 protocol: protocols::PROTOCOL_URI.to_string(),
                 protocol_path: protocols::REQUEST_PATH.to_string(),
             })
-            .data(WriteData::Bytes(request_bytes.clone()));
+            .data(Data::from(request_bytes.clone()));
 
         // add protocol tag
         // N.B. adding a protocol tag ensures message queries with a protocol
@@ -600,7 +599,7 @@ impl RevocationBuilder {
                 protocol: protocols::PROTOCOL_URI.to_string(),
                 protocol_path: protocols::REVOCATION_PATH.to_string(),
             })
-            .data(WriteData::Bytes(revocation_bytes.clone()));
+            .data(Data::from(revocation_bytes.clone()));
 
         // add protocol tag
         // N.B. adding a protocol tag ensures message queries with a protocol

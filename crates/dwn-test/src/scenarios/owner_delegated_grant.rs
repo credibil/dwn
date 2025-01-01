@@ -8,7 +8,7 @@ use rand::RngCore;
 use vercre_dwn::Method;
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{DelegatedGrant, WriteBuilder, WriteData};
+use vercre_dwn::records::{Data, DelegatedGrant, WriteBuilder};
 
 use crate::key_store::{ALICE_DID, APP_DID, BOB_DID};
 use crate::provider::ProviderImpl;
@@ -40,7 +40,7 @@ async fn configure() {
     // --------------------------------------------------
     let mut data = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_data = WriteData::Bytes(data.to_vec());
+    let write_data = Data::from(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data_format("application/octet-stream")

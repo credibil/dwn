@@ -7,9 +7,8 @@ use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use tokio::time;
-use vercre_dwn::data::DataStream;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
+use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, Data};
 use vercre_dwn::{Message, endpoint};
 
 // The owner should be able to subscribe their own event stream.
@@ -35,7 +34,7 @@ async fn owner_events() {
     let data = br#"{"message": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Stream(DataStream::from(data.to_vec())))
+        .data( Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await

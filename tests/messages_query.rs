@@ -11,7 +11,7 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, WriteData, WriteProtocol};
+use vercre_dwn::records::{WriteBuilder, Data, WriteProtocol};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // Should fetch all messages for owner owner beyond a provided cursor.
@@ -54,7 +54,7 @@ async fn owner_messages() {
         let write = WriteBuilder::new()
             .protocol(protocol.clone())
             .schema(&schema)
-            .data(WriteData::Stream(reader.clone()))
+            .data(Data::Stream(reader.clone()))
             .published(true)
             .sign(&alice_keyring)
             .build()
@@ -89,7 +89,7 @@ async fn owner_messages() {
     let message = WriteBuilder::new()
         .protocol(protocol.clone())
         .schema(&schema)
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -240,7 +240,7 @@ async fn match_grant_scope() {
     let write_any = WriteBuilder::new()
         .protocol(protocol.clone())
         .schema(schema)
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -257,7 +257,7 @@ async fn match_grant_scope() {
     let reader = DataStream::from(data.to_vec());
 
     let write_rand = WriteBuilder::new()
-        .data(WriteData::Stream(reader))
+        .data(Data::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await

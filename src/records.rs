@@ -18,7 +18,7 @@ pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub use self::write::{
-    DelegatedGrant, EncryptedKey, EncryptionProperty, Write, WriteBuilder, WriteData, WriteProtocol,
+    DelegatedGrant, EncryptedKey, EncryptionProperty, Write, WriteBuilder, Data, WriteProtocol,
 };
 pub use crate::data::{DataStream, Encryption, Recipient};
 use crate::serde::rfc3339_micros_opt;

@@ -638,7 +638,7 @@ pub struct WriteBuilder<O, A, S> {
     tags: Option<Map<String, Value>>,
     record_id: Option<String>,
     parent_context_id: Option<String>,
-    data: WriteData,
+    data: Data,
     data_format: String,
     date_created: DateTime<Utc>,
     published: Option<bool>,
@@ -669,10 +669,7 @@ pub struct WriteProtocol {
 }
 
 /// Entry data can be raw bytes or CID.
-pub enum WriteData {
-    /// Data is raw bytes.
-    Bytes(Vec<u8>),
-
+pub enum Data {
     /// Data is a `DataStream`.
     Stream(DataStream),
 
@@ -688,9 +685,15 @@ pub enum WriteData {
     },
 }
 
-impl Default for WriteData {
+impl Default for Data {
     fn default() -> Self {
-        Self::Bytes(Vec::new())
+        Self::Stream(DataStream::default())
+    }
+}
+
+impl From<Vec<u8>> for Data {
+    fn from(data: Vec<u8>) -> Self {
+        Data::Stream(DataStream::from(data))
     }
 }
 
@@ -714,7 +717,7 @@ impl WriteBuilder<New, Unattested, Unsigned> {
         Self {
             message_timestamp: now,
             date_created: now,
-            data: WriteData::default(),
+            data: Data::default(),
             data_format: "application/json".to_string(),
             signer: Unsigned,
             attesters: Unattested,
@@ -743,7 +746,7 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
         Self {
             message_timestamp: Utc::now(),
             date_created: existing.descriptor.date_created,
-            data: WriteData::default(),
+            data: Data::default(),
             data_format: existing.descriptor.data_format.clone(),
             existing: Some(existing),
             origin: Existing,
@@ -804,7 +807,7 @@ impl WriteBuilder<New, Unattested, Unsigned> {
 impl<O> WriteBuilder<O, Unattested, Unsigned> {
     /// Entry data as a CID or raw bytes.
     #[must_use]
-    pub fn data(mut self, data: WriteData) -> Self {
+    pub fn data(mut self, data: Data) -> Self {
         self.data = data;
         self
     }
@@ -1022,22 +1025,14 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
         // if data.len() <= data::MAX_ENCODED_SIZE {}
 
         match &self.data {
-            WriteData::Bytes(data) => {
-                let stream = DataStream::from(data.clone());
-                let (data_cid, data_size) = stream.compute_cid()?;
-                write.descriptor.data_cid = data_cid;
-                write.descriptor.data_size = data_size;
-                write.encryption = stream.encryption();
-                write.data_stream = Some(stream);
-            }
-            WriteData::Stream(stream) => {
+            Data::Stream(stream) => {
                 let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
                 write.encryption = stream.encryption();
                 write.data_stream = Some(stream.clone());
             }
-            WriteData::Cid { data_cid, data_size } => {
+            Data::Cid { data_cid, data_size } => {
                 write.descriptor.data_cid.clone_from(data_cid);
                 write.descriptor.data_size = *data_size;
             }
