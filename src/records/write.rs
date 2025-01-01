@@ -693,7 +693,7 @@ impl Default for Data {
 
 impl From<Vec<u8>> for Data {
     fn from(data: Vec<u8>) -> Self {
-        Data::Stream(DataStream::from(data))
+        Self::Stream(DataStream::from(data))
     }
 }
 
