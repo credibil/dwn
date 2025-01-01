@@ -11,20 +11,20 @@ use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use vercre_infosec::jose::jwe::{CekAlgorithm, EncryptionAlgorithm};
+use vercre_infosec::Signer;
+use vercre_infosec::jose::jwe::{ContentAlgorithm, KeyAlgorithm};
 use vercre_infosec::jose::{Jws, JwsBuilder, PublicKeyJwk};
-use vercre_infosec::{Cipher, Signer};
 
 use crate::authorization::{self, Authorization, JwsPayload};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
+use crate::hd_key::DerivationScheme;
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{DataStream, DateRange};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
-// use crate::typestate::{Unsigned, Signed};
 use crate::{Descriptor, Error, Interface, Method, Result, data, forbidden, unexpected, utils};
 
 /// Handle `RecordsWrite` messages.
@@ -240,7 +240,7 @@ impl TryFrom<&Entry> for Write {
 impl Write {
     /// Use a builder to create a new [`Write`] message.
     #[must_use]
-    pub fn build() -> WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
+    pub fn build() -> WriteBuilder<New, Unattested, Unsigned> {
         WriteBuilder::new()
     }
 
@@ -418,74 +418,6 @@ impl Write {
         Ok(())
     }
 
-    // Encrypt message
-    // See: createEncryptionProperty in records-write.ts
-    fn encrypt(
-        &self, input: &EncryptionInput, _encryptor: &impl Cipher,
-    ) -> Result<EncryptionProperty> {
-        // encrypt the data encryption key once per encryption input
-
-        for key in &input.keys {
-            if key.derivation_scheme == Some(DerivationScheme::ProtocolPath)
-                && self.descriptor.protocol.is_none()
-            {
-                return Err(unexpected!(
-                    "`protocol` must be specified to use `protocols` encryption scheme"
-                ));
-            }
-            if key.derivation_scheme == Some(DerivationScheme::Schemas)
-                && self.descriptor.schema.is_none()
-            {
-                return Err(unexpected!(
-                    "`schema` must be specified to use `schema` encryption scheme"
-                ));
-            }
-
-            // ----------------------------------------------------------------
-            // Populate from JWE
-            // ----------------------------------------------------------------
-            // ** AW: encrypt the CEK using the recipient's public key **
-            // let pk_bytes = Secp256k1.publicJwkToBytes(key.public_key);
-            // let encrypted = await Encryption.eciesSecp256k1Encrypt(pk_bytes, input.key);
-
-            // ** AW: create the encrypted key data **
-            // let encryptedKey = Encoder.bytesToBase64Url(encrypted.ciphertext);
-            // let ephemeralPublicKey = await Secp256k1.publicKeyToJwk(encrypted.ephemeralPublicKey);
-            // let keyEncryptionInitializationVector = Encoder.bytesToBase64Url(encrypted.initializationVector);
-            // let messageAuthenticationCode = Encoder.bytesToBase64Url(encrypted.messageAuthenticationCode);
-
-            // let encryptedKeyData = EncryptedKey {
-            //     rootKeyId            : key.publicKeyId,
-            //     algorithm            : key.algorithm ?? EncryptionAlgorithm.EciesSecp256k1,
-            //     derivationScheme     : key.derivationScheme,
-            //     ephemeralPublicKey,
-            //     initializationVector : keyEncryptionInitializationVector,
-            //     messageAuthenticationCode,
-            //     encryptedKey
-            //   };
-            // ----------------------------------------------------------------
-
-            //   // we need to attach the actual public key if derivation scheme is protocol-context,
-            //   // so that the responder to this message is able to encrypt the message/symmetric key using the same protocol-context derived public key,
-            //   // without needing the knowledge of the corresponding private key
-            //   if (key.derivationScheme === KeyDerivationScheme.ProtocolContext) {
-            //     encryptedKeyData.derivedPublicKey = key.publicKey;
-            //   }
-
-            //   keyEncryption.push(encryptedKeyData);
-        }
-
-        // const encryption: EncryptionProperty = {
-        //   algorithm            : input.algorithm ?? EncryptionAlgorithm.Aes256Ctr,
-        //   initializationVector : Encoder.bytesToBase64Url(input.initializationVector),
-        //   keyEncryption
-        // };
-
-        // return encryption;
-
-        todo!()
-    }
-
     // Determine whether the record is the initial write.
     pub(crate) fn is_initial(&self) -> Result<bool> {
         let entry_id = entry_id(self.descriptor.clone(), self.authorization.author()?)?;
@@ -648,14 +580,14 @@ pub struct WriteDescriptor {
 pub struct EncryptionProperty {
     /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
     /// Algorithm (JWE header `enc` property).
-    algorithm: EncryptionAlgorithm,
+    pub algorithm: ContentAlgorithm,
 
     /// The initialization vector used to encrypt the data.
-    initialization_vector: String,
+    pub initialization_vector: String,
 
     /// One or more objects, each containing information about the
     /// Content Encryption Key (CEK) used to encrypt the data.
-    key_encryption: Vec<EncryptedKey>,
+    pub key_encryption: Vec<EncryptedKey>,
 }
 
 /// The encrypted Content Encryption Key (CEK). Equivalent to the JWE
@@ -667,54 +599,38 @@ pub struct EncryptionProperty {
 pub struct EncryptedKey {
     /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
     /// of the root public key used to encrypt the symmetric encryption key.
-    root_key_id: String,
+    pub root_key_id: String,
 
     /// The derived public key.
     #[serde(skip_serializing_if = "Option::is_none")]
-    derived_public_key: Option<PublicKeyJwk>,
+    pub derived_public_key: Option<PublicKeyJwk>,
 
     /// The content encryption key (CEK) derivation scheme.
-    derivation_scheme: DerivationScheme,
+    pub derivation_scheme: DerivationScheme,
 
     /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
-    /// Algorithm (JWE header `enc` property).
-    algorithm: EncryptionAlgorithm,
-
-    /// The initialization vector used to encrypt the data.
-    initialization_vector: String,
+    /// Algorithm (JWE header `alg` property).
+    pub algorithm: KeyAlgorithm,
 
     /// The ephemeral public key used to encrypt the data.
-    ephemeral_public_key: PublicKeyJwk,
+    pub ephemeral_public_key: PublicKeyJwk,
+
+    /// The initialization vector used to encrypt the data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initialization_vector: Option<String>,
 
     /// The message authentication code.
-    message_authentication_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_authentication_code: Option<String>,
 
     /// The encrypted Content Encryption Key (CEK). Equivalent to the JWE
     /// Encrypted Key (JWE `encrypted_key` property), this is the key used to
     /// encrypt the data.
-    encrypted_key: String,
-}
-
-/// Key derivation schemes.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum DerivationScheme {
-    /// Key derivation using the `dataFormat` value for Flat-space records.
-    #[default]
-    DataFormats,
-
-    /// Key derivation using protocol context.
-    ProtocolContext,
-
-    /// Key derivation using the protocol path.
-    ProtocolPath,
-
-    /// Key derivation using the `schema` value for Flat-space records.
-    Schemas,
+    pub encrypted_key: String,
 }
 
 /// Options for use when creating a new [`Write`] message.
-pub struct WriteBuilder<O, A, E, S> {
+pub struct WriteBuilder<O, A, S> {
     message_timestamp: DateTime<Utc>,
     recipient: Option<String>,
     protocol: Option<WriteProtocol>,
@@ -728,17 +644,15 @@ pub struct WriteBuilder<O, A, E, S> {
     published: Option<bool>,
     date_published: Option<DateTime<Utc>>,
     protocol_role: Option<String>,
-    encryption_input: Option<EncryptionInput>,
     permission_grant_id: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
     existing: Option<Write>,
     origin: O,
     attesters: A,
-    encrypter: E,
     signer: S,
 }
 
-impl Default for WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
+impl Default for WriteBuilder<New, Unattested, Unsigned> {
     fn default() -> Self {
         Self::new()
     }
@@ -756,11 +670,11 @@ pub struct WriteProtocol {
 
 /// Entry data can be raw bytes or CID.
 pub enum WriteData {
-    /// Data is bytes.
+    /// Data is raw bytes.
     Bytes(Vec<u8>),
 
     /// Data is a `DataStream`.
-    Reader(DataStream),
+    Stream(DataStream),
 
     /// A CID referencing previously stored data.
     Cid {
@@ -780,43 +694,6 @@ impl Default for WriteData {
     }
 }
 
-/// Encryption settings.
-#[derive(Clone, Debug, Default)]
-pub struct EncryptionInput {
-    /// The algorithm to use for encrypting the data. Equivalent to the JWE
-    /// Encryption Algorithm (JWE header `enc` property).
-    pub algorithm: EncryptionAlgorithm,
-
-    /// The initialization vector to use for encrypting the data.
-    pub initialization_vector: Vec<u8>,
-
-    /// The private key used to encrypt the content encryption key (CEK).
-    pub key: Vec<u8>,
-
-    /// An array of inputs specifying how the CEK key is to be encrypted. Each
-    /// entry in the array will result in a unique ciphertext for the CEK.
-    pub keys: Vec<EncryptionKey>,
-}
-
-/// Encryption key settings.
-#[derive(Clone, Debug, Default)]
-pub struct EncryptionKey {
-    /// The content encryption key (CEK) derivation scheme.
-    pub derivation_scheme: Option<DerivationScheme>,
-
-    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id) of
-    /// the public key used to encrypt the content encryption key (CEK).
-    pub public_key_id: String,
-
-    /// The recipient's public key to use to derive the shared secret used to
-    /// encrypt the content encryption key (CEK).
-    pub public_key: PublicKeyJwk,
-
-    /// The algorithm used to encrypt or determine the value of the content
-    /// encryption key (CEK).
-    pub algorithm: CekAlgorithm,
-}
-
 // State 'guards' for the WriteBuilder typestate pattern.
 pub struct New;
 pub struct Existing;
@@ -824,14 +701,11 @@ pub struct Existing;
 pub struct Unattested;
 pub struct Attested<'a, A: Signer>(pub &'a [&'a A]);
 
-pub struct Unencrypted;
-pub struct Encrypted<'a, E: Cipher>(pub &'a E);
-
 pub struct Unsigned;
 pub struct Signed<'a, S: Signer>(pub &'a S);
 
 /// Create a `Write` record from scratch.
-impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
+impl WriteBuilder<New, Unattested, Unsigned> {
     /// Returns a new [`WriteBuilder`]
     #[must_use]
     pub fn new() -> Self {
@@ -844,7 +718,6 @@ impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
             data_format: "application/json".to_string(),
             signer: Unsigned,
             attesters: Unattested,
-            encrypter: Unencrypted,
             origin: New,
             recipient: None,
             protocol: None,
@@ -857,14 +730,13 @@ impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
             protocol_role: None,
             permission_grant_id: None,
             delegated_grant: None,
-            encryption_input: None,
             existing: None,
         }
     }
 }
 
 /// Create a [`Write`] record from an existing record.
-impl WriteBuilder<Existing, Unattested, Unencrypted, Unsigned> {
+impl WriteBuilder<Existing, Unattested, Unsigned> {
     /// Returns a new [`WriteBuilder`] based on an existing `Write` record.
     #[must_use]
     pub fn from(existing: Write) -> Self {
@@ -877,7 +749,6 @@ impl WriteBuilder<Existing, Unattested, Unencrypted, Unsigned> {
             origin: Existing,
             signer: Unsigned,
             attesters: Unattested,
-            encrypter: Unencrypted,
             recipient: None,
             protocol: None,
             schema: None,
@@ -889,7 +760,6 @@ impl WriteBuilder<Existing, Unattested, Unencrypted, Unsigned> {
             protocol_role: None,
             permission_grant_id: None,
             delegated_grant: None,
-            encryption_input: None,
         }
     }
 }
@@ -897,14 +767,7 @@ impl WriteBuilder<Existing, Unattested, Unencrypted, Unsigned> {
 /// State: New, Unattested, Unencrypted, and Unsigned.
 ///
 /// Immutable properties are able be set.
-impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
-    // /// The datetime the record was created. Defaults to now.
-    // #[must_use]
-    // pub const fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
-    //     self.date_created = date_created;
-    //     self
-    // }
-
+impl WriteBuilder<New, Unattested, Unsigned> {
     /// Set a protocol for the record.
     #[must_use]
     pub fn protocol(mut self, protocol: WriteProtocol) -> Self {
@@ -934,11 +797,11 @@ impl WriteBuilder<New, Unattested, Unencrypted, Unsigned> {
     }
 }
 
-/// State: Unattested, Unencrypted, and Unsigned.
+/// State: Unattested, and Unsigned.
 ///
 ///  Mutable properties properties are able to be set for both new and existing
 /// `Write` records.
-impl<O> WriteBuilder<O, Unattested, Unencrypted, Unsigned> {
+impl<O> WriteBuilder<O, Unattested, Unsigned> {
     /// Entry data as a CID or raw bytes.
     #[must_use]
     pub fn data(mut self, data: WriteData) -> Self {
@@ -996,7 +859,7 @@ impl<O> WriteBuilder<O, Unattested, Unencrypted, Unsigned> {
     }
 
     // ----------------------------------------------------------------
-    // Methods soley enabled for testing
+    // Methods enabled soley for testing
     // ----------------------------------------------------------------
     /// Override message timestamp.
     #[cfg(debug_assertions)]
@@ -1024,7 +887,7 @@ impl<O> WriteBuilder<O, Unattested, Unencrypted, Unsigned> {
 }
 
 /// State: Unencrypted and Unsigned.
-impl<'a, O, A> WriteBuilder<O, A, Unencrypted, Unsigned> {
+impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
     /// Logically (from user POV), have an attester sign the record.
     ///
     /// At this point, the builder simply captures the attester for use in the
@@ -1033,7 +896,7 @@ impl<'a, O, A> WriteBuilder<O, A, Unencrypted, Unsigned> {
     #[must_use]
     pub fn attest<S: Signer>(
         self, attesters: &'a [&'a S],
-    ) -> WriteBuilder<O, Attested<'a, S>, Unencrypted, Unsigned> {
+    ) -> WriteBuilder<O, Attested<'a, S>, Unsigned> {
         WriteBuilder {
             attesters: Attested(attesters),
             message_timestamp: self.message_timestamp,
@@ -1052,55 +915,20 @@ impl<'a, O, A> WriteBuilder<O, A, Unencrypted, Unsigned> {
             permission_grant_id: self.permission_grant_id,
             delegated_grant: self.delegated_grant,
             existing: self.existing,
-            encryption_input: self.encryption_input,
             origin: self.origin,
             signer: self.signer,
-            encrypter: self.encrypter,
-        }
-    }
-
-    /// Logically (from user POV), encrypt the record.
-    ///
-    /// At this point, the builder simply captures the encrytper for use in the
-    /// final build step. Can only be done if the content hasn't been signed yet.
-    #[must_use]
-    pub fn encrypt(
-        self, encrypter: &'a impl Cipher,
-    ) -> WriteBuilder<O, A, Encrypted<'a, impl Cipher>, Unsigned> {
-        WriteBuilder {
-            encrypter: Encrypted(encrypter),
-            encryption_input: self.encryption_input,
-            message_timestamp: self.message_timestamp,
-            recipient: self.recipient,
-            protocol: self.protocol,
-            schema: self.schema,
-            tags: self.tags,
-            record_id: self.record_id,
-            parent_context_id: self.parent_context_id,
-            data: self.data,
-            data_format: self.data_format,
-            date_created: self.date_created,
-            published: self.published,
-            date_published: self.date_published,
-            protocol_role: self.protocol_role,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant: self.delegated_grant,
-            existing: self.existing,
-            origin: self.origin,
-            signer: self.signer,
-            attesters: self.attesters,
         }
     }
 }
 
 // State: Unsigned
-impl<'a, O, A, E> WriteBuilder<O, A, E, Unsigned> {
+impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
     /// Logically (from user POV), sign the record.
     ///
     /// At this point, the builder simply captures the signer for use in the final
     /// build step. Can only be done if the content hasn't been signed yet.
     #[must_use]
-    pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<O, A, E, Signed<'a, impl Signer>> {
+    pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<O, A, Signed<'a, impl Signer>> {
         WriteBuilder {
             signer: Signed(signer),
 
@@ -1120,10 +948,8 @@ impl<'a, O, A, E> WriteBuilder<O, A, E, Unsigned> {
             permission_grant_id: self.permission_grant_id,
             delegated_grant: self.delegated_grant,
             existing: self.existing,
-            encryption_input: self.encryption_input,
             origin: self.origin,
             attesters: self.attesters,
-            encrypter: self.encrypter,
         }
     }
 }
@@ -1132,7 +958,7 @@ impl<'a, O, A, E> WriteBuilder<O, A, E, Unsigned> {
 
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
-impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
+impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
     fn to_write(&self) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
             write.clone()
@@ -1192,27 +1018,24 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
             write.descriptor.date_published = None;
         }
 
+        // TODO: store data in `encoded_data` if data is small enough
+        // if data.len() <= data::MAX_ENCODED_SIZE {}
+
         match &self.data {
             WriteData::Bytes(data) => {
-                // store data in `encoded_data` if data is small enough
-                // otherwise, convert to data stream
-                // if data.len() <= data::MAX_ENCODED_SIZE {
-                //     write.descriptor.data_cid = cid::from_value(&data)?;
-                //     write.descriptor.data_size = data.len();
-                //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data));
-                // } else {
                 let stream = DataStream::from(data.clone());
                 let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
+                write.encryption = stream.encryption();
                 write.data_stream = Some(stream);
-                // }
             }
-            WriteData::Reader(reader) => {
-                let (data_cid, data_size) = reader.compute_cid()?;
+            WriteData::Stream(stream) => {
+                let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
-                write.data_stream = Some(reader.clone());
+                write.encryption = stream.encryption();
+                write.data_stream = Some(stream.clone());
             }
             WriteData::Cid { data_cid, data_size } => {
                 write.descriptor.data_cid.clone_from(data_cid);
@@ -1220,6 +1043,7 @@ impl<O, A, E, S: Signer> WriteBuilder<O, A, E, Signed<'_, S>> {
             }
         };
 
+        // write.encryption = self.data.encryption();
         write.authorization = Authorization {
             author_delegated_grant: self.delegated_grant.clone(),
             ..Authorization::default()
@@ -1235,7 +1059,7 @@ struct Payload {
     descriptor_cid: String,
 }
 
-impl<O, A: Signer, E, S: Signer> WriteBuilder<O, Attested<'_, A>, E, Signed<'_, S>> {
+impl<O, A: Signer, S: Signer> WriteBuilder<O, Attested<'_, A>, Signed<'_, S>> {
     async fn attestation(self, descriptor: &WriteDescriptor) -> Result<Jws> {
         let payload = Payload {
             descriptor_cid: cid::from_value(descriptor)?,
@@ -1248,7 +1072,7 @@ impl<O, A: Signer, E, S: Signer> WriteBuilder<O, Attested<'_, A>, E, Signed<'_, 
 }
 
 /// State: Unattested, Unencrypted, and Signed.
-impl<O, S: Signer> WriteBuilder<O, Unattested, Unencrypted, Signed<'_, S>> {
+impl<O, S: Signer> WriteBuilder<O, Unattested, Signed<'_, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1267,8 +1091,8 @@ impl<O, S: Signer> WriteBuilder<O, Unattested, Unencrypted, Signed<'_, S>> {
     }
 }
 
-/// State: Attested, Unencrypted, and Signed.
-impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Unencrypted, Signed<'a, S>> {
+/// State: Attested, and Signed.
+impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Signed<'a, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1281,53 +1105,6 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Unencrypted, 
 
         let mut write = self.to_write()?;
         write.attestation = Some(self.attestation(&write.descriptor).await?);
-        write.sign_as_author(parent_context_id, permission_grant_id, protocol_role, signer).await?;
-        Ok(write)
-    }
-}
-
-/// State: Unattested, Encrypted, and Signed.
-impl<'a, O, E: Cipher, S: Signer> WriteBuilder<O, Unattested, Encrypted<'a, E>, Signed<'a, S>> {
-    /// Build the `Write` message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self) -> Result<Write> {
-        let mut write = self.to_write()?;
-
-        // FIXME: move these methods away from Write to  WriteBuilder
-        write.encrypt(&self.encryption_input.unwrap_or_default(), self.encrypter.0)?;
-        write
-            .sign_as_author(
-                self.parent_context_id,
-                self.permission_grant_id,
-                self.protocol_role,
-                self.signer.0,
-            )
-            .await?;
-        Ok(write)
-    }
-}
-
-/// State: Attested, Encrypted, and Signed.
-impl<'a, O, A: Signer, E: Cipher, S: Signer>
-    WriteBuilder<O, Attested<'a, A>, Encrypted<'a, E>, Signed<'a, S>>
-{
-    /// Build the `Write` message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self) -> Result<Write> {
-        let signer = self.signer.0;
-        let parent_context_id = self.parent_context_id.clone();
-        let protocol_role = self.protocol_role.clone();
-        let permission_grant_id = self.permission_grant_id.clone();
-        let encrypter = self.encrypter.0;
-        let encryption_input = self.encryption_input.clone();
-
-        let mut write = self.to_write()?;
-        write.attestation = Some(self.attestation(&write.descriptor).await?);
-        write.encrypt(&encryption_input.unwrap_or_default(), encrypter)?;
         write.sign_as_author(parent_context_id, permission_grant_id, protocol_role, signer).await?;
         Ok(write)
     }

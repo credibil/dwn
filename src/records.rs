@@ -18,10 +18,9 @@ pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub use self::write::{
-    DelegatedGrant, DerivationScheme, EncryptedKey, EncryptionInput, EncryptionKey,
-    EncryptionProperty, Write, WriteBuilder, WriteData, WriteProtocol,
+    DelegatedGrant, EncryptedKey, EncryptionProperty, Write, WriteBuilder, WriteData, WriteProtocol,
 };
-pub use crate::data::DataStream;
+pub use crate::data::{DataStream, Encryption, Recipient};
 use crate::serde::rfc3339_micros_opt;
 use crate::{Quota, RangeFilter, Result, utils};
 

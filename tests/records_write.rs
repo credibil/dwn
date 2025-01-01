@@ -22,7 +22,7 @@ async fn overwrite_older() {
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let initial_write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Stream(DataStream::from(data.to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -57,7 +57,7 @@ async fn overwrite_older() {
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let write = WriteBuilder::from(initial_write)
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Stream(DataStream::from(data.to_vec())))
         .sign(&alice_keyring)
         .build()
         .await

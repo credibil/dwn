@@ -7,17 +7,19 @@
 //! from the parent key.
 
 use std::fmt::{self, Display};
+use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use ed25519_dalek::{SecretKey, SigningKey};
+// use ed25519_dalek::{SecretKey, SigningKey};
+use x25519_dalek::{PublicKey, StaticSecret};
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use vercre_infosec::jose::PublicKeyJwk;
 use vercre_infosec::{Curve, KeyType};
 
-use crate::{Result, unexpected};
+use crate::{Error, Result, unexpected};
 
 /// Key derivation schemes.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -49,6 +51,20 @@ impl Display for DerivationScheme {
     }
 }
 
+impl FromStr for DerivationScheme {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "dataFormats" => Ok(Self::DataFormats),
+            "protocolContext" => Ok(Self::ProtocolContext),
+            "protocolPath" => Ok(Self::ProtocolPath),
+            "schemas" => Ok(Self::Schemas),
+            _ => Err(unexpected!("invalid derivation scheme")),
+        }
+    }
+}
+
 /// Simplified JSON Web Key (JWK) key structure.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrivateKeyJwk {
@@ -66,29 +82,33 @@ pub struct DerivedPrivateJwk {
     pub derived_private_key: PrivateKeyJwk,
 }
 
+
+
 /// Derives a descendant private key.
 /// NOTE: currently only supports Ed25519 keys.
-pub async fn derive_private_key(
+///
+/// # Errors
+/// LATER: document errors
+pub fn derive_private_jwk(
     ancestor_key: DerivedPrivateJwk, sub_derivation_path: &[String],
 ) -> Result<DerivedPrivateJwk> {
     let ancestor_private_key = Base64UrlUnpadded::decode_vec(&ancestor_key.derived_private_key.d)?;
 
     // derive the descendant private key
-    let derived_key = derive_key(&ancestor_private_key, sub_derivation_path).await?;
+    let derived = derive_key(&ancestor_private_key, sub_derivation_path)?;
+    let fixed: [u8; 32] = derived.try_into().map_err(|_| unexpected!("invalid secret key"))?;
+    let derived_secret = StaticSecret::from(fixed);
+    let derived_public = PublicKey::from(&derived_secret);
 
     // convert to JWK
-    let derived_secret: SecretKey =
-        derived_key.try_into().map_err(|_| unexpected!("invalid secret key"))?;
-    let signing_key: SigningKey = SigningKey::from_bytes(&derived_secret);
-
     let derived_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(signing_key.verifying_key().as_bytes()),
+            x: Base64UrlUnpadded::encode_string(derived_public.as_bytes()),
             ..PublicKeyJwk::default()
         },
-        d: Base64UrlUnpadded::encode_string(&derived_secret),
+        d: Base64UrlUnpadded::encode_string(derived_secret.as_bytes()),
     };
 
     // return derived private JWK
@@ -105,23 +125,24 @@ pub async fn derive_private_key(
 
 /// Derives a hardened hierarchical deterministic private key using HKDF
 /// (HMAC-based Extract-and-Expand Key Derivation Function).
-pub async fn derive_key(private_key: &[u8], relative_path: &[String]) -> Result<Vec<u8>> {
+///
+/// # Errors
+/// LATER: document errors
+pub fn derive_key(private_key: &[u8], relative_path: &[String]) -> Result<Vec<u8>> {
     let mut derived_key = private_key.to_vec();
 
     for segment in relative_path {
-        // check no empty strings exist within the derivation
         if segment.is_empty() {
             return Err(unexpected!("invalid key derivation path"));
         }
-        let info = Base64UrlUnpadded::decode_vec(&segment)?;
         let mut okm = [0u8; 32];
         // let salt = hex!(owner);// TODO: use owner as salt
 
         Hkdf::<Sha256>::new(None, &derived_key)
-            .expand(&info, &mut okm)
+            .expand(segment.as_bytes(), &mut okm)
             .map_err(|e| anyhow!("issue expanding hkdf key: {e}"))?;
         derived_key = okm.to_vec();
     }
 
-    return Ok(derived_key);
+    Ok(derived_key)
 }

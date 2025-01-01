@@ -2,7 +2,7 @@
 
 use anyhow::{Result, anyhow};
 pub use vercre_did::{DidResolver, Document};
-pub use vercre_infosec::{Cipher, KeyOps, Signer};
+pub use vercre_infosec::{Receiver, KeyOps, Signer};
 
 use crate::event::{Event, Subscriber};
 use crate::store::Cursor;
@@ -59,7 +59,7 @@ pub trait KeyStore: Send + Sync {
 /// Implementers of this trait are expected to provide the necessary
 /// cryptographic functionality to support Verifiable Credential issuance and
 /// Verifiable Presentation submissions.
-pub trait Keyring: Signer + Cipher {}
+pub trait Keyring: Signer + Receiver {}
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.

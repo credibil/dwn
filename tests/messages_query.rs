@@ -54,7 +54,7 @@ async fn owner_messages() {
         let write = WriteBuilder::new()
             .protocol(protocol.clone())
             .schema(&schema)
-            .data(WriteData::Reader(reader.clone()))
+            .data(WriteData::Stream(reader.clone()))
             .published(true)
             .sign(&alice_keyring)
             .build()
@@ -89,7 +89,7 @@ async fn owner_messages() {
     let message = WriteBuilder::new()
         .protocol(protocol.clone())
         .schema(&schema)
-        .data(WriteData::Reader(reader))
+        .data(WriteData::Stream(reader))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -240,7 +240,7 @@ async fn match_grant_scope() {
     let write_any = WriteBuilder::new()
         .protocol(protocol.clone())
         .schema(schema)
-        .data(WriteData::Reader(reader))
+        .data(WriteData::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await
@@ -257,7 +257,7 @@ async fn match_grant_scope() {
     let reader = DataStream::from(data.to_vec());
 
     let write_rand = WriteBuilder::new()
-        .data(WriteData::Reader(reader))
+        .data(WriteData::Stream(reader))
         .sign(&alice_keyring)
         .build()
         .await

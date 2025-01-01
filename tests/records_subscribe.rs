@@ -35,7 +35,7 @@ async fn owner_events() {
     let data = br#"{"message": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Stream(DataStream::from(data.to_vec())))
         .sign(&alice_keyring)
         .build()
         .await

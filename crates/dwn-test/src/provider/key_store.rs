@@ -4,11 +4,11 @@ use std::collections::HashMap;
 
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use ed25519_dalek::{SecretKey, Signer as _, SigningKey};
+use ed25519_dalek::{ Signer as _, SigningKey};
 use vercre_dwn::provider::{KeyStore, Keyring};
-use vercre_infosec::{Algorithm, Cipher, Signer};
-use x25519_dalek::{PublicKey, StaticSecret};
+use vercre_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 
+// use x25519_dalek::{PublicKey, StaticSecret};
 use crate::provider::ProviderImpl;
 
 pub const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
@@ -34,7 +34,6 @@ pub struct KeyStoreImpl {
 #[derive(Default, Clone, Debug)]
 pub struct KeyringImpl {
     pub did: String,
-    // pub verify_key: String,
     pub secret_key: String,
 }
 
@@ -85,7 +84,7 @@ impl Keyring for KeyringImpl {}
 impl Signer for KeyringImpl {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
-        let secret_key: SecretKey =
+        let secret_key: ed25519_dalek::SecretKey =
             decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
         let signing_key: SigningKey = SigningKey::from_bytes(&secret_key);
 
@@ -94,7 +93,7 @@ impl Signer for KeyringImpl {
 
     async fn public_key(&self) -> Result<Vec<u8>> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
-        let secret_key: SecretKey =
+        let secret_key: ed25519_dalek::SecretKey =
             decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
         let signing_key: SigningKey = SigningKey::from_bytes(&secret_key);
 
@@ -111,26 +110,26 @@ impl Signer for KeyringImpl {
     }
 }
 
-impl Cipher for KeyringImpl {
-    // FIXME: wrap return in Result<Vec<u8>>
-    fn public_key(&self) -> Vec<u8> {
-        let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key).unwrap();
-        let bytes: [u8; 32] =
-            decoded.try_into().map_err(|_| anyhow!("Invalid secret key")).unwrap();
+impl Receiver for KeyringImpl {
+    // // FIXME: wrap return in Result<Vec<u8>>
+    // fn public_key(&self) -> Vec<u8> {
+    //     let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key).unwrap();
+    //     let bytes: [u8; 32] =
+    //         decoded.try_into().map_err(|_| anyhow!("Invalid secret key")).unwrap();
 
-        // derive x25519 key agreement public key
-        PublicKey::from(bytes).as_bytes().to_vec()
+    //     // derive x25519 key agreement public key
+    //     PublicKey::from(bytes).as_bytes().to_vec()
+    // }
+
+    fn key_id(&self) -> String {
+        self.did.clone()
     }
 
-    async fn diffie_hellman(&self, sender_public: &[u8]) -> Result<Vec<u8>> {
-        let sender_key: [u8; 32] = sender_public.try_into()?;
-        let sender_public = PublicKey::from(sender_key);
-
+    async fn shared_secret(&self, sender_public: PublicKey) -> Result<SharedSecret> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
         let bytes: [u8; 32] = decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
-        let secret_key = StaticSecret::from(bytes);
 
-        let shared_secret = secret_key.diffie_hellman(&sender_public);
-        Ok(shared_secret.as_bytes().to_vec())
+        let secret_key = SecretKey::from(bytes);
+        secret_key.shared_secret(sender_public)
     }
 }

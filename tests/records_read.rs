@@ -1,8 +1,8 @@
 //! Records Read
 
-use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
+use hd_key::{DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use http::StatusCode;
 use rand::RngCore;
 use serde_json::Value;
@@ -11,13 +11,13 @@ use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
-    DeleteBuilder, DerivationScheme, EncryptedKey, EncryptionInput, EncryptionKey,
-    EncryptionProperty, ReadBuilder, RecordsFilter, WriteBuilder, WriteData, WriteProtocol,
+    DeleteBuilder, Encryption, ReadBuilder, Recipient, RecordsFilter, WriteBuilder, WriteData,
+    WriteProtocol,
 };
 use vercre_dwn::store::Entry;
 use vercre_dwn::{Error, Method, endpoint, hd_key};
-use vercre_infosec::Signer;
-use vercre_infosec::jose::jwe;
+use vercre_infosec::jose::jwe::{ContentAlgorithm, KeyAlgorithm};
+use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.
 #[tokio::test]
@@ -29,7 +29,7 @@ async fn owner() {
     // Add a `write` record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec().to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -65,7 +65,7 @@ async fn disallow_non_owner() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec().to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -98,7 +98,7 @@ async fn published_anonymous() {
     // Add a `write` record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec().to_vec())))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -132,7 +132,7 @@ async fn published_authenticated() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec().to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec().to_vec())))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -168,7 +168,7 @@ async fn non_owner_recipient() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec())))
         .recipient(BOB_DID)
         .sign(&alice_keyring)
         .build()
@@ -204,7 +204,7 @@ async fn deleted_write() {
     // Mock write and delete, saving only the `RecordsDelete`.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec())))
         .recipient(BOB_DID)
         .sign(&alice_keyring)
         .build()
@@ -281,7 +281,7 @@ async fn non_author_deleted_write() {
     // Bob writes a record to Alice's web node.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec())))
         .protocol(WriteProtocol {
             protocol: "https://example.com/foo".to_string(),
             protocol_path: "foo".to_string(),
@@ -360,7 +360,7 @@ async fn non_owner_author() {
     // Bob writes a record to Alice's web node.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec())))
         .protocol(WriteProtocol {
             protocol: "https://example.com/foo".to_string(),
             protocol_path: "foo".to_string(),
@@ -412,7 +412,7 @@ async fn initial_write_included() {
     // Alice writes a record and then an update.
     // --------------------------------------------------
     let write_1 = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -422,7 +422,7 @@ async fn initial_write_included() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_2 = WriteBuilder::from(write_1)
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec())))
         .sign(&alice_keyring)
         .build()
         .await
@@ -472,7 +472,7 @@ async fn allow_anyone() {
     // Alice saves an image.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"cafe-aesthetic.jpg".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"cafe-aesthetic.jpg".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://social-media.xyz".to_string(),
             protocol_path: "image".to_string(),
@@ -526,7 +526,7 @@ async fn no_anonymous() {
     // Alice writes an email.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"foo".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"foo".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://email-protocol.xyz".to_string(),
             protocol_path: "email".to_string(),
@@ -579,7 +579,7 @@ async fn allow_recipient() {
     // Alice writes an email to Bob.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Hello Bob!".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Hello Bob!".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://email-protocol.xyz".to_string(),
@@ -650,7 +650,7 @@ async fn allow_author() {
     // Bob writes an email to Alice.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Hello Alice!".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Hello Alice!".to_vec())))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://email-protocol.xyz".to_string(),
@@ -719,7 +719,7 @@ async fn filter_one() {
     // Alice writes a message to a nested protocol.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"foo".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"foo".to_vec())))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://nested.xyz".to_string(),
@@ -775,7 +775,7 @@ async fn filter_many() {
     // --------------------------------------------------
     for _ in 0..2 {
         let write = WriteBuilder::new()
-            .data(WriteData::Reader(DataStream::from(b"foo".to_vec())))
+            .data(WriteData::Stream(DataStream::from(b"foo".to_vec())))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://nested.xyz".to_string(),
@@ -832,7 +832,7 @@ async fn root_role() {
     // Alice writes 2 messages to the protocol.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Bob is a friend".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://friend-role.xyz".to_string(),
@@ -847,7 +847,7 @@ async fn root_role() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let chat = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(
+        .data(WriteData::Stream(DataStream::from(
             b"Bob can read this because he is a friend".to_vec(),
         )))
         .recipient(ALICE_DID)
@@ -902,7 +902,7 @@ async fn invalid_protocol_path() {
     // Alice writes a chat message to the protocol.
     // --------------------------------------------------
     let chat = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Blah blah blah".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Blah blah blah".to_vec())))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://friend-role.xyz".to_string(),
@@ -956,7 +956,7 @@ async fn no_recipient_role() {
     // Alice writes a chat message to the protocol.
     // --------------------------------------------------
     let chat = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Blah blah blah".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Blah blah blah".to_vec())))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://friend-role.xyz".to_string(),
@@ -1010,7 +1010,7 @@ async fn context_role() {
     // Alice creates a thread.
     // --------------------------------------------------
     let thread = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"A new thread".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"A new thread".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -1027,7 +1027,7 @@ async fn context_role() {
     // Alice adds Bob as a participant on the thread.
     // --------------------------------------------------
     let participant = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Bob is a friend".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -1046,7 +1046,7 @@ async fn context_role() {
     // Alice writes a chat message on the thread.
     // --------------------------------------------------
     let chat = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(
+        .data(WriteData::Stream(DataStream::from(
             b"Bob can read this because he is a participant".to_vec(),
         )))
         .protocol(WriteProtocol {
@@ -1133,7 +1133,7 @@ async fn invalid_context_role() {
     // Alice creates 2 threads.
     // --------------------------------------------------
     let thread_1 = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Thread 1".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Thread 1".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -1148,7 +1148,7 @@ async fn invalid_context_role() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let thread_2 = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Thread 2".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Thread 2".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -1166,7 +1166,7 @@ async fn invalid_context_role() {
     // Alice adds Bob as a participant on the thread.
     // --------------------------------------------------
     let participant = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"Bob is a friend".to_vec())))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -1185,7 +1185,7 @@ async fn invalid_context_role() {
     // Alice writes a chat message to thread 2.
     // --------------------------------------------------
     let chat = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(
+        .data(WriteData::Stream(DataStream::from(
             b"Bob can read this because he is a participant".to_vec(),
         )))
         .protocol(WriteProtocol {
@@ -1227,7 +1227,7 @@ async fn invalid_grant_method() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(
+        .data(WriteData::Stream(DataStream::from(
             b"Bob can read this because I have granted him permission".to_vec(),
         )))
         .sign(&alice_keyring)
@@ -1295,7 +1295,7 @@ async fn unrestricted_grant() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"minimal".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"minimal".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -1378,7 +1378,7 @@ async fn grant_protocol() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"minimal".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"minimal".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -1461,7 +1461,7 @@ async fn invalid_grant_protocol() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"minimal".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"minimal".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -1531,7 +1531,7 @@ async fn grant_context() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"minimal".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"minimal".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -1599,7 +1599,7 @@ async fn invalid_grant_context() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"minimal".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"minimal".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -1669,7 +1669,7 @@ async fn grant_protocol_path() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"minimal".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"minimal".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -1737,7 +1737,7 @@ async fn invalid_grant_protocol_path() {
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"minimal".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"minimal".to_vec())))
         .protocol(WriteProtocol {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -1810,7 +1810,7 @@ async fn record_deleted() {
     // Alice writes then  deletes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"some data".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"some data".to_vec())))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -1859,7 +1859,7 @@ async fn data_blocks_deleted() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data.to_vec())))
+        .data(WriteData::Stream(DataStream::from(data.to_vec())))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -1899,7 +1899,7 @@ async fn encoded_data() {
     // Alice writes a record and then deletes data from BlockStore.
     // --------------------------------------------------
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(b"data small enough to be encoded".to_vec())))
+        .data(WriteData::Stream(DataStream::from(b"data small enough to be encoded".to_vec())))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -1941,7 +1941,7 @@ async fn block_data() {
     let write_stream = DataStream::from(data.to_vec());
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(write_stream.clone()))
+        .data(WriteData::Stream(write_stream.clone()))
         .published(true)
         .sign(&alice_keyring)
         .build()
@@ -1977,78 +1977,84 @@ async fn block_data() {
 async fn decrypt_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
-    // 0. Generate record data.
-    let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
-
-    // Encrypt record data using AES128-GCM.
-    let bob_key = bob_keyring.public_key().await.expect("should get public key");
-    let jwe = jwe::encrypt(&data, &bob_key).expect("should encrypt data");
-
-    let schemas_private_key = hd_key::DerivedPrivateJwk {
-        root_key_id: "key_id".to_string(),
-        derivation_scheme: hd_key::DerivationScheme::Schemas,
+    // ************************************************************************
+    // DONE OUT OF BAND
+    // Step 0: derive public keys to use in encrypting CEK for each recipient
+    // - root private key is DWN owner's private key
+    // - derived private keys are encrypted (using participant's public key)
+    //   and distributed to each participant
+    // ************************************************************************
+    // schema encryption key
+    let mut root_private_key = DerivedPrivateJwk {
+        root_key_id: "z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX".to_string(),
+        derivation_scheme: DerivationScheme::Schemas,
         derivation_path: None,
-        // derived_private_key: alice_keyring.private_key_jwk(),
-        derived_private_key: hd_key::PrivateKeyJwk::default(),
+        // Alice's private jwk
+        derived_private_key: PrivateKeyJwk {
+            public_key: PublicKeyJwk {
+                kty: KeyType::Okp,
+                crv: Curve::Ed25519,
+                x: "RW-Q0fO2oECyLs4rZDZZo4p6b7pu7UF2eu9JBsktDco".to_string(),
+                ..PublicKeyJwk::default()
+            },
+            d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
+        },
     };
 
     let derivation_path =
-        vec![hd_key::DerivationScheme::Schemas.to_string(), "https://some-schema.com".to_string()];
-    let schema_private_key = hd_key::derive_private_key(schemas_private_key, &derivation_path);
-    // let schema_public_key =  Secp256k1.getPublicJwk(schema_private_key.derivedPrivateKey);
+        vec![DerivationScheme::Schemas.to_string(), "https://some-schema.com".to_string()];
+    let schema_private_jwk = hd_key::derive_private_jwk(root_private_key.clone(), &derivation_path)
+        .expect("should derive private key");
+    let schema_jwk = schema_private_jwk.derived_private_key.public_key;
 
-    //   const rootPrivateKeyWithDataFormatsScheme: DerivedPrivateJwk = {
-    //     rootKeyId         : alice.keyId,
-    //     derivationScheme  : KeyDerivationScheme.DataFormats,
-    //     derivedPrivateKey : alice.keyPair.privateJwk
-    //   };
+    // data format encryption key
+    root_private_key.derivation_scheme = DerivationScheme::DataFormats;
+    let derivation_path =
+        vec![DerivationScheme::DataFormats.to_string(), "some/format".to_string()];
+    let data_formats_private_jwk = hd_key::derive_private_jwk(root_private_key, &derivation_path)
+        .expect("should derive private key");
+    let data_formats_jwk = data_formats_private_jwk.derived_private_key.public_key;
+    // ************************************************************************
 
-    //   const dataFormat = 'some/format';
-    //   const dataFormatDerivationPath = Records.constructKeyDerivationPathUsingDataFormatsScheme(schema, dataFormat);
-    //   const dataFormatDerivedPublicKey = await HdKey.derivePublicKey(rootPrivateKeyWithDataFormatsScheme, dataFormatDerivationPath);
+    let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
 
-    //   const encryptionInput: EncryptionInput = {
-    //     initializationVector : dataEncryptionInitializationVector,
-    //     key                  : dataEncryptionKey,
-    //     keyEncryptionInputs  : [{
-    //       publicKeyId      : alice.keyId, // reusing signing key for encryption purely as a convenience
-    //       publicKey        : schemaDerivedPublicKey,
-    //       derivationScheme : KeyDerivationScheme.Schemas
-    //     },
-    //     {
-    //       publicKeyId      : alice.keyId, // reusing signing key for encryption purely as a convenience
-    //       publicKey        : dataFormatDerivedPublicKey,
-    //       derivationScheme : KeyDerivationScheme.DataFormats
-    //     }]
-    //   };
+    let config = Encryption {
+        content_algorithm: ContentAlgorithm::A256Gcm,
+        key_algorithm: KeyAlgorithm::EcdhEsA256Kw,
+        recipients: vec![
+            Recipient {
+                key_id: alice_kid.clone(),
+                public_key: schema_jwk,
+                derivation_scheme: DerivationScheme::Schemas,
+            },
+            Recipient {
+                key_id: alice_kid.clone(),
+                public_key: data_formats_jwk,
+                derivation_scheme: DerivationScheme::DataFormats,
+            },
+        ],
+    };
 
-    // let iv = Base64UrlUnpadded::decode_vec(&jwe.iv).expect("should decode base64");
-    // let base64_cek = jwe.encrypted_key;
-    // let encrypted_cek = Base64UrlUnpadded::decode_vec(&base64_cek).expect("should decode base64");
-
-    // let enc = EncryptionInput {
-    //     algorithm: jwe::EncryptionAlgorithm::A256Gcm,
-    //     initialization_vector: iv,
-    //     key: encrypted_cek,
-    //     keys: vec![
-    //         // EncryptionKey {
-    //         //     derivation_scheme: Some(DerivationScheme::Schemas),
-    //         //     //public_key_id: alice_keyring.key_id().to_string(),
-    //         //     public_key: jwe.protected.epk,
-    //         //     algorithm: jwe::CekAlgorithm::EcdhEs,
-    //         // },
-    //         // KeyEncryptionInput {
-    //         //     public_key_id: alice_keyring.key_id().to_string(),
-    //         //     public_key: bob_key,
-    //         //     derivation_scheme: KeyDerivationScheme::DataFormats,
-    //         // },
-    //     ],
-    // };
+    // generate record data and encrypt
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_data = WriteData::Stream(
+        DataStream::from(data.to_vec()).encrypt(&config).expect("should encrypt"),
+    );
 
     // 4. Create Write record
+    let write = WriteBuilder::new()
+        .data(write_data)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    println!("write: {:?}", write);
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
 // // Should decrypt flat-space schemaless records using a derived key.

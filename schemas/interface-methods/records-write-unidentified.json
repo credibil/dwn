@@ -25,7 +25,9 @@
         "algorithm": {
           "type": "string",
           "enum": [
-            "A256CTR"
+            "A256CTR",
+            "A256GCM",
+            "XChacha20+Poly1305"
           ]
         },
         "initializationVector": {
@@ -55,7 +57,9 @@
               "algorithm": {
                 "type": "string",
                 "enum": [
-                  "ECIES-ES256K"
+                  "ECIES-ES256K",
+                  "ECDH-ES+A256KW",
+                  "ECDH-ES"
                 ]
               },
               "encryptedKey": {
@@ -77,9 +81,7 @@
               "derivationScheme",
               "algorithm",
               "encryptedKey",
-              "initializationVector",
-              "ephemeralPublicKey",
-              "messageAuthenticationCode"
+              "ephemeralPublicKey"
             ]
           }
         }
