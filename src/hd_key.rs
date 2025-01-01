@@ -11,13 +11,13 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
-// use ed25519_dalek::{SecretKey, SigningKey};
-use x25519_dalek::{PublicKey, StaticSecret};
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use vercre_infosec::jose::PublicKeyJwk;
 use vercre_infosec::{Curve, KeyType};
+// use ed25519_dalek::{SecretKey, SigningKey};
+use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{Error, Result, unexpected};
 
@@ -81,8 +81,6 @@ pub struct DerivedPrivateJwk {
     pub derivation_path: Option<Vec<String>>,
     pub derived_private_key: PrivateKeyJwk,
 }
-
-
 
 /// Derives a descendant private key.
 /// NOTE: currently only supports Ed25519 keys.

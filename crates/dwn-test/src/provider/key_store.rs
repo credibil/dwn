@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use ed25519_dalek::{ Signer as _, SigningKey};
+use ed25519_dalek::{Signer as _, SigningKey};
 use vercre_dwn::provider::{KeyStore, Keyring};
 use vercre_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 

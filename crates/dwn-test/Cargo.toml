@@ -8,16 +8,13 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-aes-gcm = "0.10.3"
 anyhow.workspace = true
 async-nats = "0.38.0"
-async-trait = "0.1.83"
 base64ct.workspace = true
 blockstore = "0.7.1"
 cid = { workspace = true, features = ["alloc"] }
-crypto_box = { version = "0.9.1", features = ["chacha20", "heapless"] }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
-futures = "0.3.31"
+futures.workspace=true
 http.workspace = true
 insta.workspace = true
 rand.workspace = true
@@ -27,4 +24,3 @@ tokio.workspace = true
 vercre-dwn = { path = "../.." }
 vercre-infosec.workspace = true
 vercre-serialize = { path = "../serialize" }
-x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }

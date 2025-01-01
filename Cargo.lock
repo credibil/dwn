@@ -34,7 +34,6 @@ checksum = "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0"
 dependencies = [
  "crypto-common",
  "generic-array",
- "heapless",
 ]
 
 [[package]]
@@ -935,37 +934,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto_box"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16182b4f39a82ec8a6851155cc4c0cda3065bb1db33651726a29e1951de0f009"
-dependencies = [
- "aead",
- "chacha20",
- "crypto_secretbox",
- "curve25519-dalek",
- "salsa20",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "crypto_secretbox"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9d6cf87adf719ddf43a805e92c6870a531aedda35ff640442cbaf8674e141e1"
-dependencies = [
- "aead",
- "chacha20",
- "cipher",
- "generic-array",
- "poly1305",
- "salsa20",
- "subtle",
- "zeroize",
-]
-
-[[package]]
 name = "ctr"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1215,14 +1183,11 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 name = "dwn-test"
 version = "0.0.0"
 dependencies = [
- "aes-gcm",
  "anyhow",
  "async-nats",
- "async-trait",
  "base64ct",
  "blockstore",
  "cid 0.11.1",
- "crypto_box",
  "ed25519-dalek",
  "futures",
  "http 1.2.0",
@@ -1234,7 +1199,6 @@ dependencies = [
  "vercre-dwn",
  "vercre-infosec",
  "vercre-serialize",
- "x25519-dalek",
 ]
 
 [[package]]
@@ -1883,12 +1847,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hex-literal"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
-
-[[package]]
 name = "hkdf"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2282,9 +2240,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.27.1"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9deec35f105267485e0b85b4da7861d444ad498bd476418ec10aeaec3c2ead1"
+checksum = "c2303ef9ebb6acd7afe7c48cbc06ab807349c429d4e47c4cde8b35400503198f"
 dependencies = [
  "ahash 0.8.11",
  "base64 0.22.1",
@@ -3583,9 +3541,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.27.1"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "040034d1c0deb1c413e44dafaea2f8bd7d273f1b56de531ab8cee5a93acb1741"
+checksum = "2fb7a1f338d8e32357ad1d7078454c248e5fdd2188fbb6966b400c2fa4d4f566"
 dependencies = [
  "ahash 0.8.11",
  "fluent-uri",
@@ -5389,16 +5347,13 @@ version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "async-recursion",
- "async-trait",
  "base64ct",
  "chrono",
  "ciborium",
  "cid 0.11.1",
  "derive_more",
  "dwn-test",
- "ed25519-dalek",
  "futures",
- "hex-literal",
  "hkdf",
  "http 1.2.0",
  "insta",
@@ -5420,6 +5375,7 @@ dependencies = [
 [[package]]
 name = "vercre-infosec"
 version = "0.1.0-alpha.6"
+source = "git+https://github.com/vercre/infosec.git#76c07498525c50a370d2ef3d26421ab19ed8bc64"
 dependencies = [
  "aes-gcm",
  "aes-kw",
@@ -5809,9 +5765,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.6.20"
+version = "0.6.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36c1fec1a2bb5866f07c25f68c26e565c4c200aebb96d7e55710c19d3e8ac49b"
+checksum = "e6f5bb5257f2407a5425c6e749bfd9692192a73e70a6060516ac04f889087d68"
 dependencies = [
  "memchr",
 ]

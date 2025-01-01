@@ -2,7 +2,7 @@
 
 use anyhow::{Result, anyhow};
 pub use vercre_did::{DidResolver, Document};
-pub use vercre_infosec::{Receiver, KeyOps, Signer};
+pub use vercre_infosec::{KeyOps, Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
 use crate::store::Cursor;
