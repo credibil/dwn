@@ -6,7 +6,7 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{QueryBuilder, RecordsFilter, WriteBuilder, Data};
+use vercre_dwn::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 
 // The owner should be able to to subscribe their own event stream
 #[tokio::test]
@@ -21,7 +21,7 @@ async fn overwrite_older() {
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let initial_write = WriteBuilder::new()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -56,7 +56,7 @@ async fn overwrite_older() {
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let write = WriteBuilder::from(initial_write)
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await

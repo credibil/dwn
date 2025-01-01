@@ -11,7 +11,7 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, Data, WriteProtocol};
+use vercre_dwn::records::{Data, WriteBuilder, WriteProtocol};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // Should fetch all messages for owner owner beyond a provided cursor.

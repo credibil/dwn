@@ -10,7 +10,7 @@ use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{
-    DateRange, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, Data, WriteProtocol,
+    Data, DateRange, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteProtocol,
 };
 use vercre_dwn::store::Pagination;
 use vercre_dwn::{Error, Message, RangeFilter, authorization, endpoint};
@@ -201,7 +201,7 @@ async fn no_encoded_data() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write = Write::build()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -927,7 +927,7 @@ async fn dat_size_part_range() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write10 = Write::build()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -940,7 +940,7 @@ async fn dat_size_part_range() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write50 = Write::build()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -953,7 +953,7 @@ async fn dat_size_part_range() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write100 = Write::build()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -1040,7 +1040,7 @@ async fn data_size_full_range() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write10 = Write::build()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -1053,7 +1053,7 @@ async fn data_size_full_range() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write50 = Write::build()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -1066,7 +1066,7 @@ async fn data_size_full_range() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let write100 = Write::build()
-        .data( Data::from(data.to_vec()))
+        .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await

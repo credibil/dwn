@@ -1,6 +1,7 @@
 //! # Records
 
 mod delete;
+mod encryption;
 mod query;
 mod read;
 mod subscribe;
@@ -14,13 +15,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
+pub use self::encryption::{EncryptOptions, Recipient};
 pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub use self::write::{
-    DelegatedGrant, EncryptedKey, EncryptionProperty, Write, WriteBuilder, Data, WriteProtocol,
+    Data, DelegatedGrant, EncryptedKey, EncryptionProperty, Write, WriteBuilder, WriteProtocol,
 };
-pub use crate::data::{DataStream, Encryption, Recipient};
+pub use crate::data::DataStream;
 use crate::serde::rfc3339_micros_opt;
 use crate::{Quota, RangeFilter, Result, utils};
 

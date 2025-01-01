@@ -11,12 +11,11 @@ use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
-    Data, DeleteBuilder, Encryption, ReadBuilder, Recipient, RecordsFilter, WriteBuilder,
+    Data, DeleteBuilder, EncryptOptions, ReadBuilder, Recipient, RecordsFilter, WriteBuilder,
     WriteProtocol,
 };
 use vercre_dwn::store::Entry;
 use vercre_dwn::{Error, Method, endpoint, hd_key};
-use vercre_infosec::jose::jwe::{ContentAlgorithm, KeyAlgorithm};
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.
@@ -1979,10 +1978,11 @@ async fn decrypt_schema() {
 
     // ************************************************************************
     // DONE OUT OF BAND
-    // Step 0: derive public keys to use in encrypting CEK for each recipient
+    //
+    // Derive keys to use in encrypting/decrypting CEK for each recipient:
     // - root private key is DWN owner's private key
-    // - derived private keys are encrypted (using participant's public key)
-    //   and distributed to each participant
+    // - derived private keys are encrypted (using recipient's public key) and
+    //   distributed to each recipient
     // ************************************************************************
     // schema encryption key
     let mut root_private_key = DerivedPrivateJwk {
@@ -2005,7 +2005,7 @@ async fn decrypt_schema() {
         vec![DerivationScheme::Schemas.to_string(), "https://some-schema.com".to_string()];
     let schema_private_jwk = hd_key::derive_private_jwk(root_private_key.clone(), &derivation_path)
         .expect("should derive private key");
-    let schema_jwk = schema_private_jwk.derived_private_key.public_key;
+    let schema_public_jwk = schema_private_jwk.derived_private_key.public_key;
 
     // data format encryption key
     root_private_key.derivation_scheme = DerivationScheme::DataFormats;
@@ -2013,45 +2013,65 @@ async fn decrypt_schema() {
         vec![DerivationScheme::DataFormats.to_string(), "some/format".to_string()];
     let data_formats_private_jwk = hd_key::derive_private_jwk(root_private_key, &derivation_path)
         .expect("should derive private key");
-    let data_formats_jwk = data_formats_private_jwk.derived_private_key.public_key;
+    let data_formats_public_jwk = data_formats_private_jwk.derived_private_key.public_key;
     // ************************************************************************
 
     let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
 
-    let config = Encryption {
-        content_algorithm: ContentAlgorithm::A256Gcm,
-        key_algorithm: KeyAlgorithm::EcdhEsA256Kw,
-        recipients: vec![
-            Recipient {
-                key_id: alice_kid.clone(),
-                public_key: schema_jwk,
-                derivation_scheme: DerivationScheme::Schemas,
-            },
-            Recipient {
-                key_id: alice_kid.clone(),
-                public_key: data_formats_jwk,
-                derivation_scheme: DerivationScheme::DataFormats,
-            },
-        ],
-    };
+    let options = EncryptOptions::new()
+        .with_recipient(Recipient {
+            key_id: alice_kid.clone(),
+            public_key: schema_public_jwk,
+            derivation_scheme: DerivationScheme::Schemas,
+        })
+        .with_recipient(Recipient {
+            key_id: alice_kid.clone(),
+            public_key: data_formats_public_jwk,
+            derivation_scheme: DerivationScheme::DataFormats,
+        });
 
     // generate record data and encrypt
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_data =
-        Data::Stream(DataStream::from(data.to_vec()).encrypt(&config).expect("should encrypt"));
+
+    let (ciphertext, settings) = options.encrypt(&data).expect("should encrypt");
+    let write_data = Data::Stream(DataStream::from(ciphertext));
 
     // 4. Create Write record
     let write = WriteBuilder::new()
         .data(write_data)
+        .encryption(settings)
         .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
-
-    println!("write: {:?}", write);
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice reads the record with encrypted data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+    let Some(read_stream) = body.entry.data else {
+        panic!("should have data");
+    };
+
+    // reassemble the JWE from EncryptedProperty
+    // let jwe: Jwe = EncryptionProperty::from(read_stream).into();
+
+    // let plaintext=jwe::decrypt(&read_stream, &config).expect("should decrypt");
+    // assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
 }
 
 // // Should decrypt flat-space schemaless records using a derived key.

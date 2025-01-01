@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, Data};
+use vercre_dwn::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;

@@ -647,6 +647,7 @@ pub struct WriteBuilder<O, A, S> {
     permission_grant_id: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
     existing: Option<Write>,
+    encryption: Option<EncryptionProperty>,
     origin: O,
     attesters: A,
     signer: S,
@@ -734,6 +735,7 @@ impl WriteBuilder<New, Unattested, Unsigned> {
             permission_grant_id: None,
             delegated_grant: None,
             existing: None,
+            encryption: None,
         }
     }
 }
@@ -763,6 +765,7 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
             protocol_role: None,
             permission_grant_id: None,
             delegated_grant: None,
+            encryption: None,
         }
     }
 }
@@ -861,6 +864,13 @@ impl<O> WriteBuilder<O, Unattested, Unsigned> {
         self
     }
 
+    /// The encryption properties for the record.
+    #[must_use]
+    pub fn encryption(mut self, encryption: EncryptionProperty) -> Self {
+        self.encryption = Some(encryption);
+        self
+    }
+
     // ----------------------------------------------------------------
     // Methods enabled soley for testing
     // ----------------------------------------------------------------
@@ -917,6 +927,7 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
             protocol_role: self.protocol_role,
             permission_grant_id: self.permission_grant_id,
             delegated_grant: self.delegated_grant,
+            encryption: self.encryption,
             existing: self.existing,
             origin: self.origin,
             signer: self.signer,
@@ -950,6 +961,7 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
             protocol_role: self.protocol_role,
             permission_grant_id: self.permission_grant_id,
             delegated_grant: self.delegated_grant,
+            encryption: self.encryption,
             existing: self.existing,
             origin: self.origin,
             attesters: self.attesters,
@@ -1026,15 +1038,13 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
                 let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
+                write.data_stream = Some(stream.clone());
 
                 // if data_size <= data::MAX_ENCODED_SIZE {
                 //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&stream.buffer));
                 // } else {
                 //     write.data_stream = Some(stream.clone());
                 // }
-
-                write.encryption = stream.encryption();
-                write.data_stream = Some(stream.clone());
             }
             Data::Cid { data_cid, data_size } => {
                 write.descriptor.data_cid.clone_from(data_cid);
@@ -1042,7 +1052,7 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             }
         };
 
-        // write.encryption = self.data.encryption();
+        write.encryption.clone_from(&self.encryption);
         write.authorization = Authorization {
             author_delegated_grant: self.delegated_grant.clone(),
             ..Authorization::default()

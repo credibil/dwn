@@ -14,7 +14,7 @@ use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{KeyStore, MessageStore};
-use vercre_dwn::records::{DeleteBuilder, WriteBuilder, Data, WriteProtocol};
+use vercre_dwn::records::{Data, DeleteBuilder, WriteBuilder, WriteProtocol};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint, store};
 
 // Bob should be able to read any message in Alice's web node.

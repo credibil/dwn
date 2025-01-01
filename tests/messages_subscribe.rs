@@ -14,7 +14,7 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{WriteBuilder, Data};
+use vercre_dwn::records::{Data, WriteBuilder};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // TODO: implement fake provider with no subscription support for this test.

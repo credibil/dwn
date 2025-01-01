@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use vercre_infosec::jose::PublicKeyJwk;
 use vercre_infosec::{Curve, KeyType};
-// use ed25519_dalek::{SecretKey, SigningKey};
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{Error, Result, unexpected};
