@@ -1995,7 +1995,7 @@ async fn decrypt_schema() {
     // ************************************************************************
 
     // schema encryption key
-    let mut root_private = DerivedPrivateJwk {
+    let schema_root_private = DerivedPrivateJwk {
         root_key_id: alice_kid.clone(),
         derivation_scheme: DerivationScheme::Schemas,
         derivation_path: None,
@@ -2014,7 +2014,7 @@ async fn decrypt_schema() {
 
     let derivation_path =
         vec![DerivationScheme::Schemas.to_string(), "https://some-schema.com".to_string()];
-    let schema_private = hd_key::derive_jwk(root_private.clone(), &derivation_path)
+    let schema_private = hd_key::derive_jwk(schema_root_private.clone(), &derivation_path)
         .expect("should derive private key");
     let schema_public = schema_private.derived_private_key.public_key;
 
@@ -2074,7 +2074,8 @@ async fn decrypt_schema() {
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
-    let plaintext = decrypt(&encrypted, &write, &root_private).await.expect("should decrypt");
+    let plaintext =
+        decrypt(&encrypted, &write, &schema_root_private).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 }
 
