@@ -86,7 +86,7 @@ pub struct DerivedPrivateJwk {
 ///
 /// # Errors
 /// LATER: document errors
-pub fn derive_private_jwk(
+pub fn derive_jwk(
     ancestor_key: DerivedPrivateJwk, sub_derivation_path: &[String],
 ) -> Result<DerivedPrivateJwk> {
     let ancestor_private_key = Base64UrlUnpadded::decode_vec(&ancestor_key.derived_private_key.d)?;

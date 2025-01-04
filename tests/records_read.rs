@@ -1,6 +1,9 @@
 //! Records Read
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
+use std::io::Read;
+
+use base64ct::{Base64UrlUnpadded, Encoding};
+use dwn_test::key_store::{ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use hd_key::{DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use http::StatusCode;
@@ -12,7 +15,7 @@ use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
     Data, DeleteBuilder, EncryptOptions, ReadBuilder, Recipient, RecordsFilter, WriteBuilder,
-    WriteProtocol,
+    WriteProtocol, decrypt,
 };
 use vercre_dwn::store::Entry;
 use vercre_dwn::{Error, Method, endpoint, hd_key};
@@ -1976,6 +1979,12 @@ async fn decrypt_schema() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
+    let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
+    let key_bytes: [u8; 32] =
+        Base64UrlUnpadded::decode_vec(ALICE_VERIFYING_KEY).unwrap().try_into().unwrap();
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&key_bytes).unwrap();
+    let alice_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
+
     // ************************************************************************
     // DONE OUT OF BAND
     //
@@ -1986,7 +1995,7 @@ async fn decrypt_schema() {
     // ************************************************************************
     // schema encryption key
     let mut root_private_key = DerivedPrivateJwk {
-        root_key_id: "z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX".to_string(),
+        root_key_id: alice_kid.clone(),
         derivation_scheme: DerivationScheme::Schemas,
         derivation_path: None,
         // Alice's private jwk
@@ -1994,7 +2003,8 @@ async fn decrypt_schema() {
             public_key: PublicKeyJwk {
                 kty: KeyType::Okp,
                 crv: Curve::Ed25519,
-                x: "RW-Q0fO2oECyLs4rZDZZo4p6b7pu7UF2eu9JBsktDco".to_string(),
+                // derived X25519 public
+                x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
                 ..PublicKeyJwk::default()
             },
             d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
@@ -2003,7 +2013,7 @@ async fn decrypt_schema() {
 
     let derivation_path =
         vec![DerivationScheme::Schemas.to_string(), "https://some-schema.com".to_string()];
-    let schema_private_jwk = hd_key::derive_private_jwk(root_private_key.clone(), &derivation_path)
+    let schema_private_jwk = hd_key::derive_jwk(root_private_key.clone(), &derivation_path)
         .expect("should derive private key");
     let schema_public_jwk = schema_private_jwk.derived_private_key.public_key;
 
@@ -2011,22 +2021,26 @@ async fn decrypt_schema() {
     root_private_key.derivation_scheme = DerivationScheme::DataFormats;
     let derivation_path =
         vec![DerivationScheme::DataFormats.to_string(), "some/format".to_string()];
-    let data_formats_private_jwk = hd_key::derive_private_jwk(root_private_key, &derivation_path)
+    let data_formats_private_jwk = hd_key::derive_jwk(root_private_key.clone(), &derivation_path)
         .expect("should derive private key");
     let data_formats_public_jwk = data_formats_private_jwk.derived_private_key.public_key;
     // ************************************************************************
 
-    let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
-
     let options = EncryptOptions::new()
+        // .with_recipient(Recipient {
+        //     key_id: alice_kid.clone(),
+        //     public_key: schema_public_jwk,
+        //     derivation_scheme: DerivationScheme::Schemas,
+        // })
         .with_recipient(Recipient {
             key_id: alice_kid.clone(),
-            public_key: schema_public_jwk,
-            derivation_scheme: DerivationScheme::Schemas,
-        })
-        .with_recipient(Recipient {
-            key_id: alice_kid.clone(),
-            public_key: data_formats_public_jwk,
+            // public_key: data_formats_public_jwk,
+            public_key: PublicKeyJwk {
+                kty: KeyType::Okp,
+                crv: Curve::Ed25519,
+                x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+                ..PublicKeyJwk::default()
+            },
             derivation_scheme: DerivationScheme::DataFormats,
         });
 
@@ -2035,11 +2049,11 @@ async fn decrypt_schema() {
     rand::thread_rng().fill_bytes(&mut data);
 
     let (ciphertext, settings) = options.encrypt(&data).expect("should encrypt");
-    let write_data = Data::Stream(DataStream::from(ciphertext));
 
     // 4. Create Write record
     let write = WriteBuilder::new()
-        .data(write_data)
+        .data(Data::Stream(DataStream::from(ciphertext)))
+        .schema("https://some-schema.com")
         .encryption(settings)
         .sign(&alice_keyring)
         .build()
@@ -2062,16 +2076,13 @@ async fn decrypt_schema() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
-    let Some(read_stream) = body.entry.data else {
-        panic!("should have data");
-    };
+    let write = body.entry.records_write.expect("should have write");
 
-    // reassemble the JWE from EncryptedProperty
-    // let jwe: Jwe = EncryptionProperty::from(read_stream).into();
+    let mut read_stream = body.entry.data.expect("should have data");
+    let mut data = Vec::new();
+    read_stream.read_to_end(&mut data).expect("should read data");
 
-    // let plaintext=jwe::decrypt(&read_stream, &config).expect("should decrypt");
-    // assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
+    let plaintext = decrypt(&data, &write, &root_private_key).await.expect("should decrypt");
 }
 
 // // Should decrypt flat-space schemaless records using a derived key.

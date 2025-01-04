@@ -12,8 +12,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::Signer;
-use vercre_infosec::jose::jwe::{ContentAlgorithm, KeyAlgorithm};
-use vercre_infosec::jose::{Jws, JwsBuilder, PublicKeyJwk};
+use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{self, Authorization, JwsPayload};
 use crate::data::cid;
@@ -22,7 +21,7 @@ use crate::hd_key::DerivationScheme;
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{DataStream, DateRange};
+use crate::records::{DataStream, DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
 use crate::{Descriptor, Error, Interface, Method, Result, data, forbidden, unexpected, utils};
@@ -572,63 +571,6 @@ pub struct WriteDescriptor {
     pub date_published: Option<DateTime<Utc>>,
 }
 
-/// `EncryptionProperty` contains information about the encryption used when
-/// encrypting a `Write` message. The information is used by the recipient
-/// to decrypt the message.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EncryptionProperty {
-    /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
-    /// Algorithm (JWE header `enc` property).
-    pub algorithm: ContentAlgorithm,
-
-    /// The initialization vector used to encrypt the data.
-    pub initialization_vector: String,
-
-    /// One or more objects, each containing information about the
-    /// Content Encryption Key (CEK) used to encrypt the data.
-    pub key_encryption: Vec<EncryptedKey>,
-}
-
-/// The encrypted Content Encryption Key (CEK). Equivalent to the JWE
-/// Encrypted Key (JWE `encrypted_key` property), this is the key used to
-/// encrypt the data.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(clippy::struct_field_names)]
-pub struct EncryptedKey {
-    /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
-    /// of the root public key used to encrypt the symmetric encryption key.
-    pub root_key_id: String,
-
-    /// The derived public key.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub derived_public_key: Option<PublicKeyJwk>,
-
-    /// The content encryption key (CEK) derivation scheme.
-    pub derivation_scheme: DerivationScheme,
-
-    /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
-    /// Algorithm (JWE header `alg` property).
-    pub algorithm: KeyAlgorithm,
-
-    /// The ephemeral public key used to encrypt the data.
-    pub ephemeral_public_key: PublicKeyJwk,
-
-    /// The initialization vector used to encrypt the data.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub initialization_vector: Option<String>,
-
-    /// The message authentication code.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_authentication_code: Option<String>,
-
-    /// The encrypted Content Encryption Key (CEK). Equivalent to the JWE
-    /// Encrypted Key (JWE `encrypted_key` property), this is the key used to
-    /// encrypt the data.
-    pub encrypted_key: String,
-}
-
 /// Options for use when creating a new [`Write`] message.
 pub struct WriteBuilder<O, A, S> {
     message_timestamp: DateTime<Utc>,
@@ -1052,7 +994,25 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             }
         };
 
-        write.encryption.clone_from(&self.encryption);
+        if let Some(encryption) = &self.encryption {
+            for key in &encryption.key_encryption {
+                if key.derivation_scheme == DerivationScheme::ProtocolPath
+                    && self.protocol.is_none()
+                {
+                    return Err(unexpected!(
+                        "`protocol` must be specified when using `protocols` encryption scheme"
+                    ));
+                }
+                if key.derivation_scheme == DerivationScheme::Schemas && self.schema.is_none() {
+                    return Err(unexpected!(
+                        "`schema` must be specified when using `schema` encryption scheme"
+                    ));
+                }
+            }
+
+            write.encryption = Some(encryption.clone());
+        }
+
         write.authorization = Authorization {
             author_delegated_grant: self.delegated_grant.clone(),
             ..Authorization::default()

@@ -15,13 +15,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
-pub use self::encryption::{EncryptOptions, Recipient};
+pub use self::encryption::{EncryptOptions, EncryptedKey, EncryptionProperty, Recipient, decrypt};
 pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
-pub use self::write::{
-    Data, DelegatedGrant, EncryptedKey, EncryptionProperty, Write, WriteBuilder, WriteProtocol,
-};
+pub use self::write::{Data, DelegatedGrant, Write, WriteBuilder, WriteProtocol};
 pub use crate::data::DataStream;
 use crate::serde::rfc3339_micros_opt;
 use crate::{Quota, RangeFilter, Result, utils};

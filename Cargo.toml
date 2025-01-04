@@ -27,6 +27,7 @@ chrono = { version = "0.4.39", features = ["serde"] }
 ciborium = "0.2.2"
 cid.workspace = true
 derive_more = { version = "1.0.0", features = ["display"] }
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures.workspace = true
 hkdf = "0.12.4"
 http.workspace = true
