@@ -236,6 +236,7 @@ pub async fn decrypt(
         return Err(unexpected!("encryption key not found"));
     };
 
+    // TODO: move this code to Provider
     // derive path-appropriate JWK from ancestor
     let path = derivation_path(recipient, write)?;
     let derived_jwk = hd_key::derive_jwk(ancestor_jwk.clone(), &path)?;

@@ -2078,6 +2078,23 @@ async fn decrypt_schema() {
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
+    // decrypt using schema descendant key
+    let plaintext =
+        decrypt(&encrypted, &write, &schema_private, &alice_keyring).await.expect("should decrypt");
+    assert_eq!(plaintext, data);
+
+    // decrypt using data format descendant key
+    let plaintext = decrypt(&encrypted, &write, &data_formats_private, &alice_keyring)
+        .await
+        .expect("should decrypt");
+    assert_eq!(plaintext, data);
+
+    // decrypt using schema root key
+    let plaintext =
+        decrypt(&encrypted, &write, &schema_root, &alice_keyring).await.expect("should decrypt");
+    assert_eq!(plaintext, data);
+
+    // decrypt using data format root key
     let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_keyring)
         .await
         .expect("should decrypt");
