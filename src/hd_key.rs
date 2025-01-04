@@ -11,6 +11,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -80,26 +81,38 @@ pub struct DerivedPrivateJwk {
     pub derived_private_key: PrivateKeyJwk,
 }
 
+// FIXME: currently only supports Ed25519 keys.
 /// Derives a descendant private key.
-/// NOTE: currently only supports Ed25519 keys.
 ///
 /// # Errors
 /// LATER: document errors
 pub fn derive_jwk(
-    ancestor_jwk: DerivedPrivateJwk, sub_derivation_path: &[String],
+    ancestor: DerivedPrivateJwk, descendant_path: &[String],
 ) -> Result<DerivedPrivateJwk> {
-    let ancestor_secret = Base64UrlUnpadded::decode_vec(&ancestor_jwk.derived_private_key.d)?;
+    let empty_path = vec![];
+    let ancestor_path = ancestor.derivation_path.as_ref().unwrap_or(&empty_path);
 
-    // derive the descendant private key
-    let derived_secret = derive_key(&ancestor_secret, sub_derivation_path)?;
-    let secret_bytes: [u8; 32] =
-        derived_secret.try_into().map_err(|_| unexpected!("invalid secret key"))?;
+    // validate initial part of descendant path matches ancestor
+    if ancestor_path.as_slice() != &descendant_path[0..ancestor_path.len()] {
+        return Err(unexpected!("ancestor and descendant key derivation segments do not match"));
+    }
 
-    // let derived_secret = StaticSecret::from(fixed);
-    // let derived_public = PublicKey::from(&derived_secret);
-    let derived_secret = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+    // derive keypair for the descendant sub-path, i.e. the difference between 
+    // the ancestor and full descendant paths
+    let sub_path = &descendant_path[ancestor_path.len()..];
+
+    let ancestor_secret = Base64UrlUnpadded::decode_vec(&ancestor.derived_private_key.d)?;
+    let secret_bytes: [u8; PUBLIC_KEY_LENGTH] =
+        ancestor_secret.try_into().map_err(|_| unexpected!("invalid secret key"))?;
+
+    // derive descendant private/public keypair
+    let derived_secret = derive_key(secret_bytes, sub_path)?;
+
+    // FIXME: don't assume we are using Ed25519 with need to convert to X25519
+    //        !!check `Curve` value
+    let derived_signing = ed25519_dalek::SigningKey::from_bytes(&derived_secret);
     let derived_public =
-        x25519_dalek::PublicKey::from(derived_secret.verifying_key().to_montgomery().to_bytes());
+        x25519_dalek::PublicKey::from(derived_signing.verifying_key().to_montgomery().to_bytes());
 
     // convert to JWK
     let derived_jwk = PrivateKeyJwk {
@@ -109,17 +122,13 @@ pub fn derive_jwk(
             x: Base64UrlUnpadded::encode_string(derived_public.as_bytes()),
             ..PublicKeyJwk::default()
         },
-        d: Base64UrlUnpadded::encode_string(derived_secret.as_bytes()),
+        d: Base64UrlUnpadded::encode_string(&derived_secret),
     };
 
-    // return derived private JWK
-    let mut derivation_path = ancestor_jwk.derivation_path.unwrap_or_default();
-    derivation_path.extend(sub_derivation_path.to_vec());
-
     Ok(DerivedPrivateJwk {
-        root_key_id: ancestor_jwk.root_key_id,
-        derivation_scheme: ancestor_jwk.derivation_scheme,
-        derivation_path: Some(derivation_path),
+        root_key_id: ancestor.root_key_id,
+        derivation_scheme: ancestor.derivation_scheme,
+        derivation_path: Some(descendant_path.to_vec()),
         derived_private_key: derived_jwk,
     })
 }
@@ -129,20 +138,22 @@ pub fn derive_jwk(
 ///
 /// # Errors
 /// LATER: document errors
-pub fn derive_key(private_key: &[u8], relative_path: &[String]) -> Result<Vec<u8>> {
-    let mut derived_key = private_key.to_vec();
+pub fn derive_key(
+    from_key: [u8; PUBLIC_KEY_LENGTH], path: &[String],
+) -> Result<[u8; PUBLIC_KEY_LENGTH]> {
+    let mut derived_key = from_key;
 
-    for segment in relative_path {
+    for segment in path {
         if segment.is_empty() {
             return Err(unexpected!("invalid key derivation path"));
         }
-        let mut okm = [0u8; 32];
-        // let salt = hex!(owner);// TODO: use owner as salt
+        let mut okm = [0u8; PUBLIC_KEY_LENGTH];
+        // let salt = hex!(owner); // TODO: use owner as salt
 
         Hkdf::<Sha256>::new(None, &derived_key)
             .expand(segment.as_bytes(), &mut okm)
             .map_err(|e| anyhow!("issue expanding hkdf key: {e}"))?;
-        derived_key = okm.to_vec();
+        derived_key = okm;
     }
 
     Ok(derived_key)

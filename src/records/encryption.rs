@@ -1,5 +1,6 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
+use vercre_infosec::Receiver;
 use vercre_infosec::jose::jwe::{
     self, ContentAlgorithm, Header, JweBuilder, KeyAlgorithm, KeyEncryption, Protected, PublicKey,
     Recipients,
@@ -222,7 +223,7 @@ impl EncryptOptions {
 /// # Errors
 /// LATER: Add error handling
 pub async fn decrypt(
-    data: &[u8], write: &Write, ancestor_jwk: &DerivedPrivateJwk,
+    data: &[u8], write: &Write, ancestor_jwk: &DerivedPrivateJwk, _: &impl Receiver,
 ) -> Result<Vec<u8>> {
     let Some(encryption) = &write.encryption else {
         return Err(unexpected!("encryption parameter not set"));
@@ -235,11 +236,10 @@ pub async fn decrypt(
         return Err(unexpected!("encryption key not found"));
     };
 
-    let derivation_path = derivation_path(recipient, write)?;
-    let derived_jwk = hd_key::derive_jwk(ancestor_jwk.clone(), &derivation_path)?;
+    // derive path-appropriate JWK from ancestor
+    let path = derivation_path(recipient, write)?;
+    let derived_jwk = hd_key::derive_jwk(ancestor_jwk.clone(), &path)?;
     let receiver = ReceiverImpl(derived_jwk.derived_private_key.d.clone());
-
-    // let receiver = ReceiverImpl(ancestor_jwk.derived_private_key.d.clone());
 
     // recreate JWE
     let protected = Protected {
@@ -321,7 +321,7 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
 use anyhow::anyhow;
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SigningKey};
 use sha2::Digest;
-use vercre_infosec::{Receiver, SecretKey, SharedSecret};
+use vercre_infosec::{SecretKey, SharedSecret};
 
 struct ReceiverImpl(String);
 

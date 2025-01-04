@@ -1977,13 +1977,18 @@ async fn block_data() {
 async fn decrypt_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    // let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
-    let key_bytes: [u8; 32] =
+    let verifying_bytes: [u8; 32] =
         Base64UrlUnpadded::decode_vec(ALICE_VERIFYING_KEY).unwrap().try_into().unwrap();
-    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&key_bytes).unwrap();
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&verifying_bytes).unwrap();
+
+    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
+    let alice_private = "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string();
     let alice_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
+
+    let schema = String::from("https://some-schema.com");
+    let data_format = String::from("some/format");
 
     // ************************************************************************
     // DONE OUT OF BAND
@@ -1995,12 +2000,10 @@ async fn decrypt_schema() {
     // ************************************************************************
 
     // schema encryption key
-    let schema_root_private = DerivedPrivateJwk {
+    let schema_root = DerivedPrivateJwk {
         root_key_id: alice_kid.clone(),
         derivation_scheme: DerivationScheme::Schemas,
         derivation_path: None,
-
-        // Alice's private jwk
         derived_private_key: PrivateKeyJwk {
             public_key: PublicKeyJwk {
                 kty: KeyType::Okp,
@@ -2008,35 +2011,35 @@ async fn decrypt_schema() {
                 x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
                 ..PublicKeyJwk::default()
             },
-            d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
+            d: alice_private,
         },
     };
 
-    let derivation_path =
-        vec![DerivationScheme::Schemas.to_string(), "https://some-schema.com".to_string()];
-    let schema_private = hd_key::derive_jwk(schema_root_private.clone(), &derivation_path)
-        .expect("should derive private key");
-    let schema_public = schema_private.derived_private_key.public_key;
+    let path = vec![DerivationScheme::Schemas.to_string(), schema.clone()];
+    let schema_private =
+        hd_key::derive_jwk(schema_root.clone(), &path).expect("should derive private key");
+    let schema_public = schema_private.derived_private_key.public_key.clone();
 
-    // // data format encryption key
-    // root_private.derivation_scheme = DerivationScheme::DataFormats;
-    // let derivation_path =
-    //     vec![DerivationScheme::DataFormats.to_string(), "some/format".to_string()];
-    // let data_formats_private = hd_key::derive_jwk(root_private.clone(), &derivation_path)
-    //     .expect("should derive private key");
-    // let data_formats_public = data_formats_private.derived_private_key.public_key;
+    // data format encryption key
+    let mut data_formats_root = schema_root.clone(); // same root as schema
+    data_formats_root.derivation_scheme = DerivationScheme::DataFormats;
+    let path = vec![DerivationScheme::DataFormats.to_string(), schema.clone(), data_format.clone()];
+    let data_formats_private =
+        hd_key::derive_jwk(data_formats_root.clone(), &path).expect("should derive private key");
+    let data_formats_public = data_formats_private.derived_private_key.public_key.clone();
     // ************************************************************************
 
-    let options = EncryptOptions::new().with_recipient(Recipient {
-        key_id: alice_kid.clone(),
-        public_key: schema_public,
-        derivation_scheme: DerivationScheme::Schemas,
-    });
-    // .with_recipient(Recipient {
-    //     key_id: alice_kid.clone(),
-    //     public_key: data_formats_public,
-    //     derivation_scheme: DerivationScheme::DataFormats,
-    // });
+    let options = EncryptOptions::new()
+        .with_recipient(Recipient {
+            key_id: alice_kid.clone(),
+            public_key: schema_public,
+            derivation_scheme: DerivationScheme::Schemas,
+        })
+        .with_recipient(Recipient {
+            key_id: alice_kid.clone(),
+            public_key: data_formats_public,
+            derivation_scheme: DerivationScheme::DataFormats,
+        });
 
     // generate data and encrypt
     let data = "hello world".as_bytes().to_vec();
@@ -2045,7 +2048,8 @@ async fn decrypt_schema() {
     // create Write record
     let write = WriteBuilder::new()
         .data(Data::Stream(DataStream::from(ciphertext)))
-        .schema("https://some-schema.com")
+        .schema(schema)
+        .data_format(data_format)
         .encryption(settings)
         .sign(&alice_keyring)
         .build()
@@ -2074,8 +2078,9 @@ async fn decrypt_schema() {
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
-    let plaintext =
-        decrypt(&encrypted, &write, &schema_root_private).await.expect("should decrypt");
+    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_keyring)
+        .await
+        .expect("should decrypt");
     assert_eq!(plaintext, data);
 }
 
