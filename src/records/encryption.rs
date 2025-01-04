@@ -6,7 +6,7 @@ use vercre_infosec::jose::jwe::{
 };
 use vercre_infosec::jose::{Curve, Jwe, PublicKeyJwk};
 
-use crate::hd_key::{DerivationScheme, DerivedPrivateJwk};
+use crate::hd_key::{self, DerivationScheme, DerivedPrivateJwk};
 use crate::records::Write;
 use crate::{Result, unexpected};
 
@@ -166,7 +166,6 @@ impl EncryptOptions {
         }
 
         let jwe = builder.build()?;
-        println!("JWE: {jwe:?}\n");
 
         // use JWE to build EncryptionProperty
         let mut encryption = EncryptionProperty {
@@ -228,6 +227,7 @@ pub async fn decrypt(
     let Some(encryption) = &write.encryption else {
         return Err(unexpected!("encryption parameter not set"));
     };
+
     let Some(recipient) = encryption.key_encryption.iter().find(|k| {
         k.root_key_id == ancestor_jwk.root_key_id
             && k.derivation_scheme == ancestor_jwk.derivation_scheme
@@ -235,10 +235,11 @@ pub async fn decrypt(
         return Err(unexpected!("encryption key not found"));
     };
 
-    // let derivation_path= derivation_path(recipient, write)?;
-    // let derived_jwk = hd_key::derive_jwk(ancestor_jwk.clone(), &derivation_path)?;
-    // let receiver = ReceiverImpl(derived_jwk.derived_private_key.d.clone());
-    let receiver = ReceiverImpl(ancestor_jwk.derived_private_key.d.clone());
+    let derivation_path = derivation_path(recipient, write)?;
+    let derived_jwk = hd_key::derive_jwk(ancestor_jwk.clone(), &derivation_path)?;
+    let receiver = ReceiverImpl(derived_jwk.derived_private_key.d.clone());
+
+    // let receiver = ReceiverImpl(ancestor_jwk.derived_private_key.d.clone());
 
     // recreate JWE
     let protected = Protected {

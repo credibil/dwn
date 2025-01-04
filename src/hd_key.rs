@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use vercre_infosec::jose::PublicKeyJwk;
 use vercre_infosec::{Curve, KeyType};
-use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{Error, Result, unexpected};
 
@@ -87,15 +86,20 @@ pub struct DerivedPrivateJwk {
 /// # Errors
 /// LATER: document errors
 pub fn derive_jwk(
-    ancestor_key: DerivedPrivateJwk, sub_derivation_path: &[String],
+    ancestor_jwk: DerivedPrivateJwk, sub_derivation_path: &[String],
 ) -> Result<DerivedPrivateJwk> {
-    let ancestor_private_key = Base64UrlUnpadded::decode_vec(&ancestor_key.derived_private_key.d)?;
+    let ancestor_secret = Base64UrlUnpadded::decode_vec(&ancestor_jwk.derived_private_key.d)?;
 
     // derive the descendant private key
-    let derived = derive_key(&ancestor_private_key, sub_derivation_path)?;
-    let fixed: [u8; 32] = derived.try_into().map_err(|_| unexpected!("invalid secret key"))?;
-    let derived_secret = StaticSecret::from(fixed);
-    let derived_public = PublicKey::from(&derived_secret);
+    let derived_secret = derive_key(&ancestor_secret, sub_derivation_path)?;
+    let secret_bytes: [u8; 32] =
+        derived_secret.try_into().map_err(|_| unexpected!("invalid secret key"))?;
+
+    // let derived_secret = StaticSecret::from(fixed);
+    // let derived_public = PublicKey::from(&derived_secret);
+    let derived_secret = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+    let derived_public =
+        x25519_dalek::PublicKey::from(derived_secret.verifying_key().to_montgomery().to_bytes());
 
     // convert to JWK
     let derived_jwk = PrivateKeyJwk {
@@ -109,12 +113,12 @@ pub fn derive_jwk(
     };
 
     // return derived private JWK
-    let mut derivation_path = ancestor_key.derivation_path.unwrap_or_default();
+    let mut derivation_path = ancestor_jwk.derivation_path.unwrap_or_default();
     derivation_path.extend(sub_derivation_path.to_vec());
 
     Ok(DerivedPrivateJwk {
-        root_key_id: ancestor_key.root_key_id,
-        derivation_scheme: ancestor_key.derivation_scheme,
+        root_key_id: ancestor_jwk.root_key_id,
+        derivation_scheme: ancestor_jwk.derivation_scheme,
         derivation_path: Some(derivation_path),
         derived_private_key: derived_jwk,
     })
