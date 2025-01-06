@@ -3,15 +3,15 @@
 use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_test::key_store::{ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, CAROL_DID};
+use dwn_test::key_store::{ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
-use hd_key::{DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
+use hd_key::{DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use http::StatusCode;
 use rand::RngCore;
 use serde_json::Value;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
-use vercre_dwn::protocols::{ConfigureBuilder, Definition};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
     Data, DeleteBuilder, EncryptOptions, ReadBuilder, Recipient, RecordsFilter, WriteBuilder,
@@ -1979,26 +1979,26 @@ async fn decrypt_schema() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
+
+    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
     let verifying_bytes: [u8; 32] =
         Base64UrlUnpadded::decode_vec(ALICE_VERIFYING_KEY).unwrap().try_into().unwrap();
     let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&verifying_bytes).unwrap();
-
-    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
-    let alice_private = "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string();
     let alice_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
 
     let schema = String::from("https://some-schema.com");
     let data_format = String::from("some/format");
 
-    // ************************************************************************
-    // DONE OUT OF BAND
+    // --------------------------------------------------
+    // Alice derives and issues participants' keys.
+    // The keys are used for decrypting data for selected messages with each
+    // key 'locked' to it's derivation scheme and path.
     //
-    // Derive keys to use in encrypting/decrypting CEK for each recipient:
-    // - root private key is DWN owner's private key
+    // N.B.
+    // - the root private key is the owner's private key
     // - derived private keys are encrypted (using recipient's public key) and
-    //   distributed to each recipient
-    // ************************************************************************
-
+    //   distributed to each recipient (out of band)
+    // --------------------------------------------------
     // schema encryption key
     let schema_root = DerivedPrivateJwk {
         root_key_id: alice_kid.clone(),
@@ -2011,24 +2011,27 @@ async fn decrypt_schema() {
                 x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
                 ..PublicKeyJwk::default()
             },
-            d: alice_private,
+            d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
         },
     };
 
     let path = vec![DerivationScheme::Schemas.to_string(), schema.clone()];
-    let schema_private =
-        hd_key::derive_jwk(schema_root.clone(), &path).expect("should derive private key");
-    let schema_public = schema_private.derived_private_key.public_key.clone();
+    let schema_leaf = hd_key::derive_jwk(schema_root.clone(), &DerivationPath::Full(&path))
+        .expect("should derive private key");
+    let schema_public = schema_leaf.derived_private_key.public_key.clone();
 
     // data format encryption key
     let mut data_formats_root = schema_root.clone(); // same root as schema
     data_formats_root.derivation_scheme = DerivationScheme::DataFormats;
     let path = vec![DerivationScheme::DataFormats.to_string(), schema.clone(), data_format.clone()];
-    let data_formats_private =
-        hd_key::derive_jwk(data_formats_root.clone(), &path).expect("should derive private key");
-    let data_formats_public = data_formats_private.derived_private_key.public_key.clone();
-    // ************************************************************************
+    let data_formats_leaf =
+        hd_key::derive_jwk(data_formats_root.clone(), &DerivationPath::Full(&path))
+            .expect("should derive private key");
+    let data_formats_public = data_formats_leaf.derived_private_key.public_key.clone();
 
+    // --------------------------------------------------
+    // Alice writes a record with encrypted data.
+    // --------------------------------------------------
     let options = EncryptOptions::new()
         .with_recipient(Recipient {
             key_id: alice_kid.clone(),
@@ -2049,7 +2052,7 @@ async fn decrypt_schema() {
     let write = WriteBuilder::new()
         .data(Data::Stream(DataStream::from(ciphertext)))
         .schema(schema)
-        .data_format(data_format)
+        .data_format(&data_format)
         .encryption(settings)
         .sign(&alice_keyring)
         .build()
@@ -2059,7 +2062,7 @@ async fn decrypt_schema() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice reads the record with encrypted data.
+    // Alice reads the record with encrypted data and decrypts it.
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
@@ -2080,11 +2083,11 @@ async fn decrypt_schema() {
 
     // decrypt using schema descendant key
     let plaintext =
-        decrypt(&encrypted, &write, &schema_private, &alice_keyring).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &schema_leaf, &alice_keyring).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // decrypt using data format descendant key
-    let plaintext = decrypt(&encrypted, &write, &data_formats_private, &alice_keyring)
+    let plaintext = decrypt(&encrypted, &write, &data_formats_leaf, &alice_keyring)
         .await
         .expect("should decrypt");
     assert_eq!(plaintext, data);
@@ -2099,22 +2102,313 @@ async fn decrypt_schema() {
         .await
         .expect("should decrypt");
     assert_eq!(plaintext, data);
+
+    // --------------------------------------------------
+    // Check decryption fails using key derived from invalid path.
+    // --------------------------------------------------
+    let invalid_path = vec![DerivationScheme::DataFormats.to_string(), data_format];
+    let invalid_key =
+        hd_key::derive_jwk(data_formats_root.clone(), &DerivationPath::Full(&invalid_path))
+            .expect("should derive private key");
+
+    let Err(Error::BadRequest(_)) = decrypt(&encrypted, &write, &invalid_key, &alice_keyring).await
+    else {
+        panic!("should be BadRequest");
+    };
 }
 
-// // Should decrypt flat-space schemaless records using a derived key.
-// #[tokio::test]
-// async fn decrypt_schemaless() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should decrypt flat-space schemaless records using a derived key.
+#[tokio::test]
+async fn decrypt_schemaless() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-// // Should only be able to decrypt records using the correct derived private key
-// // within a protocol-context derivation scheme.
-// #[tokio::test]
-// async fn decrypt_context() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+    // --------------------------------------------------
+    // Alice derives participants' keys.
+    // --------------------------------------------------
+    let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
+
+    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
+    let verifying_bytes: [u8; 32] =
+        Base64UrlUnpadded::decode_vec(ALICE_VERIFYING_KEY).unwrap().try_into().unwrap();
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&verifying_bytes).unwrap();
+    let alice_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
+
+    let data_format = String::from("image/jpg");
+
+    // encryption key
+    let data_formats_root = DerivedPrivateJwk {
+        root_key_id: alice_kid.clone(),
+        derivation_scheme: DerivationScheme::DataFormats,
+        derivation_path: None,
+        derived_private_key: PrivateKeyJwk {
+            public_key: PublicKeyJwk {
+                kty: KeyType::Okp,
+                crv: Curve::Ed25519,
+                x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+                ..PublicKeyJwk::default()
+            },
+            d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
+        },
+    };
+
+    let path = vec![DerivationScheme::DataFormats.to_string(), data_format.clone()];
+    let data_formats_leaf =
+        hd_key::derive_jwk(data_formats_root.clone(), &DerivationPath::Full(&path))
+            .expect("should derive private key");
+    let data_formats_public = data_formats_leaf.derived_private_key.public_key.clone();
+
+    // --------------------------------------------------
+    // Alice writes a record with encrypted data.
+    // --------------------------------------------------
+    // generate data and encrypt
+    let data = "hello world".as_bytes().to_vec();
+
+    let options = EncryptOptions::new().with_recipient(Recipient {
+        key_id: alice_kid.clone(),
+        public_key: data_formats_public,
+        derivation_scheme: DerivationScheme::DataFormats,
+    });
+
+    let (ciphertext, settings) = options.encrypt(&data).expect("should encrypt");
+
+    // create Write record
+    let write = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(ciphertext)))
+        .data_format(&data_format)
+        .encryption(settings)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice reads the record with encrypted data and decrypts it.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let write = body.entry.records_write.expect("should have write");
+
+    let mut read_stream = body.entry.data.expect("should have data");
+    let mut encrypted = Vec::new();
+    read_stream.read_to_end(&mut encrypted).expect("should read data");
+
+    // decrypt using schema descendant key
+    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_keyring)
+        .await
+        .expect("should decrypt");
+    assert_eq!(plaintext, data);
+}
+
+// Should only be able to decrypt records using the correct derived private key
+// within a protocol-context derivation scheme.
+#[tokio::test]
+async fn decrypt_context() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice's keys.
+    // --------------------------------------------------
+    let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
+
+    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
+    let verifying_bytes: [u8; 32] =
+        Base64UrlUnpadded::decode_vec(ALICE_VERIFYING_KEY).unwrap().try_into().unwrap();
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&verifying_bytes).unwrap();
+    let alice_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
+
+    let alice_private_jwk = PrivateKeyJwk {
+        public_key: PublicKeyJwk {
+            kty: KeyType::Okp,
+            crv: Curve::Ed25519,
+            x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+            ..PublicKeyJwk::default()
+        },
+        d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
+    };
+
+    // --------------------------------------------------
+    // Bob's keys.
+    // --------------------------------------------------
+    let bob_kid = format!("{BOB_DID}#z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD");
+
+    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
+    let verifying_bytes: [u8; 32] =
+        Base64UrlUnpadded::decode_vec(BOB_VERIFYING_KEY).unwrap().try_into().unwrap();
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&verifying_bytes).unwrap();
+    let bob_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
+
+    let bob_private_jwk = PrivateKeyJwk {
+        public_key: PublicKeyJwk {
+            kty: KeyType::Okp,
+            crv: Curve::Ed25519,
+            x: Base64UrlUnpadded::encode_string(bob_public.as_bytes()),
+            ..PublicKeyJwk::default()
+        },
+        d: "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo".to_string(),
+    };
+
+    // --------------------------------------------------
+    // Alice configures the chat protocol with encryption.
+    // --------------------------------------------------
+    let chat = include_bytes!("../crates/dwn-test/protocols/chat.json");
+    let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
+    let definition = definition
+        .add_encryption(&alice_kid, alice_private_jwk.clone())
+        .expect("should add encryption");
+
+    let configure_alice = ConfigureBuilder::new()
+        .definition(definition)
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply = endpoint::handle(ALICE_DID, configure_alice, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob configures the chat protocol with encryption.
+    // --------------------------------------------------
+    let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
+    let definition = definition
+        .add_encryption(&bob_kid, bob_private_jwk.clone())
+        .expect("should add encryption");
+
+    let configure_bob = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+    let reply = endpoint::handle(BOB_DID, configure_bob, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    //  Bob queries for Alice's chat protocol definition.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter("http://chat-protocol.xyz")
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].authorization.author().unwrap(), ALICE_DID);
+
+    // --------------------------------------------------
+    //  Bob writes an initiating a chat thread.
+    // --------------------------------------------------
+    // generate data and encrypt
+    let data = "hello Alice".as_bytes().to_vec();
+    let mut options = EncryptOptions::new().data(&data);
+    let encrypted = options.encrypt2().expect("should encrypt");
+    // let (ciphertext, settings) = options.encrypt(&data).expect("should encrypt");
+
+    // encrypted.add_recipient(Recipient {
+    //     key_id: alice_kid.clone(),
+    //     public_key: alice_private_jwk.public_key.clone(),
+    //     derivation_scheme: DerivationScheme::ProtocolPath,
+    // });
+    // let ep = encrypted.finalize().expect("should build");
+
+    // create Write record
+    let write = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(encrypted.ciphertext.clone())))
+        .protocol(WriteProtocol {
+            protocol: "http://chat-protocol.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .schema("thread")
+        .data_format("application/json")
+        // .encryption(settings)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // get the rule set for the protocol path
+    let rule_set = definition.structure.get("thread").unwrap();
+    let encryption = rule_set.encryption.as_ref().unwrap();
+
+    // protocol path derived public key
+    let options = EncryptOptions::new().with_recipient(Recipient {
+        key_id: encryption.root_key_id.clone(),
+        public_key: encryption.public_key_jwk.clone(),
+        derivation_scheme: DerivationScheme::ProtocolPath,
+    });
+
+    // protocol context derived public key
+    let author_root = DerivedPrivateJwk {
+        root_key_id: bob_kid.clone(),
+        derivation_scheme: DerivationScheme::ProtocolContext,
+        derivation_path: None,
+        derived_private_key: bob_private_jwk.clone(),
+    };
+
+    let context_id = write.context_id.clone().unwrap();
+    let context_path = [DerivationScheme::ProtocolContext.to_string(), context_id];
+    let context_jwk = hd_key::derive_jwk(author_root, &DerivationPath::Full(&context_path))
+        .expect("should derive key");
+
+    let options = options.with_recipient(Recipient {
+        key_id: bob_kid.clone(),
+        public_key: context_jwk.derived_private_key.public_key.clone(),
+        derivation_scheme: DerivationScheme::ProtocolContext,
+    });
+
+    // generate data and encrypt
+    let data = "hello Alice".as_bytes().to_vec();
+    let (_ciphertext, _settings) = options.encrypt(&data).expect("should encrypt");
+
+    // create Write record
+    // write.encryption=settings;
+
+    // --------------------------------------------------
+    // Alice reads the record with encrypted data and decrypts it.
+    // --------------------------------------------------
+    // let read = ReadBuilder::new()
+    //     .filter(RecordsFilter::new().record_id(&write.record_id))
+    //     .sign(&alice_keyring)
+    //     .build()
+    //     .await
+    //     .expect("should create read");
+
+    // let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    // assert_eq!(reply.status.code, StatusCode::OK);
+
+    // let body = reply.body.expect("should have body");
+    // let write = body.entry.records_write.expect("should have write");
+
+    // let mut read_stream = body.entry.data.expect("should have data");
+    // let mut encrypted = Vec::new();
+    // read_stream.read_to_end(&mut encrypted).expect("should read data");
+
+    // // decrypt using schema descendant key
+    // let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_keyring)
+    //     .await
+    //     .expect("should decrypt");
+    // assert_eq!(plaintext, data);
+}
 
 // // Should only be able to decrypt records using the correct derived private key
 // // within a protocol derivation scheme.

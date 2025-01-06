@@ -5347,6 +5347,7 @@ dependencies = [
 name = "vercre-dwn"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "aes-gcm",
  "anyhow",
  "async-recursion",
  "base64ct",
@@ -5378,7 +5379,6 @@ dependencies = [
 [[package]]
 name = "vercre-infosec"
 version = "0.1.0-alpha.6"
-source = "git+https://github.com/vercre/infosec.git#b13e3f60e2f629ae1879cb762c03f9e3644ee4f5"
 dependencies = [
  "aes-gcm",
  "aes-kw",

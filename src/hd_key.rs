@@ -81,25 +81,37 @@ pub struct DerivedPrivateJwk {
     pub derived_private_key: PrivateKeyJwk,
 }
 
+pub enum DerivationPath<'a> {
+    Full(&'a [String]),
+    Relative(&'a [String]),
+}
+
 // FIXME: currently only supports Ed25519 keys.
 /// Derives a descendant private key.
 ///
 /// # Errors
 /// LATER: document errors
-pub fn derive_jwk(
-    ancestor: DerivedPrivateJwk, descendant_path: &[String],
-) -> Result<DerivedPrivateJwk> {
+pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<DerivedPrivateJwk> {
     let empty_path = vec![];
     let ancestor_path = ancestor.derivation_path.as_ref().unwrap_or(&empty_path);
 
-    // validate initial part of descendant path matches ancestor
-    if ancestor_path.as_slice() != &descendant_path[0..ancestor_path.len()] {
-        return Err(unexpected!("ancestor and descendant key derivation segments do not match"));
-    }
+    let sub_path = match path {
+        DerivationPath::Full(descendant_path) => {
+            // validate initial part of descendant path matches ancestor
+            for (i, segment) in ancestor_path.iter().enumerate() {
+                if segment != &descendant_path[i] {
+                    return Err(unexpected!(
+                        "ancestor and descendant key derivation segments do not match"
+                    ));
+                }
+            }
 
-    // derive keypair for the descendant sub-path, i.e. the difference between 
-    // the ancestor and full descendant paths
-    let sub_path = &descendant_path[ancestor_path.len()..];
+            // derive keypair for the descendant sub-path, i.e. the difference between
+            // the ancestor and full descendant paths
+            &descendant_path[ancestor_path.len()..]
+        }
+        DerivationPath::Relative(sub_path) => sub_path,
+    };
 
     let ancestor_secret = Base64UrlUnpadded::decode_vec(&ancestor.derived_private_key.d)?;
     let secret_bytes: [u8; PUBLIC_KEY_LENGTH] =
@@ -125,10 +137,13 @@ pub fn derive_jwk(
         d: Base64UrlUnpadded::encode_string(&derived_secret),
     };
 
+    let mut derivation_path = ancestor_path.clone();
+    derivation_path.extend_from_slice(sub_path);
+
     Ok(DerivedPrivateJwk {
         root_key_id: ancestor.root_key_id,
         derivation_scheme: ancestor.derivation_scheme,
-        derivation_path: Some(descendant_path.to_vec()),
+        derivation_path: Some(derivation_path),
         derived_private_key: derived_jwk,
     })
 }

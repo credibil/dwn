@@ -130,7 +130,10 @@ impl Authorization {
 
     // TODO: cache this value
     /// Get message author's DID.
-    pub(crate) fn author(&self) -> Result<String> {
+    /// 
+    /// # Errors
+    /// LATER: add error docs
+    pub fn author(&self) -> Result<String> {
         self.author_delegated_grant.as_ref().map_or_else(
             || signer_did(&self.signature),
             |grant| signer_did(&grant.authorization.signature),
