@@ -230,7 +230,7 @@ impl<'a> EncryptOptions<'a> {
 impl Encrypted {
     /// Add a recipient to the encryption options.
     #[must_use]
-    pub fn add_recipient(&mut self, recipient: Recipient) -> &Self {
+    pub fn add_recipient(mut self, recipient: Recipient) -> Self {
         self.recipients.push(recipient);
         self
     }

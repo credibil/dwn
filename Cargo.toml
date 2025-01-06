@@ -86,7 +86,7 @@ cid = "0.11.1"
 dwn-test = { path = "crates/dwn-test" }
 futures = "0.3.31"
 http = "1.2.0"
-insta = { version = "1.41.1", features = ["redactions", "yaml"] }
+insta = { version = "1.42.0", features = ["redactions", "yaml"] }
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.134", features = ["alloc"] }

@@ -2321,18 +2321,10 @@ async fn decrypt_context() {
     // generate data and encrypt
     let data = "hello Alice".as_bytes().to_vec();
     let mut options = EncryptOptions::new().data(&data);
-    let encrypted = options.encrypt2().expect("should encrypt");
-    // let (ciphertext, settings) = options.encrypt(&data).expect("should encrypt");
-
-    // encrypted.add_recipient(Recipient {
-    //     key_id: alice_kid.clone(),
-    //     public_key: alice_private_jwk.public_key.clone(),
-    //     derivation_scheme: DerivationScheme::ProtocolPath,
-    // });
-    // let ep = encrypted.finalize().expect("should build");
+    let mut encrypted = options.encrypt2().expect("should encrypt");
 
     // create Write record
-    let write = WriteBuilder::new()
+    let mut write = WriteBuilder::new()
         .data(Data::Stream(DataStream::from(encrypted.ciphertext.clone())))
         .protocol(WriteProtocol {
             protocol: "http://chat-protocol.xyz".to_string(),
@@ -2340,7 +2332,6 @@ async fn decrypt_context() {
         })
         .schema("thread")
         .data_format("application/json")
-        // .encryption(settings)
         .sign(&bob_keyring)
         .build()
         .await
@@ -2351,7 +2342,7 @@ async fn decrypt_context() {
     let encryption = rule_set.encryption.as_ref().unwrap();
 
     // protocol path derived public key
-    let options = EncryptOptions::new().with_recipient(Recipient {
+    encrypted = encrypted.add_recipient(Recipient {
         key_id: encryption.root_key_id.clone(),
         public_key: encryption.public_key_jwk.clone(),
         derivation_scheme: DerivationScheme::ProtocolPath,
@@ -2370,18 +2361,17 @@ async fn decrypt_context() {
     let context_jwk = hd_key::derive_jwk(author_root, &DerivationPath::Full(&context_path))
         .expect("should derive key");
 
-    let options = options.with_recipient(Recipient {
+    encrypted = encrypted.add_recipient(Recipient {
         key_id: bob_kid.clone(),
         public_key: context_jwk.derived_private_key.public_key.clone(),
         derivation_scheme: DerivationScheme::ProtocolContext,
     });
 
     // generate data and encrypt
-    let data = "hello Alice".as_bytes().to_vec();
-    let (_ciphertext, _settings) = options.encrypt(&data).expect("should encrypt");
+    let encryption = encrypted.finalize().expect("should encrypt");
 
     // create Write record
-    // write.encryption=settings;
+    write.encryption = Some(encryption);
 
     // --------------------------------------------------
     // Alice reads the record with encrypted data and decrypts it.
