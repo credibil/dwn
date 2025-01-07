@@ -89,13 +89,13 @@ http = "1.2.0"
 insta = { version = "1.42.0", features = ["redactions", "yaml"] }
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = { version = "1.0.134", features = ["alloc"] }
+serde_json = { version = "1.0.135", features = ["alloc"] }
 tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 
-[patch."https://github.com/vercre/infosec.git"]
-vercre-infosec = { path = "../infosec" }
+# [patch."https://github.com/vercre/infosec.git"]
+# vercre-infosec = { path = "../infosec" }
 
 [profile.release]
 # Optimize for small code size
