@@ -57,11 +57,14 @@ pub async fn handle(
         let write_ts = write.descriptor.base.message_timestamp.timestamp_micros();
         let latest_ts = latest_entry.descriptor().message_timestamp.timestamp_micros();
         if write_ts < latest_ts {
-            return Err(Error::Conflict("newer write record already exists".to_string()));
+            return Err(Error::Conflict("a more recent update exists".to_string()));
+        }
+        if write_ts == latest_ts && write.cid()? <= latest_entry.cid()? {
+            return Err(Error::Conflict("an update with a larger CID already exists".to_string()));
         }
 
         if latest_entry.descriptor().method == Method::Delete {
-            return Err(unexpected!("RecordsWrite not allowed after RecordsDelete"));
+            return Err(unexpected!("record has been deleted"));
         }
     }
 

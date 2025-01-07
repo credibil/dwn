@@ -2410,15 +2410,9 @@ async fn decrypt_context() {
     assert_eq!(plaintext, data);
 
     // --------------------------------------------------
-    // Alice sends Bob an encrypted message using the  protocol context public
-    // key derived above.
+    // Alice sends Bob an encrypted message using the protocol
+    // context public key derived above.
     // --------------------------------------------------
-    // encrypted = encrypted.add_recipient(Recipient {
-    //     key_id: bob_kid.clone(),
-    //     public_key: context_jwk.derived_private_key.public_key.clone(),
-    //     derivation_scheme: DerivationScheme::ProtocolContext,
-    // });
-
     // generate data and encrypt
     let data = "Hello Bob".as_bytes().to_vec();
     let mut options = EncryptOptions::new().data(&data);
@@ -2563,20 +2557,7 @@ async fn decrypt_protocol() {
     let data = "Hello Alice".as_bytes().to_vec();
     let mut options = EncryptOptions::new().data(&data);
     let mut encrypted = options.encrypt2().expect("should encrypt");
-
-    // create Write record
-    let mut write = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(encrypted.ciphertext.clone())))
-        .protocol(WriteProtocol {
-            protocol: "http://email-protocol.xyz".to_string(),
-            protocol_path: "email".to_string(),
-        })
-        .schema("email")
-        .data_format("text/plain")
-        .sign(&bob_keyring)
-        .build()
-        .await
-        .expect("should create write");
+    let ciphertext = encrypted.ciphertext.clone();
 
     // get the rule set for the protocol path
     let rule_set = definition.structure.get("email").unwrap();
@@ -2592,9 +2573,20 @@ async fn decrypt_protocol() {
     // generate data and encrypt
     let encryption = encrypted.finalize().expect("should encrypt");
 
-    // finalize Write record
-    write.encryption = Some(encryption);
-    write.sign_as_author(None, None, &bob_keyring).await.expect("should sign");
+    // create Write record
+    let write = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(ciphertext)))
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .encryption(encryption)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
 
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
