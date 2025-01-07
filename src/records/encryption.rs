@@ -172,7 +172,6 @@ impl<'a> EncryptOptions<'a> {
                 decoded.extend(&Base64UrlUnpadded::decode_vec(y)?);
                 decoded
             };
-
             builder = builder.add_recipient(&recipient.key_id, PublicKey::from_slice(&decoded)?);
         }
 

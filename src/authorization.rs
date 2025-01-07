@@ -130,7 +130,7 @@ impl Authorization {
 
     // TODO: cache this value
     /// Get message author's DID.
-    /// 
+    ///
     /// # Errors
     /// LATER: add error docs
     pub fn author(&self) -> Result<String> {

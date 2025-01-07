@@ -2443,14 +2443,6 @@ async fn decrypt_context() {
     let rule_set = definition.structure.get("thread").unwrap();
     let _encryption = rule_set.encryption.as_ref().unwrap();
 
-    // // protocol context derived public key
-    // let bob_root = DerivedPrivateJwk {
-    //     root_key_id: bob_kid.clone(),
-    //     derivation_scheme: DerivationScheme::ProtocolContext,
-    //     derivation_path: None,
-    //     derived_private_key: bob_private_jwk.clone(),
-    // };
-
     let context_id = write.context_id.clone().unwrap();
     let segment_1 = context_id.split("/").collect::<Vec<&str>>()[0];
     let context_path = [DerivationScheme::ProtocolContext.to_string(), segment_1.to_string()];
@@ -2499,13 +2491,146 @@ async fn decrypt_context() {
     assert_eq!(plaintext, data);
 }
 
-// // Should only be able to decrypt records using the correct derived private key
-// // within a protocol derivation scheme.
-// #[tokio::test]
-// async fn decrypt_protocol() {
-//     let provider = ProviderImpl::new().await.expect("should create provider");
-//     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-// }
+// Should only be able to decrypt records using the correct derived private key
+// within a protocol derivation scheme.
+#[tokio::test]
+async fn decrypt_protocol() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice's keys.
+    // --------------------------------------------------
+    let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
+
+    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
+    let verifying_bytes: [u8; 32] =
+        Base64UrlUnpadded::decode_vec(ALICE_VERIFYING_KEY).unwrap().try_into().unwrap();
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&verifying_bytes).unwrap();
+    let alice_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
+
+    let alice_private_jwk = PrivateKeyJwk {
+        public_key: PublicKeyJwk {
+            kty: KeyType::Okp,
+            crv: Curve::Ed25519,
+            x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+            ..PublicKeyJwk::default()
+        },
+        d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
+    };
+
+    // --------------------------------------------------
+    // Alice configures the chat protocol with encryption.
+    // --------------------------------------------------
+    let chat = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
+    let definition = definition
+        .add_encryption(&alice_kid, alice_private_jwk.clone())
+        .expect("should add encryption");
+
+    let configure_email = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply = endpoint::handle(ALICE_DID, configure_email, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    //  Bob queries for Alice's email protocol definition.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter("http://email-protocol.xyz")
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].authorization.author().unwrap(), ALICE_DID);
+
+    // --------------------------------------------------
+    //  Bob writes an encrypted email to Alice.
+    // --------------------------------------------------
+    // generate data and encrypt
+    let data = "Hello Alice".as_bytes().to_vec();
+    let mut options = EncryptOptions::new().data(&data);
+    let mut encrypted = options.encrypt2().expect("should encrypt");
+
+    // create Write record
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(encrypted.ciphertext.clone())))
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // get the rule set for the protocol path
+    let rule_set = definition.structure.get("email").unwrap();
+    let encryption = rule_set.encryption.as_ref().unwrap();
+
+    // protocol path derived public key
+    encrypted = encrypted.add_recipient(Recipient {
+        key_id: alice_kid.clone(),
+        public_key: encryption.public_key_jwk.clone(),
+        derivation_scheme: DerivationScheme::ProtocolPath,
+    });
+
+    // generate data and encrypt
+    let encryption = encrypted.finalize().expect("should encrypt");
+
+    // finalize Write record
+    write.encryption = Some(encryption);
+    write.sign_as_author(None, None, &bob_keyring).await.expect("should sign");
+
+    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    //  Alice read Bob's message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let write = body.entry.records_write.expect("should have write");
+
+    let mut read_stream = body.entry.data.expect("should have data");
+    let mut encrypted = Vec::new();
+    read_stream.read_to_end(&mut encrypted).expect("should read data");
+
+    // decrypt using her private key
+    let alice_jwk = DerivedPrivateJwk {
+        root_key_id: alice_kid.clone(),
+        derivation_scheme: DerivationScheme::ProtocolPath,
+        derivation_path: None,
+        derived_private_key: alice_private_jwk.clone(),
+    };
+
+    let plaintext =
+        decrypt(&encrypted, &write, &alice_jwk, &bob_keyring).await.expect("should decrypt");
+    assert_eq!(plaintext, data);
+}
 
 // Should return Unauthorized (401) for invalid signatures.
 #[tokio::test]
