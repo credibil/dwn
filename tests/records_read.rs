@@ -2413,7 +2413,6 @@ async fn decrypt_context() {
     // Alice sends Bob an encrypted message using the  protocol context public
     // key derived above.
     // --------------------------------------------------
-
     // encrypted = encrypted.add_recipient(Recipient {
     //     key_id: bob_kid.clone(),
     //     public_key: context_jwk.derived_private_key.public_key.clone(),
@@ -2471,8 +2470,33 @@ async fn decrypt_context() {
     write.encryption = Some(encryption);
     write.sign_as_author(None, None, &bob_keyring).await.expect("should sign");
 
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(BOB_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads Alice's message.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(BOB_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let write = body.entry.records_write.expect("should have write");
+
+    let mut read_stream = body.entry.data.expect("should have data");
+    let mut encrypted = Vec::new();
+    read_stream.read_to_end(&mut encrypted).expect("should read data");
+
+    // decrypt using context-derived descendant key
+    let plaintext =
+        decrypt(&encrypted, &write, &context_jwk, &bob_keyring).await.expect("should decrypt");
+    assert_eq!(plaintext, data);
 }
 
 // // Should only be able to decrypt records using the correct derived private key
