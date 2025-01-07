@@ -2442,7 +2442,7 @@ async fn decrypt_context() {
 
     // get the rule set for the protocol path
     let rule_set = definition.structure.get("thread").unwrap();
-    let encryption = rule_set.encryption.as_ref().unwrap();
+    let _encryption = rule_set.encryption.as_ref().unwrap();
 
     // // protocol context derived public key
     // let bob_root = DerivedPrivateJwk {

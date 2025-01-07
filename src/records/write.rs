@@ -895,7 +895,7 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
 impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
-    async fn to_write(&self) -> Result<Write> {
+    fn to_write(&self, author_did: String) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
             write.clone()
         } else {
@@ -997,17 +997,9 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             ..Authorization::default()
         };
 
-        let author_did = if let Some(grant) = &write.authorization.author_delegated_grant {
-            Some(authorization::signer_did(&grant.authorization.signature)?)
-        } else {
-            // TODO: add helper method to Signer trait
-            self.signer.0.verification_method().await?.split('#').next().map(ToString::to_string)
-        };
-
         // compute `record_id` when not provided
         if write.record_id.is_empty() {
-            write.record_id =
-                entry_id(write.descriptor.clone(), author_did.clone().unwrap_or_default())?;
+            write.record_id = entry_id(write.descriptor.clone(), author_did)?;
         }
 
         // compute `context_id` if this is a protocol-space record
@@ -1048,7 +1040,21 @@ impl<O, S: Signer> WriteBuilder<O, Unattested, Signed<'_, S>> {
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
-        let mut write = self.to_write().await?;
+        let author_did = if let Some(grant) = &self.delegated_grant {
+            authorization::signer_did(&grant.authorization.signature)?
+        } else {
+            // TODO: add helper method to Signer trait
+            self.signer
+                .0
+                .verification_method()
+                .await?
+                .split('#')
+                .next()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+        };
+
+        let mut write = self.to_write(author_did)?;
         write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
         Ok(write)
     }
@@ -1061,11 +1067,25 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Signed<'a, S>
     /// # Errors
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
+        let author_did = if let Some(grant) = &self.delegated_grant {
+            authorization::signer_did(&grant.authorization.signature)?
+        } else {
+            // TODO: add helper method to Signer trait
+            self.signer
+                .0
+                .verification_method()
+                .await?
+                .split('#')
+                .next()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+        };
+
         let signer = self.signer.0;
         let protocol_role = self.protocol_role.clone();
         let permission_grant_id = self.permission_grant_id.clone();
 
-        let mut write = self.to_write().await?;
+        let mut write = self.to_write(author_did)?;
         write.attestation = Some(self.attestation(&write.descriptor).await?);
         write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
         Ok(write)
