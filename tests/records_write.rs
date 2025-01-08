@@ -1,7 +1,7 @@
 //! Records Write
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::Duration; //DateTime,
+use chrono::{DateTime, Duration, Utc};
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -209,4 +209,108 @@ async fn update_smaller_cid() {
         panic!("should be Conflict");
     };
     assert_eq!(e, "an update with a larger CID already exists");
+}
+
+// Should allow data format of a flat-space record to be updated to any value
+#[tokio::test]
+async fn update_flat_space() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record.
+    // --------------------------------------------------
+    let initial_write = WriteBuilder::new()
+        .data(Data::from(br#"a new write record"#.to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Update the record with a new data format.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial_write.clone())
+        .data(Data::from(br#"update write record"#.to_vec()))
+        .data_format("a-new-data-format")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the data format has been updated.
+    // --------------------------------------------------
+    let read = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.descriptor.data_format, update.descriptor.data_format);
+}
+
+// Should not allow changes to immutable properties
+#[tokio::test]
+async fn immutable_unchanged() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record.
+    // --------------------------------------------------
+    let initial_write = WriteBuilder::new()
+        .data(Data::from(br#"new write record"#.to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify `date_created` cannot be updated.
+    // --------------------------------------------------
+    let date_created = Utc::now();
+
+    let update = WriteBuilder::new()
+        .record_id(initial_write.record_id.clone())
+        .date_created(date_created)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update.clone(), &provider).await
+    else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "immutable properties do not match");
+
+    // --------------------------------------------------
+    // Verify `schema` cannot be updated.
+    // --------------------------------------------------
+    let update = WriteBuilder::new()
+        .record_id(initial_write.record_id.clone())
+        .schema("new-schema")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update.clone(), &provider).await
+    else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "immutable properties do not match");
 }

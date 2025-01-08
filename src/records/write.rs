@@ -62,7 +62,6 @@ pub async fn handle(
         if write_ts == latest_ts && write.cid()? <= latest_entry.cid()? {
             return Err(Error::Conflict("an update with a larger CID already exists".to_string()));
         }
-
         if latest_entry.descriptor().method == Method::Delete {
             return Err(unexpected!("record has been deleted"));
         }
