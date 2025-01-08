@@ -11,7 +11,7 @@ impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         // let json = serde_json::to_string(entry)?;
-        // println!("{json}\n");
+        // println!("{json}");
         let _: Option<Entry> = self.db.update((TABLE, entry.cid()?)).content(entry).await?;
         Ok(())
     }

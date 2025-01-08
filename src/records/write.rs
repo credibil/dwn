@@ -99,14 +99,15 @@ pub async fn handle(
     // when this is an update, archive the initial write (and delete its data?)
     if let Some(initial_entry) = initial_entry {
         let initial_write = Write::try_from(&initial_entry)?;
-
         let mut entry = initial_entry;
         entry.indexes.insert("archived".to_string(), Value::Bool(true));
 
         MessageStore::put(provider, owner, &entry).await?;
         // FIXME: event_log data should be immutable
         EventLog::append(provider, owner, &entry).await?;
-        BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
+        if !initial_write.descriptor.data_cid.is_empty() {
+            BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
+        }
     }
 
     // delete any previous messages with the same `record_id` EXCEPT initial write

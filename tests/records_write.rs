@@ -322,15 +322,56 @@ async fn initial_no_data() {
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Write a record.
+    // Write a record with no data.
     // --------------------------------------------------
-    let initial_write = WriteBuilder::new()
-        .sign(&alice_keyring)
-        .build()
-        .await
-        .expect("should create write");
+    let initial_write =
+        WriteBuilder::new().sign(&alice_keyring).build().await.expect("should create write");
     let reply =
         endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
 
+    // --------------------------------------------------
+    // Verify the record cannot be queried for.
+    // --------------------------------------------------
+    let read = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+
+    // --------------------------------------------------
+    // Update the record, adding data.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial_write.clone())
+        .data(Data::from(br#"update write record"#.to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the data format has been updated.
+    // --------------------------------------------------
+    let read = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"update write record"))
+    );
 }
