@@ -1164,7 +1164,7 @@ async fn update_data(
         data.read_to_end(&mut data_bytes)?;
 
         if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("computed data CID does not match message `data_cid`"));
+            return Err(unexpected!("actual data CID does not match message `data_cid`"));
         }
         if write.descriptor.data_size != data_size {
             return Err(unexpected!("actual data size does not match message `data_size`"));
@@ -1181,7 +1181,7 @@ async fn update_data(
 
         // verify data CID and size
         if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("computed data CID does not match message `data_cid`"));
+            return Err(unexpected!("actual data CID does not match message `data_cid`"));
         }
         if write.descriptor.data_size != data_size {
             return Err(unexpected!("actual data size does not match message `data_size`"));

@@ -6,7 +6,7 @@ use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
-use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE, cid};
+use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder};
 use vercre_dwn::{Error, Message, endpoint};
@@ -410,7 +410,7 @@ async fn update_no_data() {
     else {
         panic!("should be BadRequest");
     };
-    assert_eq!(e, "computed data CID does not match message `data_cid`");
+    assert_eq!(e, "actual data CID does not match message `data_cid`");
 
     // --------------------------------------------------
     // Verify the initial write and it's data are still available.
@@ -561,10 +561,8 @@ async fn large_data_size_larger() {
         .await
         .expect("should create write");
 
-    // change the data size
+    // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
-    // write.descriptor.data_cid = cid::from_value(&write).expect("should create CID");
-    // write.record_id=entry_id();
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -593,7 +591,7 @@ async fn small_data_size_larger() {
         .await
         .expect("should create write");
 
-    // change the data size
+    // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
@@ -623,10 +621,8 @@ async fn large_data_size_smaller() {
         .await
         .expect("should create write");
 
-    // change the data size
+    // alter the data size
     write.descriptor.data_size = 1;
-    // write.descriptor.data_cid = cid::from_value(&write).expect("should create CID");
-    // write.record_id=entry_id();
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -655,11 +651,142 @@ async fn small_data_size_smaller() {
         .await
         .expect("should create write");
 
-    // change the data size
+    // alter the data size
     write.descriptor.data_size = 1;
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
+}
+
+// Should fail when data size greater than `encoded_data` threshold and
+// descriptor `data_cid` is incorrect.
+#[tokio::test]
+async fn large_data_cid_larger() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a lot of data and then change the `data_cid`.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the data CID
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+    write.data_stream = Some(write_stream);
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data CID does not match message `data_cid`");
+}
+
+// Should fail when data size less than `encoded_data` threshold and descriptor
+// `data_cid` is incorrect.
+#[tokio::test]
+async fn small_data_cid_larger() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a small amount of data and then change the `data_cid`.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the data CID
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+    write.data_stream = Some(write_stream);
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data CID does not match message `data_cid`");
+}
+
+// Should fail when data size greater than `encoded_data` threshold and
+// descriptor `data_cid` is incorrect.
+#[tokio::test]
+async fn large_data_cid_smaller() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a lot of data and then change the `data_cid`.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the data CID
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+    write.data_stream = Some(write_stream);
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data CID does not match message `data_cid`");
+}
+
+// Should fail when data size less than `encoded_data` threshold and descriptor
+// `data_cid` is incorrect.
+#[tokio::test]
+async fn small_data_cid_smaller() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a small amount of data and then change the `data_cid`.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the data CID
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+    write.data_stream = Some(write_stream);
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data CID does not match message `data_cid`");
 }
