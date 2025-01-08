@@ -1,6 +1,6 @@
 //! Records Write
 
-use base64ct::{Base64UrlUnpadded, Encoding};
+use base64ct::{Base64, Base64UrlUnpadded, Encoding};
 use chrono::{Duration, Utc}; //DateTime,
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
@@ -485,4 +485,61 @@ async fn retain_large_data() {
         panic!("should have data");
     };
     assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
+}
+
+// Should inherit data from previous writes when data size less than
+// `encoded_data` threshold.
+#[tokio::test]
+async fn retain_small_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record with a lot of data.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let initial_write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Update the record but not data.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial_write.clone())
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the initial write's data is still available.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let write = body.entry.records_write.expect("should have write");
+    let Some(read_stream) = body.entry.data else {
+        panic!("should have data");
+    };
+    assert_eq!(read_stream.buffer, data.to_vec());
 }
