@@ -67,16 +67,16 @@ pub async fn handle(
         }
     }
 
+    // process record's data
     let (write, code) = if let Some(mut data) = write.data_stream.clone() {
-        // incoming message WITH data
-        (process_stream(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
+        // with data
+        (update_data(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
     } else if initial_entry.is_some() {
-        // incoming message WITHOUT data AND not an initial write
-        let Some(latest_entry) = &latest_entry else {
-            return Err(unexpected!("latest existing message should exist"));
+        // no data AND NOT an initial write
+        let Some(latest_existing) = &latest_entry else {
+            return Err(unexpected!("latest existing record should exist"));
         };
-        let latest_write = Write::try_from(latest_entry)?;
-        (process_data(owner, &write, &latest_write, provider).await?, StatusCode::ACCEPTED)
+        (existing_data(owner, &write, latest_existing, provider).await?, StatusCode::ACCEPTED)
     } else {
         // incoming message WITHOUT data AND an initial write
         (write, StatusCode::NO_CONTENT)
@@ -97,15 +97,13 @@ pub async fn handle(
     EventStream::emit(provider, owner, &entry).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
-    if let Some(initial_entry) = initial_entry {
+    if let Some(mut initial_entry) = initial_entry {
         let initial_write = Write::try_from(&initial_entry)?;
-        let mut entry = initial_entry;
-        entry.indexes.insert("archived".to_string(), Value::Bool(true));
+        initial_entry.indexes.insert("archived".to_string(), Value::Bool(true));
 
-        MessageStore::put(provider, owner, &entry).await?;
-        // FIXME: event_log data should be immutable
-        EventLog::append(provider, owner, &entry).await?;
-        if !initial_write.descriptor.data_cid.is_empty() {
+        MessageStore::put(provider, owner, &initial_entry).await?;
+        EventLog::append(provider, owner, &initial_entry).await?;
+        if !initial_write.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
             BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
         }
     }
@@ -123,8 +121,8 @@ pub async fn handle(
 
     // when message is a grant revocation, delete all grant-authorized
     // messages with timestamp after revocation
-    if write.descriptor.protocol == Some(PROTOCOL_URI.to_owned())
-        && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_owned())
+    if write.descriptor.protocol == Some(PROTOCOL_URI.to_string())
+        && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string())
     {
         revoke_grants(owner, &write, provider).await?;
     }
@@ -672,6 +670,9 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
     /// Returns a new [`WriteBuilder`] based on an existing `Write` record.
     #[must_use]
     pub fn from(existing: Write) -> Self {
+        let mut existing = existing;
+        existing.data_stream = None;
+
         Self {
             message_timestamp: Utc::now(),
             date_created: existing.descriptor.date_created,
@@ -967,14 +968,15 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
                 write.descriptor.data_size = data_size;
                 write.data_stream = Some(stream.clone());
             }
-            Some(Data::Cid { data_cid, data_size }) => {
-                write.descriptor.data_cid.clone_from(data_cid);
-                write.descriptor.data_size = *data_size;
-            }
             Some(Data::Bytes(data)) => {
                 let data_cid = cid::from_value(data)?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data.len();
+                write.data_stream = Some(DataStream::from(data.clone()));
+            }
+            Some(Data::Cid { data_cid, data_size }) => {
+                write.descriptor.data_cid.clone_from(data_cid);
+                write.descriptor.data_size = *data_size;
             }
             None => {}
         };
@@ -1146,8 +1148,8 @@ fn earliest_and_latest(entries: &[Entry]) -> (Option<Entry>, Option<Entry>) {
     entries.first().map_or((None, None), |first| (Some(first.clone()), entries.last().cloned()))
 }
 
-async fn process_stream(
-    owner: &str, write: &Write, data: &mut DataStream, store: &impl BlockStore,
+async fn update_data(
+    owner: &str, write: &Write, data: &mut DataStream, block_store: &impl BlockStore,
 ) -> Result<Write> {
     let mut write = write.clone();
 
@@ -1174,7 +1176,7 @@ async fn process_stream(
         write.descriptor.data_size = data_bytes.len();
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
     } else {
-        let (data_cid, data_size) = data.to_store(owner, store).await?;
+        let (data_cid, data_size) = data.to_store(owner, block_store).await?;
 
         // verify data CID and size
         if write.descriptor.data_cid != data_cid {
@@ -1191,39 +1193,40 @@ async fn process_stream(
     Ok(write)
 }
 
-// Write message is not an 'initial write' with no data_stream.
-// Check integrity against the most recent existing write.
-async fn process_data(
-    owner: &str, write: &Write, existing: &Write, store: &impl BlockStore,
+// Write message has no data and is not an 'initial write':
+//  1. verify the new message's data integrity
+//  2. copy stored `encoded_data` to the new  message.
+async fn existing_data(
+    owner: &str, new_write: &Write, existing: &Entry, block_store: &impl BlockStore,
 ) -> Result<Write> {
+    let latest_existing = Write::try_from(existing)?;
+
     // Perform `data_cid` check in case a user attempts to gain access to data
     // by referencing a different known `data_cid`. This  ensures the data is
     // already associated with the latest existing message.
     // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
-    if existing.descriptor.data_cid != write.descriptor.data_cid {
-        return Err(unexpected!("data CID does not match data_cid in descriptor"));
+    if latest_existing.descriptor.data_cid != new_write.descriptor.data_cid {
+        return Err(unexpected!("data CID does not match descriptor `data_cid`"));
     }
-    if existing.descriptor.data_size != write.descriptor.data_size {
-        return Err(unexpected!("data size does not match data_size in descriptor"));
+    if latest_existing.descriptor.data_size != new_write.descriptor.data_size {
+        return Err(unexpected!("data size does not match descriptor `data_size`"));
     }
 
-    // encode the data from the original write if it is smaller than the
-    // data-store threshold
-    let mut message = write.clone();
-    if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {
-        let Some(encoded) = &existing.encoded_data else {
-            return Err(unexpected!("no `encoded_data` in most recent existing message"));
+    // if bigger than encoding threshold, ensure data is in the block store
+    if latest_existing.descriptor.data_size > data::MAX_ENCODED_SIZE {
+        let result = block_store.get(owner, &new_write.descriptor.data_cid).await?;
+        if result.is_none() {
+            return Err(unexpected!("cannot update with no data when initial write has no data"));
         };
-        message.encoded_data = Some(encoded.clone());
-    };
+        return Ok(new_write.clone());
+    }
 
-    // otherwise, make sure the data is in the data store
-    let result = store.get(owner, &write.descriptor.data_cid).await?;
-    if result.is_none() {
-        return Err(unexpected!(
-            "`data_stream` is not set and unable to find previously stored data"
-        ));
+    // otherwise, copy `encoded_data` to the new message
+    let mut message = new_write.clone();
+    if latest_existing.encoded_data.is_none() {
+        return Err(unexpected!("no `encoded_data` in most recent existing message"));
     };
+    message.encoded_data = latest_existing.encoded_data;
 
     Ok(message)
 }

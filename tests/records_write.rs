@@ -5,8 +5,10 @@ use chrono::{Duration, Utc}; //DateTime,
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use rand::RngCore;
+use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
+use vercre_dwn::records::{Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder};
 use vercre_dwn::{Error, Message, endpoint};
 
 // // Should handle pre-processing errors
@@ -58,25 +60,25 @@ async fn update_older() {
     let data = br#"updated write record"#;
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
-    let write = WriteBuilder::from(initial_write.clone())
+    let update = WriteBuilder::from(initial_write.clone())
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the updated record overwrote the original.
     // --------------------------------------------------
-    let read = QueryBuilder::new()
-        .filter(RecordsFilter::new().record_id(&write.record_id))
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&update.record_id))
         .sign(&alice_keyring)
         .build()
         .await
-        .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -96,13 +98,13 @@ async fn update_older() {
     // --------------------------------------------------
     // Verify the latest update remains unchanged.
     // --------------------------------------------------
-    let read = QueryBuilder::new()
-        .filter(RecordsFilter::new().record_id(write.record_id))
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(update.record_id))
         .sign(&alice_keyring)
         .build()
         .await
-        .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -165,13 +167,13 @@ async fn update_smaller_cid() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // verify update
-    let read = QueryBuilder::new()
+    let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(&initial_write.record_id))
         .sign(&alice_keyring)
         .build()
         .await
-        .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -187,13 +189,13 @@ async fn update_smaller_cid() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // verify update
-    let read = QueryBuilder::new()
+    let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(&initial_write.record_id))
         .sign(&alice_keyring)
         .build()
         .await
-        .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -246,13 +248,13 @@ async fn update_flat_space() {
     // --------------------------------------------------
     // Verify the data format has been updated.
     // --------------------------------------------------
-    let read = QueryBuilder::new()
+    let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(&initial_write.record_id))
         .sign(&alice_keyring)
         .build()
         .await
-        .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -411,7 +413,7 @@ async fn update_no_data() {
     assert_eq!(e, "computed data CID does not match message `data_cid`");
 
     // --------------------------------------------------
-    // Verify the data format has been updated.
+    // Verify the initial write and it's data are still available.
     // --------------------------------------------------
     let read = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(&initial_write.record_id))
@@ -425,8 +427,62 @@ async fn update_no_data() {
     let body = reply.body.expect("should have body");
     let entries = body.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
-    assert_eq!(
-        entries[0].write.encoded_data,
-        Some(Base64UrlUnpadded::encode_string(b"some data"))
-    );
+    assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
+}
+
+// Should inherit data from previous writes when data size greater than
+// `encoded_data` threshold.
+#[tokio::test]
+async fn retain_large_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record with a lot of data.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let initial_write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Update the record but not data.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial_write.clone())
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the initial write's data is still available.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+    let Some(read_stream) = body.entry.data else {
+        panic!("should have data");
+    };
+    assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
 }

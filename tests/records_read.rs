@@ -1965,7 +1965,6 @@ async fn block_data() {
 
     let body = reply.body.expect("should have body");
     assert!(body.entry.records_write.is_some());
-
     let Some(read_stream) = body.entry.data else {
         panic!("should have data");
     };
