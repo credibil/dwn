@@ -790,3 +790,147 @@ async fn small_data_cid_smaller() {
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
 }
+
+// Should prevent accessing data by referencing a different`data_cid` in an update.
+#[tokio::test]
+async fn alter_data_cid_larger() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write 2 records.
+    // --------------------------------------------------
+    // record 1
+    let mut data_1 = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data_1);
+
+    let write_1 = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(data_1.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // record 2
+    let mut data_2 = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data_2);
+
+    let write_2 = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(data_2.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Attempt to update record 2 to reference record 1's data.
+    // --------------------------------------------------
+    let mut update = WriteBuilder::from(write_2.clone())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the data CID
+    update.descriptor.data_cid = write_1.descriptor.data_cid;
+    update.descriptor.data_size = write_1.descriptor.data_size;
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "data CID does not match descriptor `data_cid`");
+
+    // --------------------------------------------------
+    // Verify record still has original data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write_2.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let data = body.entry.data.expect("should have data");
+    assert_eq!(data.buffer, data_2.to_vec());
+}
+
+// Should prevent accessing data by referencing a different`data_cid` in an update.
+#[tokio::test]
+async fn alter_data_cid_smaller() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write 2 records.
+    // --------------------------------------------------
+    // record 1
+    let mut data_1 = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data_1);
+
+    let write_1 = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(data_1.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // record 2
+    let mut data_2 = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data_2);
+
+    let write_2 = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(data_2.to_vec())))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Attempt to update record 2 to reference record 1's data.
+    // --------------------------------------------------
+    let mut update = WriteBuilder::from(write_2.clone())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the data CID
+    update.descriptor.data_cid = write_1.descriptor.data_cid;
+    update.descriptor.data_size = write_1.descriptor.data_size;
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "data CID does not match descriptor `data_cid`");
+
+    // --------------------------------------------------
+    // Verify record still has original data.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write_2.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let data = body.entry.data.expect("should have data");
+    assert_eq!(data.buffer, data_2.to_vec());
+}
