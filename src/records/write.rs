@@ -561,7 +561,7 @@ pub struct WriteBuilder<O, A, S> {
     tags: Option<Map<String, Value>>,
     record_id: Option<String>,
     parent_context_id: Option<String>,
-    data: Data,
+    data: Option<Data>,
     data_format: String,
     date_created: DateTime<Utc>,
     published: Option<bool>,
@@ -641,7 +641,7 @@ impl WriteBuilder<New, Unattested, Unsigned> {
         Self {
             message_timestamp: now,
             date_created: now,
-            data: Data::default(),
+            data: None,
             data_format: "application/json".to_string(),
             signer: Unsigned,
             attesters: Unattested,
@@ -671,7 +671,7 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
         Self {
             message_timestamp: Utc::now(),
             date_created: existing.descriptor.date_created,
-            data: Data::default(),
+            data: None,
             data_format: existing.descriptor.data_format.clone(),
             existing: Some(existing),
             origin: Existing,
@@ -734,7 +734,7 @@ impl<O> WriteBuilder<O, Unattested, Unsigned> {
     /// Entry data as a CID or raw bytes.
     #[must_use]
     pub fn data(mut self, data: Data) -> Self {
-        self.data = data;
+        self.data = Some(data);
         self
     }
 
@@ -901,12 +901,13 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
         let mut write = if let Some(write) = &self.existing {
             write.clone()
         } else {
+            // set immutable properties
             let mut write = Write {
                 descriptor: WriteDescriptor {
                     base: Descriptor {
                         interface: Interface::Records,
                         method: Method::Write,
-                        message_timestamp: self.message_timestamp,
+                        ..Descriptor::default()
                     },
                     date_created: self.date_created,
                     recipient: self.recipient.clone(),
@@ -915,7 +916,9 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
                 ..Write::default()
             };
 
-            // immutable properties
+            if let Some(record_id) = self.record_id.clone() {
+                write.record_id = record_id;
+            }
             if let Some(write_protocol) = self.protocol.clone() {
                 let normalized = utils::clean_url(&write_protocol.protocol)?;
                 write.descriptor.protocol = Some(normalized);
@@ -932,13 +935,10 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             write
         };
 
+        // mutable properties
         write.descriptor.base.message_timestamp = self.message_timestamp;
         write.descriptor.data_format.clone_from(&self.data_format);
 
-        // record_id
-        if let Some(record_id) = self.record_id.clone() {
-            write.record_id = record_id;
-        }
         // tags
         if let Some(tags) = self.tags.clone() {
             write.descriptor.tags = Some(tags);
@@ -957,7 +957,7 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
         }
 
         match &self.data {
-            Data::Stream(stream) => {
+            Some(Data::Stream(stream)) => {
                 let (data_cid, data_size) = stream.compute_cid()?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
@@ -969,10 +969,11 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
                 //     write.data_stream = Some(stream.clone());
                 // }
             }
-            Data::Cid { data_cid, data_size } => {
+            Some(Data::Cid { data_cid, data_size }) => {
                 write.descriptor.data_cid.clone_from(data_cid);
                 write.descriptor.data_size = *data_size;
             }
+            None => {}
         };
 
         if let Some(encryption) = &self.encryption {

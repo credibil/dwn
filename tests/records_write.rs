@@ -1,7 +1,7 @@
 //! Records Write
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc}; //DateTime,
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -211,7 +211,7 @@ async fn update_smaller_cid() {
     assert_eq!(e, "an update with a larger CID already exists");
 }
 
-// Should allow data format of a flat-space record to be updated to any value
+// Should allow data format of a flat-space record to be updated to any value.
 #[tokio::test]
 async fn update_flat_space() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -261,7 +261,7 @@ async fn update_flat_space() {
     assert_eq!(entries[0].write.descriptor.data_format, update.descriptor.data_format);
 }
 
-// Should not allow changes to immutable properties
+// Should not allow changes to immutable properties.
 #[tokio::test]
 async fn immutable_unchanged() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -313,4 +313,24 @@ async fn immutable_unchanged() {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "immutable properties do not match");
+}
+
+// Should allow an initial write without data.
+#[tokio::test]
+async fn initial_no_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record.
+    // --------------------------------------------------
+    let initial_write = WriteBuilder::new()
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+
 }

@@ -10,10 +10,8 @@ pub(crate) const TABLE: &str = "message";
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
-
         // let json = serde_json::to_string(entry)?;
         // println!("{json}\n");
-
         let _: Option<Entry> = self.db.update((TABLE, entry.cid()?)).content(entry).await?;
         Ok(())
     }
@@ -24,7 +22,7 @@ impl MessageStore for ProviderImpl {
         let mut serializer = surrealdb::Sql::new();
         query.serialize(&mut serializer).unwrap();
         let sql = serializer.output();
-        // println!("{sql}");
+        // println!("\n{sql}\n");
         let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         response.take(0).map_err(|e| e.into())
     }
