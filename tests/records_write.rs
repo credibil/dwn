@@ -375,3 +375,58 @@ async fn initial_no_data() {
         Some(Base64UrlUnpadded::encode_string(b"update write record"))
     );
 }
+
+// Should not allow a record to be updated without data.
+#[tokio::test]
+async fn update_no_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record with no data.
+    // --------------------------------------------------
+    let initial_write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Update the record, adding data.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial_write.clone())
+        .data(Data::Bytes(br#"update write record"#.to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update.clone(), &provider).await
+    else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "computed data CID does not match message `data_cid`");
+
+    // --------------------------------------------------
+    // Verify the data format has been updated.
+    // --------------------------------------------------
+    let read = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"some data"))
+    );
+}

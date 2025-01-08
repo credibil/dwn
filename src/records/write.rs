@@ -598,6 +598,9 @@ pub enum Data {
     /// Data is a `DataStream`.
     Stream(DataStream),
 
+    /// Data is raw bytes.
+    Bytes(Vec<u8>),
+
     /// A CID referencing previously stored data.
     Cid {
         /// CID of data already stored by the web node. If not set, the `data`
@@ -963,16 +966,15 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
                 write.data_stream = Some(stream.clone());
-
-                // if data_size <= data::MAX_ENCODED_SIZE {
-                //     write.encoded_data = Some(Base64UrlUnpadded::encode_string(&stream.buffer));
-                // } else {
-                //     write.data_stream = Some(stream.clone());
-                // }
             }
             Some(Data::Cid { data_cid, data_size }) => {
                 write.descriptor.data_cid.clone_from(data_cid);
                 write.descriptor.data_size = *data_size;
+            }
+            Some(Data::Bytes(data)) => {
+                let data_cid = cid::from_value(data)?;
+                write.descriptor.data_cid = data_cid;
+                write.descriptor.data_size = data.len();
             }
             None => {}
         };
