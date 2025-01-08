@@ -672,6 +672,7 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
     pub fn from(existing: Write) -> Self {
         let mut existing = existing;
         existing.data_stream = None;
+        existing.encoded_data = None;
 
         Self {
             message_timestamp: Utc::now(),
@@ -1212,11 +1213,11 @@ async fn existing_data(
         return Err(unexpected!("data size does not match descriptor `data_size`"));
     }
 
-    // if bigger than encoding threshold, ensure data is in the block store
+    // if bigger than encoding threshold, ensure data referenced by `data_cid` exists
     if latest_existing.descriptor.data_size > data::MAX_ENCODED_SIZE {
         let result = block_store.get(owner, &new_write.descriptor.data_cid).await?;
         if result.is_none() {
-            return Err(unexpected!("cannot update with no data when initial write has no data"));
+            return Err(unexpected!("referenced data does not exist"));
         };
         return Ok(new_write.clone());
     }
@@ -1224,7 +1225,7 @@ async fn existing_data(
     // otherwise, copy `encoded_data` to the new message
     let mut message = new_write.clone();
     if latest_existing.encoded_data.is_none() {
-        return Err(unexpected!("no `encoded_data` in most recent existing message"));
+        return Err(unexpected!("`encoded_data` missing from previous entry"));
     };
     message.encoded_data = latest_existing.encoded_data;
 
