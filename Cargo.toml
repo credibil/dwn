@@ -39,7 +39,7 @@ rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10.8"
-thiserror = "2.0.9"
+thiserror = "2.0.10"
 tokio = { workspace = true, features = ["sync"] }
 uuid = { version = "1.11.0", features = ["fast-rng", "v4"] }
 vercre-did.workspace = true
@@ -90,7 +90,7 @@ insta = { version = "1.42.0", features = ["redactions", "yaml"] }
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.135", features = ["alloc"] }
-tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 

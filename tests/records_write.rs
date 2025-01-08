@@ -1,12 +1,12 @@
 //! Records Write
 
-use base64ct::{Base64, Base64UrlUnpadded, Encoding};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{Duration, Utc}; //DateTime,
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
-use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
+use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE, cid};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder};
 use vercre_dwn::{Error, Message, endpoint};
@@ -481,10 +481,8 @@ async fn retain_large_data() {
 
     let body = reply.body.expect("should have body");
     assert!(body.entry.records_write.is_some());
-    let Some(read_stream) = body.entry.data else {
-        panic!("should have data");
-    };
-    assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
+    let read_stream = body.entry.data.expect("should have data");
+    assert_eq!(read_stream.buffer, data.to_vec());
 }
 
 // Should inherit data from previous writes when data size less than
@@ -537,9 +535,131 @@ async fn retain_small_data() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
-    let write = body.entry.records_write.expect("should have write");
-    let Some(read_stream) = body.entry.data else {
-        panic!("should have data");
-    };
+    assert!(body.entry.records_write.is_some());
+    let read_stream = body.entry.data.expect("should have data");
     assert_eq!(read_stream.buffer, data.to_vec());
+}
+
+// Should fail when data size greater than `encoded_data` threshold and
+// descriptor `data_size` is larger than data size.
+#[tokio::test]
+async fn large_data_size_larger() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a lot of data and then change the `data_size`.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // change the data size
+    write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
+    // write.descriptor.data_cid = cid::from_value(&write).expect("should create CID");
+    // write.record_id=entry_id();
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data size does not match message `data_size`");
+}
+
+// Should fail when data size less than `encoded_data` threshold and descriptor
+// `data_size` is larger than `encoded_data` threshold.
+#[tokio::test]
+async fn small_data_size_larger() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a small amount of data and then change the `data_size`.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // change the data size
+    write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data size does not match message `data_size`");
+}
+
+// Should fail when data size greater than `encoded_data` threshold and
+// descriptor `data_size` is smaller than threshold.
+#[tokio::test]
+async fn large_data_size_smaller() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a lot of data and then change the `data_size`.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // change the data size
+    write.descriptor.data_size = 1;
+    // write.descriptor.data_cid = cid::from_value(&write).expect("should create CID");
+    // write.record_id=entry_id();
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data size does not match message `data_size`");
+}
+
+// Should fail when data size less than `encoded_data` threshold and descriptor
+// `data_size` is smaller than actual data size.
+#[tokio::test]
+async fn small_data_size_smaller() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Writes a record with a small amount of data and then change the `data_size`.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+    let write_stream = DataStream::from(data.to_vec());
+
+    let mut write = WriteBuilder::new()
+        .data(Data::Stream(write_stream.clone()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // change the data size
+    write.descriptor.data_size = 1;
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "actual data size does not match message `data_size`");
 }
