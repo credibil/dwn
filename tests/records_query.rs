@@ -506,7 +506,7 @@ async fn owner_recipient() {
     // Alice creates 2 records, 1 for Bob and 1 for Carol.
     // --------------------------------------------------
     let alice_bob = Write::build()
-        .data(Data::from(br#"Hello Bob"#.to_vec()))
+        .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -523,7 +523,7 @@ async fn owner_recipient() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let alice_carol = Write::build()
-        .data(Data::from(br#"Hello Carol"#.to_vec()))
+        .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -645,7 +645,7 @@ async fn published() {
     // Alice creates 2 records: 1 published and 1 unpublished.
     // --------------------------------------------------
     let published = Write::build()
-        .data(Data::from(br#"published"#.to_vec()))
+        .data(Data::from(b"published".to_vec()))
         .schema("post")
         .published(true)
         .sign(&alice_keyring)
@@ -657,7 +657,7 @@ async fn published() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let unpublished = Write::build()
-        .data(Data::from(br#"unpublished"#.to_vec()))
+        .data(Data::from(b"unpublished".to_vec()))
         .schema("post")
         .sign(&alice_keyring)
         .build()
@@ -771,7 +771,7 @@ async fn unpublished() {
     // Alice creates 2 records: 1 published and 1 unpublished.
     // --------------------------------------------------
     let published = Write::build()
-        .data(Data::from(br#"record 1"#.to_vec()))
+        .data(Data::from(b"record 1".to_vec()))
         .schema("post")
         .published(true)
         .sign(&alice_keyring)
@@ -783,7 +783,7 @@ async fn unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let unpublished = Write::build()
-        .data(Data::from(br#"record 1"#.to_vec()))
+        .data(Data::from(b"record 1".to_vec()))
         .schema("post")
         .sign(&alice_keyring)
         .build()
@@ -1157,8 +1157,9 @@ async fn date_created_range() {
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
     let write_2022 = Write::build()
-        .data(Data::from(br#"2022"#.to_vec()))
+        .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
+        .message_timestamp(first_2022.into())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1169,8 +1170,9 @@ async fn date_created_range() {
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
     let write_2023 = Write::build()
-        .data(Data::from(br#"2023"#.to_vec()))
+        .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
+        .message_timestamp(first_2023.into())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1181,8 +1183,9 @@ async fn date_created_range() {
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
     let write_2024 = Write::build()
-        .data(Data::from(br#"2024"#.to_vec()))
+        .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
+        .message_timestamp(first_2024.into())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1289,8 +1292,9 @@ async fn published_unpublished() {
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
     let write_2022 = Write::build()
-        .data(Data::from(br#"2022"#.to_vec()))
+        .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
+        .message_timestamp(first_2022.into())
         .published(true)
         .date_published(first_2022.into())
         .sign(&alice_keyring)
@@ -1303,8 +1307,9 @@ async fn published_unpublished() {
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
     let write_2023 = Write::build()
-        .data(Data::from(br#"2023"#.to_vec()))
+        .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
+        .message_timestamp(first_2023.into())
         .published(true)
         .date_published(first_2023.into())
         .sign(&alice_keyring)
@@ -1317,8 +1322,9 @@ async fn published_unpublished() {
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
     let write_2024 = Write::build()
-        .data(Data::from(br#"2024"#.to_vec()))
+        .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
+        .message_timestamp(first_2024.into())
         .published(true)
         .date_published(first_2024.into())
         .sign(&alice_keyring)
@@ -1498,8 +1504,9 @@ async fn date_published() {
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
     let write_2022 = Write::build()
-        .data(Data::from(br#"2022"#.to_vec()))
+        .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
+        .message_timestamp(first_2022.into())
         .published(true)
         .date_published(first_2022.into())
         .sign(&alice_keyring)
@@ -1512,8 +1519,9 @@ async fn date_published() {
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
     let write_2023 = Write::build()
-        .data(Data::from(br#"2023"#.to_vec()))
+        .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
+        .message_timestamp(first_2023.into())
         .published(true)
         .date_published(first_2023.into())
         .sign(&alice_keyring)
@@ -1526,8 +1534,9 @@ async fn date_published() {
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
     let write_2024 = Write::build()
-        .data(Data::from(br#"2024"#.to_vec()))
+        .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
+        .message_timestamp(first_2024.into())
         .published(true)
         .date_published(first_2024.into())
         .sign(&alice_keyring)
@@ -1713,7 +1722,7 @@ async fn date_updated() {
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
 
     let write_2022 = WriteBuilder::from(write_1)
-        .data(Data::from(br#"2022"#.to_vec()))
+        .data(Data::from(b"2022".to_vec()))
         .message_timestamp(first_2022.into())
         .published(true)
         .date_published(first_2022.into())
@@ -1726,7 +1735,7 @@ async fn date_updated() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_2023 = WriteBuilder::from(write_2)
-        .data(Data::from(br#"2023"#.to_vec()))
+        .data(Data::from(b"2023".to_vec()))
         .message_timestamp(first_2023.into())
         .published(true)
         .date_published(first_2023.into())
@@ -1739,7 +1748,7 @@ async fn date_updated() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_2024 = WriteBuilder::from(write_3)
-        .data(Data::from(br#"2024"#.to_vec()))
+        .data(Data::from(b"2024".to_vec()))
         .message_timestamp(first_2024.into())
         .published(true)
         .date_published(first_2024.into())
@@ -1845,8 +1854,9 @@ async fn range_and_match() {
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
     let write_2022 = Write::build()
-        .data(Data::from(br#"2022"#.to_vec()))
+        .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
+        .message_timestamp(first_2022.into())
         .schema("2022And2023Schema")
         .sign(&alice_keyring)
         .build()
@@ -1858,8 +1868,9 @@ async fn range_and_match() {
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
     let write_2023 = Write::build()
-        .data(Data::from(br#"2023"#.to_vec()))
+        .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
+        .message_timestamp(first_2023.into())
         .schema("2022And2023Schema")
         .sign(&alice_keyring)
         .build()
@@ -1871,8 +1882,9 @@ async fn range_and_match() {
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
     let write_2024 = Write::build()
-        .data(Data::from(br#"2024"#.to_vec()))
+        .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
+        .message_timestamp(first_2024.into())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1916,7 +1928,7 @@ async fn authorization() {
     // Alice creates a record.
     // --------------------------------------------------
     let write = Write::build()
-        .data(Data::from(br#"data"#.to_vec()))
+        .data(Data::from(b"data".to_vec()))
         .schema("schema")
         .sign(&alice_keyring)
         .build()
@@ -1957,7 +1969,7 @@ async fn attestation() {
     // Alice creates a record.
     // --------------------------------------------------
     let write = Write::build()
-        .data(Data::from(br#"data"#.to_vec()))
+        .data(Data::from(b"data".to_vec()))
         .schema("schema")
         .attest(&[&alice_keyring])
         .sign(&alice_keyring)
@@ -1999,7 +2011,7 @@ async fn exclude_unpublished() {
     // Alice creates 2 records, 1 published the other unpublished.
     // --------------------------------------------------
     let published = Write::build()
-        .data(Data::from(br#"published"#.to_vec()))
+        .data(Data::from(b"published".to_vec()))
         .schema("schema")
         .published(true)
         .sign(&alice_keyring)
@@ -2011,7 +2023,7 @@ async fn exclude_unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let unpublished = Write::build()
-        .data(Data::from(br#"unpublised"#.to_vec()))
+        .data(Data::from(b"unpublised".to_vec()))
         .schema("schema")
         .sign(&alice_keyring)
         .build()
@@ -2058,6 +2070,7 @@ async fn date_sort() {
         .schema("schema")
         .published(true)
         .date_created(ts_2022.into())
+        .message_timestamp(ts_2022.into())
         .sign(&alice_keyring)
         .build()
         .await
@@ -2071,6 +2084,7 @@ async fn date_sort() {
         .schema("schema")
         .published(true)
         .date_created(ts_2023.into())
+        .message_timestamp(ts_2023.into())
         .sign(&alice_keyring)
         .build()
         .await
@@ -2084,6 +2098,7 @@ async fn date_sort() {
         .schema("schema")
         .published(true)
         .date_created(ts_2024.into())
+        .message_timestamp(ts_2024.into())
         .sign(&alice_keyring)
         .build()
         .await
@@ -2336,6 +2351,7 @@ async fn sort_identical() {
     let write_1 = Write::build()
         .data(Data::Stream(DataStream::from(b"write_1".to_vec())))
         .date_created(timestamp.into())
+        .message_timestamp(timestamp.into())
         .schema("schema")
         .published(true)
         .sign(&alice_keyring)
@@ -2346,6 +2362,7 @@ async fn sort_identical() {
     let write_2 = Write::build()
         .data(Data::Stream(DataStream::from(b"write_2".to_vec())))
         .date_created(timestamp.into())
+        .message_timestamp(timestamp.into())
         .schema("schema")
         .published(true)
         .sign(&alice_keyring)
@@ -2356,6 +2373,7 @@ async fn sort_identical() {
     let write_3 = Write::build()
         .data(Data::Stream(DataStream::from(b"write_3".to_vec())))
         .date_created(timestamp.into())
+        .message_timestamp(timestamp.into())
         .schema("schema")
         .published(true)
         .sign(&alice_keyring)
@@ -2433,6 +2451,7 @@ async fn paginate_ascending() {
 
         let write = Write::build()
             .date_created(date_created.into())
+            .message_timestamp(date_created.into())
             .data(Data::Stream(DataStream::from(format!("write_{}", i).into_bytes())))
             .schema("schema")
             .published(true)
@@ -2504,6 +2523,7 @@ async fn paginate_descending() {
             .schema("schema")
             .published(true)
             .date_created(date_created.into())
+            .message_timestamp(date_created.into())
             .sign(&alice_keyring)
             .build()
             .await
@@ -2562,7 +2582,7 @@ async fn anonymous() {
     // Create records.
     // --------------------------------------------------
     let write_1 = Write::build()
-        .data(Data::from(br#"schema1"#.to_vec()))
+        .data(Data::from(b"schema1".to_vec()))
         .schema("http://schema1")
         .published(true)
         .sign(&alice_keyring)
@@ -2574,7 +2594,7 @@ async fn anonymous() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_2 = Write::build()
-        .data(Data::from(br#"schema2"#.to_vec()))
+        .data(Data::from(b"schema2".to_vec()))
         .schema("http://schema2")
         .sign(&alice_keyring)
         .build()
@@ -2997,7 +3017,7 @@ async fn author_query() {
     // Alice creates 2 records each for Bob and Carol: 2 public, 2 private.
     // --------------------------------------------------
     let alice_bob_private = Write::build()
-        .data(Data::from(br#"Hello Bob"#.to_vec()))
+        .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3015,7 +3035,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let alice_bob_public = Write::build()
-        .data(Data::from(br#"Hello Bob"#.to_vec()))
+        .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3034,7 +3054,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let alice_carol_private = Write::build()
-        .data(Data::from(br#"Hello Carol"#.to_vec()))
+        .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3052,7 +3072,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let alice_carol_public = Write::build()
-        .data(Data::from(br#"Hello Carol"#.to_vec()))
+        .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3074,7 +3094,7 @@ async fn author_query() {
     // Carol creates 2 records each for Alice and Bob: 2 public, 2 private.
     // --------------------------------------------------
     let carol_alice_private = Write::build()
-        .data(Data::from(br#"Hello Alice"#.to_vec()))
+        .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3092,7 +3112,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let carol_alice_public = Write::build()
-        .data(Data::from(br#"Hello Alice"#.to_vec()))
+        .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3111,7 +3131,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let carol_bob_private = Write::build()
-        .data(Data::from(br#"Hello Bob"#.to_vec()))
+        .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3129,7 +3149,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let carol_bob_public = Write::build()
-        .data(Data::from(br#"Hello Bob"#.to_vec()))
+        .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3151,7 +3171,7 @@ async fn author_query() {
     // Bob creates 2 records each for Alice and Carol: 2 public, 2 private.
     // --------------------------------------------------
     let bob_alice_private = Write::build()
-        .data(Data::from(br#"Hello Alice"#.to_vec()))
+        .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3169,7 +3189,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let bob_alice_public = Write::build()
-        .data(Data::from(br#"Hello Alice"#.to_vec()))
+        .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3188,7 +3208,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let bob_carol_private = Write::build()
-        .data(Data::from(br#"Hello Carol"#.to_vec()))
+        .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3206,7 +3226,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let bob_carol_public = Write::build()
-        .data(Data::from(br#"Hello Carol"#.to_vec()))
+        .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(WriteProtocol {
             protocol: "http://allow-any.xyz".to_string(),
@@ -3364,15 +3384,16 @@ async fn paginate_non_owner() {
     // --------------------------------------------------
     // Public records.
     // --------------------------------------------------
-    let mut message_timestamp = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
+    let mut timestamp = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
     let mut sorted_writes = vec![];
 
     // Bob
     for i in 0..5 {
-        message_timestamp += Duration::minutes(1);
+        timestamp += Duration::minutes(1);
 
         let write = Write::build()
-            .message_timestamp(message_timestamp.into())
+            .message_timestamp(timestamp.into())
+            .date_created(timestamp.into())
             .data(Data::Stream(DataStream::from(format!("bob_private_{}", i).into_bytes())))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
@@ -3392,10 +3413,11 @@ async fn paginate_non_owner() {
 
     // Alice
     for i in 0..5 {
-        message_timestamp += Duration::minutes(1);
+        timestamp += Duration::minutes(1);
 
         let write = Write::build()
-            .message_timestamp(message_timestamp.into())
+            .message_timestamp(timestamp.into())
+            .date_created(timestamp.into())
             .data(Data::Stream(DataStream::from(format!("alice_private_{}", i).into_bytes())))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
@@ -3418,10 +3440,11 @@ async fn paginate_non_owner() {
     // --------------------------------------------------
     // Alice
     for i in 0..5 {
-        message_timestamp += Duration::minutes(1);
+        timestamp += Duration::minutes(1);
 
         let write = Write::build()
-            .message_timestamp(message_timestamp.into())
+            .message_timestamp(timestamp.into())
+            .date_created(timestamp.into())
             .data(Data::Stream(DataStream::from(format!("alice_public_{}", i).into_bytes())))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
@@ -3440,10 +3463,11 @@ async fn paginate_non_owner() {
 
     // Bob
     for i in 0..5 {
-        message_timestamp += Duration::minutes(1);
+        timestamp += Duration::minutes(1);
 
         let write = Write::build()
-            .message_timestamp(message_timestamp.into())
+            .message_timestamp(timestamp.into())
+            .date_created(timestamp.into())
             .data(Data::Stream(DataStream::from(format!("bob_public_{}", i).into_bytes())))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
@@ -3462,10 +3486,11 @@ async fn paginate_non_owner() {
 
     // Alice for Bob
     for i in 0..5 {
-        message_timestamp += Duration::minutes(1);
+        timestamp += Duration::minutes(1);
 
         let write = Write::build()
-            .message_timestamp(message_timestamp.into())
+            .message_timestamp(timestamp.into())
+            .date_created(timestamp.into())
             .data(Data::Stream(DataStream::from(format!("alice_public_{}", i).into_bytes())))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),

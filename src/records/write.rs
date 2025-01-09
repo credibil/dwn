@@ -35,6 +35,28 @@ pub async fn handle(
 ) -> Result<Reply<WriteReply>> {
     write.authorize(owner, provider).await?;
 
+    let is_initial_write = write.is_initial()?;
+
+    // verify integrity of initial write
+    if is_initial_write {
+        if write.descriptor.base.message_timestamp != write.descriptor.date_created {
+            return Err(unexpected!("`message_timestamp` and `date_created` do not match"));
+        }
+
+        //   // if the message is also a protocol context root, the `contextId` must match the expected deterministic value
+        //   if (this.message.descriptor.protocol !== undefined &&
+        //     this.message.descriptor.parentId === undefined) {
+        //     const expectedContextId = await this.getEntryId();
+
+        //     if (this.message.contextId !== expectedContextId) {
+        //       throw new DwnError(
+        //         DwnErrorCode.RecordsWriteValidateIntegrityContextIdMismatch,
+        //         `contextId in message: ${this.message.contextId} does not match deterministic contextId: ${expectedContextId}`
+        //       );
+        //     }
+        //   }
+    }
+
     // verify integrity of messages with protocol
     if write.descriptor.protocol.is_some() {
         integrity::verify(owner, &write, provider).await?;
@@ -51,7 +73,7 @@ pub async fn handle(
             return Err(unexpected!("initial write is not earliest message"));
         }
         write.compare_immutable(&initial_write)?;
-    } else if !write.is_initial()? {
+    } else if !is_initial_write {
         return Err(unexpected!("initial write not found"));
     }
 

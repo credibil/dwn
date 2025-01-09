@@ -1,7 +1,7 @@
 //! Records Write
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{Duration, Utc}; //DateTime,
+use chrono::{DateTime, Duration, Utc};
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -1037,7 +1037,10 @@ async fn update_published() {
     let entries = body.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.published, Some(true));
-    assert_eq!(entries[0].write.descriptor.date_published, initial_write.descriptor.date_published);
+    assert_eq!(
+        entries[0].write.descriptor.date_published.unwrap().timestamp_micros(),
+        initial_write.descriptor.date_published.unwrap().timestamp_micros()
+    );
 }
 
 // Should fail when updating a record but its initial write cannot be found.
@@ -1058,4 +1061,28 @@ async fn no_initial_write() {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "initial write not found");
+}
+
+// Should fail when creating a record if `date_created` and `message_timestamp`
+// are not the same.
+#[tokio::test]
+async fn create_date_mismatch() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let created = DateTime::parse_from_rfc3339("2025-01-01T00:00:00-00:00").unwrap();
+
+    let initial = WriteBuilder::new()
+        .data(Data::from(b"new write record".to_vec()))
+        .date_created(created.into())
+        .message_timestamp(Utc::now())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, initial.clone(), &provider).await
+    else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "`message_timestamp` and `date_created` do not match");
 }
