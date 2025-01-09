@@ -950,16 +950,17 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             write.descriptor.tags = Some(tags);
         }
 
-        // published
+        // published state
         if let Some(published) = self.published {
             write.descriptor.published = Some(published);
-        }
-        // date_published - need to unset if `published` is false
-        if write.descriptor.published.unwrap_or_default() {
-            write.descriptor.date_published =
-                Some(self.date_published.unwrap_or(self.message_timestamp));
-        } else {
-            write.descriptor.date_published = None;
+
+            // set/unset `date_published`
+            if published {
+                write.descriptor.date_published =
+                    Some(self.date_published.unwrap_or(self.message_timestamp));
+            } else {
+                write.descriptor.date_published = None;
+            }
         }
 
         match &self.data {

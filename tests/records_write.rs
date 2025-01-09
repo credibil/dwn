@@ -24,7 +24,7 @@ async fn update_older() {
     // --------------------------------------------------
     // Write a record.
     // --------------------------------------------------
-    let data = br#"a new write record"#;
+    let data = b"a new write record";
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let initial_write = WriteBuilder::new()
@@ -57,7 +57,7 @@ async fn update_older() {
     // --------------------------------------------------
     // Update the existing record.
     // --------------------------------------------------
-    let data = br#"updated write record"#;
+    let data = b"updated write record";
     let encoded_data = Base64UrlUnpadded::encode_string(data);
 
     let update = WriteBuilder::from(initial_write.clone())
@@ -124,7 +124,7 @@ async fn update_smaller_cid() {
     // Write a record.
     // --------------------------------------------------
     let initial_write = WriteBuilder::new()
-        .data(Data::from(br#"a new write record"#.to_vec()))
+        .data(Data::from(b"a new write record".to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -140,7 +140,7 @@ async fn update_smaller_cid() {
     let message_timestamp = initial_write.descriptor.base.message_timestamp + Duration::seconds(1);
 
     let write_1 = WriteBuilder::from(initial_write.clone())
-        .data(Data::from(br#"message 1"#.to_vec()))
+        .data(Data::from(b"message 1".to_vec()))
         .message_timestamp(message_timestamp.into())
         .sign(&alice_keyring)
         .build()
@@ -148,7 +148,7 @@ async fn update_smaller_cid() {
         .expect("should create write");
 
     let write_2 = WriteBuilder::from(initial_write.clone())
-        .data(Data::from(br#"message 2"#.to_vec()))
+        .data(Data::from(b"message 2".to_vec()))
         .message_timestamp(message_timestamp.into())
         .sign(&alice_keyring)
         .build()
@@ -223,7 +223,7 @@ async fn update_flat_space() {
     // Write a record.
     // --------------------------------------------------
     let initial_write = WriteBuilder::new()
-        .data(Data::from(br#"a new write record"#.to_vec()))
+        .data(Data::from(b"a new write record".to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -236,7 +236,7 @@ async fn update_flat_space() {
     // Update the record with a new data format.
     // --------------------------------------------------
     let update = WriteBuilder::from(initial_write.clone())
-        .data(Data::from(br#"update write record"#.to_vec()))
+        .data(Data::from(b"update write record".to_vec()))
         .data_format("a-new-data-format")
         .sign(&alice_keyring)
         .build()
@@ -263,7 +263,7 @@ async fn update_flat_space() {
     assert_eq!(entries[0].write.descriptor.data_format, update.descriptor.data_format);
 }
 
-// Should not allow changes to immutable properties.
+// Should not allow immutable properties to be updated.
 #[tokio::test]
 async fn immutable_unchanged() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -273,7 +273,7 @@ async fn immutable_unchanged() {
     // Write a record.
     // --------------------------------------------------
     let initial_write = WriteBuilder::new()
-        .data(Data::from(br#"new write record"#.to_vec()))
+        .data(Data::from(b"new write record".to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -349,7 +349,7 @@ async fn initial_no_data() {
     // Update the record, adding data.
     // --------------------------------------------------
     let update = WriteBuilder::from(initial_write.clone())
-        .data(Data::from(br#"update write record"#.to_vec()))
+        .data(Data::from(b"update write record".to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -401,7 +401,7 @@ async fn update_no_data() {
     // Update the record, adding data.
     // --------------------------------------------------
     let update = WriteBuilder::from(initial_write.clone())
-        .data(Data::Bytes(br#"update write record"#.to_vec()))
+        .data(Data::Bytes(b"update write record".to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -933,4 +933,105 @@ async fn alter_data_cid_smaller() {
     let body = reply.body.expect("should have body");
     let data = body.entry.data.expect("should have data");
     assert_eq!(data.buffer, data_2.to_vec());
+}
+
+// Should allow updates without specifying `data` or `date_published`.
+#[tokio::test]
+async fn update_published_no_date() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record.
+    // --------------------------------------------------
+    let initial_write = WriteBuilder::new()
+        .data(Data::from(b"new write record".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify `date_created` cannot be updated.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial_write.clone())
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the record's `published` state has been updated.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .build()
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"new write record"))
+    );
+}
+
+// Should conserve `published` state when updating using an existing Write record.
+#[tokio::test]
+async fn update_published() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record.
+    // --------------------------------------------------
+    let initial_write = WriteBuilder::new()
+        .data(Data::from(b"new write record".to_vec()))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify `date_created` cannot be updated.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial_write.clone())
+        .data(Data::from(b"update write record".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the record's `published` state has been updated.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&initial_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.descriptor.published, Some(true));
+    assert_eq!(entries[0].write.descriptor.date_published, initial_write.descriptor.date_published);
 }
