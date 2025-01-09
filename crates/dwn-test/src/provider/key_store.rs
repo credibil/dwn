@@ -24,8 +24,9 @@ pub const CAROL_DID: &str = "did:key:z6MkuY2MjELw3xQExptJtVkuW5YSjfeQYrVZv41RMYr
 pub const CAROL_VERIFYING_KEY: &str = "4Be7T4GDYNqXtdUIRSR4fcYEb-T3NV06uQJ-gSJA0xo";
 const CAROL_SECRET_KEY: &str = "V0YsmES1Tc8-sozoyYeBKemcrUaOLq_IceWbjWwmbMo";
 
-pub const APP_DID: &str = "did:key:z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
-const APP_SECRET_KEY: &str = "fAe8yt4xBaDpyuPKY9_1NBxmiFMCfVnnryMXD-oLyVk";
+pub const APP_DID: &str = "did:key:z6MkmR9wAW5BP3RoG8NMDRsw9DRxVYXjPNm3rqJtAQY3yfrH";
+pub const APP_VERIFYING_KEY: &str = "1mFX9lH0IiwfHh0Oeq9JL4rbm-kkbKFylQZygKXEtTI";
+const APP_SECRET_KEY: &str = "M5In2tCAa1xiK9HRJRz8wXgWOtaWPMVegIVW24rCf_E";
 
 pub const INVALID_DID: &str = "did:key:z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
 const INVALID_SECRET_KEY: &str = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo";

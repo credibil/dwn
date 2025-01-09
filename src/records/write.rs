@@ -746,6 +746,8 @@ impl WriteBuilder<New, Unattested, Unsigned> {
         self
     }
 
+    // FIXME: use ProtocolBuilder to ensure this can only be set when protocol is specified
+    
     /// Required for a child (non-root) protocol record.
     #[must_use]
     pub fn parent_context_id(mut self, parent_context_id: impl Into<String>) -> Self {

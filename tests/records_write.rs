@@ -2,7 +2,7 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
+use dwn_test::key_store::{ALICE_DID, APP_DID as VC_ISSUER_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
@@ -1330,4 +1330,89 @@ async fn anyone_co_update() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
+}
+
+// Should allow creating records using an ancestor recipient rule.
+#[tokio::test]
+async fn allow_recipient() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let vc_issuer_keyring =
+        provider.keyring(VC_ISSUER_DID).expect("should get VC issuer's keyring");
+
+    // --------------------------------------------------
+    // Alice configures an email protocol.
+    // --------------------------------------------------
+    let email = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a credential application to her web node to simulate a
+    // credential application being sent to a VC issuer.
+    // --------------------------------------------------
+    let application = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"credential application data".to_vec())))
+        .recipient(VC_ISSUER_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, application.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // The VC Issuer responds to Alice's request.
+    // --------------------------------------------------
+    let response = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"credential response data".to_vec())))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication/credentialResponse".to_string(),
+        })
+        .parent_context_id(application.context_id.unwrap())
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-response")
+        .data_format("application/json")
+        .sign(&vc_issuer_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, response.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify VC Issuer's response was created.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&response.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"credential response data"))
+    );
 }
