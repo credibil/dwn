@@ -165,6 +165,8 @@ impl QueryBuilder {
         self
     }
 
+    // FIXME: move signer to .sign(signer) method
+
     /// Generate the permission grant.
     ///
     /// # Errors
