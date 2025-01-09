@@ -43,18 +43,15 @@ pub async fn handle(
             return Err(unexpected!("`message_timestamp` and `date_created` do not match"));
         }
 
-        //   // if the message is also a protocol context root, the `contextId` must match the expected deterministic value
-        //   if (this.message.descriptor.protocol !== undefined &&
-        //     this.message.descriptor.parentId === undefined) {
-        //     const expectedContextId = await this.getEntryId();
-
-        //     if (this.message.contextId !== expectedContextId) {
-        //       throw new DwnError(
-        //         DwnErrorCode.RecordsWriteValidateIntegrityContextIdMismatch,
-        //         `contextId in message: ${this.message.contextId} does not match deterministic contextId: ${expectedContextId}`
-        //       );
-        //     }
-        //   }
+        // when the message is a protocol context root, the `context_id`
+        // must match the computed `entry_id`
+        if write.descriptor.protocol.is_some() && write.descriptor.parent_id.is_none() {
+            let author = write.authorization.author()?;
+            let context_id = entry_id(&write.descriptor, &author)?;
+            if write.context_id != Some(context_id) {
+                return Err(unexpected!("invalid `context_id`"));
+            }
+        }
     }
 
     // verify integrity of messages with protocol
@@ -928,7 +925,7 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
 impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
-    fn to_write(&self, author_did: String) -> Result<Write> {
+    fn to_write(&self, author_did: &str) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
             write.clone()
         } else {
@@ -1034,7 +1031,7 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
 
         // compute `record_id` when not provided
         if write.record_id.is_empty() {
-            write.record_id = entry_id(&write.descriptor, &author_did)?;
+            write.record_id = entry_id(&write.descriptor, author_did)?;
         }
 
         // compute `context_id` if this is a protocol-space record
@@ -1089,7 +1086,7 @@ impl<O, S: Signer> WriteBuilder<O, Unattested, Signed<'_, S>> {
                 .unwrap_or_default()
         };
 
-        let mut write = self.to_write(author_did)?;
+        let mut write = self.to_write(&author_did)?;
         write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
         Ok(write)
     }
@@ -1120,7 +1117,7 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Signed<'a, S>
         let protocol_role = self.protocol_role.clone();
         let permission_grant_id = self.permission_grant_id.clone();
 
-        let mut write = self.to_write(author_did)?;
+        let mut write = self.to_write(&author_did)?;
         write.attestation = Some(self.attestation(&write.descriptor).await?);
         write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
         Ok(write)
@@ -1128,6 +1125,9 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Signed<'a, S>
 }
 
 /// Computes the deterministic Entry ID (Record ID) of the message.
+///
+/// # Errors
+/// LATER: Add errors
 pub fn entry_id(descriptor: &WriteDescriptor, author: &str) -> Result<String> {
     #[derive(Serialize)]
     struct EntryId<'a> {
