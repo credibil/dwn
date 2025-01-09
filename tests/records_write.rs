@@ -1265,7 +1265,7 @@ async fn anyone_create() {
 
 // Should allow anyone to create a record using the "anyone co-update" rule.
 #[tokio::test]
-async fn anyone_co_update() {
+async fn anyone_update() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -1334,17 +1334,17 @@ async fn anyone_co_update() {
 
 // Should allow creating records using an ancestor recipient rule.
 #[tokio::test]
-async fn allow_recipient() {
+async fn recipient_create() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let vc_issuer_keyring =
         provider.keyring(VC_ISSUER_DID).expect("should get VC issuer's keyring");
 
     // --------------------------------------------------
-    // Alice configures an email protocol.
+    // Alice configures a credential issuance protocol.
     // --------------------------------------------------
-    let email = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
-    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
+    let credential = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(credential).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .build(&alice_keyring)
@@ -1415,4 +1415,97 @@ async fn allow_recipient() {
         entries[0].write.encoded_data,
         Some(Base64UrlUnpadded::encode_string(b"credential response data"))
     );
+}
+
+// Should allow creating records using an ancestor recipient rule.
+#[tokio::test]
+async fn recipient_udate() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a recipient protocol.
+    // --------------------------------------------------
+    let recipient = include_bytes!("../crates/dwn-test/protocols/recipient-can.json");
+    let definition: Definition = serde_json::from_slice(recipient).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates a post with Bob as the recipient.
+    // --------------------------------------------------
+    let alice_post = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"Hello Bob".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://recipient-can-protocol.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_post.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates a post tag.
+    // --------------------------------------------------
+    let alice_tag = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"tag my post".to_vec())))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://recipient-can-protocol.xyz".to_string(),
+            protocol_path: "post/tag".to_string(),
+        })
+        .parent_context_id(alice_post.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_tag.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob updates Alice's post.
+    // --------------------------------------------------
+    let bob_tag = WriteBuilder::from(alice_tag.clone())
+        .data(Data::Stream(DataStream::from(b"Bob's tag".to_vec())))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_tag.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts (and fails) to create a new post.
+    // --------------------------------------------------
+    let bob_tag = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"Bob's post".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://recipient-can-protocol.xyz".to_string(),
+            protocol_path: "post/tag".to_string(),
+        })
+        .parent_context_id(alice_post.context_id.unwrap())
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, bob_tag.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
 }

@@ -747,7 +747,7 @@ impl WriteBuilder<New, Unattested, Unsigned> {
     }
 
     // FIXME: use ProtocolBuilder to ensure this can only be set when protocol is specified
-    
+
     /// Required for a child (non-root) protocol record.
     #[must_use]
     pub fn parent_context_id(mut self, parent_context_id: impl Into<String>) -> Self {
@@ -1038,11 +1038,16 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
 
         // compute `context_id` if this is a protocol-space record
         if write.descriptor.protocol.is_some() {
-            write.context_id = if let Some(parent_context_id) = &self.parent_context_id {
-                Some(format!("{parent_context_id}/{}", write.record_id))
+            if let Some(parent_context_id) = &write.context_id {
+                // use parent write record's `context_id`
+                write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
+            } else if let Some(parent_context_id) = &self.parent_context_id {
+                // use `parent_context_id`
+                write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
             } else {
-                Some(write.record_id.clone())
-            };
+                // no parent context
+                write.context_id = Some(write.record_id.clone());
+            }
         }
 
         Ok(write)
