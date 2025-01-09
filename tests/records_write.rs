@@ -8,7 +8,7 @@ use http::StatusCode;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder};
+use vercre_dwn::records::{Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, entry_id};
 use vercre_dwn::{Error, Message, endpoint};
 
 // // Should handle pre-processing errors
@@ -563,6 +563,7 @@ async fn large_data_size_larger() {
 
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
+    write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -593,6 +594,7 @@ async fn small_data_size_larger() {
 
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
+    write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -623,6 +625,7 @@ async fn large_data_size_smaller() {
 
     // alter the data size
     write.descriptor.data_size = 1;
+    write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -651,8 +654,9 @@ async fn small_data_size_smaller() {
         .await
         .expect("should create write");
 
-    // alter the data size
+    // alter the data size and recalculate the `record_id`
     write.descriptor.data_size = 1;
+    write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");

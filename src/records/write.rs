@@ -402,7 +402,7 @@ impl Write {
 
     // Determine whether the record is the initial write.
     pub(crate) fn is_initial(&self) -> Result<bool> {
-        let entry_id = entry_id(self.descriptor.clone(), self.authorization.author()?)?;
+        let entry_id = entry_id(&self.descriptor, &self.authorization.author()?)?;
         Ok(entry_id == self.record_id)
     }
 
@@ -1012,7 +1012,7 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
 
         // compute `record_id` when not provided
         if write.record_id.is_empty() {
-            write.record_id = entry_id(write.descriptor.clone(), author_did)?;
+            write.record_id = entry_id(&write.descriptor, &author_did)?;
         }
 
         // compute `context_id` if this is a protocol-space record
@@ -1105,13 +1105,13 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Signed<'a, S>
     }
 }
 
-// Computes the deterministic Entry ID of the message.
-pub fn entry_id(descriptor: WriteDescriptor, author: String) -> Result<String> {
+/// Computes the deterministic Entry ID (Record ID) of the message.
+pub fn entry_id(descriptor: &WriteDescriptor, author: &str) -> Result<String> {
     #[derive(Serialize)]
-    struct EntryId {
+    struct EntryId<'a> {
         #[serde(flatten)]
-        descriptor: WriteDescriptor,
-        author: String,
+        descriptor: &'a WriteDescriptor,
+        author: &'a str,
     }
     cid::from_value(&EntryId { descriptor, author })
 }
