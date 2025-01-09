@@ -40,6 +40,7 @@ pub async fn handle(
         integrity::verify(owner, &write, provider).await?;
     }
 
+    // find existing entries for the `record_id`
     let existing = existing_entries(owner, &write.record_id, provider).await?;
     let (initial_entry, latest_entry) = earliest_and_latest(&existing);
 
@@ -50,6 +51,8 @@ pub async fn handle(
             return Err(unexpected!("initial write is not earliest message"));
         }
         write.compare_immutable(&initial_write)?;
+    } else if !write.is_initial()? {
+        return Err(unexpected!("initial write not found"));
     }
 
     // confirm current message is the most recent AND previous write was not a 'delete'
@@ -76,9 +79,9 @@ pub async fn handle(
         let Some(latest_existing) = &latest_entry else {
             return Err(unexpected!("latest existing record should exist"));
         };
-        (existing_data(owner, &write, latest_existing, provider).await?, StatusCode::ACCEPTED)
+        (copy_data(owner, &write, latest_existing, provider).await?, StatusCode::ACCEPTED)
     } else {
-        // incoming message WITHOUT data AND an initial write
+        // no data AND an initial write
         (write, StatusCode::NO_CONTENT)
     };
 
@@ -1198,7 +1201,7 @@ async fn update_data(
 // Write message has no data and is not an 'initial write':
 //  1. verify the new message's data integrity
 //  2. copy stored `encoded_data` to the new  message.
-async fn existing_data(
+async fn copy_data(
     owner: &str, new_write: &Write, existing: &Entry, block_store: &impl BlockStore,
 ) -> Result<Write> {
     let latest_existing = Write::try_from(existing)?;

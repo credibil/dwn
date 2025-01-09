@@ -1035,3 +1035,23 @@ async fn update_published() {
     assert_eq!(entries[0].write.descriptor.published, Some(true));
     assert_eq!(entries[0].write.descriptor.date_published, initial_write.descriptor.date_published);
 }
+
+// Should fail when updating a record but its initial write cannot be found.
+#[tokio::test]
+async fn no_initial_write() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let update = WriteBuilder::new()
+        .data(Data::from(b"new write record".to_vec()))
+        .record_id("bafkreihs5gnovjoqueffglvevvohpgts3aj5ykgmlqm7quuotujxtxtp7f")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update.clone(), &provider).await
+    else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "initial write not found");
+}
