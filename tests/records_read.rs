@@ -2514,10 +2514,10 @@ async fn decrypt_protocol() {
     };
 
     // --------------------------------------------------
-    // Alice configures the chat protocol with encryption.
+    // Alice configures the email protocol with encryption.
     // --------------------------------------------------
-    let chat = include_bytes!("../crates/dwn-test/protocols/email.json");
-    let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
+    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let definition = definition
         .add_encryption(&alice_kid, alice_private_jwk.clone())
         .expect("should add encryption");

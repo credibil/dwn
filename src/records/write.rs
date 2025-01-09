@@ -37,7 +37,7 @@ pub async fn handle(
 
     let is_initial_write = write.is_initial()?;
 
-    // verify integrity of initial write
+    // verify initial write integrity 
     if is_initial_write {
         if write.descriptor.base.message_timestamp != write.descriptor.date_created {
             return Err(unexpected!("`message_timestamp` and `date_created` do not match"));

@@ -7,8 +7,11 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
+// use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, entry_id};
+use vercre_dwn::records::{
+    Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteProtocol, entry_id,
+};
 use vercre_dwn::{Error, Message, endpoint};
 
 // // Should handle pre-processing errors
@@ -1049,22 +1052,21 @@ async fn no_initial_write() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
-    let update = WriteBuilder::new()
+    let initial = WriteBuilder::new()
         .data(Data::from(b"new write record".to_vec()))
         .record_id("bafkreihs5gnovjoqueffglvevvohpgts3aj5ykgmlqm7quuotujxtxtp7f")
         .sign(&alice_keyring)
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update.clone(), &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, initial, &provider).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "initial write not found");
 }
 
 // Should fail when creating a record if `date_created` and `message_timestamp`
-// are not the same.
+// do not match.
 #[tokio::test]
 async fn create_date_mismatch() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -1080,9 +1082,34 @@ async fn create_date_mismatch() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, initial.clone(), &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, initial, &provider).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "`message_timestamp` and `date_created` do not match");
+}
+
+// Should fail when creating a record with an invalid `context_id`.
+#[tokio::test]
+async fn invalid_context_id() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    let mut initial = WriteBuilder::new()
+        .data(Data::from(b"new write record".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    initial.context_id =
+        Some("bafkreihs5gnovjoqueffglvevvohpgts3aj5ykgmlqm7quuotujxtxtp7f".to_string());
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, initial, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "invalid `context_id`");
 }
