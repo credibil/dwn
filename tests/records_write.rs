@@ -3515,3 +3515,130 @@ async fn any_data_format() {
     let write = body.entry.records_write.expect("should exist");
     assert_eq!(write.descriptor.data_format, "any-new-data-format");
 }
+
+// Should notallow a record to be created when it's schema is invalid for the
+// specified hierarchal level.
+#[tokio::test]
+async fn schema_hierarchy() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a credential issuance protocol.
+    // --------------------------------------------------
+    let issuance = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write a credential response with the
+    // protocol path as a top-level path.
+    // --------------------------------------------------
+    let response1 = WriteBuilder::new()
+        .data(Data::from(b"credential response data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialResponse".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-response")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, response1, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "invalid protocol path");
+
+    // --------------------------------------------------
+    // Alice successfully writes a credential application.
+    // --------------------------------------------------
+    let application1 = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, application1.clone(), &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write a credential application below her
+    // first application.
+    // --------------------------------------------------
+    let application2 = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication/credentialApplication".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
+        .parent_context_id(application1.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, application2, &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "invalid protocol path");
+
+    // --------------------------------------------------
+    // Alice successfully writes a credential response.
+    // --------------------------------------------------
+    let response2 = WriteBuilder::new()
+        .data(Data::from(b"credential response data".to_vec()))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication/credentialResponse".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-response")
+        .parent_context_id(application1.context_id.unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, response2.clone(), &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write a credential application below the
+    // credential response.
+    // --------------------------------------------------
+    let application3 = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication/credentialResponse/credentialApplication".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
+        .parent_context_id(response2.context_id.unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, application3, &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "invalid protocol path");
+}
