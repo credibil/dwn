@@ -2,7 +2,9 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use dwn_test::key_store::{ALICE_DID, APP_DID as VC_ISSUER_DID, BOB_DID, CAROL_DID};
+use dwn_test::key_store::{
+    ALICE_DID, APP_DID as ISSUER_DID, BOB_DID, CAROL_DID, CAROL_DID as FAKE_DID,
+};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
@@ -1389,14 +1391,13 @@ async fn anyone_update() {
 async fn ancestor_create() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let vc_issuer_keyring =
-        provider.keyring(VC_ISSUER_DID).expect("should get VC issuer's keyring");
+    let issuer_keyring = provider.keyring(ISSUER_DID).expect("should get VC issuer's keyring");
 
     // --------------------------------------------------
     // Alice configures a credential issuance protocol.
     // --------------------------------------------------
-    let credential = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
-    let definition: Definition = serde_json::from_slice(credential).expect("should deserialize");
+    let issuance = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .build(&alice_keyring)
@@ -1412,7 +1413,7 @@ async fn ancestor_create() {
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(VC_ISSUER_DID)
+        .recipient(ISSUER_DID)
         .protocol(WriteProtocol {
             protocol: "http://credential-issuance-protocol.xyz".to_string(),
             protocol_path: "credentialApplication".to_string(),
@@ -1440,7 +1441,7 @@ async fn ancestor_create() {
         .parent_context_id(application.context_id.unwrap())
         .schema("https://identity.foundation/credential-manifest/schemas/credential-response")
         .data_format("application/json")
-        .sign(&vc_issuer_keyring)
+        .sign(&issuer_keyring)
         .build()
         .await
         .expect("should create write");
@@ -3141,4 +3142,180 @@ async fn no_recipient_update() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "immutable properties do not match");
+}
+
+// Should prevent unauthorized record creation using a `recipient` rule.
+#[tokio::test]
+async fn unauthorized_create() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let fake_keyring = provider.keyring(FAKE_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a credential issuance protocol.
+    // --------------------------------------------------
+    let issuance = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a credential application to her web node to simulate a
+    // credential application being sent to a VC issuer.
+    // --------------------------------------------------
+    let application = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .recipient(ISSUER_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, application.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // A fake VC Issuer responds to Alice's request.
+    // --------------------------------------------------
+    let response = WriteBuilder::new()
+        .data(Data::from(b"credential response data".to_vec()))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication/credentialResponse".to_string(),
+        })
+        .parent_context_id(application.context_id.unwrap())
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-response")
+        .data_format("application/json")
+        .sign(&fake_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, response, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
+}
+
+// Should prevent record creation when protocol cannot be found.
+#[tokio::test]
+async fn no_protocol_definition() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a credential application to her web node without the
+    // credential issuance protocol installed.
+    // --------------------------------------------------
+    let application = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .recipient(ISSUER_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, application, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "unable to find protocol definition");
+}
+
+// Should prevent record creation when schema is invalid.
+#[tokio::test]
+async fn invalid_schema() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a credential issuance protocol.
+    // --------------------------------------------------
+    let issuance = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a credential application using an invalid schema.
+    // --------------------------------------------------
+    let application = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .recipient(ISSUER_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication".to_string(),
+        })
+        .schema("unexpected-schema")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, application, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "invalid schema");
+}
+
+// Should prevent record creation when protocol path is invalid.
+#[tokio::test]
+async fn invalid_protocol_path() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a credential issuance protocol.
+    // --------------------------------------------------
+    let issuance = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a credential application using an invalid schema.
+    // --------------------------------------------------
+    let application = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .recipient(ISSUER_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "invalidType".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, application, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "invalid protocol path");
 }

@@ -123,7 +123,7 @@ impl Record {
         let definition = integrity::protocol_definition(owner, protocol, store).await?;
 
         let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
-            return Err(forbidden!("no rule set defined for protocol path"));
+            return Err(forbidden!("invalid protocol path"));
         };
 
         Ok(rule_set)

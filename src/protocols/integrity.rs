@@ -23,7 +23,7 @@ pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Re
         return Err(forbidden!("missing protocol"));
     };
     let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
-        return Err(forbidden!("no rule set defined for protocol path"));
+        return Err(forbidden!("invalid protocol path"));
     };
 
     check_type(write, &definition.types)?;
@@ -73,16 +73,16 @@ fn check_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<(
         return Err(forbidden!("missing type name"));
     };
     let Some(protocol_type) = types.get(type_name) else {
-        return Err(forbidden!("record with type {type_name} not allowed in protocol"));
+        return Err(forbidden!("record not allowed in protocol"));
     };
 
     if protocol_type.schema.is_some() && protocol_type.schema != write.descriptor.schema {
-        return Err(forbidden!("invalid schema for type {type_name}"));
+        return Err(forbidden!("invalid schema"));
     }
 
     if let Some(data_formats) = &protocol_type.data_formats {
         if !data_formats.contains(&write.descriptor.data_format) {
-            return Err(forbidden!("invalid data_format for type {type_name}"));
+            return Err(forbidden!("invalid data_format"));
         }
     }
 
