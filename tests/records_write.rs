@@ -3301,7 +3301,7 @@ async fn invalid_protocol_path() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice writes a credential application using an invalid schema.
+    // Alice writes a credential application using an invalid protocol path.
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
@@ -3318,4 +3318,47 @@ async fn invalid_protocol_path() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid protocol path");
+}
+
+// Should prevent record creation when protocol path is incorrect.
+// That is, the path is valid but it is used incorrectly.
+#[tokio::test]
+async fn incorrect_protocol_path() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a credential issuance protocol.
+    // --------------------------------------------------
+    let issuance = include_bytes!("../crates/dwn-test/protocols/credential-issuance.json");
+    let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a credential application using an invalid protocol path.
+    // --------------------------------------------------
+    let application = WriteBuilder::new()
+        .data(Data::from(b"credential application data".to_vec()))
+        .recipient(ISSUER_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://credential-issuance-protocol.xyz".to_string(),
+            protocol_path: "credentialApplication/credentialResponse".to_string(),
+        })
+        .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
+        .data_format("application/json")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, application, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "invalid protocol path for parentless record");
 }

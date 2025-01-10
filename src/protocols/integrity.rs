@@ -26,8 +26,8 @@ pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Re
         return Err(forbidden!("invalid protocol path"));
     };
 
-    check_type(write, &definition.types)?;
     check_protocol_path(owner, write, store).await?;
+    check_type(write, &definition.types)?;
     if rule_set.role.is_some() {
         check_role_record(owner, write, store).await?;
     }
