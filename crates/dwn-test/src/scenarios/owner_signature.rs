@@ -33,7 +33,7 @@ async fn flat_space() {
     .expect("should serialize");
 
     let bob_msg = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(bob_data)))
+        .data(Data::from(bob_data))
         .published(true)
         .sign(&bob_keyring)
         .build()

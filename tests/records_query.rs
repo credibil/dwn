@@ -1679,7 +1679,7 @@ async fn date_updated() {
     let first_2021 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00-00:00").unwrap();
 
     let write_1 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_1".to_vec())))
+        .data(Data::from(b"write_1".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
         .sign(&alice_keyring)
@@ -1691,7 +1691,7 @@ async fn date_updated() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_2 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_2".to_vec())))
+        .data(Data::from(b"write_2".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
         .sign(&alice_keyring)
@@ -1703,7 +1703,7 @@ async fn date_updated() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_3 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_3".to_vec())))
+        .data(Data::from(b"write_3".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
         .sign(&alice_keyring)
@@ -2066,7 +2066,7 @@ async fn date_sort() {
     let ts_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
 
     let write_1 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_1".to_vec())))
+        .data(Data::from(b"write_1".to_vec()))
         .schema("schema")
         .published(true)
         .date_created(ts_2022.into())
@@ -2080,7 +2080,7 @@ async fn date_sort() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_2 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_2".to_vec())))
+        .data(Data::from(b"write_2".to_vec()))
         .schema("schema")
         .published(true)
         .date_created(ts_2023.into())
@@ -2094,7 +2094,7 @@ async fn date_sort() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write_3 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_3".to_vec())))
+        .data(Data::from(b"write_3".to_vec()))
         .schema("schema")
         .published(true)
         .date_created(ts_2024.into())
@@ -2349,7 +2349,7 @@ async fn sort_identical() {
     let timestamp = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
 
     let write_1 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_1".to_vec())))
+        .data(Data::from(b"write_1".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
         .schema("schema")
@@ -2360,7 +2360,7 @@ async fn sort_identical() {
         .expect("should create write");
 
     let write_2 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_2".to_vec())))
+        .data(Data::from(b"write_2".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
         .schema("schema")
@@ -2371,7 +2371,7 @@ async fn sort_identical() {
         .expect("should create write");
 
     let write_3 = Write::build()
-        .data(Data::Stream(DataStream::from(b"write_3".to_vec())))
+        .data(Data::from(b"write_3".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
         .schema("schema")
@@ -2452,7 +2452,7 @@ async fn paginate_ascending() {
         let write = Write::build()
             .date_created(date_created.into())
             .message_timestamp(date_created.into())
-            .data(Data::Stream(DataStream::from(format!("write_{}", i).into_bytes())))
+            .data(Data::from(format!("write_{}", i).into_bytes()))
             .schema("schema")
             .published(true)
             .sign(&alice_keyring)
@@ -2519,7 +2519,7 @@ async fn paginate_descending() {
         date_created += Duration::days(1);
 
         let write = Write::build()
-            .data(Data::Stream(DataStream::from(format!("write_{}", i).into_bytes())))
+            .data(Data::from(format!("write_{}", i).into_bytes()))
             .schema("schema")
             .published(true)
             .date_created(date_created.into())
@@ -3394,7 +3394,7 @@ async fn paginate_non_owner() {
         let write = Write::build()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::Stream(DataStream::from(format!("bob_private_{}", i).into_bytes())))
+            .data(Data::from(format!("bob_private_{}", i).into_bytes()))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
                 protocol_path: "post".to_string(),
@@ -3418,7 +3418,7 @@ async fn paginate_non_owner() {
         let write = Write::build()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::Stream(DataStream::from(format!("alice_private_{}", i).into_bytes())))
+            .data(Data::from(format!("alice_private_{}", i).into_bytes()))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
                 protocol_path: "post".to_string(),
@@ -3445,7 +3445,7 @@ async fn paginate_non_owner() {
         let write = Write::build()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::Stream(DataStream::from(format!("alice_public_{}", i).into_bytes())))
+            .data(Data::from(format!("alice_public_{}", i).into_bytes()))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
                 protocol_path: "post".to_string(),
@@ -3468,7 +3468,7 @@ async fn paginate_non_owner() {
         let write = Write::build()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::Stream(DataStream::from(format!("bob_public_{}", i).into_bytes())))
+            .data(Data::from(format!("bob_public_{}", i).into_bytes()))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
                 protocol_path: "post".to_string(),
@@ -3491,7 +3491,7 @@ async fn paginate_non_owner() {
         let write = Write::build()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::Stream(DataStream::from(format!("alice_public_{}", i).into_bytes())))
+            .data(Data::from(format!("alice_public_{}", i).into_bytes()))
             .protocol(WriteProtocol {
                 protocol: "http://allow-any.xyz".to_string(),
                 protocol_path: "post".to_string(),
@@ -3641,7 +3641,7 @@ async fn published_false() {
     // Alice creates an unpublished record.
     // -------------------------------------------------
     let unpublished = Write::build()
-        .data(Data::Stream(DataStream::from(b"1".to_vec())))
+        .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
         .published(false)
         .sign(&alice_keyring)
@@ -3693,7 +3693,7 @@ async fn tenant_bound() {
     // 2 owners create records.
     // -------------------------------------------------
     let alice_write = Write::build()
-        .data(Data::Stream(DataStream::from(b"1".to_vec())))
+        .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
         .sign(&alice_keyring)
         .build()
@@ -3703,7 +3703,7 @@ async fn tenant_bound() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let bob_write = Write::build()
-        .data(Data::Stream(DataStream::from(b"1".to_vec())))
+        .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
         .sign(&bob_keyring)
         .build()
@@ -3833,7 +3833,7 @@ async fn context_id() {
     // Alice writes 2 foo records.
     // --------------------------------------------------
     let foo_1 = Write::build()
-        .data(Data::Stream(DataStream::from(b"foo_1".to_vec())))
+        .data(Data::from(b"foo_1".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://nested.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -3848,7 +3848,7 @@ async fn context_id() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let foo_2 = Write::build()
-        .data(Data::Stream(DataStream::from(b"foo_2".to_vec())))
+        .data(Data::from(b"foo_2".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://nested.xyz".to_string(),
             protocol_path: "foo".to_string(),
@@ -3866,7 +3866,7 @@ async fn context_id() {
     // Alice writes 2 foo/bar records.
     // --------------------------------------------------
     let bar_1 = Write::build()
-        .data(Data::Stream(DataStream::from(b"bar_1".to_vec())))
+        .data(Data::from(b"bar_1".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://nested.xyz".to_string(),
             protocol_path: "foo/bar".to_string(),
@@ -3882,7 +3882,7 @@ async fn context_id() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let bar_2 = Write::build()
-        .data(Data::Stream(DataStream::from(b"bar_2".to_vec())))
+        .data(Data::from(b"bar_2".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://nested.xyz".to_string(),
             protocol_path: "foo/bar".to_string(),
@@ -3901,7 +3901,7 @@ async fn context_id() {
     // Alice writes 2 foo/bar/baz records.
     // --------------------------------------------------
     let baz_1 = Write::build()
-        .data(Data::Stream(DataStream::from(b"baz_1".to_vec())))
+        .data(Data::from(b"baz_1".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://nested.xyz".to_string(),
             protocol_path: "foo/bar/baz".to_string(),
@@ -3917,7 +3917,7 @@ async fn context_id() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let baz_2 = Write::build()
-        .data(Data::Stream(DataStream::from(b"baz_2".to_vec())))
+        .data(Data::from(b"baz_2".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://nested.xyz".to_string(),
             protocol_path: "foo/bar/baz".to_string(),
@@ -4021,7 +4021,7 @@ async fn protocol_no_role() {
     // Alice writes a thread record.
     // --------------------------------------------------
     let thread = Write::build()
-        .data(Data::Stream(DataStream::from(b"A new thread".to_vec())))
+        .data(Data::from(b"A new thread".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
             protocol_path: "thread".to_string(),
@@ -4037,7 +4037,7 @@ async fn protocol_no_role() {
     // Alice writes a chat record addressed to Bob.
     // --------------------------------------------------
     let chat_bob = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob can read this".to_vec())))
+        .data(Data::from(b"Bob can read this".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -4058,7 +4058,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     for _ in 0..2 {
         let chat = Write::build()
-            .data(Data::Stream(DataStream::from(b"Bob cannot read this".to_vec())))
+            .data(Data::from(b"Bob cannot read this".to_vec()))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://thread-role.xyz".to_string(),
@@ -4135,7 +4135,7 @@ async fn protocol_role() {
     // Alice writes a 'friend' role record with Bob as recipient.
     // --------------------------------------------------
     let bob_friend = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://friend-role.xyz".to_string(),
@@ -4154,9 +4154,7 @@ async fn protocol_role() {
     // --------------------------------------------------
     for _ in 0..3 {
         let chat = Write::build()
-            .data(Data::Stream(DataStream::from(
-                b"Bob can read this because he is a friend".to_vec(),
-            )))
+            .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://friend-role.xyz".to_string(),
@@ -4237,7 +4235,7 @@ async fn context_role() {
     // Alice writes a thread.
     // --------------------------------------------------
     let thread = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -4254,7 +4252,7 @@ async fn context_role() {
     // Alice writes a 'participant' role record with Bob as recipient.
     // --------------------------------------------------
     let participant_role = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -4275,9 +4273,7 @@ async fn context_role() {
     // --------------------------------------------------
     for _ in 0..3 {
         let chat = Write::build()
-            .data(Data::Stream(DataStream::from(
-                b"Bob can read this because he is a friend".to_vec(),
-            )))
+            .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://thread-role.xyz".to_string(),
@@ -4342,7 +4338,7 @@ async fn no_protocol_path() {
     // Alice writes a friend role record.
     // --------------------------------------------------
     let friend = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://friend-role.xyz".to_string(),
@@ -4360,9 +4356,7 @@ async fn no_protocol_path() {
     // --------------------------------------------------
     for _ in 0..3 {
         let chat = Write::build()
-            .data(Data::Stream(DataStream::from(
-                b"Bob can read this because he is a friend".to_vec(),
-            )))
+            .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://friend-role.xyz".to_string(),
@@ -4419,7 +4413,7 @@ async fn no_context_id() {
     // Alice writes a friend role record.
     // --------------------------------------------------
     let thread = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -4437,7 +4431,7 @@ async fn no_context_id() {
     // Alice writes a 'participant' role record with Bob as recipient.
     // --------------------------------------------------
     let participant_role = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -4458,9 +4452,7 @@ async fn no_context_id() {
     // --------------------------------------------------
     for _ in 0..3 {
         let chat = Write::build()
-            .data(Data::Stream(DataStream::from(
-                b"Bob can read this because he is a friend".to_vec(),
-            )))
+            .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://thread-role.xyz".to_string(),
@@ -4522,9 +4514,7 @@ async fn no_root_role_record() {
     // --------------------------------------------------
     for _ in 0..3 {
         let chat = Write::build()
-            .data(Data::Stream(DataStream::from(
-                b"Bob can read this because he is a friend".to_vec(),
-            )))
+            .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://friend-role.xyz".to_string(),
@@ -4581,7 +4571,7 @@ async fn no_context_role() {
     // Alice writes a thread role record.
     // --------------------------------------------------
     let thread = Write::build()
-        .data(Data::Stream(DataStream::from(b"Bob is a friend".to_vec())))
+        .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://thread-role.xyz".to_string(),
@@ -4600,9 +4590,7 @@ async fn no_context_role() {
     // --------------------------------------------------
     for _ in 0..3 {
         let chat = Write::build()
-            .data(Data::Stream(DataStream::from(
-                b"Bob can read this because he is a friend".to_vec(),
-            )))
+            .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(WriteProtocol {
                 protocol: "http://thread-role.xyz".to_string(),

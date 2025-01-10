@@ -862,7 +862,7 @@ async fn alter_data_cid_larger() {
     rand::thread_rng().fill_bytes(&mut data_1);
 
     let write_1 = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(data_1.to_vec())))
+        .data(Data::from(data_1.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -876,7 +876,7 @@ async fn alter_data_cid_larger() {
     rand::thread_rng().fill_bytes(&mut data_2);
 
     let write_2 = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(data_2.to_vec())))
+        .data(Data::from(data_2.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -934,7 +934,7 @@ async fn alter_data_cid_smaller() {
     rand::thread_rng().fill_bytes(&mut data_1);
 
     let write_1 = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(data_1.to_vec())))
+        .data(Data::from(data_1.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -948,7 +948,7 @@ async fn alter_data_cid_smaller() {
     rand::thread_rng().fill_bytes(&mut data_2);
 
     let write_2 = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(data_2.to_vec())))
+        .data(Data::from(data_2.to_vec()))
         .sign(&alice_keyring)
         .build()
         .await
@@ -1282,7 +1282,7 @@ async fn anyone_create() {
     // --------------------------------------------------
     let email_data = b"Hello Alice";
     let email = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(email_data.to_vec())))
+        .data(Data::from(email_data.to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://email-protocol.xyz".to_string(),
             protocol_path: "email".to_string(),
@@ -1339,7 +1339,7 @@ async fn anyone_update() {
     // Alice creates a document.
     // --------------------------------------------------
     let alice_doc = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"A document".to_vec())))
+        .data(Data::from(b"A document".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://anyone-collaborate-protocol.xyz".to_string(),
             protocol_path: "doc".to_string(),
@@ -1356,7 +1356,7 @@ async fn anyone_update() {
     // Bob updates Alice's document.
     // --------------------------------------------------
     let alice_doc = WriteBuilder::from(alice_doc)
-        .data(Data::Stream(DataStream::from(b"An update".to_vec())))
+        .data(Data::from(b"An update".to_vec()))
         .sign(&bob_keyring)
         .build()
         .await
@@ -1368,7 +1368,7 @@ async fn anyone_update() {
     // Bob attempts (and fails) to create a new document.
     // --------------------------------------------------
     let bob_doc = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"A document".to_vec())))
+        .data(Data::from(b"A document".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://anyone-collaborate-protocol.xyz".to_string(),
             protocol_path: "doc".to_string(),
@@ -1410,7 +1410,7 @@ async fn ancestor_create() {
     // credential application being sent to a VC issuer.
     // --------------------------------------------------
     let application = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"credential application data".to_vec())))
+        .data(Data::from(b"credential application data".to_vec()))
         .recipient(VC_ISSUER_DID)
         .protocol(WriteProtocol {
             protocol: "http://credential-issuance-protocol.xyz".to_string(),
@@ -1430,7 +1430,7 @@ async fn ancestor_create() {
     // The VC Issuer responds to Alice's request.
     // --------------------------------------------------
     let response = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"credential response data".to_vec())))
+        .data(Data::from(b"credential response data".to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://credential-issuance-protocol.xyz".to_string(),
@@ -1493,7 +1493,7 @@ async fn ancestor_update() {
     // Alice creates a post with Bob as the recipient.
     // --------------------------------------------------
     let alice_post = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"Hello Bob".to_vec())))
+        .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://recipient-can-protocol.xyz".to_string(),
@@ -1511,7 +1511,7 @@ async fn ancestor_update() {
     // Alice creates a post tag.
     // --------------------------------------------------
     let alice_tag = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"tag my post".to_vec())))
+        .data(Data::from(b"tag my post".to_vec()))
         .recipient(ALICE_DID)
         .protocol(WriteProtocol {
             protocol: "http://recipient-can-protocol.xyz".to_string(),
@@ -1530,7 +1530,7 @@ async fn ancestor_update() {
     // Bob updates Alice's post.
     // --------------------------------------------------
     let bob_tag = WriteBuilder::from(alice_tag.clone())
-        .data(Data::Stream(DataStream::from(b"Bob's tag".to_vec())))
+        .data(Data::from(b"Bob's tag".to_vec()))
         .sign(&bob_keyring)
         .build()
         .await
@@ -1543,7 +1543,7 @@ async fn ancestor_update() {
     // Bob attempts (and fails) to create a new post.
     // --------------------------------------------------
     let bob_tag = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"Bob's post".to_vec())))
+        .data(Data::from(b"Bob's post".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://recipient-can-protocol.xyz".to_string(),
@@ -1587,7 +1587,7 @@ async fn direct_update() {
     // Alice creates a post with Bob as the recipient.
     // --------------------------------------------------
     let alice_post = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"Hello Bob".to_vec())))
+        .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(WriteProtocol {
             protocol: "http://recipient-can-protocol.xyz".to_string(),
@@ -1605,7 +1605,7 @@ async fn direct_update() {
     // Carol attempts (but fails) to update Alice's post.
     // --------------------------------------------------
     let carol_update = WriteBuilder::from(alice_post.clone())
-        .data(Data::Stream(DataStream::from(b"Carol's update".to_vec())))
+        .data(Data::from(b"Carol's update".to_vec()))
         .sign(&carol_keyring)
         .build()
         .await
@@ -1621,7 +1621,7 @@ async fn direct_update() {
     // Bob updates Alice's post.
     // --------------------------------------------------
     let bob_update = WriteBuilder::from(alice_post.clone())
-        .data(Data::Stream(DataStream::from(b"Bob's update".to_vec())))
+        .data(Data::from(b"Bob's update".to_vec()))
         .sign(&bob_keyring)
         .build()
         .await
@@ -1676,7 +1676,7 @@ async fn block_non_author() {
     // Carol attempts (but fails) to add a caption to Alice's image.
     // --------------------------------------------------
     let carol_caption = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"bad vibes! >:(".to_vec())))
+        .data(Data::from(b"bad vibes! >:(".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://social-media.xyz".to_string(),
             protocol_path: "image/caption".to_string(),
@@ -1698,7 +1698,7 @@ async fn block_non_author() {
     // Alice adds a caption to her image.
     // --------------------------------------------------
     let alice_caption = WriteBuilder::new()
-        .data(Data::Stream(DataStream::from(b"coffee and work vibes!".to_vec())))
+        .data(Data::from(b"coffee and work vibes!".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://social-media.xyz".to_string(),
             protocol_path: "image/caption".to_string(),
@@ -1733,4 +1733,97 @@ async fn block_non_author() {
         entries[0].write.encoded_data,
         Some(Base64UrlUnpadded::encode_string(b"coffee and work vibes!"))
     );
+}
+
+// Should allow author to update using an ancestor author rule.
+#[tokio::test]
+async fn ancestor_author_update() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Bob configures the social media protocol.
+    // --------------------------------------------------
+    let author_can = include_bytes!("../crates/dwn-test/protocols/author-can.json");
+    let definition: Definition = serde_json::from_slice(author_can).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob creates a post.
+    // --------------------------------------------------
+    let bob_post = WriteBuilder::new()
+        .data(Data::from(b"Bob's post".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://author-can-protocol.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_post.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice comments on Bob's post
+    // --------------------------------------------------
+    let alice_comment = WriteBuilder::new()
+        .data(Data::from(b"Alice's comment".to_vec()))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://author-can-protocol.xyz".to_string(),
+            protocol_path: "post/comment".to_string(),
+        })
+        .parent_context_id(bob_post.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_comment.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob updates Alice's comment
+    // --------------------------------------------------
+    let bob_update = WriteBuilder::from(alice_comment)
+        .data(Data::from(b"Update to Alice's comment".to_vec()))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts (and fails) to create a new comment on his post.
+    // --------------------------------------------------
+    let bob_post = WriteBuilder::new()
+        .data(Data::from(b"Bob's comment".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://author-can-protocol.xyz".to_string(),
+            protocol_path: "post/comment".to_string(),
+        })
+        .parent_context_id(bob_post.context_id.unwrap())
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, bob_post.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
 }

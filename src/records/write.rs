@@ -619,15 +619,15 @@ pub enum Data {
     Stream(DataStream),
 
     /// Data is use to calculate CID and size of previously stored data — as
-    /// for `Data::Cid`. The data is not added to the Write record's 
+    /// for `Data::Cid`. The data is not added to the Write record's
     /// `data_stream`.
     ///
     /// N.B. This option can only be used when the referenced data has already
     /// been stored by the web node.
     Bytes(Vec<u8>),
 
-    /// A CID (and size) referencing BlockStore data from a previous update to
-    /// the Write record.
+    /// A CID (and size) referencing `BlockStore` data from a previous update
+    /// to the Write record.
     ///
     /// N.B. This option can only be used when the referenced data has already
     /// been stored by the web node.
