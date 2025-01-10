@@ -3362,3 +3362,86 @@ async fn incorrect_protocol_path() {
     };
     assert_eq!(e, "invalid protocol path for parentless record");
 }
+
+// Should prevent use of invalid data formats for a given protocol.
+#[tokio::test]
+async fn invalid_data_format() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the social media protocol.
+    // --------------------------------------------------
+    let social_media = include_bytes!("../crates/dwn-test/protocols/social-media.json");
+    let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes an image to her web node.
+    // --------------------------------------------------
+    let image = WriteBuilder::new()
+        .data(Data::from(b"cafe-aesthetic.jpg".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://social-media.xyz".to_string(),
+            protocol_path: "image".to_string(),
+        })
+        .schema("imageSchema")
+        .data_format("image/jpeg")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, image.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to update the image to an invalid format.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(image.clone())
+        .data_format("not-permitted-data-format")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, update, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "invalid data format");
+
+    // --------------------------------------------------
+    // Alice updates the image to a permitted data format.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(image.clone())
+        .data_format("image/gif")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the data format was updated.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&image.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+    let write = body.entry.records_write.expect("should exist");
+    assert_eq!(write.descriptor.data_format, "image/gif");
+}

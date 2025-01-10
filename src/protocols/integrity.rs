@@ -82,7 +82,7 @@ fn check_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<(
 
     if let Some(data_formats) = &protocol_type.data_formats {
         if !data_formats.contains(&write.descriptor.data_format) {
-            return Err(forbidden!("invalid data_format"));
+            return Err(forbidden!("invalid data format"));
         }
     }
 
