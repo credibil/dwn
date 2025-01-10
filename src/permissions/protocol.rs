@@ -225,7 +225,9 @@ impl Protocol<'_> {
         };
 
         let definition = integrity::protocol_definition(owner, protocol, store).await?;
-        let role_rule_set = integrity::rule_set(&protocol_role, &definition.structure).unwrap();
+        let Some(role_rule_set) = integrity::rule_set(&protocol_role, &definition.structure) else {
+            return Err(forbidden!("no rule set defined for invoked role"));
+        };
         if !role_rule_set.role.unwrap_or_default() {
             return Err(forbidden!("protocol path does not match role record type"));
         }

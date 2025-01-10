@@ -2746,9 +2746,10 @@ async fn update_protocol_role() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
-// Should reject creation of records when the protocol role is invalid.
+// Should reject creation of records when no access has been granted to the
+// protocol role path.
 #[tokio::test]
-async fn invalid_role_path() {
+async fn forbidden_role_path() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -2842,4 +2843,302 @@ async fn invalid_role_path() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find record for role");
+}
+
+// Should reject creation of records using an invalid protocol path.
+#[tokio::test]
+async fn invalid_role_path() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the thread-role protocol.
+    // --------------------------------------------------
+    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts (and fails) to use a fake protocol role.
+    // --------------------------------------------------
+    let chat = WriteBuilder::new()
+        .data(Data::from(b"Hello Alice".to_vec()))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .protocol_role("not-a-real-path")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, chat.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "no rule set defined for invoked role");
+}
+
+// Should allow record updates by the initial author.
+#[tokio::test]
+async fn initial_author_update() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the message protocol.
+    // --------------------------------------------------
+    let message = include_bytes!("../crates/dwn-test/protocols/message.json");
+    let definition: Definition = serde_json::from_slice(message).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob writes a message.
+    // --------------------------------------------------
+    let bob_msg = WriteBuilder::new()
+        .data(Data::from(b"Hello from Bob".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://message-protocol.xyz".to_string(),
+            protocol_path: "message".to_string(),
+        })
+        .schema("http://message.me")
+        .data_format("text/plain")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_msg.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the record was created.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&bob_msg.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"Hello from Bob"))
+    );
+
+    // --------------------------------------------------
+    // Bob updates his message.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(bob_msg)
+        .data(Data::from(b"Hello, this is your friend Bob".to_vec()))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the update.
+    // --------------------------------------------------
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"Hello, this is your friend Bob"))
+    );
+}
+
+// Should prevent record updates by another author who does not have permission.
+#[tokio::test]
+async fn no_author_update() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the message protocol.
+    // --------------------------------------------------
+    let message = include_bytes!("../crates/dwn-test/protocols/message.json");
+    let definition: Definition = serde_json::from_slice(message).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob writes a message.
+    // --------------------------------------------------
+    let bob_msg = WriteBuilder::new()
+        .data(Data::from(b"Hello from Bob".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://message-protocol.xyz".to_string(),
+            protocol_path: "message".to_string(),
+        })
+        .schema("http://message.me")
+        .data_format("text/plain")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_msg.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the record was created.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&bob_msg.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"Hello from Bob"))
+    );
+
+    // --------------------------------------------------
+    // Carol attempts (but fails) to update Bob's message.
+    // --------------------------------------------------
+    let update = WriteBuilder::new()
+        .data(Data::from(b"Hello, this is your friend Carol".to_vec()))
+        .record_id(bob_msg.record_id)
+        .protocol(WriteProtocol {
+            protocol: "http://message-protocol.xyz".to_string(),
+            protocol_path: "message".to_string(),
+        })
+        .schema("http://message.me")
+        .data_format("text/plain")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, update.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
+}
+
+// Should prevent updates to the immutable `recipient` property.
+#[tokio::test]
+async fn no_recipient_update() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the message protocol.
+    // --------------------------------------------------
+    let message = include_bytes!("../crates/dwn-test/protocols/message.json");
+    let definition: Definition = serde_json::from_slice(message).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob writes a message.
+    // --------------------------------------------------
+    let bob_msg = WriteBuilder::new()
+        .data(Data::from(b"Hello from Bob".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://message-protocol.xyz".to_string(),
+            protocol_path: "message".to_string(),
+        })
+        .schema("http://message.me")
+        .data_format("text/plain")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_msg.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the record was created.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&bob_msg.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"Hello from Bob"))
+    );
+
+    // --------------------------------------------------
+    // Bob attempts (but fails) to update the message's recipient.
+    // --------------------------------------------------
+    let update = WriteBuilder::new()
+        .data(Data::from(b"Hello, this is your friend Carol".to_vec()))
+        .record_id(bob_msg.record_id)
+        .protocol(WriteProtocol {
+            protocol: "http://message-protocol.xyz".to_string(),
+            protocol_path: "message".to_string(),
+        })
+        .schema("http://message.me")
+        .data_format("text/plain")
+        .recipient(CAROL_DID)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "immutable properties do not match");
 }

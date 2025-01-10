@@ -1157,13 +1157,11 @@ pub fn entry_id(descriptor: &WriteDescriptor, author: &str) -> Result<String> {
 async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Entry>> {
-    // N.B. unset method in order to get Write and Delete messages
     let query = RecordsQuery::new()
         .add_filter(RecordsFilter::new().record_id(record_id))
         .include_archived(true)
-        .method(None);
-    let entries = store.query(owner, &query.into()).await.unwrap();
-    Ok(entries)
+        .method(None); // both Write and Delete messages
+    store.query(owner, &query.into()).await.map_err(Into::into)
 }
 
 // Fetches the initial_write record associated for `record_id`.
