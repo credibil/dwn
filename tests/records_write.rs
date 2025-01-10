@@ -3516,7 +3516,7 @@ async fn any_data_format() {
     assert_eq!(write.descriptor.data_format, "any-new-data-format");
 }
 
-// Should notallow a record to be created when it's schema is invalid for the
+// Should notnallow a record to be created when it's schema is invalid for the
 // specified hierarchal level.
 #[tokio::test]
 async fn schema_hierarchy() {
@@ -3628,7 +3628,8 @@ async fn schema_hierarchy() {
         .data(Data::from(b"credential application data".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://credential-issuance-protocol.xyz".to_string(),
-            protocol_path: "credentialApplication/credentialResponse/credentialApplication".to_string(),
+            protocol_path: "credentialApplication/credentialResponse/credentialApplication"
+                .to_string(),
         })
         .schema("https://identity.foundation/credential-manifest/schemas/credential-application")
         .parent_context_id(response2.context_id.unwrap())
@@ -3641,4 +3642,68 @@ async fn schema_hierarchy() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid protocol path");
+}
+
+// Should only allow owner to write when record does not have an action rule
+// defined.
+#[tokio::test]
+async fn owner_no_rule() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a private protocol.
+    // --------------------------------------------------
+    let private = include_bytes!("../crates/dwn-test/protocols/private-protocol.json");
+    let definition: Definition = serde_json::from_slice(private).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice can write to her web node.
+    // --------------------------------------------------
+    let alice_write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://private-protocol.xyz".to_string(),
+            protocol_path: "privateNote".to_string(),
+        })
+        .schema("private-note")
+        .data_format("text/plain")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts (and fails) to write to ALice's web node.
+    // --------------------------------------------------
+    let bob_write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://private-protocol.xyz".to_string(),
+            protocol_path: "privateNote".to_string(),
+        })
+        .schema("private-note")
+        .data_format("text/plain")
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, bob_write.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "no rule defined for action");
 }
