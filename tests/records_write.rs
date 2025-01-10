@@ -3445,3 +3445,73 @@ async fn invalid_data_format() {
     let write = body.entry.records_write.expect("should exist");
     assert_eq!(write.descriptor.data_format, "image/gif");
 }
+
+// Should allow any data format when protocol does not explicitly specify
+// permitted data format(s).
+#[tokio::test]
+async fn any_data_format() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a minimal protocol.
+    // --------------------------------------------------
+    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes an image to her web node.
+    // --------------------------------------------------
+    let image = WriteBuilder::new()
+        .data(Data::from(b"cafe-aesthetic.jpg".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://minimal.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .schema("any-schema")
+        .data_format("any-data-format")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, image.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice updates the image to another format.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(image.clone())
+        .data_format("any-new-data-format")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the data format was updated.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&image.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(ALICE_DID, read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    assert!(body.entry.records_write.is_some());
+    let write = body.entry.records_write.expect("should exist");
+    assert_eq!(write.descriptor.data_format, "any-new-data-format");
+}
