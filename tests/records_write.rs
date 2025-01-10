@@ -2,7 +2,7 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use dwn_test::key_store::{ALICE_DID, APP_DID as VC_ISSUER_DID, BOB_DID};
+use dwn_test::key_store::{ALICE_DID, APP_DID as VC_ISSUER_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
@@ -319,7 +319,57 @@ async fn immutable_unchanged() {
     assert_eq!(e, "immutable properties do not match");
 }
 
-// Should allow an initial write without data.
+// Should inherit data from previous write when `data_cid` and `data_size`
+// match and no data stream is provided.
+#[tokio::test]
+async fn inherit_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record.
+    // --------------------------------------------------
+    let initial = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Update the record, providing data to calculate CID and size, but without
+    // adding to block store.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial.clone())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the initial write and it's data are still available.
+    // --------------------------------------------------
+    let read = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&update.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
+}
+
+// ln 367: Should allow an initial write without data.
 #[tokio::test]
 async fn initial_no_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -380,14 +430,14 @@ async fn initial_no_data() {
     );
 }
 
-// Should not allow a record to be updated without data.
+// ln 409: Should not allow a record to be updated without data.
 #[tokio::test]
 async fn update_no_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
 
     // --------------------------------------------------
-    // Write a record with no data.
+    // Write a record.
     // --------------------------------------------------
     let initial = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
@@ -400,7 +450,8 @@ async fn update_no_data() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Update the record, adding data.
+    // Update the record, providing data to calculate CID and size, but without
+    // setting `data_stream`.
     // --------------------------------------------------
     let update = WriteBuilder::from(initial.clone())
         .data(Data::Bytes(b"update write record".to_vec()))
@@ -412,7 +463,7 @@ async fn update_no_data() {
     else {
         panic!("should be BadRequest");
     };
-    assert_eq!(e, "actual data CID does not match message `data_cid`");
+    assert_eq!(e, "data CID does not match descriptor `data_cid`");
 
     // --------------------------------------------------
     // Verify the initial write and it's data are still available.
@@ -1334,7 +1385,7 @@ async fn anyone_update() {
 
 // Should allow creating records using an ancestor recipient rule.
 #[tokio::test]
-async fn recipient_create() {
+async fn ancestor_create() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let vc_issuer_keyring =
@@ -1419,7 +1470,7 @@ async fn recipient_create() {
 
 // Should allow creating records using an ancestor recipient rule.
 #[tokio::test]
-async fn recipient_udate() {
+async fn ancestor_update() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -1508,4 +1559,178 @@ async fn recipient_udate() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
+}
+
+// Should allow updates using a direct recipient rule.
+#[tokio::test]
+async fn direct_update() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a recipient protocol.
+    // --------------------------------------------------
+    let recipient = include_bytes!("../crates/dwn-test/protocols/recipient-can.json");
+    let definition: Definition = serde_json::from_slice(recipient).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates a post with Bob as the recipient.
+    // --------------------------------------------------
+    let alice_post = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"Hello Bob".to_vec())))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://recipient-can-protocol.xyz".to_string(),
+            protocol_path: "post".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_post.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol attempts (but fails) to update Alice's post.
+    // --------------------------------------------------
+    let carol_update = WriteBuilder::from(alice_post.clone())
+        .data(Data::Stream(DataStream::from(b"Carol's update".to_vec())))
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) =
+        endpoint::handle(ALICE_DID, carol_update.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
+
+    // --------------------------------------------------
+    // Bob updates Alice's post.
+    // --------------------------------------------------
+    let bob_update = WriteBuilder::from(alice_post.clone())
+        .data(Data::Stream(DataStream::from(b"Bob's update".to_vec())))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should allow author to block non-authors using an ancestor author rule.
+#[tokio::test]
+async fn block_non_author() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+
+    // --------------------------------------------------
+    // Bob configures the social media protocol.
+    // --------------------------------------------------
+    let social_media = include_bytes!("../crates/dwn-test/protocols/social-media.json");
+    let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&bob_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(BOB_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes an image to Bob's web node.
+    // --------------------------------------------------
+    let alice_image = WriteBuilder::new()
+        .data(Data::from(b"cafe-aesthetic.jpg".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://social-media.xyz".to_string(),
+            protocol_path: "image".to_string(),
+        })
+        .schema("imageSchema")
+        .data_format("image/jpeg")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(BOB_DID, alice_image.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Carol attempts (but fails) to add a caption to Alice's image.
+    // --------------------------------------------------
+    let carol_caption = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"bad vibes! >:(".to_vec())))
+        .protocol(WriteProtocol {
+            protocol: "http://social-media.xyz".to_string(),
+            protocol_path: "image/caption".to_string(),
+        })
+        .schema("captionSchema")
+        .data_format("text/plain")
+        .sign(&carol_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) =
+        endpoint::handle(BOB_DID, carol_caption.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "action not permitted");
+
+    // --------------------------------------------------
+    // Alice adds a caption to her image.
+    // --------------------------------------------------
+    let alice_caption = WriteBuilder::new()
+        .data(Data::Stream(DataStream::from(b"coffee and work vibes!".to_vec())))
+        .protocol(WriteProtocol {
+            protocol: "http://social-media.xyz".to_string(),
+            protocol_path: "image/caption".to_string(),
+        })
+        .schema("captionSchema")
+        .parent_context_id(alice_image.context_id.unwrap())
+        .data_format("text/plain")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(BOB_DID, alice_caption.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify Alice was able to add her caption.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&alice_caption.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(BOB_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"coffee and work vibes!"))
+    );
 }

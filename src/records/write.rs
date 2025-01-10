@@ -618,10 +618,19 @@ pub enum Data {
     /// Data is a `DataStream`.
     Stream(DataStream),
 
-    /// Data is raw bytes.
+    /// Data is use to calculate CID and size of previously stored data — as
+    /// for `Data::Cid`. The data is not added to the Write record's 
+    /// `data_stream`.
+    ///
+    /// N.B. This option can only be used when the referenced data has already
+    /// been stored by the web node.
     Bytes(Vec<u8>),
 
-    /// A CID referencing previously stored data.
+    /// A CID (and size) referencing BlockStore data from a previous update to
+    /// the Write record.
+    ///
+    /// N.B. This option can only be used when the referenced data has already
+    /// been stored by the web node.
     Cid {
         /// CID of data already stored by the web node. If not set, the `data`
         /// parameter must be set.
@@ -927,6 +936,8 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
 impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
+    // FIXME: break into separate functions
+    #[allow(clippy::too_many_lines)]
     fn to_write(&self, author_did: &str) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
             write.clone()
@@ -995,10 +1006,10 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
                 write.data_stream = Some(stream.clone());
             }
             Some(Data::Bytes(data)) => {
+                // calculate CID and size only — don't add to `data_stream`
                 let data_cid = cid::from_value(data)?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data.len();
-                write.data_stream = Some(DataStream::from(data.clone()));
             }
             Some(Data::Cid { data_cid, data_size }) => {
                 write.descriptor.data_cid.clone_from(data_cid);
@@ -1039,13 +1050,10 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
         // compute `context_id` if this is a protocol-space record
         if write.descriptor.protocol.is_some() {
             if let Some(parent_context_id) = &write.context_id {
-                // use parent write record's `context_id`
                 write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
             } else if let Some(parent_context_id) = &self.parent_context_id {
-                // use `parent_context_id`
                 write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
             } else {
-                // no parent context
                 write.context_id = Some(write.record_id.clone());
             }
         }
