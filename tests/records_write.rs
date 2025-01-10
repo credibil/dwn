@@ -11,7 +11,8 @@ use vercre_dwn::messages::{self, MessagesFilter};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{EventLog, KeyStore};
 use vercre_dwn::records::{
-    Data, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteProtocol, entry_id,
+    Data, DeleteBuilder, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteProtocol,
+    entry_id,
 };
 use vercre_dwn::store::MessagesQuery;
 use vercre_dwn::{Error, Interface, Message, endpoint};
@@ -1743,7 +1744,7 @@ async fn ancestor_author_update() {
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
-    // Bob configures the social media protocol.
+    // Alice configures the author-can protocol.
     // --------------------------------------------------
     let author_can = include_bytes!("../crates/dwn-test/protocols/author-can.json");
     let definition: Definition = serde_json::from_slice(author_can).expect("should deserialize");
@@ -1826,4 +1827,408 @@ async fn ancestor_author_update() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
+}
+
+// Should allow a role record with recipient to be created and updated.
+#[tokio::test]
+async fn update_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the friend-role protocol.
+    // --------------------------------------------------
+    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob as a friend.
+    // --------------------------------------------------
+    let bob_friend = WriteBuilder::new()
+        .data(Data::from(b"Bob is my friend".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "friend".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_friend.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice updates Bob's friend role record.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(bob_friend)
+        .data(Data::from(b"Bob is still my friend".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should reject a role record when no recipient is defined.
+#[tokio::test]
+async fn no_role_recipient() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the friend-role protocol.
+    // --------------------------------------------------
+    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to add a role record with no recipient.
+    // --------------------------------------------------
+    let bob_friend = WriteBuilder::new()
+        .data(Data::from(b"Bob is my friend".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "friend".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) =
+        endpoint::handle(ALICE_DID, bob_friend.clone(), &provider).await
+    else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "role record is missing recipient");
+}
+
+// Should allow a role record to be created for the same recipient after their
+// previous record has been deleted.
+#[tokio::test]
+async fn recreate_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the friend-role protocol.
+    // --------------------------------------------------
+    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob as a friend.
+    // --------------------------------------------------
+    let bob_friend = WriteBuilder::new()
+        .data(Data::from(b"Bob is my friend".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "friend".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_friend.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice removes Bob as a friend.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&bob_friend.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should delete");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob as a friend again.
+    // --------------------------------------------------
+    let bob_friend = WriteBuilder::new()
+        .data(Data::from(b"Bob is my friend again".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://friend-role.xyz".to_string(),
+            protocol_path: "friend".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_friend.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should allow records to be created and updated using a context role.
+#[tokio::test]
+async fn context_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the friend-role protocol.
+    // --------------------------------------------------
+    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice starts a new thread.
+    // --------------------------------------------------
+    let thread = WriteBuilder::new()
+        .data(Data::from(b"My new thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob to the thread.
+    // --------------------------------------------------
+    let bob_thread = WriteBuilder::new()
+        .data(Data::from(b"Bob can join my thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice updates Bob's role.
+    // --------------------------------------------------
+    let update_bob = WriteBuilder::from(bob_thread)
+        .data(Data::from(b"Update Bob".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, update_bob.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should allow the same role to be created under different contexts.
+#[tokio::test]
+async fn context_roles() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the friend-role protocol.
+    // --------------------------------------------------
+    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice starts a new thread.
+    // --------------------------------------------------
+    let thread1 = WriteBuilder::new()
+        .data(Data::from(b"My new thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, thread1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob to the thread.
+    // --------------------------------------------------
+    let bob_thread1 = WriteBuilder::new()
+        .data(Data::from(b"Bob can join my thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread1.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_thread1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice starts another thread.
+    // --------------------------------------------------
+    let thread2 = WriteBuilder::new()
+        .data(Data::from(b"My new thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, thread2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob to the second thread.
+    // --------------------------------------------------
+    let bob_thread2 = WriteBuilder::new()
+        .data(Data::from(b"Bob can join my thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread2.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_thread2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+}
+
+// Should reject attempts to create a duplicate role under same context.
+#[tokio::test]
+async fn duplicate_context_role() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures the friend-role protocol.
+    // --------------------------------------------------
+    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice starts a new thread.
+    // --------------------------------------------------
+    let thread = WriteBuilder::new()
+        .data(Data::from(b"My new thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice adds Bob to the thread.
+    // --------------------------------------------------
+    let bob_thread = WriteBuilder::new()
+        .data(Data::from(b"Bob can join my thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to add Bob to the thread again.
+    // --------------------------------------------------
+    let bob_thread2 = WriteBuilder::new()
+        .data(Data::from(b"Bob can join my thread".to_vec()))
+        .recipient(BOB_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://thread-role.xyz".to_string(),
+            protocol_path: "thread/participant".to_string(),
+        })
+        .parent_context_id(thread.context_id.as_ref().unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) =
+        endpoint::handle(ALICE_DID, bob_thread2.clone(), &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "recipient already has this role record");
 }

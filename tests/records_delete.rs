@@ -326,7 +326,6 @@ async fn rewrite_data() {
         .build(&alice_keyring)
         .await
         .expect("should create delete");
-
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 

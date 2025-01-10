@@ -11,7 +11,7 @@ use crate::protocols::{
 use crate::provider::MessageStore;
 use crate::records::Write;
 use crate::store::{RecordsFilter, RecordsQuery};
-use crate::{Result, forbidden, schema, utils};
+use crate::{Result, forbidden, schema, unexpected, utils};
 
 /// Verify the integrity of `RecordsWrite` messages using a protocol.
 pub async fn verify(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
@@ -171,13 +171,13 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
 /// Verify the integrity of the `records::Write` as a role record.
 async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
     let Some(recipient) = &write.descriptor.recipient else {
-        return Err(forbidden!("role record is missing recipient"));
+        return Err(unexpected!("role record is missing recipient"));
     };
     let Some(protocol) = &write.descriptor.protocol else {
-        return Err(forbidden!("missing protocol"));
+        return Err(unexpected!("missing protocol"));
     };
     let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(forbidden!("missing protocol_path"));
+        return Err(unexpected!("missing protocol_path"));
     };
 
     // if this is not the root record, add a prefix filter to the query
@@ -201,10 +201,10 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
     let entries = store.query(owner, &query.into()).await?;
     for entry in entries {
         let Some(w) = entry.as_write() else {
-            return Err(forbidden!("expected `RecordsWrite` message"));
+            return Err(unexpected!("expected `RecordsWrite` message"));
         };
         if w.record_id != write.record_id {
-            return Err(forbidden!("DID '{recipient}' is already recipient of a role record",));
+            return Err(unexpected!("recipient already has this role record",));
         }
     }
 
