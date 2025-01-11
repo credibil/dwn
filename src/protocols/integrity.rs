@@ -69,7 +69,7 @@ fn check_type(write: &Write, types: &BTreeMap<String, ProtocolType>) -> Result<(
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(forbidden!("missing protocol path"));
     };
-    let Some(type_name) = protocol_path.split('/').last() else {
+    let Some(type_name) = protocol_path.split('/').next_back() else {
         return Err(forbidden!("missing type name"));
     };
     let Some(protocol_type) = types.get(type_name) else {
@@ -113,7 +113,7 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
     let Some(protocol_path) = &write.descriptor.protocol_path else {
         return Err(forbidden!("missing protocol path"));
     };
-    let Some(type_name) = protocol_path.split('/').last() else {
+    let Some(type_name) = protocol_path.split('/').next_back() else {
         return Err(forbidden!("missing type name"));
     };
 

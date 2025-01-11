@@ -36,22 +36,27 @@ pub async fn handle(
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 
-    // find existing entries for the `record_id`
+    let is_initial = write.is_initial()?;
+
+    // find any existing entries for the `record_id`
     let existing = existing_entries(owner, &write.record_id, provider).await?;
     let (initial_entry, latest_entry) = earliest_and_latest(&existing);
 
-    // when message is not the initial write, verify 'immutable' properties
-    if let Some(initial_entry) = &initial_entry {
-        let initial_write = Write::try_from(initial_entry)?;
-        if !initial_write.is_initial()? {
-            return Err(unexpected!("initial write is not earliest message"));
-        }
-        write.compare_immutable(&initial_write)?;
-    } else if !write.is_initial()? {
+    // when no existing entries, verify this write is the initial write
+    if initial_entry.is_none() && !is_initial {
         return Err(unexpected!("initial write not found"));
     }
 
-    // confirm current message is the most recent AND previous write was not a 'delete'
+    // when message is an update, verify 'immutable' properties are unchanged
+    if let Some(initial_entry) = &initial_entry {
+        let earliest = Write::try_from(initial_entry)?;
+        if !earliest.is_initial()? {
+            return Err(unexpected!("initial write is not the earliest message"));
+        }
+        write.verify_immutable(&earliest)?;
+    }
+
+    // check message is the most recent AND most recent has not been deleted
     if let Some(latest_entry) = &latest_entry {
         let write_ts = write.descriptor.base.message_timestamp.timestamp_micros();
         let latest_ts = latest_entry.descriptor().message_timestamp.timestamp_micros();
@@ -66,27 +71,29 @@ pub async fn handle(
         }
     }
 
-    // process record's data
-    let (write, code) = if let Some(mut data) = write.data_stream.clone() {
-        // with data
-        (update_data(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
-    } else if initial_entry.is_some() {
+    // process data stream
+    let mut write = write;
+    if let Some(mut data) = write.data_stream.clone() {
+        write.update_data(owner, &mut data, provider).await?;
+    } else if !is_initial {
         // no data AND NOT an initial write
         let Some(existing) = &latest_entry else {
-            return Err(unexpected!("latest existing record should exist"));
+            return Err(unexpected!("latest existing record not found"));
         };
-        (copy_data(owner, &write, existing, provider).await?, StatusCode::ACCEPTED)
-    } else {
-        // no data AND IS an initial write
-        (write, StatusCode::NO_CONTENT)
+        write.copy_data(owner, existing, provider).await?;
     };
 
-    // ----------------------------------------------------------------
-    // Archive
-    // ----------------------------------------------------------------
-    // The `archive` flag is set when the intial write has no data.
-    // It prevents querying of initial writes without data, thus preventing users
-    // from accessing private data they wouldn't ordinarily be able to access.
+    // response codes:
+    //   - 202 for queryable writes
+    //   - 204 for private, non-queryable writes
+    let code = if write.data_stream.is_some() || !is_initial {
+        StatusCode::ACCEPTED
+    } else {
+        StatusCode::NO_CONTENT
+    };
+
+    // set `archive` flag is set when the intial write has no data
+    // N.B. this is used to prevent malicious access to another record's data
     let mut entry = Entry::from(&write);
     entry.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
 
@@ -123,16 +130,9 @@ pub async fn handle(
     if write.descriptor.protocol == Some(PROTOCOL_URI.to_string())
         && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string())
     {
-        revoke_grants(owner, &write, provider).await?;
+        write.revoke_grants(owner, provider).await?;
     }
 
-    // ----------------------------------------------------------------
-    // Response Codes
-    // ----------------------------------------------------------------
-    // In order to discern between a 'private' write and an accessible initial
-    // state we use separate response codes:
-    //   - 202 for queryable writes
-    //   - 204 for private, non-queryable writes
     Ok(Reply {
         status: Status {
             code: code.as_u16(),
@@ -248,6 +248,23 @@ impl Write {
         self.data_stream = Some(data_stream);
     }
 
+    /// Computes the deterministic Entry ID (Record ID) of the message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn entry_id(&self, author: &str) -> Result<String> {
+        #[derive(Serialize)]
+        struct EntryId<'a> {
+            #[serde(flatten)]
+            descriptor: &'a WriteDescriptor,
+            author: &'a str,
+        }
+        cid::from_value(&EntryId {
+            descriptor: &self.descriptor,
+            author,
+        })
+    }
+
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
         let record_owner = authzn.owner()?;
@@ -314,7 +331,7 @@ impl Write {
             // must match the computed `entry_id`
             if self.descriptor.protocol.is_some() && self.descriptor.parent_id.is_none() {
                 let author = self.authorization.author()?;
-                let context_id = entry_id(&self.descriptor, &author)?;
+                let context_id = self.entry_id(&author)?;
                 if self.context_id != Some(context_id) {
                     return Err(unexpected!("invalid `context_id`"));
                 }
@@ -366,6 +383,137 @@ impl Write {
         Ok(())
     }
 
+    // Verify immutable properties of two records are identical.
+    fn verify_immutable(&self, other: &Self) -> Result<()> {
+        let self_desc = &self.descriptor;
+        let other_desc = &other.descriptor;
+
+        if self_desc.base.interface != other_desc.base.interface
+            || self_desc.base.method != other_desc.base.method
+            || self_desc.protocol != other_desc.protocol
+            || self_desc.protocol_path != other_desc.protocol_path
+            || self_desc.recipient != other_desc.recipient
+            || self_desc.schema != other_desc.schema
+            || self_desc.parent_id != other_desc.parent_id
+            || self_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
+                != other_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
+        {
+            return Err(unexpected!("immutable properties do not match"));
+        }
+
+        Ok(())
+    }
+
+    // Determine whether the record is the initial write.
+    pub(crate) fn is_initial(&self) -> Result<bool> {
+        let entry_id = self.entry_id(&self.authorization.author()?)?;
+        Ok(entry_id == self.record_id)
+    }
+
+    async fn update_data(
+        &mut self, owner: &str, stream: &mut DataStream, block_store: &impl BlockStore,
+    ) -> Result<()> {
+        // when data is below the threshold, store it within MessageStore
+        if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {
+            // verify data integrity
+            let (data_cid, data_size) = stream.compute_cid()?;
+            if self.descriptor.data_cid != data_cid {
+                return Err(unexpected!("actual data CID does not match message `data_cid`"));
+            }
+            if self.descriptor.data_size != data_size {
+                return Err(unexpected!("actual data size does not match message `data_size`"));
+            }
+
+            // store the stream data with the message
+            let mut data_bytes = Vec::new();
+            stream.read_to_end(&mut data_bytes)?;
+            self.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
+
+            // write record is a grant
+            // TODO: move this check to `verify_integrity` method
+            if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+                integrity::verify_schema(self, &data_bytes)?;
+            }
+        } else {
+            // store data in BlockStore
+            let (data_cid, data_size) = stream.to_store(owner, block_store).await?;
+
+            // verify integrity of stored data
+            if self.descriptor.data_cid != data_cid {
+                return Err(unexpected!("actual data CID does not match message `data_cid`"));
+            }
+            if self.descriptor.data_size != data_size {
+                return Err(unexpected!("actual data size does not match message `data_size`"));
+            }
+        }
+
+        Ok(())
+    }
+
+    // Write message has no data and is not an 'initial write':
+    //  1. verify the new message's data integrity
+    //  2. copy stored `encoded_data` to the new  message.
+    async fn copy_data(
+        &mut self, owner: &str, existing: &Entry, block_store: &impl BlockStore,
+    ) -> Result<()> {
+        let latest = Self::try_from(existing)?;
+
+        // Perform `data_cid` check in case a user attempts to gain access to data
+        // by referencing a different known `data_cid`. This  ensures the data is
+        // already associated with the latest existing message.
+        // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
+        if latest.descriptor.data_cid != self.descriptor.data_cid {
+            return Err(unexpected!("data CID does not match descriptor `data_cid`"));
+        }
+        if latest.descriptor.data_size != self.descriptor.data_size {
+            return Err(unexpected!("data size does not match descriptor `data_size`"));
+        }
+
+        // if bigger than encoding threshold, ensure data exists for this record
+        if latest.descriptor.data_size > data::MAX_ENCODED_SIZE {
+            let result = block_store.get(owner, &self.descriptor.data_cid).await?;
+            if result.is_none() {
+                return Err(unexpected!("referenced data does not exist"));
+            };
+            return Ok(());
+        }
+
+        // otherwise, copy `encoded_data` to the new message
+        if latest.encoded_data.is_none() {
+            return Err(unexpected!("referenced data does not exist"));
+        };
+        self.encoded_data = latest.encoded_data;
+
+        Ok(())
+    }
+
+    // Revoke grants if records::Write is a permission revocation.
+    async fn revoke_grants(&self, owner: &str, provider: &impl Provider) -> Result<()> {
+        // get grant from revocation message `parent_id`
+        let Some(grant_id) = &self.descriptor.parent_id else {
+            return Err(unexpected!("missing `parent_id`"));
+        };
+        let message_timestamp = self.descriptor.base.message_timestamp;
+
+        let lt = DateRange::new().lt(message_timestamp);
+        let query = RecordsQuery::new()
+            .add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
+
+        let records = MessageStore::query(provider, owner, &query.into()).await?;
+
+        // delete matching messages
+        for record in records {
+            let message_cid = record.cid()?;
+            MessageStore::delete(provider, owner, &message_cid).await?;
+            EventLog::delete(provider, owner, &message_cid).await?;
+        }
+
+        Ok(())
+    }
+}
+
+// Signing
+impl Write {
     /// Signs the Write message body. The signer is either the author or a delegate.
     ///
     /// # Errors
@@ -454,33 +602,6 @@ impl Write {
 
         self.authorization.owner_signature = Some(owner_jws);
         self.authorization.owner_delegated_grant = Some(delegated_grant);
-
-        Ok(())
-    }
-
-    // Determine whether the record is the initial write.
-    pub(crate) fn is_initial(&self) -> Result<bool> {
-        let entry_id = entry_id(&self.descriptor, &self.authorization.author()?)?;
-        Ok(entry_id == self.record_id)
-    }
-
-    // Verify immutable properties of two records are identical.
-    fn compare_immutable(&self, other: &Self) -> Result<()> {
-        let self_desc = &self.descriptor;
-        let other_desc = &other.descriptor;
-
-        if self_desc.base.interface != other_desc.base.interface
-            || self_desc.base.method != other_desc.base.method
-            || self_desc.protocol != other_desc.protocol
-            || self_desc.protocol_path != other_desc.protocol_path
-            || self_desc.recipient != other_desc.recipient
-            || self_desc.schema != other_desc.schema
-            || self_desc.parent_id != other_desc.parent_id
-            || self_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
-                != other_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
-        {
-            return Err(unexpected!("immutable properties do not match"));
-        }
 
         Ok(())
     }
@@ -1010,7 +1131,7 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             // parent_id == last segment of  `parent_context_id`
             if let Some(parent_context_id) = &self.parent_context_id {
                 write.descriptor.parent_id =
-                    parent_context_id.split('/').last().map(ToString::to_string);
+                    parent_context_id.split('/').next_back().map(ToString::to_string);
             }
             write
         };
@@ -1083,7 +1204,7 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
 
         // compute `record_id` when not provided
         if write.record_id.is_empty() {
-            write.record_id = entry_id(&write.descriptor, author_did)?;
+            write.record_id = write.entry_id(author_did)?;
         }
 
         // compute `context_id` if this is a protocol-space record
@@ -1178,20 +1299,6 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Signed<'a, S>
     }
 }
 
-/// Computes the deterministic Entry ID (Record ID) of the message.
-///
-/// # Errors
-/// LATER: Add errors
-pub fn entry_id(descriptor: &WriteDescriptor, author: &str) -> Result<String> {
-    #[derive(Serialize)]
-    struct EntryId<'a> {
-        #[serde(flatten)]
-        descriptor: &'a WriteDescriptor,
-        author: &'a str,
-    }
-    cid::from_value(&EntryId { descriptor, author })
-}
-
 // Fetch previous entries for this record, ordered from earliest to latest.
 async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
@@ -1225,108 +1332,4 @@ pub async fn initial_write(
 // `record_id`.
 fn earliest_and_latest(entries: &[Entry]) -> (Option<Entry>, Option<Entry>) {
     entries.first().map_or((None, None), |first| (Some(first.clone()), entries.last().cloned()))
-}
-
-async fn update_data(
-    owner: &str, write: &Write, stream: &mut DataStream, block_store: &impl BlockStore,
-) -> Result<Write> {
-    let mut write = write.clone();
-
-    // when data is below the threshold, store it within MessageStore
-    if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {
-        // verify data integrity
-        let (data_cid, data_size) = stream.compute_cid()?;
-        if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("actual data CID does not match message `data_cid`"));
-        }
-        if write.descriptor.data_size != data_size {
-            return Err(unexpected!("actual data size does not match message `data_size`"));
-        }
-
-        // store the stream data with the message
-        let mut data_bytes = Vec::new();
-        stream.read_to_end(&mut data_bytes)?;
-        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
-
-        // write record is a grant
-        // TODO: move this check to `verify_integrity` method
-        if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            integrity::verify_schema(&write, &data_bytes)?;
-        }
-    } else {
-        // store data in BlockStore
-        let (data_cid, data_size) = stream.to_store(owner, block_store).await?;
-
-        // verify integrity of stored data
-        if write.descriptor.data_cid != data_cid {
-            return Err(unexpected!("actual data CID does not match message `data_cid`"));
-        }
-        if write.descriptor.data_size != data_size {
-            return Err(unexpected!("actual data size does not match message `data_size`"));
-        }
-    }
-
-    Ok(write)
-}
-
-// Write message has no data and is not an 'initial write':
-//  1. verify the new message's data integrity
-//  2. copy stored `encoded_data` to the new  message.
-async fn copy_data(
-    owner: &str, new_write: &Write, existing: &Entry, block_store: &impl BlockStore,
-) -> Result<Write> {
-    let latest_existing = Write::try_from(existing)?;
-
-    // Perform `data_cid` check in case a user attempts to gain access to data
-    // by referencing a different known `data_cid`. This  ensures the data is
-    // already associated with the latest existing message.
-    // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
-    if latest_existing.descriptor.data_cid != new_write.descriptor.data_cid {
-        return Err(unexpected!("data CID does not match descriptor `data_cid`"));
-    }
-    if latest_existing.descriptor.data_size != new_write.descriptor.data_size {
-        return Err(unexpected!("data size does not match descriptor `data_size`"));
-    }
-
-    // if bigger than encoding threshold, ensure data referenced by `data_cid` exists
-    if latest_existing.descriptor.data_size > data::MAX_ENCODED_SIZE {
-        let result = block_store.get(owner, &new_write.descriptor.data_cid).await?;
-        if result.is_none() {
-            return Err(unexpected!("referenced data does not exist"));
-        };
-        return Ok(new_write.clone());
-    }
-
-    // otherwise, copy `encoded_data` to the new message
-    let mut message = new_write.clone();
-    if latest_existing.encoded_data.is_none() {
-        return Err(unexpected!("referenced data does not exist"));
-    };
-    message.encoded_data = latest_existing.encoded_data;
-
-    Ok(message)
-}
-
-// Revoke grants if records::Write is a permission revocation.
-async fn revoke_grants(owner: &str, write: &Write, provider: &impl Provider) -> Result<()> {
-    // get grant from revocation message `parent_id`
-    let Some(grant_id) = &write.descriptor.parent_id else {
-        return Err(unexpected!("missing `parent_id`"));
-    };
-    let message_timestamp = write.descriptor.base.message_timestamp;
-
-    let lt = DateRange::new().lt(message_timestamp);
-    let query =
-        RecordsQuery::new().add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
-
-    let records = MessageStore::query(provider, owner, &query.into()).await?;
-
-    // delete matching messages
-    for record in records {
-        let message_cid = record.cid()?;
-        MessageStore::delete(provider, owner, &message_cid).await?;
-        EventLog::delete(provider, owner, &message_cid).await?;
-    }
-
-    Ok(())
 }
