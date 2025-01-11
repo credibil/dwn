@@ -220,7 +220,7 @@ impl Protocol<'_> {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
-        let Some(protocol_role) = authzn.jws_payload()?.protocol_role else {
+        let Some(protocol_role) = authzn.payload()?.protocol_role else {
             return Ok(());
         };
 
@@ -292,7 +292,7 @@ impl Protocol<'_> {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
-        let invoked_role = authzn.jws_payload()?.protocol_role;
+        let invoked_role = authzn.payload()?.protocol_role;
         let allowed_actions = self.allowed_actions(owner, record, store).await?;
         let Some(action_rules) = &rule_set.actions else {
             return Err(forbidden!("no rule defined for action"));
@@ -352,7 +352,7 @@ impl Protocol<'_> {
         // walk up the ancestor tree until no parent
         while let Some(record_id) = &current_id {
             let Some(initial) = write::initial_write(owner, record_id, store).await? else {
-                return Err(forbidden!("no initial write record found descendant"));
+                return Err(forbidden!("no parent record found"));
             };
             ancestors.push(initial.clone());
             current_id.clone_from(&initial.descriptor.parent_id);

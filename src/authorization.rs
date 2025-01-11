@@ -170,9 +170,8 @@ impl Authorization {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub fn jws_payload(&self) -> Result<JwsPayload> {
-        let base64 = &self.signature.payload;
-        let decoded = Base64UrlUnpadded::decode_vec(base64)
+    pub fn payload(&self) -> Result<JwsPayload> {
+        let decoded = Base64UrlUnpadded::decode_vec(&self.signature.payload)
             .map_err(|e| unexpected!("issue decoding header: {e}"))?;
         serde_json::from_slice(&decoded).map_err(|e| unexpected!("issue deserializing header: {e}"))
     }

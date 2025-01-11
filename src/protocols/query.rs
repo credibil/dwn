@@ -144,7 +144,7 @@ impl Query {
         }
 
         // does the message have a permission grant?
-        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Ok(Access::Published);
         };
 

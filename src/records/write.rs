@@ -34,30 +34,9 @@ pub async fn handle(
     owner: &str, write: Write, provider: &impl Provider,
 ) -> Result<Reply<WriteReply>> {
     write.authorize(owner, provider).await?;
+    write.verify_integrity(owner, provider).await?;
 
     let is_initial_write = write.is_initial()?;
-
-    // verify initial write integrity
-    if is_initial_write {
-        if write.descriptor.base.message_timestamp != write.descriptor.date_created {
-            return Err(unexpected!("`message_timestamp` and `date_created` do not match"));
-        }
-
-        // when the message is a protocol context root, the `context_id`
-        // must match the computed `entry_id`
-        if write.descriptor.protocol.is_some() && write.descriptor.parent_id.is_none() {
-            let author = write.authorization.author()?;
-            let context_id = entry_id(&write.descriptor, &author)?;
-            if write.context_id != Some(context_id) {
-                return Err(unexpected!("invalid `context_id`"));
-            }
-        }
-    }
-
-    // verify integrity of messages with protocol
-    if write.descriptor.protocol.is_some() {
-        integrity::verify(owner, &write, provider).await?;
-    }
 
     // find existing entries for the `record_id`
     let existing = existing_entries(owner, &write.record_id, provider).await?;
@@ -312,7 +291,7 @@ impl Write {
 
         // permission grant
         let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-        let payload: WriteSignaturePayload = serde_json::from_slice(&decoded)?;
+        let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
@@ -325,6 +304,58 @@ impl Write {
         }
 
         Err(forbidden!("message failed authorization"))
+    }
+
+    async fn verify_integrity(&self, owner: &str, provider: &impl Provider) -> Result<()> {
+        if self.is_initial()? {
+            if self.descriptor.base.message_timestamp != self.descriptor.date_created {
+                return Err(unexpected!("`message_timestamp` and `date_created` do not match"));
+            }
+
+            // when the message is a protocol context root, the `context_id`
+            // must match the computed `entry_id`
+            if self.descriptor.protocol.is_some() && self.descriptor.parent_id.is_none() {
+                let author = self.authorization.author()?;
+                let context_id = entry_id(&self.descriptor, &author)?;
+                if self.context_id != Some(context_id) {
+                    return Err(unexpected!("invalid `context_id`"));
+                }
+            }
+        }
+
+        // verify integrity of messages with protocol
+        if self.descriptor.protocol.is_some() {
+            integrity::verify(owner, self, provider).await?;
+        }
+
+        let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)
+            .map_err(|e| unexpected!("issue decoding header: {e}"))?;
+        let payload: SignaturePayload = serde_json::from_slice(&decoded)
+            .map_err(|e| unexpected!("issue deserializing header: {e}"))?;
+
+        // verify integrity of message against signature payload
+        if self.record_id != payload.record_id {
+            return Err(unexpected!("message and authorization `recordId`s do not match"));
+        }
+        if self.context_id != payload.context_id {
+            return Err(unexpected!("message and authorization `contextId`s do not match"));
+        }
+        if let Some(attestation_cid) = payload.attestation_cid {
+            let expected_cid = cid::from_value(&self.attestation)?;
+            if attestation_cid != expected_cid {
+                return Err(unexpected!(
+                    "message and authorization `attestationCid`s do not match"
+                ));
+            }
+        }
+        if let Some(encryption_cid) = payload.encryption_cid {
+            let expected_cid = cid::from_value(&self.encryption)?;
+            if encryption_cid != expected_cid {
+                return Err(unexpected!("message and authorization `encryptionCid`s do not match"));
+            }
+        }
+
+        Ok(())
     }
 
     /// Signs the Write message body. The signer is either the author or a delegate.
@@ -345,7 +376,7 @@ impl Write {
         let attestation_cid = self.attestation.as_ref().map(cid::from_value).transpose()?;
         let encryption_cid = self.encryption.as_ref().map(cid::from_value).transpose()?;
 
-        let payload = WriteSignaturePayload {
+        let payload = SignaturePayload {
             base: JwsPayload {
                 descriptor_cid: cid::from_value(&self.descriptor)?,
                 permission_grant_id,
@@ -450,7 +481,7 @@ impl Write {
 /// Signature payload.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WriteSignaturePayload {
+pub struct SignaturePayload {
     /// The standard signature payload.
     #[serde(flatten)]
     pub base: JwsPayload,

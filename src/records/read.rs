@@ -222,7 +222,7 @@ impl Read {
         }
 
         // verify grant
-        if let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id {
+        if let Some(grant_id) = &authzn.payload()?.permission_grant_id {
             let grant = permissions::fetch_grant(owner, grant_id, store).await?;
             grant.permit_read(owner, &author, self, write, store).await?;
             return Ok(());

@@ -87,7 +87,7 @@ impl Subscribe {
         }
 
         // verify grant
-        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("missing permission grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;

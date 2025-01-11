@@ -3,21 +3,24 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use dwn_test::key_store::{
-    ALICE_DID, APP_DID as ISSUER_DID, BOB_DID, CAROL_DID, CAROL_DID as FAKE_DID,
+    ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID, CAROL_DID,
+    CAROL_DID as FAKE_DID,
 };
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
+use vercre_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use vercre_dwn::messages::{self, MessagesFilter};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{EventLog, KeyStore};
 use vercre_dwn::records::{
-    Data, DeleteBuilder, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder, WriteProtocol,
-    entry_id,
+    Data, DeleteBuilder, EncryptOptions, QueryBuilder, ReadBuilder, Recipient, RecordsFilter,
+    WriteBuilder, WriteProtocol, entry_id,
 };
 use vercre_dwn::store::MessagesQuery;
 use vercre_dwn::{Error, Interface, Message, endpoint};
+use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors
 // #[tokio::test]
@@ -47,13 +50,13 @@ async fn update_older() {
     // --------------------------------------------------
     // Verify the record was created.
     // --------------------------------------------------
-    let read = QueryBuilder::new()
+    let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(&initial.record_id))
         .sign(&alice_keyring)
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -620,6 +623,7 @@ async fn large_data_size_larger() {
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
+    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -651,6 +655,7 @@ async fn small_data_size_larger() {
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
+    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -682,6 +687,7 @@ async fn large_data_size_smaller() {
     // alter the data size
     write.descriptor.data_size = 1;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
+    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -710,9 +716,10 @@ async fn small_data_size_smaller() {
         .await
         .expect("should create write");
 
-    // alter the data size and recalculate the `record_id`
+    // alter the data size and recalculate the `record_id` and signature
     write.descriptor.data_size = 1;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
+    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -3706,4 +3713,263 @@ async fn owner_no_rule() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "no rule defined for action");
+}
+
+// Should find recipient-based rules for deeply nested contexts.
+#[tokio::test]
+async fn deep_nesting() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let pfi_keyring = provider.keyring(PFI_DID).expect("should get the PFI keyring");
+
+    // --------------------------------------------------
+    // PFI configures the dex protocol.
+    // --------------------------------------------------
+    let dex = include_bytes!("../crates/dwn-test/protocols/dex.json");
+    let definition: Definition = serde_json::from_slice(dex).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&pfi_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(PFI_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Setup:
+    //  - Alice uses the tbDEX protocol to make a request to a
+    //    Participating Financial Institution (PFI)
+    //  - The PFI responds to Alice's request with an offer.
+    // --------------------------------------------------
+    let alice_ask = WriteBuilder::new()
+        .data(Data::from(b"some request".to_vec()))
+        .recipient(PFI_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://dex.xyz".to_string(),
+            protocol_path: "ask".to_string(),
+        })
+        .schema("https://tbd/website/tbdex/ask")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(PFI_DID, alice_ask.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // offer response
+    let pfi_offer = WriteBuilder::new()
+        .data(Data::from(b"some offer".to_vec()))
+        .recipient(ALICE_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://dex.xyz".to_string(),
+            protocol_path: "ask/offer".to_string(),
+        })
+        .schema("https://tbd/website/tbdex/offer")
+        .parent_context_id(alice_ask.context_id.unwrap())
+        .sign(&pfi_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(PFI_DID, pfi_offer.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // The test:
+    //  - Alice responds to the PFI acknowledging fulfillment of the offer.
+    // --------------------------------------------------
+    let fulfillment = WriteBuilder::new()
+        .data(Data::from(b"some offer".to_vec()))
+        .recipient(PFI_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://dex.xyz".to_string(),
+            protocol_path: "ask/offer/fulfillment".to_string(),
+        })
+        .schema("https://tbd/website/tbdex/fulfillment")
+        .parent_context_id(pfi_offer.context_id.unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(PFI_DID, fulfillment.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify the record was created.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&fulfillment.record_id))
+        .sign(&pfi_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(PFI_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.descriptor.data_cid, fulfillment.descriptor.data_cid);
+}
+
+// Should not permit write with invalid `parent_id`.
+#[tokio::test]
+async fn invalid_parent_id() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let pfi_keyring = provider.keyring(PFI_DID).expect("should get the PFI keyring");
+
+    // --------------------------------------------------
+    // PFI configures the dex protocol.
+    // --------------------------------------------------
+    let dex = include_bytes!("../crates/dwn-test/protocols/dex.json");
+    let definition: Definition = serde_json::from_slice(dex).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&pfi_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(PFI_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice uses the tbDEX protocol to make a request to a Participating
+    // Financial Institution (PFI)
+    // --------------------------------------------------
+    let alice_ask = WriteBuilder::new()
+        .data(Data::from(b"some request".to_vec()))
+        .recipient(PFI_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://dex.xyz".to_string(),
+            protocol_path: "ask".to_string(),
+        })
+        .schema("https://tbd/website/tbdex/ask")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(PFI_DID, alice_ask.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempt (and fails) to respond to the PFI to acknowledge
+    // fulfillment without having received a response.
+    // --------------------------------------------------
+    let fulfillment = WriteBuilder::new()
+        .data(Data::from(b"some offer".to_vec()))
+        .recipient(PFI_DID)
+        .protocol(WriteProtocol {
+            protocol: "http://dex.xyz".to_string(),
+            protocol_path: "ask/offer/fulfillment".to_string(),
+        })
+        .schema("https://tbd/website/tbdex/fulfillment")
+        .parent_context_id("nonexistentparentid")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(PFI_DID, fulfillment.clone(), &provider).await
+    else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "no parent record found");
+}
+
+// Should fail when CID for encrypted data does not match authorization `encryption_cid`.
+#[tokio::test]
+async fn invalid_encryption_cid() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Setup: Alice's keys.
+    // --------------------------------------------------
+    let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
+
+    // derive x25519 key from ed25519 key (Edwards -> Montgomery)
+    let verifying_bytes: [u8; 32] =
+        Base64UrlUnpadded::decode_vec(ALICE_VERIFYING_KEY).unwrap().try_into().unwrap();
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&verifying_bytes).unwrap();
+    let alice_public = x25519_dalek::PublicKey::from(verifying_key.to_montgomery().to_bytes());
+
+    let alice_private_jwk = PrivateKeyJwk {
+        public_key: PublicKeyJwk {
+            kty: KeyType::Okp,
+            crv: Curve::Ed25519,
+            x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+            ..PublicKeyJwk::default()
+        },
+        d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
+    };
+
+    // --------------------------------------------------
+    // Alice configures an email protocol with encryption.
+    // --------------------------------------------------
+    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
+    let definition = definition
+        .add_encryption(&alice_kid, alice_private_jwk.clone())
+        .expect("should add encryption");
+
+    let email = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, email, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    //  Bob writes an encrypted email to Alice.
+    // --------------------------------------------------
+    // generate data and encrypt
+    let data = "Hello Alice".as_bytes().to_vec();
+    let mut options = EncryptOptions::new().data(&data);
+    let mut encrypted = options.encrypt2().expect("should encrypt");
+    let ciphertext = encrypted.ciphertext.clone();
+
+    // get the rule set for the protocol path
+    let rule_set = definition.structure.get("email").unwrap();
+    let encryption = rule_set.encryption.as_ref().unwrap();
+
+    // protocol path derived public key
+    encrypted = encrypted.add_recipient(Recipient {
+        key_id: alice_kid.clone(),
+        public_key: encryption.public_key_jwk.clone(),
+        derivation_scheme: DerivationScheme::ProtocolPath,
+    });
+
+    // generate data and encrypt
+    let mut encryption = encrypted.finalize().expect("should encrypt");
+
+    // create Write record
+    let mut write = WriteBuilder::new()
+        .data(Data::from(ciphertext))
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .encryption(encryption.clone())
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // cause the `encryption_cid` to be invalid
+    encryption.initialization_vector = "invalid-iv".to_string();
+    write.encryption = Some(encryption);
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "message and authorization `encryptionCid`s do not match");
 }

@@ -167,7 +167,7 @@ async fn tampered_signature() {
     let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should build");
     let authorization = query.authorization.as_mut().unwrap();
 
-    let mut payload = authorization.jws_payload().expect("should have payload");
+    let mut payload = authorization.payload().expect("should have payload");
     payload.descriptor_cid = cid::from_value(&"some random value").expect("should have CID");
 
     let bytes = serde_json::to_vec(&payload).expect("should serialize");

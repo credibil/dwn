@@ -133,7 +133,7 @@ impl Subscribe {
         }
 
         // verify protocol when request invokes a protocol role
-        if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
+        if let Some(protocol) = &authzn.payload()?.protocol_role {
             let protocol =
                 Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
             return protocol.permit_subscribe(owner, self, provider).await;
@@ -143,7 +143,7 @@ impl Subscribe {
         let Some(authzn) = &self.authorization else {
             return Err(forbidden!("missing authorization"));
         };
-        if authzn.jws_payload()?.protocol_role.is_some() {
+        if authzn.payload()?.protocol_role.is_some() {
             // FIXME: fix this
             // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
         }

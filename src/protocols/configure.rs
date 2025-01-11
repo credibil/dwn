@@ -166,7 +166,7 @@ impl Configure {
         }
 
         // permission grant
-        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("author has no grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;

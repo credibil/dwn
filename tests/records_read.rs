@@ -5,11 +5,13 @@ use std::io::Read;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_test::key_store::{ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
-use hd_key::{DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use http::StatusCode;
 use rand::RngCore;
 use serde_json::Value;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
+use vercre_dwn::hd_key::{
+    self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk,
+};
 use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
@@ -18,7 +20,7 @@ use vercre_dwn::records::{
     WriteProtocol, decrypt,
 };
 use vercre_dwn::store::Entry;
-use vercre_dwn::{Error, Method, endpoint, hd_key};
+use vercre_dwn::{Error, Method, endpoint};
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.
@@ -2516,14 +2518,13 @@ async fn decrypt_protocol() {
         .add_encryption(&alice_kid, alice_private_jwk.clone())
         .expect("should add encryption");
 
-    let configure_email = ConfigureBuilder::new()
+    let email = ConfigureBuilder::new()
         .definition(definition.clone())
         .build(&alice_keyring)
         .await
         .expect("should build");
-    let reply = endpoint::handle(ALICE_DID, configure_email, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply =
+        endpoint::handle(ALICE_DID, email, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------

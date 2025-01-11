@@ -174,7 +174,7 @@ impl Query {
         }
 
         // verify protocol when request invokes a protocol role
-        if authzn.jws_payload()?.protocol_role.is_some() {
+        if authzn.payload()?.protocol_role.is_some() {
             let Some(protocol) = &self.descriptor.filter.protocol else {
                 return Err(unexpected!("missing protocol"));
             };
@@ -270,7 +270,7 @@ impl Query {
         store_query = store_query.add_filter(filter.add_recipient(&author).published(false));
 
         // New filter: author can query any record when authorized by a role
-        if authzn.jws_payload()?.protocol_role.is_some() {
+        if authzn.payload()?.protocol_role.is_some() {
             let mut filter = self.descriptor.filter.clone();
             filter.published = Some(false);
             store_query = store_query.add_filter(filter.published(false));
