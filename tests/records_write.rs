@@ -623,7 +623,7 @@ async fn large_data_size_larger() {
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
-    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
+    write.sign_as_author(None, None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -655,7 +655,7 @@ async fn small_data_size_larger() {
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
-    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
+    write.sign_as_author(None, None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -687,7 +687,7 @@ async fn large_data_size_smaller() {
     // alter the data size
     write.descriptor.data_size = 1;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
-    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
+    write.sign_as_author(None, None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -719,7 +719,7 @@ async fn small_data_size_smaller() {
     // alter the data size and recalculate the `record_id` and signature
     write.descriptor.data_size = 1;
     write.record_id = entry_id(&write.descriptor, ALICE_DID).expect("should create record ID");
-    write.sign_as_author(None,None, &alice_keyring).await.expect("should sign");
+    write.sign_as_author(None, None, &alice_keyring).await.expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -858,7 +858,8 @@ async fn small_data_cid_smaller() {
     assert_eq!(e, "actual data CID does not match message `data_cid`");
 }
 
-// Should prevent accessing data by referencing a different`data_cid` in an update.
+// Should prevent accessing data by referencing a different `data_cid` in an
+// update.
 #[tokio::test]
 async fn alter_data_cid_larger() {
     let provider = ProviderImpl::new().await.expect("should create provider");
@@ -1290,9 +1291,8 @@ async fn anyone_create() {
     // --------------------------------------------------
     // Bob writes an email.
     // --------------------------------------------------
-    let email_data = b"Hello Alice";
     let email = WriteBuilder::new()
-        .data(Data::from(email_data.to_vec()))
+        .data(Data::from(b"Hello Alice".to_vec()))
         .protocol(WriteProtocol {
             protocol: "http://email-protocol.xyz".to_string(),
             protocol_path: "email".to_string(),
@@ -1321,7 +1321,10 @@ async fn anyone_create() {
     let body = reply.body.expect("should have body");
     let entries = body.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(email_data)));
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"Hello Alice"))
+    );
 }
 
 // Should allow anyone to create a record using the "anyone co-update" rule.
@@ -3972,4 +3975,163 @@ async fn invalid_encryption_cid() {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization `encryptionCid`s do not match");
+}
+
+// Should fail when protocol is not normalized.
+#[tokio::test]
+#[ignore = "the protocol is automatically normalized"]
+async fn protocol_not_normalized() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures an email protocol.
+    // --------------------------------------------------
+    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes an email.
+    // --------------------------------------------------
+    let mut email = WriteBuilder::new()
+        .data(Data::from(b"Hello".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "example.com/".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    email.descriptor.protocol = Some("example.com/".to_string());
+    email.record_id = entry_id(&email.descriptor, ALICE_DID).expect("should create record ID");
+    email.context_id = Some(email.record_id.clone());
+    email.sign_as_author(None, None, &alice_keyring).await.expect("should sign");
+
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, email, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "unable to find protocol definition");
+}
+
+// Should prevent accessing data by referencing a different `data_cid` in
+// protocol-authorized records.
+#[tokio::test]
+async fn alter_data_cid_protocol() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a private record.
+    // --------------------------------------------------
+    let alice_write = WriteBuilder::new()
+        .data(Data::from(b"some private data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice configures a social media protocol that allows anyone to read and
+    // write images.
+    // --------------------------------------------------
+    let social_media = include_bytes!("../crates/dwn-test/protocols/social-media.json");
+    let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob learns the metadata (including data_cid) of Alice's private record.
+    // He attempts to gain access by writing to Alice's web node using an open
+    // protocol that references Alice's data_cid without providing any data.
+    // --------------------------------------------------
+    let bob_write = WriteBuilder::new()
+        .protocol(WriteProtocol {
+            protocol: "http://social-media.xyz".to_string(),
+            protocol_path: "image".to_string(),
+        })
+        .schema("imageSchema")
+        .data_format("image/jpeg")
+        .data(Data::Cid {
+            data_cid: alice_write.descriptor.data_cid.clone(),
+            data_size: alice_write.descriptor.data_size.clone(),
+        })
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+
+    // --------------------------------------------------
+    // Verify Bob's record cannot be read.
+    // --------------------------------------------------
+    let read = ReadBuilder::new()
+        .filter(RecordsFilter::new().record_id(&bob_write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+        panic!("should be NotFound");
+    };
+    assert_eq!(e, "no matching record");
+
+    // --------------------------------------------------
+    // Verify Bob's record cannot be queried.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("imageSchema"))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&bob_write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+
+    // --------------------------------------------------
+    //  Bob attempts (and fails) to publish his record without data.
+    // --------------------------------------------------
+    let bob_update = WriteBuilder::from(bob_write)
+        .published(true)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, bob_update, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "referenced data does not exist");
 }

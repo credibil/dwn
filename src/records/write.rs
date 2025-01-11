@@ -36,8 +36,6 @@ pub async fn handle(
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 
-    let is_initial_write = write.is_initial()?;
-
     // find existing entries for the `record_id`
     let existing = existing_entries(owner, &write.record_id, provider).await?;
     let (initial_entry, latest_entry) = earliest_and_latest(&existing);
@@ -49,7 +47,7 @@ pub async fn handle(
             return Err(unexpected!("initial write is not earliest message"));
         }
         write.compare_immutable(&initial_write)?;
-    } else if !is_initial_write {
+    } else if !write.is_initial()? {
         return Err(unexpected!("initial write not found"));
     }
 
@@ -74,12 +72,12 @@ pub async fn handle(
         (update_data(owner, &write, &mut data, provider).await?, StatusCode::ACCEPTED)
     } else if initial_entry.is_some() {
         // no data AND NOT an initial write
-        let Some(latest_existing) = &latest_entry else {
+        let Some(existing) = &latest_entry else {
             return Err(unexpected!("latest existing record should exist"));
         };
-        (copy_data(owner, &write, latest_existing, provider).await?, StatusCode::ACCEPTED)
+        (copy_data(owner, &write, existing, provider).await?, StatusCode::ACCEPTED)
     } else {
-        // no data AND an initial write
+        // no data AND IS an initial write
         (write, StatusCode::NO_CONTENT)
     };
 
@@ -326,6 +324,16 @@ impl Write {
         // verify integrity of messages with protocol
         if self.descriptor.protocol.is_some() {
             integrity::verify(owner, self, provider).await?;
+
+            // write record is a grant
+            // FIXME: extract data from stream 1x
+            // if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+            //     let mut stream =
+            //         self.data_stream.clone().ok_or_else(|| unexpected!("missing data stream"))?;
+            //     let mut data_bytes = Vec::new();
+            //     stream.read_to_end(&mut data_bytes)?;
+            //     integrity::verify_schema(self, &data_bytes)?;
+            // }
         }
 
         let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)
@@ -1220,45 +1228,42 @@ fn earliest_and_latest(entries: &[Entry]) -> (Option<Entry>, Option<Entry>) {
 }
 
 async fn update_data(
-    owner: &str, write: &Write, data: &mut DataStream, block_store: &impl BlockStore,
+    owner: &str, write: &Write, stream: &mut DataStream, block_store: &impl BlockStore,
 ) -> Result<Write> {
     let mut write = write.clone();
 
     // when data is below the threshold, store it within MessageStore
     if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {
-        // compute CID before reading (and consuming) the stream
-        let (data_cid, data_size) = data.compute_cid()?;
-
-        // read data from stream
-        let mut data_bytes = Vec::new();
-        data.read_to_end(&mut data_bytes)?;
-
+        // verify data integrity
+        let (data_cid, data_size) = stream.compute_cid()?;
         if write.descriptor.data_cid != data_cid {
             return Err(unexpected!("actual data CID does not match message `data_cid`"));
         }
         if write.descriptor.data_size != data_size {
             return Err(unexpected!("actual data size does not match message `data_size`"));
         }
+
+        // store the stream data with the message
+        let mut data_bytes = Vec::new();
+        stream.read_to_end(&mut data_bytes)?;
+        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
+
+        // write record is a grant
+        // TODO: move this check to `verify_integrity` method
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
             integrity::verify_schema(&write, &data_bytes)?;
         }
-
-        write.descriptor.data_cid = data_cid;
-        write.descriptor.data_size = data_bytes.len();
-        write.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
     } else {
-        let (data_cid, data_size) = data.to_store(owner, block_store).await?;
+        // store data in BlockStore
+        let (data_cid, data_size) = stream.to_store(owner, block_store).await?;
 
-        // verify data CID and size
+        // verify integrity of stored data
         if write.descriptor.data_cid != data_cid {
             return Err(unexpected!("actual data CID does not match message `data_cid`"));
         }
         if write.descriptor.data_size != data_size {
             return Err(unexpected!("actual data size does not match message `data_size`"));
         }
-
-        write.descriptor.data_cid = data_cid;
-        write.descriptor.data_size = data_size;
     }
 
     Ok(write)
@@ -1295,7 +1300,7 @@ async fn copy_data(
     // otherwise, copy `encoded_data` to the new message
     let mut message = new_write.clone();
     if latest_existing.encoded_data.is_none() {
-        return Err(unexpected!("`encoded_data` missing from previous entry"));
+        return Err(unexpected!("referenced data does not exist"));
     };
     message.encoded_data = latest_existing.encoded_data;
 
