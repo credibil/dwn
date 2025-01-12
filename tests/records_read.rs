@@ -1775,7 +1775,7 @@ async fn invalid_grant_protocol_path() {
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(e, "grant and record `protocol_path`s do not match");
+    assert_eq!(e, "grant and record protocol paths do not match");
 }
 
 // Should return a status of NotFound (404) when record does not exist.

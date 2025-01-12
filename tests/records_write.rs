@@ -12,9 +12,7 @@ use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use vercre_dwn::messages::{self, MessagesFilter};
-use vercre_dwn::permissions::{
-    ConditionPublication, Conditions, GrantBuilder, RecordsScope, Scope,
-};
+use vercre_dwn::permissions::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{EventLog, KeyStore};
 use vercre_dwn::records::{
@@ -5122,7 +5120,7 @@ async fn protocol_path_no_grant() {
 // Should prevent creation of unpublished records when grant requires
 // they be published.
 #[tokio::test]
-async fn grant_published_required() {
+async fn grant_publish_required() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
@@ -5152,7 +5150,7 @@ async fn grant_published_required() {
             limited_to: None,
         })
         .conditions(Conditions {
-            publication: ConditionPublication::Required,
+            publication: Publication::Required,
         })
         .build(&alice_keyring)
         .await
@@ -5197,4 +5195,84 @@ async fn grant_published_required() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant requires message to be published");
+}
+
+// Should prevent creation of unpublished records when grant requires
+// they be published.
+#[tokio::test]
+async fn grant_publish_prohibited() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a minimal protocol.
+    // --------------------------------------------------
+    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to read records.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Records {
+            method: Method::Write,
+            protocol: "http://minimal.xyz".to_string(),
+            limited_to: None,
+        })
+        .conditions(Conditions {
+            publication: Publication::Prohibited,
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob is able to create an unpublished record .
+    // --------------------------------------------------
+    let unpublished = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://minimal.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .permission_grant_id(&bob_grant.record_id)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, unpublished, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob attempts (and fails) to create a published record .
+    // --------------------------------------------------
+    let published = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .published(true)
+        .protocol(WriteProtocol {
+            protocol: "http://minimal.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .permission_grant_id(bob_grant.record_id)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, published, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "grant prohibits publishing message");
 }

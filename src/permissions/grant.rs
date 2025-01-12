@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ConditionPublication, Conditions, RecordsScope, Scope};
+use super::{Publication, Conditions, RecordsScope, Scope};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
@@ -333,12 +333,12 @@ impl Grant {
 
         let published = write.descriptor.published.unwrap_or_default();
         match conditions.publication {
-            ConditionPublication::Required => {
+            Publication::Required => {
                 if !published {
                     return Err(forbidden!("grant requires message to be published",));
                 }
             }
-            ConditionPublication::Prohibited => {
+            Publication::Prohibited => {
                 if published {
                     return Err(forbidden!("grant prohibits publishing message"));
                 }

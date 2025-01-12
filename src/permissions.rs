@@ -173,12 +173,12 @@ pub struct Conditions {
     /// Indicates whether a message written with the invocation of a permission
     /// must, may, or must not be marked as public. If unset, it is optional to
     /// make the message public.
-    pub publication: ConditionPublication,
+    pub publication: Publication,
 }
 
 /// Condition for publication of a message.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub enum ConditionPublication {
+pub enum Publication {
     /// The message must be marked as public.
     #[default]
     Required,
