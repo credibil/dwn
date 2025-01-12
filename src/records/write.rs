@@ -83,12 +83,12 @@ pub async fn handle(
         write.copy_data(owner, existing, provider).await?;
     };
 
-    // response codes:
-    //   - 202 for queryable writes
-    //   - 204 for private, non-queryable writes
+    // response codes
     let code = if write.data_stream.is_some() || !is_initial {
+        // queryable writes
         StatusCode::ACCEPTED
     } else {
+        //  private, non-queryable writes
         StatusCode::NO_CONTENT
     };
 
@@ -116,7 +116,7 @@ pub async fn handle(
 
     // delete any previous messages with the same `record_id` EXCEPT initial write
     let mut deletable = VecDeque::from(existing);
-    let _ = deletable.pop_front(); // initial write is first entry
+    let _ = deletable.pop_front(); // retain initial write (first entry)
     for entry in deletable {
         let write = Write::try_from(entry)?;
         let cid = write.cid()?;
@@ -342,8 +342,8 @@ impl Write {
         if self.descriptor.protocol.is_some() {
             integrity::verify(owner, self, provider).await?;
 
-            // write record is a grant
             // FIXME: extract data from stream 1x
+            // write record is a grant
             // if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
             //     let mut stream =
             //         self.data_stream.clone().ok_or_else(|| unexpected!("missing data stream"))?;
@@ -459,9 +459,7 @@ impl Write {
         let latest = Self::try_from(existing)?;
 
         // Perform `data_cid` check in case a user attempts to gain access to data
-        // by referencing a different known `data_cid`. This  ensures the data is
-        // already associated with the latest existing message.
-        // See: https://github.com/TBD54566975/dwn-sdk-js/issues/359 for more info
+        // by referencing a different known `data_cid`.
         if latest.descriptor.data_cid != self.descriptor.data_cid {
             return Err(unexpected!("data CID does not match descriptor `data_cid`"));
         }
