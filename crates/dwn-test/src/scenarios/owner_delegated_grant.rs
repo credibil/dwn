@@ -31,7 +31,7 @@ async fn configure() {
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "chat".to_string(),
-            options: None,
+            limited_to: None,
         });
     let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
 

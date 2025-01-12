@@ -521,7 +521,7 @@ async fn invalid_scope() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "https://example.com/protocol/test".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await
@@ -586,7 +586,7 @@ async fn incorrect_grantor() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "https://example.com/protocol/test".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await

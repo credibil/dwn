@@ -12,7 +12,7 @@ use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::hd_key::{
     self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk,
 };
-use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
+use vercre_dwn::permissions::{GrantBuilder, RecordsScope, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
@@ -1241,7 +1241,7 @@ async fn invalid_grant_method() {
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "https://example.com/protocol/test".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await
@@ -1311,7 +1311,7 @@ async fn unrestricted_grant() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "http://minimal.xyz".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await
@@ -1394,7 +1394,7 @@ async fn grant_protocol() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "http://minimal.xyz".to_string(),
-            options: Some(RecordsOptions::ProtocolPath("foo".to_string())),
+            limited_to: Some(RecordsScope::ProtocolPath("foo".to_string())),
         })
         .build(&alice_keyring)
         .await
@@ -1477,7 +1477,7 @@ async fn invalid_grant_protocol() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "http://a-different-protocol.com".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await
@@ -1547,7 +1547,7 @@ async fn grant_context() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "http://minimal.xyz".to_string(),
-            options: Some(RecordsOptions::ContextId(write.context_id.clone().unwrap())),
+            limited_to: Some(RecordsScope::ContextId(write.context_id.clone().unwrap())),
         })
         .build(&alice_keyring)
         .await
@@ -1615,7 +1615,7 @@ async fn invalid_grant_context() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "http://minimal.xyz".to_string(),
-            options: Some(RecordsOptions::ContextId("somerandomgrant".to_string())),
+            limited_to: Some(RecordsScope::ContextId("somerandomgrant".to_string())),
         })
         .build(&alice_keyring)
         .await
@@ -1685,7 +1685,7 @@ async fn grant_protocol_path() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "http://minimal.xyz".to_string(),
-            options: Some(RecordsOptions::ProtocolPath("foo".to_string())),
+            limited_to: Some(RecordsScope::ProtocolPath("foo".to_string())),
         })
         .build(&alice_keyring)
         .await
@@ -1753,7 +1753,7 @@ async fn invalid_grant_protocol_path() {
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "http://minimal.xyz".to_string(),
-            options: Some(RecordsOptions::ProtocolPath("different-protocol-path".to_string())),
+            limited_to: Some(RecordsScope::ProtocolPath("different-protocol-path".to_string())),
         })
         .build(&alice_keyring)
         .await

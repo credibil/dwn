@@ -62,7 +62,7 @@ pub enum Scope {
         /// Records scope options.
         #[serde(flatten)]
         #[serde(skip_serializing_if = "Option::is_none")]
-        options: Option<RecordsOptions>,
+        limited_to: Option<RecordsScope>,
     },
 
     /// Scope applies to the `Messages` interface.
@@ -74,6 +74,7 @@ pub enum Scope {
         #[serde(skip_serializing_if = "Option::is_none")]
         protocol: Option<String>,
     },
+
     /// Scope applies to the `Protocols` interface.
     Protocols {
         /// The method the permission is applied to.
@@ -90,7 +91,7 @@ impl Default for Scope {
         Self::Records {
             method: Method::default(),
             protocol: String::new(),
-            options: None,
+            limited_to: None,
         }
     }
 }
@@ -131,7 +132,7 @@ impl Scope {
 /// Fields specific to the `records` scope.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum RecordsOptions {
+pub enum RecordsScope {
     /// The context ID of the record.
     ContextId(String),
 
@@ -139,13 +140,13 @@ pub enum RecordsOptions {
     ProtocolPath(String),
 }
 
-impl Default for RecordsOptions {
+impl Default for RecordsScope {
     fn default() -> Self {
         Self::ContextId(String::new())
     }
 }
 
-impl RecordsOptions {
+impl RecordsScope {
     /// Get the context ID.
     #[must_use]
     pub fn context_id(&self) -> Option<&str> {
@@ -172,7 +173,7 @@ pub struct Conditions {
     /// Indicates whether a message written with the invocation of a permission
     /// must, may, or must not be marked as public. If unset, it is optional to
     /// make the message public.
-    pub publication: Option<ConditionPublication>,
+    pub publication: ConditionPublication,
 }
 
 /// Condition for publication of a message.

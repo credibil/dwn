@@ -268,7 +268,7 @@ async fn unauthorized_interface() {
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://allow-any".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await

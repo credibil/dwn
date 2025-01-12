@@ -488,7 +488,7 @@ async fn invalid_interface() {
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await
@@ -612,7 +612,7 @@ async fn protocol_grant() {
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&carol_keyring)
         .await
@@ -631,7 +631,7 @@ async fn protocol_grant() {
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
-            options: None,
+            limited_to: None,
         })
         .build(&alice_keyring)
         .await

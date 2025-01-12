@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ConditionPublication, Conditions, RecordsOptions, Scope};
+use super::{ConditionPublication, Conditions, RecordsScope, Scope};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
@@ -291,7 +291,9 @@ impl Grant {
 
     pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
         let Scope::Records {
-            protocol, options, ..
+            protocol,
+            limited_to,
+            ..
         } = &self.data.scope
         else {
             return Err(forbidden!("invalid scope: `Records` scope must have protocol set"));
@@ -301,8 +303,8 @@ impl Grant {
             return Err(forbidden!("scope protocol does not match write protocol"));
         }
 
-        match options {
-            Some(RecordsOptions::ContextId(grant_context_id)) => {
+        match limited_to {
+            Some(RecordsScope::ContextId(grant_context_id)) => {
                 let Some(write_context_id) = &write.context_id else {
                     return Err(forbidden!("missing `context_id`"));
                 };
@@ -310,9 +312,9 @@ impl Grant {
                     return Err(forbidden!("record not part of grant context"));
                 }
             }
-            Some(RecordsOptions::ProtocolPath(protocol_path)) => {
+            Some(RecordsScope::ProtocolPath(protocol_path)) => {
                 if Some(protocol_path) != write.descriptor.protocol_path.as_ref() {
-                    return Err(forbidden!("grant and record `protocol_path`s do not match"));
+                    return Err(forbidden!("grant and record protocol paths do not match"));
                 }
             }
             None => {}
@@ -325,12 +327,12 @@ impl Grant {
         let Some(conditions) = &self.data.conditions else {
             return Ok(());
         };
-        let Some(publication) = &conditions.publication else {
-            return Ok(());
-        };
+        // let Some(publication) = &conditions.publication else {
+        //     return Ok(());
+        // };
 
         let published = write.descriptor.published.unwrap_or_default();
-        match publication {
+        match conditions.publication {
             ConditionPublication::Required => {
                 if !published {
                     return Err(forbidden!("grant requires message to be published",));
