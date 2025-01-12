@@ -161,8 +161,7 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
     };
     // compare the parent segment of `context_id` with `parent_context_id`
     if context_id[..parent_context_id.len()] != *parent_context_id {
-        println!("context_id: {context_id}, parent_context_id: {parent_context_id}");
-        return Err(forbidden!("invalid `context_id`"));
+        return Err(forbidden!("incorrect parent `context_id`"));
     }
 
     Ok(())
