@@ -5352,3 +5352,125 @@ async fn grant_publish_undefined() {
     let reply = endpoint::handle(ALICE_DID, unpublished, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
+
+// Should prevent writes where neither data stream nor data CID are provided.
+#[tokio::test]
+async fn missing_data_cid() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record without a data stream.
+    // --------------------------------------------------
+    let mut data = [0u8; MAX_ENCODED_SIZE + 10];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let initial = WriteBuilder::new()
+        .data(Data::Bytes(data.to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+
+    // --------------------------------------------------
+    // Update the record, still without a data stream.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial.clone())
+        .data(Data::Bytes(data.to_vec()))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "referenced data does not exist");
+}
+
+// Should prevent writes where neither data stream nor encoded data are provided.
+#[tokio::test]
+async fn missing_encoded_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record without a data stream.
+    // --------------------------------------------------
+    let mut data = [0u8; 10];
+    rand::thread_rng().fill_bytes(&mut data);
+
+    let initial = WriteBuilder::new()
+        .data(Data::Bytes(data.to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+
+    // --------------------------------------------------
+    // Update the record, still without a data stream.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial.clone())
+        .data(Data::Bytes(data.to_vec()))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "referenced data does not exist");
+}
+
+// Should prevent updates to a record after it has been deleted.
+#[tokio::test]
+async fn write_after_delete() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record.
+    // --------------------------------------------------
+    let initial = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice deletes the record.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&initial.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should delete");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Update the record, still without a data stream.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial.clone())
+        .data(Data::from(b"some data".to_vec()))
+        .published(true)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, update, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "record has been deleted");
+}
