@@ -4581,3 +4581,74 @@ async fn protocol_max_size() {
     let reply = endpoint::handle(ALICE_DID, max_size, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
+
+// Should fail when write references a parent that has been deleted.
+#[tokio::test]
+async fn deleted_parent() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a nested protocol: foo -> bar -> baz.
+    // --------------------------------------------------
+    let nested = include_bytes!("../crates/dwn-test/protocols/nested.json");
+    let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes foo1.
+    // --------------------------------------------------
+    let foo1 = WriteBuilder::new()
+        .data(Data::from(b"some request".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://nested.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .schema("foo")
+        .data_format("text/plain")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, foo1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice deletes foo1.
+    // --------------------------------------------------
+    let delete = DeleteBuilder::new()
+        .record_id(&foo1.record_id)
+        .build(&alice_keyring)
+        .await
+        .expect("should create delete");
+    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should delete");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write bar1 under foo1.
+    // --------------------------------------------------
+    let bar1 = WriteBuilder::new()
+        .data(Data::from(b"some request".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://nested.xyz".to_string(),
+            protocol_path: "foo/bar".to_string(),
+        })
+        .schema("bar")
+        .data_format("text/plain")
+        .parent_context_id(foo1.context_id.unwrap())
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, bar1, &provider).await else {
+        panic!("should be Forbidden");
+    };
+    assert_eq!(e, "unable to find parent record");
+}
