@@ -611,8 +611,8 @@ fn validate_rule_set(
 ) -> Result<()> {
     // validate size rule
     if let Some(size) = &rule_set.size {
-        if size.min > size.max {
-            return Err(unexpected!("invalid size range at '{protocol_path}'"));
+        if size.max.is_some() && size.min > size.max {
+            return Err(unexpected!("invalid size range"));
         }
     }
 

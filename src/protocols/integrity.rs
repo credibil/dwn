@@ -219,12 +219,12 @@ fn check_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
 
     if let Some(start) = range.min {
         if data_size < start {
-            return Err(unexpected!("data size is less than allowed"));
+            return Err(forbidden!("data size is less than allowed"));
         }
     }
     if let Some(end) = range.max {
         if data_size > end {
-            return Err(unexpected!("data size is greater than allowed"));
+            return Err(forbidden!("data size is greater than allowed"));
         }
     }
 
