@@ -2,7 +2,6 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
@@ -60,7 +59,7 @@ pub async fn handle(
             return Err(Error::Conflict("message is not the latest".to_string()));
         }
         // when latest message CID is larger than incoming message CID
-        if latest_ts == configure_ts && latest.cid()?.cmp(&configure.cid()?) == Ordering::Greater {
+        if latest_ts == configure_ts && latest.cid()? > configure.cid()? {
             return Err(Error::Conflict("message CID is smaller than existing entry".to_string()));
         }
 

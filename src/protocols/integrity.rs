@@ -102,7 +102,7 @@ fn check_scope(write: &Write, scope: &Scope) -> Result<()> {
         return Err(forbidden!("grant tags must contain a \"protocol\" tag",));
     };
     if tag_protocol != protocol {
-        return Err(forbidden!("grant scope protocol must match tag protocol"));
+        return Err(forbidden!("grant scope protocol does not match protocol"));
     }
 
     Ok(())
