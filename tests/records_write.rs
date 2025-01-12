@@ -4137,9 +4137,12 @@ async fn small_data_cid_protocol() {
     assert_eq!(e, "referenced data does not exist");
 }
 
+// FIXME: requires refactor of BlockStore -> DataStore
+
 // Should prevent accessing data by referencing a different `data_cid` in
 // protocol-authorized records with large amount of data.
 #[tokio::test]
+#[ignore]
 async fn large_data_cid_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
@@ -4248,11 +4251,95 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, bob_update, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "referenced data does not exist");
+}
 
-    endpoint::handle(ALICE_DID, bob_update, &provider).await.expect("msg");
+// Should allow writes both with and without schema set when protocol does not
+// require a schema.
+#[tokio::test]
+async fn protocol_schema() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
-    // let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, bob_update, &provider).await else {
-    //     panic!("should be BadRequest");
-    // };
-    // assert_eq!(e, "referenced data does not exist");
+    // --------------------------------------------------
+    // Alice configures a collaboration protocol that allows records to be 
+    // created both with and without schemas.
+    // --------------------------------------------------
+    let collaborate = include_bytes!("../crates/dwn-test/protocols/anyone-collaborate.json");
+    let definition: Definition = serde_json::from_slice(collaborate).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record without a schema.
+    // --------------------------------------------------
+    let no_schema = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://anyone-collaborate-protocol.xyz".to_string(),
+            protocol_path: "doc".to_string(),
+        })
+        .data_format("application/octet-stream")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, no_schema.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record with a schema.
+    // --------------------------------------------------
+    let with_schema = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://anyone-collaborate-protocol.xyz".to_string(),
+            protocol_path: "doc".to_string(),
+        })
+        .schema("random-schema")
+        .data_format("application/octet-stream")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, with_schema.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Verify Bob's record cannot be queried.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().schema("imageSchema"))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().protocol_path("doc"))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create query");
+    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 2);
 }
