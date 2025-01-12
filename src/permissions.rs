@@ -173,7 +173,8 @@ pub struct Conditions {
     /// Indicates whether a message written with the invocation of a permission
     /// must, may, or must not be marked as public. If unset, it is optional to
     /// make the message public.
-    pub publication: Publication,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publication: Option<Publication>,
 }
 
 /// Condition for publication of a message.

@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{Publication, Conditions, RecordsScope, Scope};
+use super::{Conditions, Publication, RecordsScope, Scope};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
@@ -291,9 +291,7 @@ impl Grant {
 
     pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
         let Scope::Records {
-            protocol,
-            limited_to,
-            ..
+            protocol, limited_to, ..
         } = &self.data.scope
         else {
             return Err(forbidden!("invalid scope: `Records` scope must have protocol set"));
@@ -327,22 +325,19 @@ impl Grant {
         let Some(conditions) = &self.data.conditions else {
             return Ok(());
         };
-        // let Some(publication) = &conditions.publication else {
-        //     return Ok(());
-        // };
 
-        let published = write.descriptor.published.unwrap_or_default();
         match conditions.publication {
-            Publication::Required => {
-                if !published {
+            Some(Publication::Required) => {
+                if !write.descriptor.published.unwrap_or_default() {
                     return Err(forbidden!("grant requires message to be published",));
                 }
             }
-            Publication::Prohibited => {
-                if published {
+            Some(Publication::Prohibited) => {
+                if write.descriptor.published.unwrap_or_default() {
                     return Err(forbidden!("grant prohibits publishing message"));
                 }
             }
+            None => {}
         }
 
         Ok(())
