@@ -302,9 +302,12 @@ impl Grant {
         }
 
         match options {
-            Some(RecordsOptions::ContextId(context_id)) => {
-                if Some(context_id) != write.context_id.as_ref() {
-                    return Err(forbidden!("grant and record `context_id`s do not match"));
+            Some(RecordsOptions::ContextId(grant_context_id)) => {
+                let Some(write_context_id) = &write.context_id else {
+                    return Err(forbidden!("missing `context_id`"));
+                };
+                if !write_context_id.starts_with(grant_context_id) {
+                    return Err(forbidden!("record not part of grant context"));
                 }
             }
             Some(RecordsOptions::ProtocolPath(protocol_path)) => {

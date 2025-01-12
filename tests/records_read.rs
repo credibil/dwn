@@ -1637,7 +1637,7 @@ async fn invalid_grant_context() {
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be Forbidden");
     };
-    assert_eq!(e, "grant and record `context_id`s do not match");
+    assert_eq!(e, "record not part of grant context");
 }
 
 // Should allow reading records in the grant protocol path.

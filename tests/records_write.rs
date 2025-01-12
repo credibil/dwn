@@ -12,7 +12,7 @@ use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use vercre_dwn::messages::{self, MessagesFilter};
-use vercre_dwn::permissions::{GrantBuilder, Scope};
+use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{EventLog, KeyStore};
 use vercre_dwn::records::{
@@ -4843,4 +4843,81 @@ async fn protocol_grant_mismatch() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "scope protocol does not match write protocol");
+}
+
+// Should allow writes when protocol and context grant scope match.
+#[tokio::test]
+async fn protocol_grant_context() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures an email protocol.
+    // --------------------------------------------------
+    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice creates the context that she will give Bob access to.
+    // --------------------------------------------------
+    let email = WriteBuilder::new()
+        .data(Data::from(b"data1".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, email.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to read records using the email protocol.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Records {
+            method: Method::Write,
+            protocol: "http://email-protocol.xyz".to_string(),
+            options: Some(RecordsOptions::ContextId(email.context_id.clone().unwrap())),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob uses the grant to write a record to the protocol.
+    // --------------------------------------------------
+    let bob_write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://email-protocol.xyz".to_string(),
+            protocol_path: "email/email".to_string(),
+        })
+        .schema("email")
+        .data_format("text/plain")
+        .parent_context_id(email.context_id.unwrap())
+        .permission_grant_id(bob_grant.record_id)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, bob_write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
