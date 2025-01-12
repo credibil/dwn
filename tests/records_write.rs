@@ -12,14 +12,14 @@ use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use vercre_dwn::messages::{self, MessagesFilter};
-use vercre_dwn::protocols::{ConfigureBuilder, Definition};
+use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{EventLog, KeyStore};
 use vercre_dwn::records::{
     Data, DeleteBuilder, EncryptOptions, QueryBuilder, ReadBuilder, Recipient, RecordsFilter,
     WriteBuilder, WriteProtocol,
 };
 use vercre_dwn::store::MessagesQuery;
-use vercre_dwn::{Error, Interface, Message, endpoint};
+use vercre_dwn::{Error, Interface, Message, Range, endpoint};
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors
@@ -4266,7 +4266,7 @@ async fn protocol_schema() {
     let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
 
     // --------------------------------------------------
-    // Alice configures a collaboration protocol that allows records to be 
+    // Alice configures a collaboration protocol that allows records to be
     // created both with and without schemas.
     // --------------------------------------------------
     let collaborate = include_bytes!("../crates/dwn-test/protocols/anyone-collaborate.json");
@@ -4342,4 +4342,98 @@ async fn protocol_schema() {
     let body = reply.body.expect("should have body");
     let entries = body.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
+}
+
+// Should allow writes within the message size bounds specified in the protocol.
+#[tokio::test]
+async fn protocol_size() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a custom protocol with data size rules.
+    // --------------------------------------------------
+    let definition = Definition::new("http://blob-size.xyz")
+        .published(true)
+        .add_type("blob", ProtocolType::default())
+        .add_rule("blob", RuleSet {
+            size: Some(Range {
+                min: Some(1),
+                max: Some(1000),
+            }),
+            ..RuleSet::default()
+        });
+
+    let configure = ConfigureBuilder::new()
+        .definition(definition)
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record at the minimum size.
+    // --------------------------------------------------
+    let mut data = [0u8; 1];
+    rand::thread_rng().fill_bytes(&mut data);
+    let stream = DataStream::from(data.to_vec());
+
+    let min_size = WriteBuilder::new()
+        .data(Data::Stream(stream))
+        .protocol(WriteProtocol {
+            protocol: "http://blob-size.xyz".to_string(),
+            protocol_path: "blob".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, min_size, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record at the maximum size.
+    // --------------------------------------------------
+    let mut data = [0u8; 1000];
+    rand::thread_rng().fill_bytes(&mut data);
+    let stream = DataStream::from(data.to_vec());
+
+    let max_size = WriteBuilder::new()
+        .data(Data::Stream(stream))
+        .protocol(WriteProtocol {
+            protocol: "http://blob-size.xyz".to_string(),
+            protocol_path: "blob".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, max_size, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice writes a record greater than the maximum size.
+    // --------------------------------------------------
+    let mut data = [0u8; 1001];
+    rand::thread_rng().fill_bytes(&mut data);
+    let stream = DataStream::from(data.to_vec());
+
+    let too_big = WriteBuilder::new()
+        .data(Data::Stream(stream))
+        .protocol(WriteProtocol {
+            protocol: "http://blob-size.xyz".to_string(),
+            protocol_path: "blob".to_string(),
+        })
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, too_big, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "data size is greater than allowed");
 }
