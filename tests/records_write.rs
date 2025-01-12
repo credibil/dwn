@@ -12,6 +12,7 @@ use rand::RngCore;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use vercre_dwn::messages::{self, MessagesFilter};
+use vercre_dwn::permissions::{GrantBuilder, RecordsOptions, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{EventLog, KeyStore};
 use vercre_dwn::records::{
@@ -19,7 +20,7 @@ use vercre_dwn::records::{
     WriteBuilder, WriteProtocol,
 };
 use vercre_dwn::store::MessagesQuery;
-use vercre_dwn::{Error, Interface, Message, Range, endpoint};
+use vercre_dwn::{Error, Interface, Message, Method, Range, endpoint};
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors
@@ -4709,11 +4710,6 @@ async fn incorrect_parent_context() {
         .await
         .expect("should create write");
 
-    // let context_id = bar1.context_id.unwrap();
-    // let mut segments = context_id.split("/").collect::<Vec<&str>>();
-    // segments[1] = "differentParent";
-    // bar1.context_id = Some(segments.join("/"));
-
     bar1.context_id = Some(format!("differentParent/{}", bar1.record_id));
     bar1.record_id = bar1.entry_id(ALICE_DID).expect("should create record ID");
     bar1.sign_as_author(None, None, &alice_keyring).await.expect("should sign");
@@ -4722,4 +4718,60 @@ async fn incorrect_parent_context() {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "incorrect parent `context_id`");
+}
+
+// Should allow writes when matches protocol grant scope.
+#[tokio::test]
+async fn protocol_grant_match() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice configures a minimal protocol.
+    // --------------------------------------------------
+    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
+    let configure = ConfigureBuilder::new()
+        .definition(definition.clone())
+        .build(&alice_keyring)
+        .await
+        .expect("should build");
+    let reply =
+        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice grants Bob permission to read records.
+    // --------------------------------------------------
+    let bob_grant = GrantBuilder::new()
+        .granted_to(BOB_DID)
+        .scope(Scope::Records {
+            method: Method::Write,
+            protocol: "http://minimal.xyz".to_string(),
+            options: None, // Some(RecordsOptions::ProtocolPath("different-protocol-path".to_string())),
+        })
+        .build(&alice_keyring)
+        .await
+        .expect("should create grant");
+    let reply =
+        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Bob reads the record using the grant.
+    // --------------------------------------------------
+    let bob_write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .protocol(WriteProtocol {
+            protocol: "http://minimal.xyz".to_string(),
+            protocol_path: "foo".to_string(),
+        })
+        .permission_grant_id(bob_grant.record_id)
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, bob_write, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
