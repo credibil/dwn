@@ -16,8 +16,8 @@ use vercre_dwn::permissions::{GrantBuilder, RecordsScope, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
 use vercre_dwn::records::{
-    Data, DeleteBuilder, EncryptOptions, ReadBuilder, Recipient, RecordsFilter, WriteBuilder,
-    WriteProtocol, decrypt,
+    Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
+    WriteBuilder, decrypt,
 };
 use vercre_dwn::store::Entry;
 use vercre_dwn::{Error, Method, endpoint};
@@ -286,9 +286,10 @@ async fn non_author_deleted_write() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "https://example.com/foo".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "https://example.com/foo",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&bob_keyring)
         .build()
@@ -365,9 +366,10 @@ async fn non_owner_author() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "https://example.com/foo".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "https://example.com/foo",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&bob_keyring)
         .build()
@@ -477,9 +479,10 @@ async fn allow_anyone() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"cafe-aesthetic.jpg".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://social-media.xyz".to_string(),
-            protocol_path: "image".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://social-media.xyz",
+            protocol_path: "image",
+            parent_context_id: None,
         })
         .schema("imageSchema")
         .data_format("image/jpeg")
@@ -531,9 +534,10 @@ async fn no_anonymous() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"foo".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://email-protocol.xyz".to_string(),
-            protocol_path: "email".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://email-protocol.xyz",
+            protocol_path: "email",
+            parent_context_id: None,
         })
         .schema("email")
         .data_format("text/plain")
@@ -585,9 +589,10 @@ async fn allow_recipient() {
     let write = WriteBuilder::new()
         .data(Data::from(b"Hello Bob!".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://email-protocol.xyz".to_string(),
-            protocol_path: "email".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://email-protocol.xyz",
+            protocol_path: "email",
+            parent_context_id: None,
         })
         .schema("email")
         .data_format("text/plain")
@@ -656,9 +661,10 @@ async fn allow_author() {
     let write = WriteBuilder::new()
         .data(Data::from(b"Hello Alice!".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://email-protocol.xyz".to_string(),
-            protocol_path: "email".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://email-protocol.xyz",
+            protocol_path: "email",
+            parent_context_id: None,
         })
         .schema("email")
         .data_format("text/plain")
@@ -725,9 +731,10 @@ async fn filter_one() {
     let write = WriteBuilder::new()
         .data(Data::from(b"foo".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://nested.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://nested.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .schema("foo")
         .data_format("text/plain")
@@ -781,9 +788,10 @@ async fn filter_many() {
         let write = WriteBuilder::new()
             .data(Data::from(b"foo".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://nested.xyz".to_string(),
-                protocol_path: "foo".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://nested.xyz",
+                protocol_path: "foo",
+                parent_context_id: None,
             })
             .schema("foo")
             .data_format("text/plain")
@@ -838,9 +846,10 @@ async fn root_role() {
     let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://friend-role.xyz".to_string(),
-            protocol_path: "friend".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://friend-role.xyz",
+            protocol_path: "friend",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -853,9 +862,10 @@ async fn root_role() {
     let chat = WriteBuilder::new()
         .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://friend-role.xyz".to_string(),
-            protocol_path: "chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://friend-role.xyz",
+            protocol_path: "chat",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -906,9 +916,10 @@ async fn invalid_protocol_path() {
     let chat = WriteBuilder::new()
         .data(Data::from(b"Blah blah blah".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://friend-role.xyz".to_string(),
-            protocol_path: "chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://friend-role.xyz",
+            protocol_path: "chat",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -960,9 +971,10 @@ async fn no_recipient_role() {
     let chat = WriteBuilder::new()
         .data(Data::from(b"Blah blah blah".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://friend-role.xyz".to_string(),
-            protocol_path: "chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://friend-role.xyz",
+            protocol_path: "chat",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1014,9 +1026,10 @@ async fn context_role() {
     let thread = WriteBuilder::new()
         .data(Data::from(b"A new thread".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1031,11 +1044,11 @@ async fn context_role() {
     let participant = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread/participant".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread/participant",
+            parent_context_id: thread.context_id.clone(),
         })
-        .parent_context_id(thread.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1049,11 +1062,11 @@ async fn context_role() {
     // --------------------------------------------------
     let chat = WriteBuilder::new()
         .data(Data::from(b"Bob can read this because he is a participant".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread/chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread/chat",
+            parent_context_id: thread.context_id.clone(),
         })
-        .parent_context_id(thread.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1135,9 +1148,10 @@ async fn invalid_context_role() {
     let thread_1 = WriteBuilder::new()
         .data(Data::from(b"Thread 1".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1150,9 +1164,10 @@ async fn invalid_context_role() {
     let thread_2 = WriteBuilder::new()
         .data(Data::from(b"Thread 2".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1168,11 +1183,11 @@ async fn invalid_context_role() {
     let participant = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread/participant".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread/participant",
+            parent_context_id: thread_1.context_id.clone(),
         })
-        .parent_context_id(thread_1.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1186,11 +1201,11 @@ async fn invalid_context_role() {
     // --------------------------------------------------
     let chat = WriteBuilder::new()
         .data(Data::from(b"Bob can read this because he is a participant".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread/chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread/chat",
+            parent_context_id: thread_2.context_id.clone(),
         })
-        .parent_context_id(thread_2.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -1292,9 +1307,10 @@ async fn unrestricted_grant() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"minimal".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://minimal.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://minimal.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1375,9 +1391,10 @@ async fn grant_protocol() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"minimal".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://minimal.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://minimal.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1458,9 +1475,10 @@ async fn invalid_grant_protocol() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"minimal".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://minimal.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://minimal.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1528,9 +1546,10 @@ async fn grant_context() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"minimal".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://minimal.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://minimal.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1596,9 +1615,10 @@ async fn invalid_grant_context() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"minimal".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://minimal.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://minimal.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1666,9 +1686,10 @@ async fn grant_protocol_path() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"minimal".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://minimal.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://minimal.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -1734,9 +1755,10 @@ async fn invalid_grant_protocol_path() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"minimal".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://minimal.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://minimal.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -2321,9 +2343,10 @@ async fn decrypt_context() {
     // create Write record
     let mut write = WriteBuilder::new()
         .data(Data::from(encrypted.ciphertext.clone()))
-        .protocol(WriteProtocol {
-            protocol: "http://chat-protocol.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://chat-protocol.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         .schema("thread")
         .data_format("application/json")
@@ -2416,12 +2439,12 @@ async fn decrypt_context() {
     // create Write record
     let mut write = WriteBuilder::new()
         .data(Data::from(encrypted.ciphertext.clone()))
-        .protocol(WriteProtocol {
-            protocol: "http://chat-protocol.xyz".to_string(),
-            protocol_path: "thread/message".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://chat-protocol.xyz",
+            protocol_path: "thread/message",
+            parent_context_id: Some(context_id.clone()),
         })
         .schema("message")
-        .parent_context_id(context_id.clone())
         .data_format("application/json")
         .sign(&bob_keyring)
         .build()
@@ -2570,9 +2593,10 @@ async fn decrypt_protocol() {
     // create Write record
     let write = WriteBuilder::new()
         .data(Data::from(ciphertext))
-        .protocol(WriteProtocol {
-            protocol: "http://email-protocol.xyz".to_string(),
-            protocol_path: "email".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://email-protocol.xyz",
+            protocol_path: "email",
+            parent_context_id: None,
         })
         .schema("email")
         .data_format("text/plain")

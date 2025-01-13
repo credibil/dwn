@@ -14,7 +14,7 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{Data, WriteBuilder};
+use vercre_dwn::records::{Data, ProtocolBuilder, WriteBuilder};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // TODO: implement fake provider with no subscription support for this test.
@@ -205,9 +205,10 @@ async fn interface_scope() {
     let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(vercre_dwn::records::WriteProtocol {
-            protocol: definition.protocol.clone(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .sign(&alice_keyring)
@@ -412,9 +413,10 @@ async fn protocol_filter() {
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(vercre_dwn::records::WriteProtocol {
-            protocol: "http://protocol1.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(vercre_dwn::records::ProtocolBuilder {
+            protocol: "http://protocol1.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .sign(&alice_keyring)
@@ -431,9 +433,10 @@ async fn protocol_filter() {
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(vercre_dwn::records::WriteProtocol {
-            protocol: "http://protocol2.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://protocol2.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .sign(&alice_keyring)

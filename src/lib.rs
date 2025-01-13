@@ -17,7 +17,7 @@ pub mod records;
 mod schema;
 pub mod store;
 mod tasks;
- mod utils;
+mod utils;
 
 use ::serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};

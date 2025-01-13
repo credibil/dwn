@@ -10,7 +10,7 @@ use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
 use vercre_dwn::records::{
-    Data, DateRange, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder, WriteProtocol,
+    Data, DateRange, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder,
 };
 use vercre_dwn::store::Pagination;
 use vercre_dwn::{Error, Message, RangeFilter, authorization, endpoint};
@@ -381,9 +381,10 @@ async fn author() {
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let alice_write = Write::build()
         .data(Data::Stream(stream.clone()))
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -397,9 +398,10 @@ async fn author() {
 
     let bob_write = Write::build()
         .data(Data::Stream(stream.clone()))
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -508,9 +510,10 @@ async fn owner_recipient() {
     let alice_bob = Write::build()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -525,9 +528,10 @@ async fn owner_recipient() {
     let alice_carol = Write::build()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2650,9 +2654,10 @@ async fn recipient_query() {
     let alice_bob_private = Write::build()
         .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2668,9 +2673,10 @@ async fn recipient_query() {
     let alice_bob_public = Write::build()
         .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2687,9 +2693,10 @@ async fn recipient_query() {
     let alice_carol_private = Write::build()
         .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2705,9 +2712,10 @@ async fn recipient_query() {
     let alice_carol_public = Write::build()
         .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2727,9 +2735,10 @@ async fn recipient_query() {
     let carol_alice_private = Write::build()
         .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2745,9 +2754,10 @@ async fn recipient_query() {
     let carol_alice_public = Write::build()
         .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2764,9 +2774,10 @@ async fn recipient_query() {
     let carol_bob_private = Write::build()
         .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2782,9 +2793,10 @@ async fn recipient_query() {
     let carol_bob_public = Write::build()
         .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .published(true)
@@ -2804,9 +2816,10 @@ async fn recipient_query() {
     let bob_alice_private = Write::build()
         .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2822,9 +2835,10 @@ async fn recipient_query() {
     let bob_alice_public = Write::build()
         .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2841,9 +2855,10 @@ async fn recipient_query() {
     let bob_carol_private = Write::build()
         .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -2859,9 +2874,10 @@ async fn recipient_query() {
     let bob_carol_public = Write::build()
         .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3019,9 +3035,10 @@ async fn author_query() {
     let alice_bob_private = Write::build()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3037,9 +3054,10 @@ async fn author_query() {
     let alice_bob_public = Write::build()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3056,9 +3074,10 @@ async fn author_query() {
     let alice_carol_private = Write::build()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3074,9 +3093,10 @@ async fn author_query() {
     let alice_carol_public = Write::build()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3096,9 +3116,10 @@ async fn author_query() {
     let carol_alice_private = Write::build()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3114,9 +3135,10 @@ async fn author_query() {
     let carol_alice_public = Write::build()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3133,9 +3155,10 @@ async fn author_query() {
     let carol_bob_private = Write::build()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3151,9 +3174,10 @@ async fn author_query() {
     let carol_bob_public = Write::build()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .published(true)
@@ -3173,9 +3197,10 @@ async fn author_query() {
     let bob_alice_private = Write::build()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3191,9 +3216,10 @@ async fn author_query() {
     let bob_alice_public = Write::build()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3210,9 +3236,10 @@ async fn author_query() {
     let bob_carol_private = Write::build()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3228,9 +3255,10 @@ async fn author_query() {
     let bob_carol_public = Write::build()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://allow-any.xyz".to_string(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://allow-any.xyz",
+            protocol_path: "post",
+            parent_context_id: None,
         })
         .schema("post")
         .data_format("application/json")
@@ -3395,9 +3423,10 @@ async fn paginate_non_owner() {
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("bob_private_{}", i).into_bytes()))
-            .protocol(WriteProtocol {
-                protocol: "http://allow-any.xyz".to_string(),
-                protocol_path: "post".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://allow-any.xyz",
+                protocol_path: "post",
+                parent_context_id: None,
             })
             .schema("post")
             .published(true)
@@ -3419,9 +3448,10 @@ async fn paginate_non_owner() {
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_private_{}", i).into_bytes()))
-            .protocol(WriteProtocol {
-                protocol: "http://allow-any.xyz".to_string(),
-                protocol_path: "post".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://allow-any.xyz",
+                protocol_path: "post",
+                parent_context_id: None,
             })
             .schema("post")
             .published(true)
@@ -3446,9 +3476,10 @@ async fn paginate_non_owner() {
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_public_{}", i).into_bytes()))
-            .protocol(WriteProtocol {
-                protocol: "http://allow-any.xyz".to_string(),
-                protocol_path: "post".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://allow-any.xyz",
+                protocol_path: "post",
+                parent_context_id: None,
             })
             .schema("post")
             .sign(&alice_keyring)
@@ -3469,9 +3500,10 @@ async fn paginate_non_owner() {
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("bob_public_{}", i).into_bytes()))
-            .protocol(WriteProtocol {
-                protocol: "http://allow-any.xyz".to_string(),
-                protocol_path: "post".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://allow-any.xyz",
+                protocol_path: "post",
+                parent_context_id: None,
             })
             .schema("post")
             .sign(&bob_keyring)
@@ -3492,9 +3524,10 @@ async fn paginate_non_owner() {
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_public_{}", i).into_bytes()))
-            .protocol(WriteProtocol {
-                protocol: "http://allow-any.xyz".to_string(),
-                protocol_path: "post".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://allow-any.xyz",
+                protocol_path: "post",
+                parent_context_id: None,
             })
             .schema("post")
             .recipient(BOB_DID)
@@ -3834,9 +3867,10 @@ async fn context_id() {
     // --------------------------------------------------
     let foo_1 = Write::build()
         .data(Data::from(b"foo_1".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://nested.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://nested.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .schema("foo")
         .data_format("text/plain")
@@ -3849,9 +3883,10 @@ async fn context_id() {
 
     let foo_2 = Write::build()
         .data(Data::from(b"foo_2".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://nested.xyz".to_string(),
-            protocol_path: "foo".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://nested.xyz",
+            protocol_path: "foo",
+            parent_context_id: None,
         })
         .schema("foo")
         .data_format("text/plain")
@@ -3867,13 +3902,13 @@ async fn context_id() {
     // --------------------------------------------------
     let bar_1 = Write::build()
         .data(Data::from(b"bar_1".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://nested.xyz".to_string(),
-            protocol_path: "foo/bar".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://nested.xyz",
+            protocol_path: "foo/bar",
+            parent_context_id: foo_1.context_id.clone(),
         })
         .schema("bar")
         .data_format("text/plain")
-        .parent_context_id(foo_1.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -3883,13 +3918,13 @@ async fn context_id() {
 
     let bar_2 = Write::build()
         .data(Data::from(b"bar_2".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://nested.xyz".to_string(),
-            protocol_path: "foo/bar".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://nested.xyz",
+            protocol_path: "foo/bar",
+            parent_context_id: foo_1.context_id.clone(),
         })
         .schema("bar")
         .data_format("text/plain")
-        .parent_context_id(foo_1.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -3902,13 +3937,13 @@ async fn context_id() {
     // --------------------------------------------------
     let baz_1 = Write::build()
         .data(Data::from(b"baz_1".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://nested.xyz".to_string(),
-            protocol_path: "foo/bar/baz".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://nested.xyz",
+            protocol_path: "foo/bar/baz",
+            parent_context_id: bar_1.context_id.clone(),
         })
         .schema("baz")
         .data_format("text/plain")
-        .parent_context_id(bar_1.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -3918,13 +3953,13 @@ async fn context_id() {
 
     let baz_2 = Write::build()
         .data(Data::from(b"baz_2".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://nested.xyz".to_string(),
-            protocol_path: "foo/bar/baz".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://nested.xyz",
+            protocol_path: "foo/bar/baz",
+            parent_context_id: bar_1.context_id.clone(),
         })
         .schema("baz")
         .data_format("text/plain")
-        .parent_context_id(bar_1.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -4022,9 +4057,10 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     let thread = Write::build()
         .data(Data::from(b"A new thread".to_vec()))
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -4039,12 +4075,12 @@ async fn protocol_no_role() {
     let chat_bob = Write::build()
         .data(Data::from(b"Bob can read this".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread/chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread/chat",
+            parent_context_id: thread.context_id.clone(),
         })
         .published(false)
-        .parent_context_id(thread.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -4060,12 +4096,12 @@ async fn protocol_no_role() {
         let chat = Write::build()
             .data(Data::from(b"Bob cannot read this".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://thread-role.xyz".to_string(),
-                protocol_path: "thread/chat".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://thread-role.xyz",
+                protocol_path: "thread/chat",
+                parent_context_id: thread.context_id.clone(),
             })
             .published(false)
-            .parent_context_id(thread.context_id.as_ref().unwrap())
             .sign(&alice_keyring)
             .build()
             .await
@@ -4137,9 +4173,10 @@ async fn protocol_role() {
     let bob_friend = Write::build()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://friend-role.xyz".to_string(),
-            protocol_path: "friend".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://friend-role.xyz",
+            protocol_path: "friend",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -4156,9 +4193,10 @@ async fn protocol_role() {
         let chat = Write::build()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://friend-role.xyz".to_string(),
-                protocol_path: "chat".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://friend-role.xyz",
+                protocol_path: "chat",
+                parent_context_id: None,
             })
             .published(false)
             .sign(&alice_keyring)
@@ -4237,9 +4275,10 @@ async fn context_role() {
     let thread = Write::build()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -4254,11 +4293,11 @@ async fn context_role() {
     let participant_role = Write::build()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread/participant".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread/participant",
+            parent_context_id: thread.context_id.clone(),
         })
-        .parent_context_id(thread.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -4275,11 +4314,11 @@ async fn context_role() {
         let chat = Write::build()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://thread-role.xyz".to_string(),
-                protocol_path: "thread/chat".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://thread-role.xyz",
+                protocol_path: "thread/chat",
+                parent_context_id: thread.context_id.clone(),
             })
-            .parent_context_id(thread.context_id.as_ref().unwrap())
             .published(false)
             .sign(&alice_keyring)
             .build()
@@ -4340,9 +4379,10 @@ async fn no_protocol_path() {
     let friend = Write::build()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://friend-role.xyz".to_string(),
-            protocol_path: "friend".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://friend-role.xyz",
+            protocol_path: "friend",
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -4358,9 +4398,10 @@ async fn no_protocol_path() {
         let chat = Write::build()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://friend-role.xyz".to_string(),
-                protocol_path: "chat".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://friend-role.xyz",
+                protocol_path: "chat",
+                parent_context_id: None,
             })
             .published(false)
             .sign(&alice_keyring)
@@ -4415,9 +4456,10 @@ async fn no_context_id() {
     let thread = Write::build()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         // .context_id() deliberately omitted
         .sign(&alice_keyring)
@@ -4433,11 +4475,11 @@ async fn no_context_id() {
     let participant_role = Write::build()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread/participant".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread/participant",
+            parent_context_id: thread.context_id.clone(),
         })
-        .parent_context_id(thread.context_id.as_ref().unwrap())
         .sign(&alice_keyring)
         .build()
         .await
@@ -4454,11 +4496,11 @@ async fn no_context_id() {
         let chat = Write::build()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://thread-role.xyz".to_string(),
-                protocol_path: "thread/chat".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://thread-role.xyz",
+                protocol_path: "thread/chat",
+                parent_context_id: thread.context_id.clone(),
             })
-            .parent_context_id(thread.context_id.as_ref().unwrap())
             .published(false)
             .sign(&alice_keyring)
             .build()
@@ -4516,9 +4558,10 @@ async fn no_root_role_record() {
         let chat = Write::build()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://friend-role.xyz".to_string(),
-                protocol_path: "chat".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://friend-role.xyz",
+                protocol_path: "chat",
+                parent_context_id: None,
             })
             .published(false)
             .sign(&alice_keyring)
@@ -4573,9 +4616,10 @@ async fn no_context_role() {
     let thread = Write::build()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
-        .protocol(WriteProtocol {
-            protocol: "http://thread-role.xyz".to_string(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: "http://thread-role.xyz",
+            protocol_path: "thread",
+            parent_context_id: None,
         })
         // .context_id() deliberately omitted
         .sign(&alice_keyring)
@@ -4592,11 +4636,11 @@ async fn no_context_role() {
         let chat = Write::build()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
-            .protocol(WriteProtocol {
-                protocol: "http://thread-role.xyz".to_string(),
-                protocol_path: "thread/chat".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: "http://thread-role.xyz",
+                protocol_path: "thread/chat",
+                parent_context_id: thread.context_id.clone(),
             })
-            .parent_context_id(thread.context_id.as_ref().unwrap())
             .published(false)
             .sign(&alice_keyring)
             .build()
