@@ -5641,7 +5641,7 @@ async fn invalid_attestation() {
     assert_eq!(e, "message and authorization attestation CIDs do not match");
 }
 
-// TODO: Should fail validation if more than 1 attester is given.
+// TODO: Should fail validation when more than 1 attester is given.
 #[tokio::test]
 #[ignore]
 async fn multiple_attesters() {
@@ -5692,4 +5692,35 @@ async fn attestation_descriptor_cid() {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization attestation CIDs do not match");
+}
+
+// TODO: Should fail when an unknown error is returned.
+#[tokio::test]
+#[ignore]
+async fn unknown_error() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Write a record without data.
+    // --------------------------------------------------
+    let initial =
+        WriteBuilder::new().sign(&alice_keyring).build().await.expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+
+    // --------------------------------------------------
+    // Update the record, providing data.
+    // --------------------------------------------------
+    let update = WriteBuilder::from(initial.clone())
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply = endpoint::handle(ALICE_DID, update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // simulate throwing unexpected error
 }
