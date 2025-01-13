@@ -2,7 +2,6 @@
 
 // use std::time::Duration;
 
-use async_trait::async_trait;
 use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -50,13 +49,13 @@ async fn extend_timeout(owner: &str, task_id: &str, provider: &impl Provider) ->
 }
 
 /// The Task trait required to be implemented by resumable tasks.
-#[async_trait]
 pub trait Task: Serialize + DeserializeOwned + Send + Sync
 where
     Self: Sized,
 {
     /// Runs the task.
-    async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()>;
+    fn run(&self, owner: &str, provider: &impl Provider)
+    -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Used by the task manager to resume running a task.

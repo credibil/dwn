@@ -18,9 +18,8 @@ pub const MAX_ENCODED_SIZE: usize = 30000;
 
 const CHUNK_SIZE: usize = 16;
 
-/// Compuet CID from a data value or stream.
+/// Compute CID from a data value or stream.
 pub mod cid {
-
     use cid::Cid;
     use multihash_codetable::MultihashDigest;
     use serde::Serialize;
@@ -32,7 +31,7 @@ pub mod cid {
     /// Compute a CID from provided payload, serialized to CBOR.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();
         ciborium::into_writer(payload, &mut buf)?;
@@ -42,7 +41,7 @@ pub mod cid {
 }
 
 /// Data stream for serializing/deserializing web node data.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DataStream {
     /// The data to be read.
     pub buffer: Vec<u8>,
@@ -60,7 +59,7 @@ impl DataStream {
     /// Compute a CID for the provided data stream.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn compute_cid(&self) -> Result<(String, usize)> {
         let mut cid = self.clone();
 
@@ -94,7 +93,7 @@ impl DataStream {
     /// Write data stream to the underlying block store.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn to_store(
         &mut self, owner: &str, store: &impl BlockStore,
     ) -> Result<(String, usize)> {
@@ -134,7 +133,7 @@ impl DataStream {
     /// Read data stream from the underlying block store.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn from_store(
         owner: &str, cid: &str, store: &impl BlockStore,
     ) -> Result<Option<Self>> {
@@ -180,6 +179,14 @@ impl DataStream {
 impl From<Vec<u8>> for DataStream {
     fn from(data: Vec<u8>) -> Self {
         Self { buffer: data }
+    }
+}
+
+impl From<&[u8]> for DataStream {
+    fn from(data: &[u8]) -> Self {
+        Self {
+            buffer: data.to_vec(),
+        }
     }
 }
 

@@ -1,30 +1,29 @@
 //! # Messages Query
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use super::MessagesFilter;
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::provider::{EventLog, MessageStore, Provider, Signer};
+use crate::provider::{EventLog, Provider, Signer};
 use crate::store::{Cursor, MessagesQuery};
 use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema};
 
 /// Handle a query message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;
 
-    // TODO: use pagination cursor
-    let query = MessagesQuery::from(query).build();
-    let (events, _) = EventLog::query(provider, owner, &query).await?;
+    // FIXME: use pagination cursor
+    let query = MessagesQuery::from(query);
+    let (events, _) = EventLog::query(provider, owner, &query.into()).await?;
 
     let events =
         events.iter().map(|e| e.cid().unwrap_or_else(|_| String::new())).collect::<Vec<String>>();
@@ -52,7 +51,6 @@ pub struct Query {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Query {
     type Reply = QueryReply;
 
@@ -74,20 +72,20 @@ impl Message for Query {
 }
 
 impl Query {
-    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+    async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         let authzn = &self.authorization;
-        let author = authzn.author()?;
 
+        let author = authzn.author()?;
         if author == owner {
             return Ok(());
         }
 
         // verify grant
-        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Ok(());
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
+            return Err(forbidden!("author has no grant"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
+        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        grant.verify(owner, &authzn.signer()?, self.descriptor(), provider).await?;
 
         // verify filter protocol
         if grant.data.scope.protocol().is_none() {
@@ -97,7 +95,7 @@ impl Query {
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
             if filter.protocol.as_deref() != protocol {
-                return Err(forbidden!("filter protocol does not match scoped protocol",));
+                return Err(forbidden!("filter and grant protocols do not match"));
             }
         }
 
@@ -167,10 +165,12 @@ impl QueryBuilder {
         self
     }
 
+    // FIXME: move signer to .sign(signer) method
+
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {

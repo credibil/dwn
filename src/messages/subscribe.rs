@@ -2,12 +2,12 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use futures::{StreamExt, future};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
@@ -18,15 +18,23 @@ use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schem
 /// Handle a subscribe message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
+    // authorize the subscriber
     subscribe.authorize(owner, provider).await?;
 
-    let filters = subscribe.descriptor.filters;
-    let subscriber =
-        EventStream::subscribe(provider, owner, SubscribeFilter::Messages(filters)).await?;
+    // get event stream from provider
+    // N.B. the provider is expected to map events to our Event type
+    let mut subscriber = EventStream::subscribe(provider, owner).await?;
+
+    // filter the stream before returning
+    if !subscribe.descriptor.filters.is_empty() {
+        let filter = SubscribeFilter::Messages(subscribe.descriptor.filters);
+        let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
+        subscriber.inner = Box::pin(filtered);
+    }
 
     Ok(Reply {
         status: Status {
@@ -49,7 +57,6 @@ pub struct Subscribe {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Subscribe {
     type Reply = SubscribeReply;
 
@@ -80,11 +87,11 @@ impl Subscribe {
         }
 
         // verify grant
-        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Ok(());
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
+            return Err(forbidden!("missing permission grant"));
         };
         let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(&author, &authzn.signer()?, self.descriptor(), store).await?;
+        grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // ensure subscribe filters include scoped protocol
         if grant.data.scope.protocol().is_none() {
@@ -94,7 +101,7 @@ impl Subscribe {
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {
             if filter.protocol.as_deref() != protocol {
-                return Err(forbidden!("filter protocol does not match scoped protocol",));
+                return Err(forbidden!("filter and grant protocols do not match"));
             }
         }
 
@@ -103,7 +110,7 @@ impl Subscribe {
 }
 
 /// Subscribe reply
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::module_name_repetitions)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.
@@ -160,7 +167,7 @@ impl SubscribeBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
         let descriptor = SubscribeDescriptor {
             base: Descriptor {

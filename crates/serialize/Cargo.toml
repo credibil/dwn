@@ -20,7 +20,6 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-chrono.workspace = true
 vercre-dwn = { path = "../.." }
 
 [dev-dependencies]

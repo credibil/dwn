@@ -111,7 +111,7 @@ pub struct Attestation {
 
 impl Authorization {
     /// Verify message signatures.
-    pub async fn authenticate(&self, resolver: impl DidResolver) -> Result<()> {
+    pub(crate) async fn authenticate(&self, resolver: impl DidResolver) -> Result<()> {
         // let verifier = verify_key!(resolver);
         self.signature.verify(verify_key!(resolver.clone())).await?;
 
@@ -130,6 +130,9 @@ impl Authorization {
 
     // TODO: cache this value
     /// Get message author's DID.
+    ///
+    /// # Errors
+    /// LATER: add error docs
     pub fn author(&self) -> Result<String> {
         self.author_delegated_grant.as_ref().map_or_else(
             || signer_did(&self.signature),
@@ -137,7 +140,8 @@ impl Authorization {
         )
     }
 
-    pub fn owner(&self) -> Result<Option<String>> {
+    /// Get message owner's DID.
+    pub(crate) fn owner(&self) -> Result<Option<String>> {
         let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
             signer_did(&grant.authorization.signature)?
         } else {
@@ -150,20 +154,24 @@ impl Authorization {
     }
 
     /// Get message signer's DID from the message authorization.
-    pub fn signer(&self) -> Result<String> {
+    pub(crate) fn signer(&self) -> Result<String> {
         signer_did(&self.signature)
     }
 
-    pub fn owner_signer(&self) -> Result<String> {
+    /// Get the owner's signing DID from the owner signature.
+    pub(crate) fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
             return Err(unexpected!("owner delegated grant not found"));
         };
         signer_did(&grant.authorization.signature)
     }
 
-    pub fn jws_payload(&self) -> Result<JwsPayload> {
-        let base64 = &self.signature.payload;
-        let decoded = Base64UrlUnpadded::decode_vec(base64)
+    /// Get the JWS payload of the message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn payload(&self) -> Result<JwsPayload> {
+        let decoded = Base64UrlUnpadded::decode_vec(&self.signature.payload)
             .map_err(|e| unexpected!("issue decoding header: {e}"))?;
         serde_json::from_slice(&decoded).map_err(|e| unexpected!("issue deserializing header: {e}"))
     }
@@ -171,6 +179,10 @@ impl Authorization {
 
 /// Gets the DID of the signer of the given message, returning an error if the
 /// message is not signed.
+///
+/// # Errors
+/// LATER: Add errors
+/// Returns an error if the message is not signed.
 pub fn signer_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
         return Err(unexpected!("Invalid `kid`"));
@@ -183,7 +195,7 @@ pub fn signer_did(jws: &Jws) -> Result<String> {
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub struct AuthorizationBuilder {
+pub(crate) struct AuthorizationBuilder {
     descriptor_cid: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
@@ -194,34 +206,34 @@ pub struct AuthorizationBuilder {
 impl AuthorizationBuilder {
     /// Returns a new [`AuthorizationBuilder`]
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Set the `Descriptor` CID.
     #[must_use]
-    pub fn descriptor_cid(mut self, descriptor_cid: impl Into<String>) -> Self {
+    pub(crate) fn descriptor_cid(mut self, descriptor_cid: impl Into<String>) -> Self {
         self.descriptor_cid = Some(descriptor_cid.into());
         self
     }
 
     /// Set the `Descriptor`.
     #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
+    pub(crate) fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
         self.delegated_grant = Some(delegated_grant);
         self
     }
 
     /// Specify a grant ID to use.
     #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+    pub(crate) fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
         self.permission_grant_id = Some(permission_grant_id.into());
         self
     }
 
     /// Specify a protocol role to use.
     #[must_use]
-    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+    pub(crate) fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
         self.protocol_role = Some(protocol_role.into());
         self
     }
@@ -229,8 +241,8 @@ impl AuthorizationBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// TODO: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
+    /// LATER: Add errors
+    pub(crate) async fn build(self, signer: &impl Signer) -> Result<Authorization> {
         let descriptor_cid =
             self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;
         let delegated_grant_id = if let Some(grant) = &self.delegated_grant {

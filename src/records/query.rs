@@ -2,54 +2,49 @@
 //!
 //! `Query` is a message type used to query a record in the web node.
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
 use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
+use crate::{Descriptor, Interface, Method, Result, forbidden, unauthorized, unexpected, utils};
 
 /// Process `Query` message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
-    let mut filter = query.descriptor.filter.clone();
+    query.validate()?;
 
-    // authorize messages querying for private records
-    if !filter.published.unwrap_or_default() {
+    let store_query = if query.only_published() {
+        // correct filter when querying soley for published records
+        let mut query = query;
+        query.descriptor.filter.published = Some(true);
+        RecordsQuery::from(query)
+    } else {
         query.authorize(owner, provider).await?;
-
         let Some(authzn) = &query.authorization else {
             return Err(forbidden!("missing authorization"));
         };
-        let author = authzn.author()?;
 
-        // non-owner queries
-        if author != owner {
-            // when query.author is in filter.author or filter.author is empty/None,
-            filter.author = Some(Quota::One(author.clone()));
-
-            // when query.author is in filter.recipient || filter.recipient is
-            // empty/None, set filter.recipient = query.author
-            filter.recipient = Some(Quota::One(author));
-
-            // when filter.protocol_role ??
+        if authzn.author()? == owner {
+            RecordsQuery::from(query)
+        } else {
+            query.into_non_owner()?
         }
-    }
+    };
 
-    // get the latest active `RecordsWrite` records
-    let rq = RecordsQuery::from(query).build();
-    let (records, _) = MessageStore::query(provider, owner, &rq).await?;
+    // fetch records matching query criteria
+    let (records, cursor) =
+        MessageStore::paginated_query(provider, owner, &store_query.into()).await?;
 
     // short-circuit when no records found
     if records.is_empty() {
@@ -67,17 +62,27 @@ pub async fn handle(
     for record in records {
         let write: Write = record.try_into()?;
 
-        let initial_write = if write.is_initial()? {
-            let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true).build();
-            let (records, _) = MessageStore::query(provider, owner, &query).await?;
-            let mut initial_write: Write = (&records[0]).try_into()?;
-            initial_write.encoded_data = None;
-            Some(initial_write)
-        } else {
-            None
-        };
+        // short-circuit when the record is an initial write
+        if write.is_initial()? {
+            entries.push(QueryReplyEntry {
+                write,
+                initial_write: None,
+            });
+            continue;
+        }
 
-        entries.push(QueryReplyEntry { write, initial_write });
+        // get the initial write for the returned `RecordsWrite`
+        let query = RecordsQuery::new()
+            .add_filter(RecordsFilter::new().record_id(&write.record_id))
+            .include_archived(true);
+        let records = MessageStore::query(provider, owner, &query.into()).await?;
+        let mut initial_write: Write = (&records[0]).try_into()?;
+        initial_write.encoded_data = None;
+
+        entries.push(QueryReplyEntry {
+            write,
+            initial_write: Some(initial_write),
+        });
     }
 
     Ok(Reply {
@@ -87,7 +92,7 @@ pub async fn handle(
         },
         body: Some(QueryReply {
             entries: Some(entries),
-            cursor: None,
+            cursor,
         }),
     })
 }
@@ -104,7 +109,6 @@ pub struct Query {
     pub authorization: Option<Authorization>,
 }
 
-#[async_trait]
 impl Message for Query {
     type Reply = QueryReply;
 
@@ -160,7 +164,7 @@ impl Query {
 
         // authenticate the message
         if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(forbidden!("failed to authenticate: {e}"));
+            return Err(unauthorized!("failed to authenticate: {e}"));
         }
 
         // verify grant
@@ -170,13 +174,109 @@ impl Query {
         }
 
         // verify protocol when request invokes a protocol role
-        if let Some(protocol) = &authzn.jws_payload()?.protocol_role {
-            let protocol =
+        if authzn.payload()?.protocol_role.is_some() {
+            let Some(protocol) = &self.descriptor.filter.protocol else {
+                return Err(unexpected!("missing protocol"));
+            };
+            let Some(protocol_path) = &self.descriptor.filter.protocol_path else {
+                return Err(unexpected!("missing `protocol_path`"));
+            };
+            if protocol_path.contains('/') && self.descriptor.filter.context_id.is_none() {
+                return Err(unexpected!("missing `context_id`"));
+            }
+
+            // verify protocol role is authorized
+            let verifier =
                 Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
-            return protocol.permit_query(owner, self, provider).await;
+            return verifier.permit_query(owner, self, provider).await;
         }
 
         Ok(())
+    }
+
+    fn validate(&self) -> Result<()> {
+        if let Some(protocol) = &self.descriptor.filter.protocol {
+            utils::validate_url(protocol)?;
+        }
+
+        if let Some(schema) = &self.descriptor.filter.schema {
+            utils::validate_url(schema)?;
+        }
+
+        let Some(published) = self.descriptor.filter.published else {
+            return Ok(());
+        };
+        if published {
+            return Ok(());
+        }
+
+        if self.descriptor.date_sort == Some(Sort::PublishedAscending)
+            || self.descriptor.date_sort == Some(Sort::PublishedDescending)
+        {
+            return Err(unexpected!(
+                "cannot sort by `date_published` when querying for unpublished records"
+            ));
+        }
+
+        Ok(())
+    }
+
+    // when the `published` flag is unset and the query uses published-related
+    // settings, set the `published` flag to true
+    fn only_published(&self) -> bool {
+        if let Some(published) = self.descriptor.filter.published {
+            return published;
+        }
+        if self.descriptor.filter.date_published.is_some() {
+            return true;
+        }
+        if self.descriptor.date_sort == Some(Sort::PublishedAscending)
+            || self.descriptor.date_sort == Some(Sort::PublishedDescending)
+        {
+            return true;
+        }
+        if self.authorization.is_none() {
+            return true;
+        }
+        false
+    }
+
+    // when requestor (message author) is not web node owner,
+    // recreate filters to include query author as record author or recipient
+    fn into_non_owner(self) -> Result<RecordsQuery> {
+        let mut store_query = RecordsQuery::from(self.clone());
+
+        let Some(authzn) = &self.authorization else {
+            return Err(forbidden!("missing authorization"));
+        };
+        let author = authzn.author()?;
+
+        store_query.filters = vec![];
+
+        // New filter: copy query filter  and set `published` to true
+        if self.descriptor.filter.published.is_none() {
+            let filter = self.descriptor.filter.clone();
+            store_query = store_query.add_filter(filter.published(true));
+        }
+
+        // New filter: copy query filter remove authors except `author`
+        let mut filter = self.descriptor.filter.clone();
+        filter.author = None;
+        store_query = store_query.add_filter(filter.add_author(&author).published(false));
+
+        // New filter: copy query filter and remove recipients except author
+        let mut filter = self.descriptor.filter.clone();
+        filter.recipient = None;
+        store_query = store_query.add_filter(filter.add_recipient(&author).published(false));
+
+        // New filter: author can query any record when authorized by a role
+        if authzn.payload()?.protocol_role.is_some() {
+            let mut filter = self.descriptor.filter.clone();
+            filter.published = Some(false);
+            store_query = store_query.add_filter(filter.published(false));
+        }
+
+        Ok(store_query)
     }
 }
 
@@ -201,67 +301,67 @@ pub struct QueryDescriptor {
 }
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct QueryBuilder {
+pub struct QueryBuilder<F, S> {
     message_timestamp: DateTime<Utc>,
-    filter: RecordsFilter,
+    filter: F,
     date_sort: Option<Sort>,
     pagination: Option<Pagination>,
-    permission_grant_id: Option<String>,
     protocol_role: Option<String>,
+    permission_grant_id: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
-    authorize: Option<bool>,
+    signer: S,
 }
 
-impl QueryBuilder {
+pub struct Unsigned;
+pub struct Signed<'a, S: Signer>(pub &'a S);
+
+pub struct Unfiltered;
+pub struct Filtered(RecordsFilter);
+
+impl Default for QueryBuilder<Unfiltered, Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl QueryBuilder<Unfiltered, Unsigned> {
     /// Returns a new [`QueryBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self {
             message_timestamp: Utc::now(),
-            ..Self::default()
+            filter: Unfiltered,
+            signer: Unsigned,
+            date_sort: None,
+            pagination: None,
+            protocol_role: None,
+            permission_grant_id: None,
+            delegated_grant: None,
         }
     }
 
-    /// Specifies the permission grant ID.
+    /// Set the filter to use when querying.
     #[must_use]
-    pub fn filter(mut self, filter: RecordsFilter) -> Self {
-        self.filter = filter;
-        self
+    pub fn filter(self, filter: RecordsFilter) -> QueryBuilder<Filtered, Unsigned> {
+        QueryBuilder {
+            filter: Filtered(filter),
+            message_timestamp: self.message_timestamp,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
+            signer: self.signer,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+        }
     }
+}
 
-    /// Determines which date to use when sorting query results.
-    #[must_use]
-    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
-        self.date_sort = Some(date_sort);
-        self
-    }
-
-    /// Sets the limit (size) and offset of the resultset pagination cursor.
-    #[must_use]
-    pub fn pagination(mut self, pagination: Pagination) -> Self {
-        self.pagination = Some(pagination);
-        self
-    }
-
-    // /// The datetime the record was created. Defaults to now.
-    // #[must_use]
-    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-    //     self.message_timestamp = message_timestamp;
-    //     self
-    // }
-
+/// State: Unsigned
+impl<'a, F> QueryBuilder<F, Unsigned> {
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
         self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub const fn authorize(mut self, authorize: bool) -> Self {
-        self.authorize = Some(authorize);
         self
     }
 
@@ -279,38 +379,95 @@ impl QueryBuilder {
         self
     }
 
+    /// Determines which date to use when sorting query results.
+    #[must_use]
+    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
+        self.date_sort = Some(date_sort);
+        self
+    }
+
+    /// Sets the limit (size) and offset of the resultset pagination cursor.
+    #[must_use]
+    pub fn pagination(mut self, pagination: Pagination) -> Self {
+        self.pagination = Some(pagination);
+        self
+    }
+
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the
+    /// final build step.
+    #[must_use]
+    pub fn sign<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, Signed<'a, S>> {
+        QueryBuilder {
+            signer: Signed(signer),
+
+            message_timestamp: self.message_timestamp,
+            filter: self.filter,
+            date_sort: self.date_sort,
+            pagination: self.pagination,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+        }
+    }
+}
+
+// Build without signing
+impl QueryBuilder<Filtered, Unsigned> {
     /// Build the write message.
     ///
     /// # Errors
-    /// TODO: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
+    /// LATER: Add errors
+    pub fn build(self) -> Result<Query> {
+        // validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
+
+        Ok(Query {
+            descriptor: QueryDescriptor {
+                base: Descriptor {
+                    interface: Interface::Records,
+                    method: Method::Query,
+                    message_timestamp: self.message_timestamp,
+                },
+                filter: self.filter.0.normalize()?,
+                date_sort: self.date_sort,
+                pagination: self.pagination,
+            },
+            authorization: None,
+        })
+    }
+}
+
+// Build includes signing
+impl<S: Signer> QueryBuilder<Filtered, Signed<'_, S>> {
+    /// Build the write message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn build(self) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
                 method: Method::Query,
                 message_timestamp: self.message_timestamp,
             },
-            filter: self.filter.normalize()?,
+            filter: self.filter.0.normalize()?,
             date_sort: self.date_sort,
             pagination: self.pagination,
         };
 
-        let authorization = if self.authorize.unwrap_or(true) {
-            let mut auth_builder =
-                AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-            if let Some(id) = self.permission_grant_id {
-                auth_builder = auth_builder.permission_grant_id(id);
-            }
-            if let Some(role) = self.protocol_role {
-                auth_builder = auth_builder.protocol_role(role);
-            }
-            if let Some(delegated_grant) = self.delegated_grant {
-                auth_builder = auth_builder.delegated_grant(delegated_grant);
-            }
-            Some(auth_builder.build(signer).await?)
-        } else {
-            None
-        };
+        let mut auth_builder =
+            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
+        if let Some(id) = self.permission_grant_id {
+            auth_builder = auth_builder.permission_grant_id(id);
+        }
+        if let Some(role) = self.protocol_role {
+            auth_builder = auth_builder.protocol_role(role);
+        }
+        if let Some(delegated_grant) = self.delegated_grant {
+            auth_builder = auth_builder.delegated_grant(delegated_grant);
+        }
+        let authorization = Some(auth_builder.build(self.signer.0).await?);
 
         Ok(Query {
             descriptor,

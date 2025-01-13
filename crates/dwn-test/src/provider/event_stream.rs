@@ -1,23 +1,18 @@
 use anyhow::Result;
-use async_trait::async_trait;
-use futures::future;
 use futures::stream::StreamExt;
-use vercre_dwn::event::{Event, SubscribeFilter, Subscriber};
+use vercre_dwn::event::{Event, Subscriber};
 use vercre_dwn::provider::EventStream;
 
 use crate::provider::ProviderImpl;
 
 const SUBJECT: &str = "events";
 
-#[async_trait]
 impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
-    async fn subscribe(&self, owner: &str, filter: SubscribeFilter) -> Result<Subscriber> {
+    async fn subscribe(&self, owner: &str) -> Result<Subscriber> {
         let subscriber = self.nats_client.subscribe(format!("{SUBJECT}.{owner}")).await?;
-        let filtered = subscriber
-            .map(|message| serde_json::from_slice::<Event>(&message.payload).unwrap())
-            .filter(move |event| future::ready(filter.is_match(&event)));
-        Ok(Subscriber::new(filtered.boxed()))
+        let mapped = subscriber.map(|m| serde_json::from_slice::<Event>(&m.payload).unwrap());
+        Ok(Subscriber::new(mapped))
     }
 
     /// Emits an event to a owner's event stream.

@@ -2,72 +2,73 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use async_trait::async_trait;
-use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
-use crate::protocols::{ProtocolsFilter, query};
+use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
+use crate::protocols::query;
 use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::DelegatedGrant;
 use crate::store::{Entry, EntryType};
 use crate::{
-    Descriptor, Interface, Method, Range, Result, forbidden, permissions, schema, unexpected, utils,
+    Descriptor, Error, Interface, Method, Range, Result, forbidden, permissions, schema,
+    unexpected, utils,
 };
 
 /// Process query message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
 
+    // validate the message
+    configure.validate()?;
+
     // find any matching protocol entries
-    let filter = ProtocolsFilter {
-        protocol: configure.descriptor.definition.protocol.clone(),
-    };
-    let results = query::fetch_config(owner, Some(filter), provider).await?;
+    let results = query::fetch_config(
+        owner,
+        Some(configure.descriptor.definition.protocol.clone()),
+        provider,
+    )
+    .await?;
 
-    // determine if incoming message is the latest
-    let is_latest = if let Some(existing) = &results {
-        // find latest matching protocol entry
-        let timestamp = &configure.descriptor.base.message_timestamp;
-        let (is_latest, latest) = existing.iter().fold((true, &configure), |(_, _), e| {
-            if &e.descriptor.base.message_timestamp > timestamp {
-                (false, e)
-            } else {
-                (true, &configure)
-            }
-        });
+    // determine incoming message is the latest
+    if let Some(existing) = &results {
+        let Some(latest) = existing.iter().max_by(|a, b| {
+            a.descriptor.base.message_timestamp.cmp(&b.descriptor.base.message_timestamp)
+        }) else {
+            return Err(unexpected!("no matching protocol entries found"));
+        };
 
-        // delete all entries except the most recent
-        let latest_ts = latest.descriptor.base.message_timestamp;
-        for e in existing {
-            let current_ts = e.descriptor.base.message_timestamp;
-            if current_ts.cmp(&latest_ts) == Ordering::Less {
-                let cid = cid::from_value(&e)?;
-                MessageStore::delete(provider, owner, &cid).await?;
-                EventLog::delete(provider, owner, &cid).await?;
-            }
+        let configure_ts = configure.descriptor.base.message_timestamp.timestamp_micros();
+        let latest_ts = latest.descriptor.base.message_timestamp.timestamp_micros();
+
+        // when latest message is more recent than incoming message
+        if latest_ts > configure_ts {
+            return Err(Error::Conflict("message is not the latest".to_string()));
         }
-        is_latest
-    } else {
-        true
-    };
+        // when latest message CID is larger than incoming message CID
+        if latest_ts == configure_ts && latest.cid()? > configure.cid()? {
+            return Err(Error::Conflict("message CID is smaller than existing entry".to_string()));
+        }
 
-    if !is_latest {
-        return Err(unexpected!("message is not the latest"));
+        // remove existing entries
+        for e in existing {
+            let cid = cid::from_value(&e)?;
+            MessageStore::delete(provider, owner, &cid).await?;
+            EventLog::delete(provider, owner, &cid).await?;
+        }
     }
 
     // save the incoming message
@@ -95,7 +96,6 @@ pub struct Configure {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Configure {
     type Reply = ConfigureReply;
 
@@ -156,37 +156,45 @@ impl Configure {
     /// Check message has sufficient privileges.
     ///
     /// # Errors
-    /// TODO: Add errors
-    pub async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+    /// LATER: Add errors
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
-        let author = authzn.author()?;
 
-        // authorize the author-delegate who signed the message
-        if let Some(delegated) = &authzn.author_delegated_grant {
-            let grant = delegated.to_grant()?;
-            grant.verify(&author, &authzn.signer()?, &self.descriptor.base, store).await?;
-        }
-
-        if self.authorization.author()? == owner {
+        if authzn.author()? == owner {
             return Ok(());
         }
 
         // permission grant
-        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-        let payload: JwsPayload = serde_json::from_slice(&decoded)?;
-        let Some(permission_grant_id) = &payload.permission_grant_id else {
-            return Err(forbidden!("missing permission grant ID"));
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
+            return Err(forbidden!("author has no grant"));
         };
-        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        grant.verify(owner, &authzn.author()?, self.descriptor(), store).await?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant
         let Some(protocol) = grant.data.scope.protocol() else {
             return Ok(());
-            // return Err(forbidden!("missing protocol in grant scope"));
         };
         if protocol != self.descriptor.definition.protocol {
-            return Err(forbidden!(" message and grant protocols do not match"));
+            return Err(forbidden!("message and grant protocols do not match"));
         }
+
+        Ok(())
+    }
+
+    /// Validate the message.
+    fn validate(&self) -> Result<()> {
+        // validate protocol
+        utils::validate_url(&self.descriptor.definition.protocol)?;
+
+        // validate schemas
+        for t in self.descriptor.definition.types.values() {
+            if let Some(schema) = &t.schema {
+                utils::validate_url(schema)?;
+            }
+        }
+
+        validate_structure(&self.descriptor.definition)?;
 
         Ok(())
     }
@@ -251,6 +259,59 @@ impl Definition {
     pub fn add_rule(mut self, name: impl Into<String>, rule_set: RuleSet) -> Self {
         self.structure.insert(name.into(), rule_set);
         self
+    }
+
+    /// Derives public encryption key and adds it to the `$encryption` property
+    /// for each protocol path segment.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn add_encryption(
+        mut self, root_key_id: &str, private_key_jwk: PrivateKeyJwk,
+    ) -> Result<Self> {
+        // TODO: refactor to recursive function
+        // create recursive closure to add encryption property to all rules sets
+        #[allow(clippy::type_complexity)]
+        struct AddEnc<'a> {
+            f: &'a dyn Fn(&AddEnc, &mut BTreeMap<String, RuleSet>, DerivedPrivateJwk) -> Result<()>,
+        }
+
+        let root_key = DerivedPrivateJwk {
+            root_key_id: root_key_id.to_string(),
+            derivation_scheme: DerivationScheme::ProtocolPath,
+            derivation_path: None,
+            derived_private_key: private_key_jwk,
+        };
+
+        // add `encryption` property to each rule set
+        let add_enc = AddEnc {
+            f: &|add_enc, rule_sets, parent_key| {
+                for (key, rule_set) in rule_sets {
+                    let derived_jwk = hd_key::derive_jwk(
+                        parent_key.clone(),
+                        &DerivationPath::Relative(&[key.clone()]),
+                    )?;
+                    let public_key_jwk = derived_jwk.derived_private_key.public_key.clone();
+                    rule_set.encryption = Some(PathEncryption {
+                        root_key_id: root_key_id.into(),
+                        public_key_jwk,
+                    });
+
+                    // recurse into nested rules sets
+                    (add_enc.f)(add_enc, &mut rule_set.structure, derived_jwk)?;
+                }
+
+                Ok(())
+            },
+        };
+
+        // recursively create and add `encryption` property to each rule set
+        let path = vec![DerivationScheme::ProtocolPath.to_string(), self.protocol.clone()];
+        let protocol_derived_jwk = hd_key::derive_jwk(root_key, &DerivationPath::Relative(&path))?;
+
+        (add_enc.f)(&add_enc, &mut self.structure, protocol_derived_jwk)?;
+
+        Ok(self)
     }
 }
 
@@ -483,7 +544,7 @@ impl ConfigureBuilder {
     /// Generate the Configure message body..
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Configure> {
         // check definition has been set
         let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;
@@ -495,7 +556,7 @@ impl ConfigureBuilder {
                 t.schema = Some(utils::clean_url(schema)?);
             }
         }
-        verify_structure(&definition)?;
+        validate_structure(&definition)?;
 
         let descriptor = ConfigureDescriptor {
             base: Descriptor {
@@ -528,26 +589,29 @@ impl ConfigureBuilder {
     }
 }
 
-fn verify_structure(definition: &Definition) -> Result<()> {
+// Verify the structure (rule sets) of the protocol definition.
+fn validate_structure(definition: &Definition) -> Result<()> {
     let keys = definition.types.keys().collect::<Vec<&String>>();
 
-    // validate the entire rule set
+    // parse rule set for roles
+    let roles = role_paths("", &definition.structure, &[])?;
+
+    // validate rule set hierarchy
     for rule_set in definition.structure.values() {
-        let roles = role_paths("", rule_set, vec![])?;
-        verify_rule_set(rule_set, "", &keys, &roles)?;
+        validate_rule_set(rule_set, "", &keys, &roles)?;
     }
 
     Ok(())
 }
 
 // Validates a rule set structure, recursively validating nested rule sets.
-fn verify_rule_set(
+fn validate_rule_set(
     rule_set: &RuleSet, protocol_path: &str, types: &Vec<&String>, roles: &Vec<String>,
 ) -> Result<()> {
-    // validate $size
+    // validate size rule
     if let Some(size) = &rule_set.size {
-        if size.min > size.max {
-            return Err(unexpected!("invalid size range at '{protocol_path}'"));
+        if size.max.is_some() && size.min > size.max {
+            return Err(unexpected!("invalid size range"));
         }
     }
 
@@ -565,28 +629,27 @@ fn verify_rule_set(
     let mut action_iter = rule_set.actions.as_ref().unwrap_or(&empty).iter();
 
     while let Some(action) = action_iter.next() {
-        // for action in rule_set.actions.as_ref().unwrap_or(&Vec::new()) {
         // validate action's `role` property, if exists.
         if let Some(role) = &action.role {
             // role must contain valid protocol paths to a role record
             if !roles.contains(role) {
-                return Err(unexpected!("missing role {role} in action for {protocol_path}"));
+                return Err(unexpected!("missing role {role} in action"));
             }
 
-            // all read-like ('read', 'query', 'subscribe') `can` actions must be present
-            let allowed = [Action::Read, Action::Query, Action::Subscribe];
-            if !allowed.iter().all(|ra| action.can.contains(ra)) {
-                return Err(unexpected!(
-                    "role {role} missing read-like action(s) for {protocol_path}"
-                ));
+            // if ANY `can` actions are read-like ('read', 'query', 'subscribe')
+            // then ALL read-like actions must be present
+            let mut read_actions = vec![Action::Read, Action::Query, Action::Subscribe];
+            read_actions.retain(|ra| action.can.contains(ra));
+
+            // intersection of `read_actions` and `can`: it should be empty or 3
+            if !read_actions.is_empty() && read_actions.len() != 3 {
+                return Err(unexpected!("role {role} is missing read-like actions"));
             }
         }
 
         // when `who` is `anyone`, `of` cannot be set
         if action.who.as_ref().is_some_and(|w| w == &Actor::Anyone) && action.of.is_some() {
-            return Err(unexpected!(
-                "`of` must not be set when `who` is \"anyone\" for {protocol_path}"
-            ));
+            return Err(unexpected!("`of` must not be set when `who` is \"anyone\""));
         }
 
         // When `who` is "recipient" and `of` is unset, `can` must only contain
@@ -621,16 +684,10 @@ fn verify_rule_set(
 
         // ensure no duplicate actors or roles in the remaining action rules
         // ie. no two action rules can have the same combination of `who` + `of` or `role`.
-
-        // let other_iter = action_iter.clone();
         for other in action_iter.clone() {
             if action.who.is_some() {
                 if action.who == other.who && action.of == other.of {
-                    return Err(unexpected!(
-                        "more than one action rule per actor {:?} of {:?} not allowed within a rule set: {action:?}",
-                        action.who,
-                        action.of
-                    ));
+                    return Err(unexpected!("an actor may only have one rule within a rule set"));
                 }
             } else if action.role == other.role {
                 return Err(unexpected!(
@@ -651,31 +708,35 @@ fn verify_rule_set(
         } else {
             &format!("{protocol_path}/{set_name}")
         };
-        verify_rule_set(rule_set, protocol_path, types, roles)?;
+        validate_rule_set(rule_set, protocol_path, types, roles)?;
     }
 
     Ok(())
 }
 
 // Parses the given rule set hierarchy to get all the role protocol paths.
-fn role_paths(protocol_path: &str, rule_set: &RuleSet, roles: Vec<String>) -> Result<Vec<String>> {
+fn role_paths(
+    protocol_path: &str, structure: &BTreeMap<String, RuleSet>, roles: &[String],
+) -> Result<Vec<String>> {
     // restrict to max depth of 10 levels
     if protocol_path.split('/').count() > 10 {
         return Err(unexpected!("Entry nesting depth exceeded 10 levels."));
     }
 
-    for (rule_name, rule_set) in &rule_set.structure {
+    let mut roles = roles.to_owned();
+
+    // only check for roles in nested rule sets
+    for (rule_name, rule_set) in structure {
         let protocol_path = if protocol_path.is_empty() {
             rule_name
         } else {
             &format!("{protocol_path}/{rule_name}")
         };
 
-        let mut roles = roles.clone();
         if rule_set.role.is_some() {
             roles.push(protocol_path.to_string());
         } else {
-            role_paths(protocol_path, rule_set, roles)?;
+            roles = role_paths(protocol_path, &rule_set.structure, &roles)?;
         }
     }
 

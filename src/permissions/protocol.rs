@@ -1,14 +1,17 @@
 //! # Protocol Permissions
 
-use crate::auth::Authorization;
-use crate::permissions::{self, Grant, Request, Scope};
+use base64ct::{Base64UrlUnpadded, Encoding};
+
+use crate::authorization::Authorization;
+use crate::permissions::{self, GrantData, RequestData, Scope};
 use crate::protocols::{
-    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REVOCATION_PATH, RuleSet, integrity,
+    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,
+    integrity,
 };
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, Subscribe, Write, write};
-use crate::store::RecordsQuery;
-use crate::{Range, Result, forbidden};
+use crate::store::{RecordsFilter, RecordsQuery};
+use crate::{Result, forbidden};
 
 /// Protocol-based authorization.
 pub struct Protocol<'a> {
@@ -16,6 +19,8 @@ pub struct Protocol<'a> {
     context_id: Option<&'a String>,
 }
 
+// FIXME: use typestate builder pattern to enforce correct usage for each record
+// type and reduce args passed to permit_* methods
 impl<'a> Protocol<'a> {
     /// Create a new `Protocol` instance.
     #[must_use]
@@ -103,22 +108,22 @@ impl Record {
     async fn rule_set(&self, owner: &str, store: &impl MessageStore) -> Result<RuleSet> {
         let protocol_path = match self {
             Self::Write(write) => &write.descriptor.protocol_path,
-            Self::Read(read) => &read.descriptor.filter.protocol_path,
             Self::Query(query) => &query.descriptor.filter.protocol_path,
             Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol_path,
-            Self::Delete(_) => {
-                unimplemented!("delete's protocol is provided by initial write record");
+            Self::Read(_) | Self::Delete(_) => {
+                unimplemented!("protocol is provided by initial write record");
             }
+        };
+
+        let Some(protocol_path) = &protocol_path else {
+            return Err(forbidden!("missing protocol"));
         };
 
         let protocol = self.protocol()?;
         let definition = integrity::protocol_definition(owner, protocol, store).await?;
 
-        let Some(protocol_path) = &protocol_path else {
-            return Err(forbidden!("missing protocol"));
-        };
         let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
-            return Err(forbidden!("no rule set defined for protocol path"));
+            return Err(forbidden!("invalid protocol path"));
         };
 
         Ok(rule_set)
@@ -129,7 +134,7 @@ impl Protocol<'_> {
     /// Protocol-based authorization for `records::Write` messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_write(
         &self, owner: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
@@ -137,126 +142,124 @@ impl Protocol<'_> {
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Query` and `records::Subscribe`
     /// messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_read(
-        &self, owner: &str, read: &Read, store: &impl MessageStore,
+        &self, owner: &str, read: &Read, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
-        let record: Record = read.into();
-        let rule_set = record.rule_set(owner, store).await?;
+        // Read record does not contain protocol information so we get it from
+        // the initial write record.
+        let write_record: Record = write.into();
+        let rule_set = write_record.rule_set(owner, store).await?;
+        // let ancestor_chain = self.ancestor_chain(owner, &write.record_id, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
+        let read_record: Record = read.into();
 
-        Ok(())
+        self.allow_role(owner, &read_record, write_record.protocol()?, store).await?;
+
+        // FIXME: pass ancestor_chain to `allow_action` method
+        self.allow_action(owner, &read_record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Query` and `records::Subscribe`
     /// messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_query(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let record: Record = query.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Subscribe` messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_subscribe(
         &self, owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
         let record: Record = subscribe.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, &rule_set, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.allow_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for `records::Delete` messages.
     ///
     /// # Errors
-    /// TODO: Document errors
+    /// LATER: Add errors
     pub async fn permit_delete(
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
-        let record: Record = write.into();
-        let rule_set = record.rule_set(owner, store).await?;
+        let write_record: Record = write.into();
+        let delete_record = delete.into();
+        let rule_set = write_record.rule_set(owner, store).await?;
 
-        let delete: Record = delete.into();
-
-        self.allow_role(owner, &delete, &rule_set, store).await?;
-        self.allow_action(owner, &delete, &rule_set, store).await?;
-
-        Ok(())
+        self.allow_role(owner, &delete_record, write_record.protocol()?, store).await?;
+        self.allow_action(owner, &delete_record, &rule_set, store).await
     }
 
     // Check if the incoming message is invoking a role. If so, validate the invoked role.
     async fn allow_role(
-        &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
+        &self, owner: &str, record: &Record, protocol: &str, store: &impl MessageStore,
     ) -> Result<()> {
         let Some(authzn) = record.authorization() else {
             return Err(forbidden!("missing authorization"));
         };
-
         let author = authzn.author()?;
-        let Some(protocol_role) = authzn.jws_payload()?.protocol_role else {
+        let Some(protocol_role) = authzn.payload()?.protocol_role else {
             return Ok(());
         };
-        if !rule_set.role.unwrap_or_default() {
-            return Err(forbidden!(
-                "protocol path {protocol_role} does not match role record type"
-            ));
+
+        let definition = integrity::protocol_definition(owner, protocol, store).await?;
+        let Some(role_rule_set) = integrity::rule_set(&protocol_role, &definition.structure) else {
+            return Err(forbidden!("no rule set defined for invoked role"));
+        };
+        if !role_rule_set.role.unwrap_or_default() {
+            return Err(forbidden!("protocol path does not match role record type"));
         }
 
-        let segment_count = protocol_role.split('/').count();
-        if self.context_id.is_none() && segment_count > 1 {
-            return Err(forbidden!("unable verify role without `context_id`"));
-        }
-
-        let mut query = RecordsQuery::new()
+        // build query to fetch the invoked role record
+        let mut filter = RecordsFilter::new()
             .protocol(self.protocol)
             .protocol_path(&protocol_role)
             .add_recipient(author);
 
-        // `context_id` prefix filter
-        if segment_count > 0 {
-            // context_id segment count is never shorter than the role path count.
-            let default = String::new();
-            let context_id = self.context_id.unwrap_or(&default);
-            let context_id_segments: Vec<&str> = context_id.split('/').collect();
-            let prefix = context_id_segments[..segment_count].join("/");
+        // `context_id` filter
+        let role_segments = protocol_role.split('/').count() - 1;
+        if role_segments > 0 {
+            let Some(context_id) = self.context_id else {
+                return Err(forbidden!("unable verify role without a `context_id`"));
+            };
 
-            query = query.context_id(Range::new(
-                Some(prefix.to_string()),
-                Some(format!("{prefix}\u{ffff}")),
-            ));
+            // get parent context ID
+            let parent_segments = context_id.split('/').collect::<Vec<&str>>();
+            let parent = parent_segments[..role_segments].join("/");
+
+            // FIXME: convert `context_id` to range inside `store` module
+            // filter = filter
+            //     .context_id(Range::new(Some(parent.clone()), Some(format!("{parent}\u{ffff}"))));
+            filter = filter.context_id(&parent);
         }
-        // fetch the invoked role record
-        let (records, _) = store.query(owner, &query.build()).await?;
 
+        // check the invoked role record exists
+        let query = RecordsQuery::new().add_filter(filter);
+        let records = store.query(owner, &query.into()).await?;
         if records.is_empty() {
-            return Err(forbidden!("unable to find records for {protocol_role}"));
+            return Err(forbidden!("unable to find record for role"));
         }
 
         Ok(())
@@ -267,28 +270,29 @@ impl Protocol<'_> {
     async fn allow_action(
         &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
     ) -> Result<()> {
-        // build record chain
-        let record_chain = match record {
+        // build chain of ancestor records
+        let ancestor_chain = match record {
             Record::Write(write) => {
-                if write::initial_entry(owner, &write.record_id, store).await?.is_some() {
-                    self.record_chain(owner, &write.record_id, store).await?
+                // if write::initial_write(owner, &write.record_id, store).await?.is_some() {
+                if !write.is_initial()? {
+                    self.ancestor_chain(owner, &write.record_id, store).await?
                 } else if let Some(parent_id) = &write.descriptor.parent_id {
-                    self.record_chain(owner, parent_id, store).await?
+                    self.ancestor_chain(owner, parent_id, store).await?
                 } else {
                     vec![]
                 }
             }
-            Record::Query(_) | Record::Subscribe(_) | Record::Read(_) => Vec::new(),
             Record::Delete(delete) => {
-                self.record_chain(owner, &delete.descriptor.record_id, store).await?
+                self.ancestor_chain(owner, &delete.descriptor.record_id, store).await?
             }
+            Record::Query(_) | Record::Subscribe(_) | Record::Read(_) => Vec::new(),
         };
 
         let Some(authzn) = record.authorization() else {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
-        let role = authzn.jws_payload()?.protocol_role;
+        let invoked_role = authzn.payload()?.protocol_role;
         let allowed_actions = self.allowed_actions(owner, record, store).await?;
         let Some(action_rules) = &rule_set.actions else {
             return Err(forbidden!("no rule defined for action"));
@@ -302,10 +306,8 @@ impl Protocol<'_> {
             if rule.who == Some(Actor::Anyone) {
                 return Ok(());
             }
-
-            // validate role
-            if role.is_some() {
-                if rule.role == role {
+            if invoked_role.is_some() {
+                if rule.role == invoked_role {
                     return Ok(());
                 }
                 continue;
@@ -318,7 +320,7 @@ impl Protocol<'_> {
                 } else {
                     // the incoming message must be a `RecordsDelete` because only
                     // `co-update`, `co-delete`, `co-prune` are allowed recipient actions,
-                    &record_chain[record_chain.len() - 1]
+                    &ancestor_chain[ancestor_chain.len() - 1]
                 };
 
                 if message.descriptor.recipient.as_ref() == Some(&author) {
@@ -328,7 +330,7 @@ impl Protocol<'_> {
             }
 
             // is actor allowed by the current action rule?
-            if check_actor(&author, rule, &record_chain)? {
+            if check_actor(&author, rule, &ancestor_chain)? {
                 return Ok(());
             }
         }
@@ -336,32 +338,29 @@ impl Protocol<'_> {
         Err(forbidden!("action not permitted"))
     }
 
-    // Constructs the chain of EXISTING records in the datastore where the first
-    // record is the root initial `records::Write` of the record chain and last
-    // record is the initial `records::Write` of the descendant record specified.
-    async fn record_chain(
-        &self, owner: &str, record_id: &str, store: &impl MessageStore,
+    // Constructs a chain of ancestor `initial_write` records starting from
+    // `descendant_id` and working backwards.
+    //
+    // e.g. root_initial_write <- ... <- descendant_initial_write
+    // => vec![root_initial_write, ...,descendant_initial_write]
+    async fn ancestor_chain(
+        &self, owner: &str, descendant_id: &str, store: &impl MessageStore,
     ) -> Result<Vec<Write>> {
-        let mut chain = vec![];
+        let mut ancestors = vec![];
+        let mut current_id = Some(descendant_id.to_owned());
 
-        // keep walking up the chain from the inbound message's parent, until there
-        // is no more parent
-        let mut current_id = Some(record_id.to_owned());
-
+        // walk up the ancestor tree until no parent
         while let Some(record_id) = &current_id {
-            let Some(initial) = write::initial_entry(owner, record_id, store).await? else {
-                return Err(forbidden!(
-                    "no parent found with ID {record_id} when constructing record chain"
-                ));
+            let Some(initial) = write::initial_write(owner, record_id, store).await? else {
+                return Err(forbidden!("no parent record found"));
             };
-
-            chain.push(initial.clone());
+            ancestors.push(initial.clone());
             current_id.clone_from(&initial.descriptor.parent_id);
         }
 
-        // root record first
-        chain.reverse();
-        Ok(chain)
+        // order from root to descendant
+        ancestors.reverse();
+        Ok(ancestors)
     }
 
     // Match `Action`s that authorize the incoming message.
@@ -375,23 +374,21 @@ impl Protocol<'_> {
                 if write.is_initial()? {
                     return Ok(vec![Action::Create]);
                 }
-                let Some(initial) = write::initial_entry(owner, &write.record_id, store).await?
+                let Some(initial) = write::initial_write(owner, &write.record_id, store).await?
                 else {
                     return Ok(Vec::new());
                 };
                 if write.authorization.author()? == initial.authorization.author()? {
                     return Ok(vec![Action::CoUpdate, Action::Update]);
                 }
-
                 Ok(vec![Action::CoUpdate])
             }
             Record::Read(_) => Ok(vec![Action::Read]),
             Record::Query(_) => Ok(vec![Action::Query]),
-            // Method::Read => Ok(vec![Action::Read]),
             Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
             Record::Delete(delete) => {
                 let Some(initial) =
-                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?
+                    write::initial_write(owner, &delete.descriptor.record_id, store).await?
                 else {
                     return Ok(Vec::new());
                 };
@@ -413,16 +410,16 @@ impl Protocol<'_> {
                 }
 
                 Ok(actions)
-            } // Method::Configure => Err(forbidden!("configure method not allowed")),
+            }
         }
     }
 }
 
 // Checks for a match with the `who` rule in record chain.
-fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -> Result<bool> {
+fn check_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write]) -> Result<bool> {
     // find a message with matching protocolPath
     let ancestor =
-        record_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
+        ancestor_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
     let Some(ancestor) = ancestor else {
         // reaching this block means there is an issue with the protocol definition
         // this check should happen `protocols::Configure`
@@ -437,21 +434,34 @@ fn check_actor(author: &str, action_rule: &ActionRule, record_chain: &[Write]) -
 /// Get the scope for a permission record. If the record is a revocation, the
 /// scope is fetched from the grant that is being revoked.
 pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) -> Result<Scope> {
-    //Result<Scope>
-    if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+    if write.descriptor.protocol.as_deref() != Some(PROTOCOL_URI) {
         return Err(forbidden!("unexpected protocol for permission record"));
     }
-    if write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string()) {
-        let Some(parent_id) = &write.descriptor.parent_id else {
-            return Err(forbidden!("missing parent ID for revocation record"));
-        };
-        let grant = permissions::fetch_grant(owner, parent_id, store).await?;
-        return Ok(grant.data.scope);
-    } else if write.descriptor.protocol_path == Some(GRANT_PATH.to_string()) {
-        let grant = Grant::try_from(write)?;
-        return Ok(grant.data.scope);
-    }
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(forbidden!("missing `protocol_path`"));
+    };
+    let Some(encoded) = &write.encoded_data else {
+        return Err(forbidden!("missing grant data"));
+    };
+    let raw_bytes = Base64UrlUnpadded::decode_vec(encoded)?;
 
-    let request = Request::try_from(write)?;
-    Ok(request.scope)
+    match protocol_path.as_str() {
+        REQUEST_PATH => {
+            let data: RequestData = serde_json::from_slice(&raw_bytes)?;
+            Ok(data.scope)
+        }
+        GRANT_PATH => {
+            let data: GrantData = serde_json::from_slice(&raw_bytes)?;
+            Ok(data.scope)
+        }
+        REVOCATION_PATH => {
+            let Some(parent_id) = &write.descriptor.parent_id else {
+                return Err(forbidden!("missing parent ID for revocation record"));
+            };
+            let grant = permissions::fetch_grant(owner, parent_id, store).await?;
+            Ok(grant.data.scope)
+        }
+
+        _ => Err(forbidden!("invalid `protocol_path`")),
+    }
 }

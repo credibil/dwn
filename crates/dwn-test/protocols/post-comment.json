@@ -1,5 +1,5 @@
 {
-  "protocol": "http://allow-any-protocol.xyz",
+  "protocol": "http://post-comment-protocol.xyz",
   "published": true,
   "types": {
     "post": {
@@ -8,7 +8,12 @@
         "application/json"
       ]
     },
-    "attachment": { }
+    "comment": {
+      "schema": "comment",
+      "dataFormats": [
+        "application/json"
+      ]
+    }
   },
   "structure": {
     "post": {
@@ -16,25 +21,24 @@
         {
           "who": "anyone",
           "can": [
-            "create",
-            "update",
-            "delete",
-            "prune",
-            "read",
-            "co-delete",
-            "co-prune"
+            "read"
           ]
         }
       ],
-      "attachment": {
+      "comment": {
         "$actions": [
           {
             "who": "anyone",
             "can": [
-              "create",
-              "update",
-              "delete",
               "read",
+              "create",
+              "update"
+            ]
+          },
+          {
+            "who": "author",
+            "of": "post",
+            "can": [
               "co-delete"
             ]
           }

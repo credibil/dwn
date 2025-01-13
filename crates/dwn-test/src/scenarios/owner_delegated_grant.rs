@@ -5,10 +5,10 @@
 //! grants App X the ability to post as her for the `chat` protocol.
 
 use rand::RngCore;
-use vercre_dwn::permissions::{GrantBuilder, ScopeProtocol};
+use vercre_dwn::Method;
+use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{DelegatedGrant, WriteBuilder, WriteData};
-use vercre_dwn::{Interface, Method};
+use vercre_dwn::records::{Data, DelegatedGrant, WriteBuilder};
 
 use crate::key_store::{ALICE_DID, APP_DID, BOB_DID};
 use crate::provider::ProviderImpl;
@@ -28,9 +28,10 @@ async fn configure() {
         .request_id("grant_id_1")
         .description("allow App X to write as me in chat protocol")
         .delegated(true)
-        .scope(Interface::Records, Method::Write, ScopeProtocol::Records {
+        .scope(Scope::Records {
+            method: Method::Write,
             protocol: "chat".to_string(),
-            options: None,
+            limited_to: None,
         });
     let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
 
@@ -39,12 +40,13 @@ async fn configure() {
     // --------------------------------------------------
     let mut data = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_data = WriteData::Bytes(data.to_vec());
+    let write_data = Data::from(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data_format("application/octet-stream")
         .data(write_data)
-        .build(&bob_keyring)
+        .sign(&bob_keyring)
+        .build()
         .await
         .expect("should create write");
 

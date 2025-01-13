@@ -3,13 +3,12 @@
 use std::str::FromStr;
 
 use ::cid::Cid;
-use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
@@ -22,10 +21,13 @@ use crate::{Descriptor, Error, Interface, Method, Result, forbidden, schema, une
 /// Handle a read message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
-    let Some(entry) = MessageStore::get(provider, owner, &read.descriptor.message_cid).await?
-    else {
+    // validate message CID
+    let cid =
+        Cid::from_str(&read.descriptor.message_cid).map_err(|e| unexpected!("invalid CID: {e}"))?;
+
+    let Some(entry) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
         return Err(Error::NotFound("message not found".to_string()));
     };
 
@@ -36,7 +38,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     // include data with RecordsWrite messages
     let data = if let EntryType::Write(ref mut write) = message {
-        //     // return embedded `encoded_data` as entry data stream.
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
@@ -73,7 +74,6 @@ pub struct Read {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Read {
     type Reply = ReadReply;
 
@@ -95,7 +95,7 @@ impl Message for Read {
 }
 
 impl Read {
-    async fn authorize(&self, owner: &str, entry: &Entry, store: &impl MessageStore) -> Result<()> {
+    async fn authorize(&self, owner: &str, entry: &Entry, provider: &impl Provider) -> Result<()> {
         let authzn = &self.authorization;
 
         // owner can read messages they authored
@@ -105,12 +105,12 @@ impl Read {
         }
 
         // verify grant
-        let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id else {
-            return Err(forbidden!("missing permission grant ID"));
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
+            return Err(forbidden!("missing grant ID"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(owner, &author, self.descriptor(), store).await?;
-        verify_scope(owner, entry, grant.data.scope, store).await?;
+        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        grant.verify(owner, &author, self.descriptor(), provider).await?;
+        verify_scope(owner, entry, grant.data.scope, provider).await?;
 
         Ok(())
     }
@@ -139,7 +139,7 @@ async fn verify_scope(
             EntryType::Write(write) => write.clone(),
             EntryType::Delete(delete) => {
                 let entry =
-                    write::initial_entry(owner, &delete.descriptor.record_id, store).await?;
+                    write::initial_write(owner, &delete.descriptor.record_id, store).await?;
                 let Some(write) = entry else {
                     return Err(forbidden!("message failed scope authorization"));
                 };
@@ -240,7 +240,7 @@ impl ReadBuilder {
     /// Generate the Read message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Read> {
         // verify CID
         let Some(message_cid) = self.message_cid else {

@@ -1,18 +1,20 @@
 //! # Store
 
-use std::fmt::Display;
+pub mod serializer;
+
 use std::ops::Deref;
 
-use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
 use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
-use crate::records::{self, Write};
-pub use crate::records::{RecordsFilter, TagFilter};
-use crate::{Descriptor, Method, Quota, Range, Result, auth, messages, protocols};
+use crate::records::{self, Delete, Write};
+pub use crate::records::{RecordsFilter, Sort, TagFilter};
+use crate::{Descriptor, Method, Result, authorization, messages, protocols};
+pub use crate::{Lower, RangeFilter, Upper};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -37,7 +39,7 @@ impl Entry {
     /// The message's CID.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub fn cid(&self) -> Result<String> {
         match self.message {
             EntryType::Write(ref write) => write.cid(),
@@ -92,6 +94,7 @@ impl Deref for Entry {
     }
 }
 
+// LATER: perhaps should be TryFrom?
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         let mut record = Self {
@@ -99,19 +102,26 @@ impl From<&Write> for Entry {
             indexes: Map::new(),
         };
 
+        // FIXME: build full indexes for each record
         record.indexes.insert(
             "author".to_string(),
             Value::String(write.authorization.author().unwrap_or_default()),
         );
+        record
+            .indexes
+            .insert("messageCid".to_string(), Value::String(write.cid().unwrap_or_default()));
 
         if let Some(attestation) = &write.attestation {
-            let attester = auth::signer_did(attestation).unwrap_or_default();
+            let attester = authorization::signer_did(attestation).unwrap_or_default();
             record.indexes.insert("attester".to_string(), Value::String(attester));
         }
 
-        let date_updated =
-            write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
-        record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
+        // --------------------------------------------------------------------
+        // LATER: `dateUpdated` should not be needed as we use `message_timestamp`
+        // let date_updated =
+        //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
+        // record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
+        // --------------------------------------------------------------------
 
         if let Some(tags) = &write.descriptor.tags {
             let mut tag_map = Map::new();
@@ -120,6 +130,24 @@ impl From<&Write> for Entry {
             }
             record.indexes.insert("tags".to_string(), Value::Object(tag_map));
         }
+
+        record
+    }
+}
+
+impl From<&Delete> for Entry {
+    fn from(delete: &Delete) -> Self {
+        let mut record = Self {
+            message: EntryType::Delete(delete.clone()),
+            indexes: Map::new(),
+        };
+
+        // FIXME: build full indexes for each record
+        // flatten record_id so it queries correctly
+        record
+            .indexes
+            .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
+        record.indexes.insert("archived".to_string(), Value::Bool(false));
 
         record
     }
@@ -169,33 +197,19 @@ pub struct ProtocolsQuery {
     pub published: Option<bool>,
 }
 
-impl ProtocolsQuery {
-    #[must_use]
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    #[must_use]
-    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
-        self.protocol = Some(protocol.into());
-        self
-    }
-
-    #[allow(dead_code)]
-    #[must_use]
-    pub(crate) const fn published(mut self, published: bool) -> Self {
-        self.published = Some(published);
-        self
-    }
-
-    pub(crate) fn build(&self) -> Query {
-        Query::Protocols(self.clone())
+impl From<ProtocolsQuery> for Query {
+    fn from(query: ProtocolsQuery) -> Self {
+        Self::Protocols(query)
     }
 }
 
-impl From<ProtocolsFilter> for ProtocolsQuery {
-    fn from(filter: ProtocolsFilter) -> Self {
-        Self::new().protocol(filter.protocol)
+impl From<protocols::Query> for ProtocolsQuery {
+    fn from(query: protocols::Query) -> Self {
+        let mut pq = Self::default();
+        if let Some(filter) = query.descriptor.filter {
+            pq.protocol = Some(filter.protocol);
+        }
+        pq
     }
 }
 
@@ -203,36 +217,16 @@ impl From<ProtocolsFilter> for ProtocolsQuery {
 /// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
 #[derive(Clone, Debug)]
 pub struct RecordsQuery {
-    /// Filter records by `method`.
+    /// Filter records using one or more filters OR'ed together.
+    pub filters: Vec<RecordsFilter>,
+
+    /// Method of to use when querying records. Defaults to `RecordsWrite`, but
+    /// can be set to `RecordsDelete` or None (for both).
     pub method: Option<Method>,
 
-    /// Filter records by `record_id`.
-    pub record_id: Option<String>,
-
-    /// Filter records by `parent_id`.
-    pub parent_id: Option<String>,
-
-    /// Filter records by `context_id`.
-    pub context_id: Option<Range<String>>,
-
-    /// Filter records by or more `recipient`s.
-    pub recipient: Option<Quota<String>>,
-
-    /// Filter records by `protocol`.
-    pub protocol: Option<String>,
-
-    /// Filter records by `protocol_path`.
-    pub protocol_path: Option<String>,
-
-    /// Filter records by `date_created`.
-    pub date_created: Option<Range<DateTime<Utc>>>,
-
-    /// Include records with the `archive` flag (initial write that has been
-    /// superseded).
+    /// Include records with the `archive` flag (i.e. include initial write for
+    /// updated records).
     pub include_archived: bool,
-
-    /// Filter records by `filter`.
-    pub filter: Option<RecordsFilter>,
 
     /// Sort options.
     pub sort: Option<Sort>,
@@ -243,24 +237,11 @@ pub struct RecordsQuery {
 
 impl Default for RecordsQuery {
     fn default() -> Self {
-        let sort = Sort {
-            message_timestamp: Some(Direction::Descending),
-            ..Sort::default()
-        };
-
         Self {
             method: Some(Method::Write),
             include_archived: false,
-            sort: Some(sort),
-
-            record_id: None,
-            parent_id: None,
-            context_id: None,
-            recipient: None,
-            protocol: None,
-            protocol_path: None,
-            date_created: None,
-            filter: None,
+            sort: Some(Sort::default()),
+            filters: vec![],
             pagination: None,
         }
     }
@@ -273,55 +254,8 @@ impl RecordsQuery {
     }
 
     #[must_use]
-    pub(crate) fn record_id(mut self, record_id: impl Into<String>) -> Self {
-        self.record_id = Some(record_id.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn parent_id(mut self, parent_id: impl Into<String>) -> Self {
-        self.parent_id = Some(parent_id.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn context_id(mut self, context_id: Range<String>) -> Self {
-        self.context_id = Some(context_id);
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
-        match self.recipient {
-            Some(Quota::One(value)) => {
-                self.recipient = Some(Quota::Many(vec![value, recipient.into()]));
-            }
-            Some(Quota::Many(mut values)) => {
-                values.push(recipient.into());
-                self.recipient = Some(Quota::Many(values));
-            }
-            None => {
-                self.recipient = Some(Quota::One(recipient.into()));
-            }
-        }
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn protocol(mut self, protocol: impl Into<String>) -> Self {
-        self.protocol = Some(protocol.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn protocol_path(mut self, protocol_path: impl Into<String>) -> Self {
-        self.protocol_path = Some(protocol_path.into());
-        self
-    }
-
-    #[must_use]
-    pub(crate) const fn date_created(mut self, date_created: Range<DateTime<Utc>>) -> Self {
-        self.date_created = Some(date_created);
+    pub(crate) fn add_filter(mut self, filter: RecordsFilter) -> Self {
+        self.filters.push(filter);
         self
     }
 
@@ -343,16 +277,12 @@ impl RecordsQuery {
         self.sort = Some(sort);
         self
     }
-
-    pub(crate) fn build(&self) -> Query {
-        Query::Records(self.clone())
-    }
 }
 
 impl From<records::Query> for RecordsQuery {
     fn from(query: records::Query) -> Self {
         Self {
-            filter: Some(query.descriptor.filter),
+            filters: vec![query.descriptor.filter],
             sort: query.descriptor.date_sort,
             pagination: query.descriptor.pagination,
             ..Self::default()
@@ -363,9 +293,15 @@ impl From<records::Query> for RecordsQuery {
 impl From<records::Read> for RecordsQuery {
     fn from(read: records::Read) -> Self {
         Self {
-            filter: Some(read.descriptor.filter),
+            filters: vec![read.descriptor.filter],
             ..Self::default()
         }
+    }
+}
+
+impl From<RecordsQuery> for Query {
+    fn from(query: RecordsQuery) -> Self {
+        Self::Records(query)
     }
 }
 
@@ -377,60 +313,17 @@ pub struct MessagesQuery {
     pub filters: Vec<MessagesFilter>,
 }
 
-impl MessagesQuery {
-    #[must_use]
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    pub(crate) fn build(&self) -> Query {
-        Query::Messages(self.clone())
-    }
-}
-
 impl From<messages::Query> for MessagesQuery {
     fn from(query: messages::Query) -> Self {
-        let mut mq = Self::new();
-        mq.filters = query.descriptor.filters;
-        mq
+        Self {
+            filters: query.descriptor.filters,
+        }
     }
 }
 
-/// `EntryType` sort.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Sort {
-    /// Sort by `date_created`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<Direction>,
-
-    /// Sort by `date_published`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_published: Option<Direction>,
-
-    /// Sort by `message_timestamp`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_timestamp: Option<Direction>,
-}
-
-/// Sort direction.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Direction {
-    /// Sort ascending.
-    Ascending,
-
-    /// Sort descending.
-    #[default]
-    Descending,
-}
-
-impl Display for Direction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ascending => write!(f, "ASC"),
-            Self::Descending => write!(f, "DESC"),
-        }
+impl From<MessagesQuery> for Query {
+    fn from(query: MessagesQuery) -> Self {
+        Self::Messages(query)
     }
 }
 
@@ -442,14 +335,46 @@ pub struct Pagination {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
 
-    /// The offset from the start of the result set from which to start when
-    /// determining the page of results to return.
-    #[serde(skip)]
-    pub offset: Option<usize>,
-
     /// Cursor created form the previous page of results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
+    // /// The offset from the start of the result set from which to start when
+    // /// determining the page of results to return.
+    // #[serde(skip)]
+    // pub offset: Option<usize>,
+}
+
+impl Pagination {
+    /// Create a new `Pagination` instance.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            limit: None,
+            cursor: None,
+            // offset: None,
+        }
+    }
+
+    /// Set the limit.
+    #[must_use]
+    pub const fn limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    /// Set the cursor.
+    #[must_use]
+    pub fn cursor(mut self, cursor: Cursor) -> Self {
+        self.cursor = Some(cursor);
+        self
+    }
+
+    // /// Set the offset.
+    // #[must_use]
+    // pub const fn offset(mut self, offset: usize) -> Self {
+    //     self.offset = Some(offset);
+    //     self
+    // }
 }
 
 /// Pagination cursor containing data from the last entry returned in the

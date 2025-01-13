@@ -16,7 +16,7 @@ pub enum Error {
     #[error(r#"{{"code": 401, "detail": "{0}"}}"#)]
     Unauthorized(String),
 
-    /// The client does not have access rights to the content.
+    /// The client does not have access rights to the content, i.e. is unauthorized.
     #[error(r#"{{"code": 403, "detail": "{0}"}}"#)]
     Forbidden(String),
 
@@ -47,6 +47,28 @@ impl Serialize for Error {
             return Err(SerdeError::custom("issue deserializing Err"));
         };
         error.serialize(serializer)
+    }
+}
+
+impl Error {
+    /// Returns the error code.
+    #[must_use]
+    pub const fn code(&self) -> u16 {
+        match self {
+            Self::BadRequest(_) => 400,
+            Self::Unauthorized(_) => 401,
+            Self::Forbidden(_) => 403,
+            Self::NotFound(_) => 404,
+            Self::Conflict(_) => 409,
+            Self::InternalServerError(_) => 500,
+            Self::Unimplemented(_) => 501,
+        }
+    }
+}
+
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.code() == other.code()
     }
 }
 
@@ -106,11 +128,6 @@ impl From<libipld::cid::Error> for Error {
 
 /// Construct an `Error::BadRequest` error from a string or existing error
 /// value.
-///
-/// This evaluates to an [`Error`][crate::Error]. It can take either just a
-/// string, or a format string with arguments. It also can take any custom type
-/// which implements `Debug` and `Display`.
-/// ```
 #[macro_export]
 macro_rules! unexpected {
     ($fmt:expr, $($arg:tt)*) => {
@@ -126,11 +143,6 @@ macro_rules! unexpected {
 
 /// Construct an `Error::Forbidden` error from a string or existing error
 /// value.
-///
-/// This evaluates to an [`Error`][crate::Error]. It can take either just a
-/// string, or a format string with arguments. It also can take any custom type
-/// which implements `Debug` and `Display`.
-/// ```
 #[macro_export]
 macro_rules! forbidden {
     ($fmt:expr, $($arg:tt)*) => {
@@ -141,6 +153,21 @@ macro_rules! forbidden {
     // };
      ($err:expr $(,)?) => {
         $crate::Error::Forbidden(format!($err))
+    };
+}
+
+/// Construct an `Error::Forbidden` error from a string or existing error
+/// value.
+#[macro_export]
+macro_rules! unauthorized {
+    ($fmt:expr, $($arg:tt)*) => {
+        $crate::Error::Unauthorized(format!($fmt, $($arg)*))
+    };
+    // ($msg:literal $(,)?) => {
+    //     $crate::Error::Unauthorized($msg.into())
+    // };
+     ($err:expr $(,)?) => {
+        $crate::Error::Unauthorized(format!($err))
     };
 }
 

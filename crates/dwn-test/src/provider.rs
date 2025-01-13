@@ -16,10 +16,9 @@ use anyhow::{Result, anyhow};
 use blockstore::InMemoryBlockstore;
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem};
-use vercre_dwn::protocols::Configure;
-use vercre_dwn::provider::{DidResolver, Document, MessageStore, Provider};
+use vercre_dwn::provider::{DidResolver, Document, Provider};
 
-use self::key_store::{ALICE_DID, BOB_DID, KeyStoreImpl};
+use self::key_store::{ALICE_DID, KeyStoreImpl};
 
 const NAMESPACE: &str = "integration-test";
 
@@ -37,23 +36,13 @@ impl ProviderImpl {
     pub async fn new() -> Result<Self> {
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns(NAMESPACE).use_db(ALICE_DID).await?;
-        let blockstore = InMemoryBlockstore::<64>::new();
-        let nats_client = async_nats::connect("demo.nats.io").await?;
 
-        let provider = Self {
+        Ok(Self {
             db,
-            blockstore,
-            nats_client,
+            blockstore: InMemoryBlockstore::<64>::new(),
+            nats_client: async_nats::connect("demo.nats.io").await?,
             keystore: KeyStoreImpl::new(),
-        };
-
-        // load base protocol configuration for Alice and Bob
-        let bytes = include_bytes!("./provider/data/protocol.json");
-        let configure: Configure = serde_json::from_slice(bytes).expect("should deserialize");
-        MessageStore::put(&provider, ALICE_DID, &configure.clone().into()).await?;
-        MessageStore::put(&provider, BOB_DID, &configure.into()).await?;
-
-        Ok(provider)
+        })
     }
 }
 

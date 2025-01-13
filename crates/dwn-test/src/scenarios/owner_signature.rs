@@ -9,10 +9,9 @@ use std::io::Read;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{Value, json};
-use vercre_dwn::data::DataStream;
 use vercre_dwn::endpoint;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{ReadBuilder, RecordsFilter, WriteBuilder, WriteData};
+use vercre_dwn::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;
@@ -33,9 +32,10 @@ async fn flat_space() {
     .expect("should serialize");
 
     let bob_msg = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(bob_data)))
+        .data(Data::from(bob_data))
         .published(true)
-        .build(&bob_keyring)
+        .sign(&bob_keyring)
+        .build()
         .await
         .expect("should create write");
 
@@ -46,8 +46,12 @@ async fn flat_space() {
     // Alice fetches the message from Bob's web node
     // --------------------------------------------------
     let filter = RecordsFilter::new().record_id(bob_msg.record_id);
-    let alice_read =
-        ReadBuilder::new().filter(filter).build(&alice_keyring).await.expect("should create write");
+    let alice_read = ReadBuilder::new()
+        .filter(filter)
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
 
     let reply =
         endpoint::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");

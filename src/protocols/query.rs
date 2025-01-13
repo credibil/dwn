@@ -1,27 +1,50 @@
 //! # Protocols Query
 
-use async_trait::async_trait;
-use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Authorization, AuthorizationBuilder, JwsPayload};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::store::{Cursor, ProtocolsQuery};
-use crate::{Descriptor, Interface, Method, Result, forbidden, permissions, schema, utils};
+use crate::store::{self, Cursor};
+use crate::{Descriptor, Interface, Method, Result, permissions, schema, utils};
+
+// Access level for query.
+#[derive(PartialEq, PartialOrd)]
+enum Access {
+    Published,
+    Unpublished,
+}
 
 /// Process query message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
-    query.authorize(owner, provider).await?;
-    let entries = fetch_config(owner, query.descriptor.filter, provider).await?;
+    // validate query
+    if let Some(filter) = &query.descriptor.filter {
+        utils::validate_url(&filter.protocol)?;
+    }
+
+    // build actual query
+    let mut store_query = store::ProtocolsQuery::from(query.clone());
+
+    // unauthorized queries can query for published protocols
+    if query.authorize(owner, provider).await? == Access::Published {
+        store_query.published = Some(true);
+    };
+
+    let records = MessageStore::query(provider, owner, &store_query.into()).await?;
+
+    // unpack messages
+    let mut entries = vec![];
+    for record in records {
+        entries.push(Configure::try_from(record)?);
+    }
 
     Ok(Reply {
         status: Status {
@@ -29,7 +52,7 @@ pub async fn handle(
             detail: Some("OK".to_string()),
         },
         body: Some(QueryReply {
-            entries,
+            entries: Some(entries),
             cursor: None,
         }),
     })
@@ -38,17 +61,17 @@ pub async fn handle(
 /// Protocols Query payload
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
     pub descriptor: QueryDescriptor,
 
     /// The message authorization.
-    pub authorization: Authorization,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authorization: Option<Authorization>,
 }
 
-#[async_trait]
 impl Message for Query {
     type Reply = QueryReply;
 
@@ -61,7 +84,7 @@ impl Message for Query {
     }
 
     fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
+        self.authorization.as_ref()
     }
 
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
@@ -81,18 +104,18 @@ pub struct QueryReply {
     pub cursor: Option<Cursor>,
 }
 
-/// Fetch published `protocols::Configure` matching the query
-pub async fn fetch_config(
-    owner: &str, filter: Option<ProtocolsFilter>, store: &impl MessageStore,
+// Fetch published protocols matching the filter
+pub(super) async fn fetch_config(
+    owner: &str, protocol: Option<String>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
-    let mut query = ProtocolsQuery::new(); //.published(true);
-    if let Some(filter) = filter {
-        let protocol_uri = utils::clean_url(&filter.protocol)?;
-        query = query.protocol(&protocol_uri);
+    // build query
+    let query = store::ProtocolsQuery {
+        protocol,
+        published: None,
     };
 
     // execute query
-    let (messages, _) = store.query(owner, &query.build()).await?;
+    let messages = store.query(owner, &query.into()).await?;
     if messages.is_empty() {
         return Ok(None);
     }
@@ -110,31 +133,39 @@ impl Query {
     /// Check message has sufficient privileges.
     ///
     /// # Errors
-    /// TODO: Add errors
-    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
-        let authzn = &self.authorization;
-
-        // no grant -> author == owner
-        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-        let payload: JwsPayload = serde_json::from_slice(&decoded)?;
-        let Some(permission_grant_id) = &payload.permission_grant_id else {
-            // return Err(forbidden!("missing permission grant ID"));
-            return Ok(());
+    /// LATER: Add errors
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<Access> {
+        let Some(authzn) = &self.authorization else {
+            return Ok(Access::Published);
         };
-        let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+
+        if authzn.author()? == owner {
+            return Ok(Access::Unpublished);
+        }
+
+        // does the message have a permission grant?
+        let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
+            return Ok(Access::Published);
+        };
+
+        // verify permission grant
+        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // if set, query and grant protocols need to match
         let Some(protocol) = grant.data.scope.protocol() else {
-            return Ok(());
+            return Ok(Access::Unpublished);
         };
+        // has a grant but no filter: published protocols only
         let Some(filter) = &self.descriptor.filter else {
-            return Err(forbidden!("missing filter"));
+            return Ok(Access::Published);
         };
+        // filter protocol must match grant protocol
         if protocol != filter.protocol {
-            return Err(forbidden!("unauthorized protocol"));
+            return Ok(Access::Published);
         }
 
-        Ok(())
+        Ok(Access::Unpublished)
     }
 }
 
@@ -188,10 +219,10 @@ impl QueryBuilder {
         self
     }
 
-    /// Generate the permission grant.
+    /// Build the query.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -202,16 +233,37 @@ impl QueryBuilder {
             filter: self.filter,
         };
 
-        // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
+        let mut authorization =
+            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
         if let Some(id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(id);
+            authorization = authorization.permission_grant_id(id);
         }
-        let authorization = builder.build(signer).await?;
 
         let query = Query {
             descriptor,
-            authorization,
+            authorization: Some(authorization.build(signer).await?),
+        };
+
+        schema::validate(&query)?;
+
+        Ok(query)
+    }
+
+    /// Build an anonymous query.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn anonymous(self) -> Result<Query> {
+        let query = Query {
+            descriptor: QueryDescriptor {
+                base: Descriptor {
+                    interface: Interface::Protocols,
+                    method: Method::Query,
+                    message_timestamp: self.message_timestamp,
+                },
+                filter: self.filter,
+            },
+            authorization: None,
         };
 
         schema::validate(&query)?;

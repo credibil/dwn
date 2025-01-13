@@ -2,66 +2,75 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
-use async_trait::async_trait;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
 use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write};
+use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write, write};
 use crate::store::RecordsQuery;
 use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(read.clone()).build();
-    let (entries, _) = MessageStore::query(provider, owner, &query).await?;
+    let mut query = RecordsQuery::from(read.clone());
+    query.method = None;
+
+    let entries = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {
-        return Err(Error::NotFound("no matching records found".to_string()));
+        return Err(Error::NotFound("no matching record".to_string()));
     }
     if entries.len() > 1 {
         return Err(unexpected!("multiple messages exist"));
     }
 
-    // if the matched message is a `RecordsDelete`, mark as not-found and return
-    // both the RecordsDelete and the initial RecordsWrite
+    // if record is deleted, return as NotFound
     if entries[0].descriptor().method == Method::Delete {
-        // TODO: implement this
+        let Some(delete) = entries[0].as_delete() else {
+            return Err(unexpected!("expected `RecordsDelete` message"));
+        };
+        let Ok(initial_write) =
+            write::initial_write(owner, &delete.descriptor.record_id, provider).await
+        else {
+            return Err(unexpected!("initial write for deleted record not found"));
+        };
+        let Some(write) = initial_write else {
+            return Err(unexpected!("initial write for deleted record not found"));
+        };
 
-        //   let initial_write = await RecordsWrite.fetchInitialRecordsWriteMessage(this.messageStore, tenant, recordsDeleteMessage.descriptor.recordId);
-        //   if initial_write.is_none() {
-        //     return Err(unexpected!("Initial write for deleted record not found"));
-        //   }
+        read.authorize(owner, &write, provider).await?;
 
-        //   // perform authorization before returning the delete and initial write messages
-        //   const parsedInitialWrite = await RecordsWrite.parse(initial_write);
-        //
-        // if let Err(e)= RecordsReadHandler.authorizeRecordsRead(tenant, recordsRead, parsedInitialWrite, this.messageStore){
-        //     // return messageReplyFromError(error, 401);
-        //     return Err(e);
-        // }
-        //
-        // return {
-        //     status : { code: 404, detail: 'Not Found' },
-        //     entry  : {
-        //       recordsDelete: recordsDeleteMessage,
-        //       initialWrite
-        //     }
-        // }
+        // FIXME: return optional body for NotFound error
+        // return Err(Error::NotFound("record is deleted".to_string()));
+
+        return Ok(Reply {
+            status: Status {
+                code: StatusCode::NOT_FOUND.as_u16(),
+                detail: None,
+            },
+            body: Some(ReadReply {
+                entry: ReadReplyEntry {
+                    records_delete: Some(delete.clone()),
+                    initial_write: Some(write),
+                    records_write: None,
+                    data: None,
+                },
+            }),
+        });
     }
 
     let mut write = Write::try_from(&entries[0])?;
 
-    // TODO: review against the original code — it should take a store provider
+    // FIXME: review against the original code — it should take a store provider
     // verify the fetched message can be safely returned to the requestor
     read.authorize(owner, &write, provider).await?;
 
@@ -70,7 +79,11 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
         Some(DataStream::from(buffer))
     } else {
-        DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
+        let data = DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?;
+        if data.is_none() {
+            return Err(Error::NotFound("no data found".to_string()));
+        }
+        data
     };
 
     write.encoded_data = None;
@@ -79,8 +92,10 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let initial_write = if write.is_initial()? {
         None
     } else {
-        let query = RecordsQuery::new().record_id(&write.record_id).include_archived(true).build();
-        let (records, _) = MessageStore::query(provider, owner, &query).await?;
+        let query = RecordsQuery::new()
+            .add_filter(RecordsFilter::new().record_id(&write.record_id))
+            .include_archived(true);
+        let records = MessageStore::query(provider, owner, &query.into()).await?;
         if records.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
@@ -121,7 +136,6 @@ pub struct Read {
     pub authorization: Option<Authorization>,
 }
 
-#[async_trait]
 impl Message for Read {
     type Reply = ReadReply;
 
@@ -175,13 +189,29 @@ pub struct ReadReplyEntry {
 
 impl Read {
     async fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
-        let Some(authzn) = &self.authorization else {
+        // authorization not required for published data
+        if write.descriptor.published.unwrap_or_default() {
             return Ok(());
+        }
+
+        let Some(authzn) = &self.authorization else {
+            return Err(forbidden!("read not authorized"));
         };
         let author = authzn.author()?;
 
-        // authorization not required for published data
-        if write.descriptor.published.unwrap_or_default() {
+        // owner can read records on their DWN
+        if author == owner {
+            return Ok(());
+        }
+
+        // recipient can read records they received
+        if let Some(recipient) = &write.descriptor.recipient {
+            if &author == recipient {
+                return Ok(());
+            }
+        }
+        // author can read records they authored
+        if author == write.authorization.author()? {
             return Ok(());
         }
 
@@ -191,34 +221,18 @@ impl Read {
             grant.verify_scope(write)?;
         }
 
-        // owner can read records they authored
-        if author == owner {
-            return Ok(());
-        }
-
-        // recipient can read
-        if let Some(recipient) = &write.descriptor.recipient {
-            if &author == recipient {
-                return Ok(());
-            }
-        }
-
-        // author can read
-        if author == write.authorization.author()? {
-            return Ok(());
-        }
-
         // verify grant
-        if let Some(grant_id) = &authzn.jws_payload()?.permission_grant_id {
+        if let Some(grant_id) = &authzn.payload()?.permission_grant_id {
             let grant = permissions::fetch_grant(owner, grant_id, store).await?;
             grant.permit_read(owner, &author, self, write, store).await?;
             return Ok(());
         }
 
         // verify protocol role and action
-        if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = Protocol::new(protocol);
-            protocol.permit_read(owner, self, store).await?;
+        if let Some(protocol_id) = &write.descriptor.protocol {
+            // FIXME: add `parent_id` to protocol builder
+            let protocol = Protocol::new(protocol_id).context_id(write.context_id.as_ref());
+            protocol.permit_read(owner, self, write, store).await?;
             return Ok(());
         }
 
@@ -240,39 +254,56 @@ pub struct ReadDescriptor {
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub struct ReadBuilder {
+pub struct ReadBuilder<F, S> {
     message_timestamp: DateTime<Utc>,
-    filter: RecordsFilter,
+    filter: F,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
-    authorize: Option<bool>,
+    signer: S,
 }
 
-impl ReadBuilder {
+pub struct Unsigned;
+pub struct Signed<'a, S: Signer>(pub &'a S);
+
+pub struct Unfiltered;
+pub struct Filtered(RecordsFilter);
+
+impl Default for ReadBuilder<Unfiltered, Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ReadBuilder<Unfiltered, Unsigned> {
     /// Returns a new [`ReadBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self {
             message_timestamp: Utc::now(),
-            ..Self::default()
+            filter: Unfiltered,
+            permission_grant_id: None,
+            protocol_role: None,
+            delegated_grant: None,
+            signer: Unsigned,
         }
     }
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn filter(mut self, filter: RecordsFilter) -> Self {
-        self.filter = filter;
-        self
+    pub fn filter(self, filter: RecordsFilter) -> ReadBuilder<Filtered, Unsigned> {
+        ReadBuilder {
+            message_timestamp: self.message_timestamp,
+            filter: Filtered(filter),
+            permission_grant_id: self.permission_grant_id,
+            protocol_role: self.protocol_role,
+            delegated_grant: self.delegated_grant,
+            signer: Unsigned,
+        }
     }
+}
 
-    // /// The datetime the record was created. Defaults to now.
-    // #[must_use]
-    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-    //     self.message_timestamp = Some(message_timestamp);
-    //     self
-    // }
-
+impl<'a, F> ReadBuilder<F, Unsigned> {
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
@@ -280,12 +311,12 @@ impl ReadBuilder {
         self
     }
 
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub const fn authorize(mut self, authorize: bool) -> Self {
-        self.authorize = Some(authorize);
-        self
-    }
+    // /// Specify a protocol role for the record.
+    // #[must_use]
+    // pub const fn authorize(mut self, authorize: bool) -> Self {
+    //     self.authorize = Some(authorize);
+    //     self
+    // }
 
     /// Specify a protocol role for the record.
     #[must_use]
@@ -301,40 +332,75 @@ impl ReadBuilder {
         self
     }
 
-    /// Build the write message.
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the
+    /// final build step.
+    #[must_use]
+    pub fn sign<S: Signer>(self, signer: &'a S) -> ReadBuilder<F, Signed<'a, S>> {
+        ReadBuilder {
+            message_timestamp: self.message_timestamp,
+            filter: self.filter,
+            permission_grant_id: self.permission_grant_id,
+            protocol_role: self.protocol_role,
+            delegated_grant: self.delegated_grant,
+            signer: Signed(signer),
+        }
+    }
+}
+
+impl ReadBuilder<Filtered, Unsigned> {
+    /// Build and return an anonymous (unsigned) Read message.
     ///
     /// # Errors
-    /// TODO: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Read> {
+    /// LATER: Add errors
+    pub fn build(self) -> Result<Read> {
         let descriptor = ReadDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
                 method: Method::Read,
                 message_timestamp: self.message_timestamp,
             },
-            filter: self.filter.normalize()?,
-        };
-
-        let authorization = if self.authorize.unwrap_or(true) {
-            let mut auth_builder =
-                AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-            if let Some(id) = self.permission_grant_id {
-                auth_builder = auth_builder.permission_grant_id(id);
-            }
-            if let Some(role) = self.protocol_role {
-                auth_builder = auth_builder.protocol_role(role);
-            }
-            if let Some(delegated_grant) = self.delegated_grant {
-                auth_builder = auth_builder.delegated_grant(delegated_grant);
-            }
-            Some(auth_builder.build(signer).await?)
-        } else {
-            None
+            filter: self.filter.0,
         };
 
         Ok(Read {
             descriptor,
-            authorization,
+            authorization: None,
+        })
+    }
+}
+
+impl<S: Signer> ReadBuilder<Filtered, Signed<'_, S>> {
+    /// Build the write message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn build(self) -> Result<Read> {
+        let descriptor = ReadDescriptor {
+            base: Descriptor {
+                interface: Interface::Records,
+                method: Method::Read,
+                message_timestamp: self.message_timestamp,
+            },
+            filter: self.filter.0.normalize()?,
+        };
+
+        let mut auth_builder =
+            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
+        if let Some(id) = self.permission_grant_id {
+            auth_builder = auth_builder.permission_grant_id(id);
+        }
+        if let Some(role) = self.protocol_role {
+            auth_builder = auth_builder.protocol_role(role);
+        }
+        if let Some(delegated_grant) = self.delegated_grant {
+            auth_builder = auth_builder.delegated_grant(delegated_grant);
+        }
+
+        Ok(Read {
+            descriptor,
+            authorization: Some(auth_builder.build(self.signer.0).await?),
         })
     }
 }

@@ -2,51 +2,50 @@
 //!
 //! `Delete` is a message type used to delete a record in the web node.
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
-use crate::auth::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::Protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider, Signer};
 use crate::records::Write;
-use crate::store::{Entry, EntryType, RecordsQuery};
+use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
 use crate::tasks::{self, Task, TaskType};
 use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Process `Delete` message.
 ///
 /// # Errors
-/// TODO: Add errors
+/// LATER: Add errors
 pub async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
-
-    let query = RecordsQuery::new().record_id(&delete.descriptor.record_id).method(None).build();
-    let (records, _) = MessageStore::query(provider, owner, &query).await?;
+    let query = RecordsQuery::new()
+        .method(None)
+        .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id));
+    let records = MessageStore::query(provider, owner, &query.into()).await?;
     if records.is_empty() {
-        return Err(Error::NotFound("no matching records found".to_string()));
+        return Err(Error::NotFound("no matching record found".to_string()));
     }
+    let latest = &records[0];
 
-    // run checks when latest existing message is a `RecordsDelete`
-    let newest_existing = &records[0];
-    if newest_existing.descriptor().method == Method::Delete {
+    // check the latest existing message has not already been deleted
+    if latest.descriptor().method == Method::Delete {
         // cannot delete a `RecordsDelete` record
         if !delete.descriptor.prune {
             return Err(Error::NotFound("cannot delete a `RecordsDelete` record".to_string()));
         }
 
         // cannot prune previously pruned record
-        let existing_delete = Delete::try_from(newest_existing)?;
+        let existing_delete = Delete::try_from(latest)?;
         if existing_delete.descriptor.prune {
             return Err(Error::NotFound(
                 "attempting to prune an already pruned record".to_string(),
@@ -54,7 +53,17 @@ pub async fn handle(
         }
     }
 
-    delete.authorize(owner, &Write::try_from(&records[0])?, provider).await?;
+    // authorize the delete message
+    delete.authorize(owner, &Write::try_from(latest)?, provider).await?;
+
+    // ensure the delete request does not pre-date the latest existing version
+    if delete.descriptor().message_timestamp.timestamp_micros()
+        < latest.descriptor().message_timestamp.timestamp_micros()
+    {
+        return Err(Error::Conflict("newer record version exists".to_string()));
+    }
+
+    // run the delete task as a resumable task
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
     Ok(Reply {
@@ -77,7 +86,6 @@ pub struct Delete {
     pub authorization: Authorization,
 }
 
-#[async_trait]
 impl Message for Delete {
     type Reply = DeleteReply;
 
@@ -124,24 +132,6 @@ impl TryFrom<&Entry> for Delete {
     }
 }
 
-impl From<&Delete> for Entry {
-    fn from(delete: &Delete) -> Self {
-        let mut record = Self {
-            message: EntryType::Delete(delete.clone()),
-            indexes: Map::new(),
-        };
-
-        // flatten record_id so it queries correctly
-        record
-            .indexes
-            .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
-        record.indexes.insert("archived".to_string(), Value::Bool(false));
-
-        record
-    }
-}
-
-#[async_trait]
 impl Task for Delete {
     async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         delete(owner, self, provider).await
@@ -154,6 +144,7 @@ impl Delete {
         let authzn = &self.authorization;
         let author = &authzn.author()?;
 
+        // when signed by delegate, authorize delegate
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = delegated_grant.to_grant()?;
             grant.permit_delete(author, &authzn.signer()?, self, write, store).await?;
@@ -168,7 +159,7 @@ impl Delete {
             return protocol.permit_delete(owner, self, write, store).await;
         }
 
-        Err(forbidden!("`RecordsDelete` message failed authorization"))
+        Err(forbidden!("delete request failed authorization"))
     }
 }
 
@@ -194,6 +185,7 @@ pub struct DeleteBuilder {
     record_id: Option<String>,
     prune: Option<bool>,
     permission_grant_id: Option<String>,
+    protocol_role: Option<String>,
 }
 
 impl DeleteBuilder {
@@ -220,13 +212,6 @@ impl DeleteBuilder {
         self
     }
 
-    // /// The datetime the record was created. Defaults to now.
-    // #[must_use]
-    // pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
-    //     self.message_timestamp = message_timestamp;
-    //     self
-    // }
-
     /// Specifies the permission grant ID.
     #[must_use]
     pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
@@ -234,10 +219,17 @@ impl DeleteBuilder {
         self
     }
 
+    /// Specifies the permission grant ID.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
+        self
+    }
+
     /// Build the write message.
     ///
     /// # Errors
-    /// TODO: Add errors
+    /// LATER: Add errors
     pub async fn build(self, signer: &impl Signer) -> Result<Delete> {
         let Some(record_id) = self.record_id else {
             return Err(unexpected!("`record_id` is not set"));
@@ -258,6 +250,9 @@ impl DeleteBuilder {
         if let Some(id) = self.permission_grant_id {
             auth_builder = auth_builder.permission_grant_id(id);
         }
+        if let Some(role) = self.protocol_role {
+            auth_builder = auth_builder.protocol_role(role);
+        }
         let authorization = auth_builder.build(signer).await?;
 
         Ok(Delete {
@@ -270,11 +265,11 @@ impl DeleteBuilder {
 async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = RecordsQuery::new()
-        .record_id(&delete.descriptor.record_id)
         .method(None)
         .include_archived(true)
-        .build();
-    let (records, _) = MessageStore::query(provider, owner, &query).await?;
+        .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id));
+
+    let records = MessageStore::query(provider, owner, &query.into()).await?;
     if records.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
@@ -282,17 +277,17 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(unexpected!("multiple messages exist"));
     }
 
-    let newest_existing = &records[0];
+    let latest = &records[0];
 
     // TODO: merge this code with `RecordsWrite`
-    // if the incoming message is not the newest, return Conflict
-    let delete_ts = delete.descriptor().message_timestamp;
-    let latest_ts = newest_existing.descriptor().message_timestamp;
-    if delete_ts.cmp(&latest_ts) == Ordering::Less {
+    // if the incoming message is not the latest, return Conflict
+    let delete_ts = delete.descriptor().message_timestamp.timestamp_micros();
+    let latest_ts = latest.descriptor().message_timestamp.timestamp_micros();
+    if delete_ts < latest_ts {
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
 
-    let Some(earliest) = records.last() else {
+    let Some(earliest) = records.first() else {
         return Err(unexpected!("no records found"));
     };
 
@@ -301,10 +296,14 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(unexpected!("initial write is not earliest message"));
     }
 
+    // FIXME: need to copy ALL initial write fields and indexes to delete message
     // save the delete message using same indexes as the initial write
-    let initial = Entry::from(&write);
+    let mut initial = Entry::from(&write);
+    initial.indexes.insert("recordId".to_string(), Value::String(write.record_id.clone()));
+
     let mut entry = Entry::from(delete);
     entry.indexes.extend(initial.indexes);
+
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
     EventStream::emit(provider, owner, &entry).await?;
@@ -324,19 +323,19 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 #[async_recursion]
 async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
     // fetch child records
-    let query = RecordsQuery::new().parent_id(record_id).build();
-    let (children, _) = MessageStore::query(provider, owner, &query).await?;
+    let query = RecordsQuery::new().add_filter(RecordsFilter::new().parent_id(record_id));
+    let children = MessageStore::query(provider, owner, &query.into()).await?;
     if children.is_empty() {
         return Ok(());
     }
 
     // group by `record_id` (a record can have multiple children)
     let mut record_id_map = HashMap::<&str, Vec<Entry>>::new();
-    for message in children {
-        let record_id = if let Some(write) = message.as_write() {
+    for entry in children {
+        let record_id = if let Some(write) = entry.as_write() {
             &write.record_id
         } else {
-            let Some(delete) = message.as_delete() else {
+            let Some(delete) = entry.as_delete() else {
                 return Err(unexpected!("unexpected message type"));
             };
             &delete.descriptor.record_id
@@ -345,14 +344,14 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
         record_id_map
             .get_mut(record_id.as_str())
             .unwrap_or(&mut Vec::<Entry>::new())
-            .push(message.clone());
+            .push(entry.clone());
     }
 
-    for (record_id, messages) in record_id_map {
+    for (record_id, entries) in record_id_map {
         // purge child's descendants
         delete_children(owner, record_id, provider).await?;
-        // purge child's messages
-        purge(owner, &messages, provider).await?;
+        // purge child's entries
+        purge(owner, &entries, provider).await?;
     }
 
     Ok(())
@@ -365,11 +364,7 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
         records.iter().filter(|m| m.descriptor().method == Method::Write).collect::<Vec<&Entry>>();
 
     // order records from earliest to most recent
-    writes.sort_by(|a, b| {
-        let ts_a = a.descriptor().message_timestamp;
-        let ts_b = b.descriptor().message_timestamp;
-        ts_a.cmp(&ts_b)
-    });
+    writes.sort_by(|a, b| a.descriptor().message_timestamp.cmp(&b.descriptor().message_timestamp));
 
     // delete data for the most recent write
     let Some(latest) = writes.pop() else {
@@ -390,32 +385,33 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
     Ok(())
 }
 
-// Deletes all messages in `existing` that are older than the `newest` in the
+// Deletes all messages in `existing` that are older than the `latest` in the
 // given tenant, but keep the initial write write for future processing by
 // ensuring its `private` index is "true".
 async fn delete_earlier(
-    owner: &str, newest: &Entry, existing: &[Entry], provider: &impl Provider,
+    owner: &str, latest: &Entry, existing: &[Entry], provider: &impl Provider,
 ) -> Result<()> {
     // N.B. under normal circumstances, there will only be, at most, two existing
     // records per `record_id` (initial + a potential subsequent write/delete),
-    for message in existing {
-        let ts_message = message.descriptor().message_timestamp;
-        let ts_newest = newest.descriptor().message_timestamp;
+    for entry in existing {
+        let entry_ts = entry.descriptor().message_timestamp.timestamp_micros();
+        let latest_ts = latest.descriptor().message_timestamp.timestamp_micros();
 
-        if ts_message.cmp(&ts_newest) == Ordering::Less {
-            delete_data(owner, message, newest, provider).await?;
-            MessageStore::delete(provider, owner, &message.cid()?).await?;
+        if entry_ts < latest_ts {
+            delete_data(owner, entry, latest, provider).await?;
 
             // when the existing message is the initial write, retain it BUT,
             // ensure the message is marked as `archived`
-            if let Some(write) = message.as_write()
+            if let Some(write) = entry.as_write()
                 && write.is_initial()?
             {
                 let mut record = Entry::from(write);
                 record.indexes.insert("archived".to_string(), Value::Bool(true));
                 MessageStore::put(provider, owner, &record).await?;
             } else {
-                EventLog::delete(provider, owner, &message.cid()?).await?;
+                let cid = entry.cid()?;
+                MessageStore::delete(provider, owner, &cid).await?;
+                EventLog::delete(provider, owner, &cid).await?;
             }
         }
     }
@@ -425,15 +421,15 @@ async fn delete_earlier(
 
 // Deletes the data referenced by the given message if needed.
 async fn delete_data(
-    owner: &str, existing: &Entry, newest: &Entry, store: &impl BlockStore,
+    owner: &str, existing: &Entry, latest: &Entry, store: &impl BlockStore,
 ) -> Result<()> {
     let Some(existing_write) = existing.as_write() else {
         return Err(unexpected!("unexpected message type"));
     };
 
-    // keep data if referenced by newest message
-    if let Some(newest_write) = newest.as_write() {
-        if existing_write.descriptor.data_cid == newest_write.descriptor.data_cid {
+    // keep data if referenced by latest message
+    if let Some(latest_write) = latest.as_write() {
+        if existing_write.descriptor.data_cid == latest_write.descriptor.data_cid {
             return Ok(());
         }
     };

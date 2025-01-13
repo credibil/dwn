@@ -83,12 +83,20 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             let schema = include_bytes!("../schemas/interface-methods/records-delete.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "PermissionRequestData" => {
+            let schema = include_bytes!("../schemas/permissions/permission-request-data.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
         "PermissionGrantData" => {
             let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
             Ok(serde_json::from_slice(schema)?)
         }
+        "PermissionRevocationData" => {
+            let schema = include_bytes!("../schemas/permissions/permission-revocation-data.json");
+            Ok(serde_json::from_slice(schema)?)
+        }
 
-        _ => Err(unexpected!("Schema not found: {schema_name}")),
+        _ => Err(unexpected!("schema not found: {schema_name}")),
     }
 }
 
@@ -101,7 +109,7 @@ impl Retrieve for Retriever {
         &self, uri: &Uri<&str>,
     ) -> Result<Value, Box<(dyn std::error::Error + Send + Sync + 'static)>> {
         // let Some(file) = uri.path().split('/').last() else {
-        //     return Err(unexpected!("Schema not found: {uri}").into());
+        //     return Err(unexpected!("schema not found: {uri}").into());
         // };
 
         match uri.path().as_str() {

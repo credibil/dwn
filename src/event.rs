@@ -5,11 +5,10 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use chrono::{DateTime, Utc};
-use futures::Stream;
+use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-// use tokio::sync::mpsc;
 use crate::messages::MessagesFilter;
 use crate::records::{RecordsFilter, TagFilter};
 use crate::store::{Entry, EntryType};
@@ -36,36 +35,16 @@ impl Default for SubscribeFilter {
 
 /// Used by local clients to handle events subscribed to.
 pub struct Subscriber {
-    inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
-}
-
-impl Default for Subscriber {
-    fn default() -> Self {
-        Self {
-            inner: Box::pin(futures::stream::empty()),
-        }
-    }
-}
-
-impl fmt::Debug for Subscriber {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Subscriber").finish()
-    }
-}
-
-impl Clone for Subscriber {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Box::pin(futures::stream::empty()),
-        }
-    }
+    pub(crate) inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
 }
 
 impl Subscriber {
     /// Wrap Provider's subscription Stream for ease of surfacing to users.
     #[must_use]
-    pub const fn new(stream: Pin<Box<dyn Stream<Item = Event> + Send>>) -> Self {
-        Self { inner: stream }
+    pub fn new(stream: impl Stream<Item = Event> + Send + 'static) -> Self {
+        Self {
+            inner: Box::pin(stream),
+        }
     }
 }
 
@@ -74,7 +53,21 @@ impl Stream for Subscriber {
 
     // Poll underlying stream for new events
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.inner.as_mut().as_mut().poll_next(cx)
+        self.inner.as_mut().poll_next(cx)
+    }
+}
+
+impl Default for Subscriber {
+    fn default() -> Self {
+        Self {
+            inner: Box::pin(stream::empty()),
+        }
+    }
+}
+
+impl fmt::Debug for Subscriber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Subscriber").finish()
     }
 }
 

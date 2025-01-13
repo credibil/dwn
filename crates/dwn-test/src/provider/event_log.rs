@@ -1,24 +1,23 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use async_trait::async_trait;
 use serde_json::Value;
 use vercre_dwn::event::Event;
 use vercre_dwn::provider::EventLog;
+use vercre_dwn::store::serializer::Serialize;
 use vercre_dwn::store::{Cursor, Query};
-use vercre_serialize::QuerySerializer;
+use vercre_serialize::surrealdb;
 
 use super::ProviderImpl;
 use crate::provider::NAMESPACE;
 
 const TABLE: &str = "event_log";
 
-#[async_trait]
 impl EventLog for ProviderImpl {
     async fn append(&self, owner: &str, event: &Event) -> Result<()> {
         self.db.use_ns(NAMESPACE).use_db(owner).await?;
         let _: Option<BTreeMap<String, Value>> =
-            self.db.create((TABLE, &event.cid()?)).content(event).await?;
+            self.db.update((TABLE, event.cid()?)).content(event).await?;
         Ok(())
     }
 
@@ -27,12 +26,17 @@ impl EventLog for ProviderImpl {
     }
 
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Cursor)> {
-        let sql = query.serialize();
-        let mut response = self.db.query(&sql).bind(("table", TABLE)).await?;
+        self.db.use_ns(NAMESPACE).use_db(owner).await?;
+
+        let mut serializer = surrealdb::Sql::new();
+        query.serialize(&mut serializer).unwrap();
+        let sql = serializer.output();
+
+        let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
         let events: Vec<Event> = response.take(0)?;
         Ok((events, Cursor::default()))
 
-        // TODO: sort and paginate
+        // FIXME: sort and paginate
     }
 
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {

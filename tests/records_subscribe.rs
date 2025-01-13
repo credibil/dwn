@@ -6,10 +6,9 @@ use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
-use serde_json::json;
-use vercre_dwn::data::DataStream;
+use tokio::time;
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder, WriteData};
+use vercre_dwn::records::{Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder};
 use vercre_dwn::{Message, endpoint};
 
 // The owner should be able to subscribe their own event stream.
@@ -32,14 +31,12 @@ async fn owner_events() {
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
-    let data = serde_json::to_vec(&json!({
-        "message": "test record write",
-    }))
-    .expect("should serialize");
+    let data = br#"{"message": "test record write"}"#;
 
     let write = WriteBuilder::new()
-        .data(WriteData::Reader(DataStream::from(data)))
-        .build(&alice_keyring)
+        .data(Data::from(data.to_vec()))
+        .sign(&alice_keyring)
+        .build()
         .await
         .expect("should create write");
 
@@ -54,7 +51,8 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .build(&alice_keyring)
+        .sign(&alice_keyring)
+        .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -75,7 +73,7 @@ async fn owner_events() {
             }
         }
     };
-    if let Err(_) = tokio::time::timeout(Duration::from_millis(500), find_event).await {
+    if let Err(_) = time::timeout(Duration::from_millis(500), find_event).await {
         panic!("should have found event");
     }
 }
