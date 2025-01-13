@@ -11,7 +11,7 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{Data, WriteBuilder, WriteProtocol};
+use vercre_dwn::records::{Data, ProtocolSettings, WriteBuilder};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // Should fetch all messages for owner owner beyond a provided cursor.
@@ -45,14 +45,14 @@ async fn owner_messages() {
     let reader = DataStream::from(data.to_vec());
 
     let schema = definition.types["post"].schema.clone().expect("should have schema");
-    let protocol = WriteProtocol {
-        protocol: definition.protocol.clone(),
-        protocol_path: "post".to_string(),
-    };
 
     for _i in 1..=5 {
         let write = WriteBuilder::new()
-            .protocol(protocol.clone())
+            .protocol(ProtocolSettings {
+                protocol: definition.protocol.clone(),
+                protocol_path: "post".to_string(),
+                parent_context_id: None,
+            })
             .schema(&schema)
             .data(Data::Stream(reader.clone()))
             .published(true)
@@ -87,7 +87,11 @@ async fn owner_messages() {
     // Alice writes an additional record.
     // --------------------------------------------------
     let message = WriteBuilder::new()
-        .protocol(protocol.clone())
+        .protocol(ProtocolSettings {
+            protocol: definition.protocol.clone(),
+            protocol_path: "post".to_string(),
+            parent_context_id: None,
+        })
         .schema(&schema)
         .data(Data::Stream(reader))
         .published(true)
@@ -231,14 +235,14 @@ async fn match_grant_scope() {
     let data = br#"{"message": "test record write"}"#;
     let reader = DataStream::from(data.to_vec());
 
-    let protocol = WriteProtocol {
-        protocol: definition.protocol.clone(),
-        protocol_path: "post".to_string(),
-    };
     let schema = definition.types["post"].schema.clone().expect("should have schema");
 
     let write_any = WriteBuilder::new()
-        .protocol(protocol.clone())
+        .protocol(ProtocolSettings {
+            protocol: definition.protocol.clone(),
+            protocol_path: "post".to_string(),
+            parent_context_id: None,
+        })
         .schema(schema)
         .data(Data::Stream(reader))
         .sign(&alice_keyring)

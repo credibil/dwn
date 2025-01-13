@@ -733,11 +733,10 @@ pub struct WriteDescriptor {
 pub struct WriteBuilder<O, A, S> {
     message_timestamp: DateTime<Utc>,
     recipient: Option<String>,
-    protocol: Option<WriteProtocol>,
+    protocol: Option<ProtocolSettings>,
     schema: Option<String>,
     tags: Option<Map<String, Value>>,
     record_id: Option<String>,
-    parent_context_id: Option<String>,
     data: Option<Data>,
     data_format: String,
     date_created: DateTime<Utc>,
@@ -761,13 +760,23 @@ impl Default for WriteBuilder<New, Unattested, Unsigned> {
 
 /// The protocol to use for the Write message.
 #[derive(Clone, Debug, Default)]
-pub struct WriteProtocol {
+pub struct ProtocolSettings {
     /// Entry protocol.
     pub protocol: String,
 
     /// Protocol path.
     pub protocol_path: String,
+
+    /// Parent context for the protocol.
+    pub parent_context_id: Option<String>,
 }
+
+// /// Required for a child (non-root) protocol record.
+// #[must_use]
+// pub fn parent_context_id(mut self, parent_context_id: impl Into<String>) -> Self {
+//     self.parent_context_id = Some(parent_context_id.into());
+//     self
+// }
 
 /// Entry data can be raw bytes or CID.
 pub enum Data {
@@ -848,7 +857,6 @@ impl WriteBuilder<New, Unattested, Unsigned> {
             schema: None,
             tags: None,
             record_id: None,
-            parent_context_id: None,
             published: None,
             date_published: None,
             protocol_role: None,
@@ -883,7 +891,6 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
             schema: None,
             tags: None,
             record_id: None,
-            parent_context_id: None,
             published: None,
             date_published: None,
             protocol_role: None,
@@ -900,7 +907,7 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
 impl WriteBuilder<New, Unattested, Unsigned> {
     /// Set a protocol for the record.
     #[must_use]
-    pub fn protocol(mut self, protocol: WriteProtocol) -> Self {
+    pub fn protocol(mut self, protocol: ProtocolSettings) -> Self {
         self.protocol = Some(protocol);
         self
     }
@@ -916,15 +923,6 @@ impl WriteBuilder<New, Unattested, Unsigned> {
     #[must_use]
     pub fn recipient(mut self, recipient: impl Into<String>) -> Self {
         self.recipient = Some(recipient.into());
-        self
-    }
-
-    // FIXME: use ProtocolBuilder to ensure this can only be set when protocol is specified
-
-    /// Required for a child (non-root) protocol record.
-    #[must_use]
-    pub fn parent_context_id(mut self, parent_context_id: impl Into<String>) -> Self {
-        self.parent_context_id = Some(parent_context_id.into());
         self
     }
 }
@@ -1044,7 +1042,6 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
             schema: self.schema,
             tags: self.tags,
             record_id: self.record_id,
-            parent_context_id: self.parent_context_id,
             data: self.data,
             data_format: self.data_format,
             date_created: self.date_created,
@@ -1078,7 +1075,6 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
             schema: self.schema,
             tags: self.tags,
             record_id: self.record_id,
-            parent_context_id: self.parent_context_id,
             data: self.data,
             data_format: self.data_format,
             date_created: self.date_created,
@@ -1124,19 +1120,21 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
             if let Some(record_id) = self.record_id.clone() {
                 write.record_id = record_id;
             }
-            if let Some(write_protocol) = self.protocol.clone() {
-                let normalized = utils::clean_url(&write_protocol.protocol)?;
+            if let Some(settings) = self.protocol.clone() {
+                let normalized = utils::clean_url(&settings.protocol)?;
                 write.descriptor.protocol = Some(normalized);
-                write.descriptor.protocol_path = Some(write_protocol.protocol_path);
+                write.descriptor.protocol_path = Some(settings.protocol_path);
+
+                // parent_id == last segment of  `parent_context_id`
+                if let Some(parent_context_id) = &settings.parent_context_id {
+                    write.descriptor.parent_id =
+                        parent_context_id.split('/').next_back().map(ToString::to_string);
+                }
             }
             if let Some(s) = &self.schema {
                 write.descriptor.schema = Some(utils::clean_url(s)?);
             }
-            // parent_id == last segment of  `parent_context_id`
-            if let Some(parent_context_id) = &self.parent_context_id {
-                write.descriptor.parent_id =
-                    parent_context_id.split('/').next_back().map(ToString::to_string);
-            }
+
             write
         };
 
@@ -1212,10 +1210,10 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
         }
 
         // compute `context_id` if this is a protocol-space record
-        if write.descriptor.protocol.is_some() {
+        if let Some(settings) = &self.protocol {
             if let Some(parent_context_id) = &write.context_id {
                 write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
-            } else if let Some(parent_context_id) = &self.parent_context_id {
+            } else if let Some(parent_context_id) = &settings.parent_context_id {
                 write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
             } else {
                 write.context_id = Some(write.record_id.clone());

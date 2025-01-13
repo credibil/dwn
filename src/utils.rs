@@ -1,5 +1,5 @@
 //! # Utils
-//! 
+//!
 //! TODO: documentation
 
 use http::uri::Uri;

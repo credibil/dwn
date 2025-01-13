@@ -14,7 +14,7 @@ use vercre_dwn::messages::ReadBuilder;
 use vercre_dwn::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{KeyStore, MessageStore};
-use vercre_dwn::records::{Data, DeleteBuilder, WriteBuilder, WriteProtocol};
+use vercre_dwn::records::{Data, DeleteBuilder, ProtocolSettings, WriteBuilder};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint, store};
 
 // Bob should be able to read any message in Alice's web node.
@@ -651,9 +651,10 @@ async fn protocol_grant() {
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(WriteProtocol {
+        .protocol(ProtocolSettings {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -687,9 +688,10 @@ async fn protocol_grant() {
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(WriteProtocol {
+        .protocol(ProtocolSettings {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
+            parent_context_id: None,
         })
         .permission_grant_id(&carol_grant.record_id)
         .sign(&carol_keyring)
@@ -883,9 +885,10 @@ async fn invalid_protocol_grant() {
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(WriteProtocol {
+        .protocol(ProtocolSettings {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
@@ -977,9 +980,10 @@ async fn delete_with_no_write() {
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(WriteProtocol {
+        .protocol(ProtocolSettings {
             protocol: "http://minimal.xyz".to_string(),
             protocol_path: "foo".to_string(),
+            parent_context_id: None,
         })
         .sign(&alice_keyring)
         .build()
