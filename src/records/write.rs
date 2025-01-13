@@ -80,7 +80,7 @@ pub async fn handle(
         let Some(existing) = &latest_entry else {
             return Err(unexpected!("latest existing record not found"));
         };
-        write.copy_data(owner, existing, provider).await?;
+        write.clone_data(owner, existing, provider).await?;
     };
 
     // response codes
@@ -333,7 +333,7 @@ impl Write {
                 let author = self.authorization.author()?;
                 let context_id = self.entry_id(&author)?;
                 if self.context_id != Some(context_id) {
-                    return Err(unexpected!("invalid `context_id`"));
+                    return Err(unexpected!("invalid context ID"));
                 }
             }
         }
@@ -360,17 +360,15 @@ impl Write {
 
         // verify integrity of message against signature payload
         if self.record_id != payload.record_id {
-            return Err(unexpected!("message and authorization `recordId`s do not match"));
+            return Err(unexpected!("message and authorization record IDs do not match"));
         }
         if self.context_id != payload.context_id {
-            return Err(unexpected!("message and authorization `contextId`s do not match"));
+            return Err(unexpected!("message and authorization context IDs do not match"));
         }
         if let Some(attestation_cid) = payload.attestation_cid {
             let expected_cid = cid::from_value(&self.attestation)?;
             if attestation_cid != expected_cid {
-                return Err(unexpected!(
-                    "message and authorization `attestationCid`s do not match"
-                ));
+                return Err(unexpected!("message and authorization attestation CIDs do not match"));
             }
         }
         if let Some(encryption_cid) = payload.encryption_cid {
@@ -453,7 +451,7 @@ impl Write {
     // Write message has no data and is not an 'initial write':
     //  1. verify the new message's data integrity
     //  2. copy stored `encoded_data` to the new  message.
-    async fn copy_data(
+    async fn clone_data(
         &mut self, owner: &str, existing: &Entry, block_store: &impl BlockStore,
     ) -> Result<()> {
         let latest = Self::try_from(existing)?;
@@ -810,6 +808,14 @@ impl From<Vec<u8>> for Data {
     fn from(data: Vec<u8>) -> Self {
         Self::Stream(DataStream::from(data))
     }
+}
+
+/// Attestation payload.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Attestation {
+    /// The attestation's descriptor CID.
+    pub descriptor_cid: String,
 }
 
 // State 'guards' for the WriteBuilder typestate pattern.
@@ -1220,15 +1226,9 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
     }
 }
 
-#[derive(Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Payload {
-    descriptor_cid: String,
-}
-
 impl<O, A: Signer, S: Signer> WriteBuilder<O, Attested<'_, A>, Signed<'_, S>> {
     async fn attestation(self, descriptor: &WriteDescriptor) -> Result<Jws> {
-        let payload = Payload {
+        let payload = Attestation {
             descriptor_cid: cid::from_value(descriptor)?,
         };
         let Some(attester) = self.attesters.0.first() else {

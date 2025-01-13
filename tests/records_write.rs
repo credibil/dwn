@@ -9,6 +9,7 @@ use dwn_test::key_store::{
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
+use vercre_dwn::authorization::JwsPayload;
 use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
 use vercre_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use vercre_dwn::messages::{self, MessagesFilter};
@@ -16,12 +17,12 @@ use vercre_dwn::permissions::{Conditions, GrantBuilder, Publication, RecordsScop
 use vercre_dwn::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use vercre_dwn::provider::{EventLog, KeyStore};
 use vercre_dwn::records::{
-    Data, DeleteBuilder, EncryptOptions, QueryBuilder, ReadBuilder, Recipient, RecordsFilter,
-    WriteBuilder, WriteProtocol,
+    Attestation, Data, DeleteBuilder, EncryptOptions, QueryBuilder, ReadBuilder, Recipient,
+    RecordsFilter, SignaturePayload, WriteBuilder, WriteProtocol,
 };
 use vercre_dwn::store::MessagesQuery;
-use vercre_dwn::{Error, Interface, Message, Method, Range, endpoint};
-use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
+use vercre_dwn::{Error, Interface, Message, Method, Range, data, endpoint};
+use vercre_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors
 // #[tokio::test]
@@ -1173,7 +1174,7 @@ async fn invalid_context_id() {
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, initial, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert_eq!(e, "invalid `context_id`");
+    assert_eq!(e, "invalid context ID");
 }
 
 // Should log an event on initial write.
@@ -4062,9 +4063,9 @@ async fn small_data_cid_protocol() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob learns the metadata (including data_cid) of Alice's private record.
-    // He attempts to gain access by writing to Alice's web node using an open
-    // protocol that references Alice's data_cid without providing any data.
+    // Bob learns the `data_cid` of Alice's record and attempts to gain access
+    // by writing to Alice's web node using an open protocol that references
+    // Alice's `data_cid` without providing any data.
     // --------------------------------------------------
     let bob_write = WriteBuilder::new()
         .data(Data::Cid {
@@ -5473,4 +5474,222 @@ async fn write_after_delete() {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "record has been deleted");
+}
+
+// Should prevent referencing data across web nodes.
+#[tokio::test]
+async fn cross_tenant_data() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+
+    // --------------------------------------------------
+    // Alice writes a record to her web node.
+    // --------------------------------------------------
+    let alice_write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(ALICE_DID, alice_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // --------------------------------------------------
+    // Alice verifies her record has encoded data.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&alice_write.record_id))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
+
+    // --------------------------------------------------
+    // Bob learns the `data_cid` of Alice's record and attempts to gain
+    // access by referencing it in his own web node.
+    // --------------------------------------------------
+    let bob_write = WriteBuilder::new()
+        .data(Data::Cid {
+            data_cid: alice_write.descriptor.data_cid,
+            data_size: alice_write.descriptor.data_size,
+        })
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create write");
+    let reply =
+        endpoint::handle(BOB_DID, bob_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+
+    // --------------------------------------------------
+    // Bob attempts (and fails) to read his record.
+    // --------------------------------------------------
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&bob_write.record_id))
+        .sign(&bob_keyring)
+        .build()
+        .await
+        .expect("should create read");
+    let reply = endpoint::handle(BOB_DID, query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+    assert!(reply.body.is_none());
+}
+
+// Should fail when `record_id` does not match signature `record_id`.
+#[tokio::test]
+async fn record_id_mismatch() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write a record with an altered `record_id`.
+    // --------------------------------------------------
+    let mut write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the record ID
+    write.record_id = "somerandomrecordid".to_string();
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "message and authorization record IDs do not match");
+}
+
+// Should fail when `context_id` does not match signature `context_id`.
+#[tokio::test]
+async fn context_id_mismatch() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write a record with an altered `context_id`.
+    // --------------------------------------------------
+    let mut write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the signature context ID
+    let payload = SignaturePayload {
+        base: JwsPayload {
+            descriptor_cid: data::cid::from_value(&write.descriptor).unwrap(),
+            ..JwsPayload::default()
+        },
+        record_id: write.record_id.clone(),
+        context_id: Some("somerandomrecordid".to_string()),
+        ..SignaturePayload::default()
+    };
+    write.authorization.signature =
+        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "message and authorization context IDs do not match");
+}
+
+// Should fail when if `attestation` payload contains properties other than
+// `descriptor_cid`.
+#[tokio::test]
+async fn invalid_attestation() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write a record with an altered `attestation_cid`.
+    // --------------------------------------------------
+    let mut write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the signature attestation CID
+    let payload = SignaturePayload {
+        base: JwsPayload {
+            descriptor_cid: data::cid::from_value(&write.descriptor).unwrap(),
+            ..JwsPayload::default()
+        },
+        record_id: write.record_id.clone(),
+        context_id: write.context_id.clone(),
+        attestation_cid: Some("somerandomrecordid".to_string()),
+        ..SignaturePayload::default()
+    };
+    write.authorization.signature =
+        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "message and authorization attestation CIDs do not match");
+}
+
+// TODO: Should fail validation if more than 1 attester is given.
+#[tokio::test]
+#[ignore]
+async fn multiple_attesters() {
+    // TODO: add support for multiple attesters
+}
+
+// Should fail validation when attestation does not include the correct
+// `descriptor_cid`.
+#[tokio::test]
+async fn attestation_descriptor_cid() {
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+
+    // --------------------------------------------------
+    // Alice attempts (and fails) to write a record with an altered attestation
+    // `descriptor_cid`.
+    // --------------------------------------------------
+    let mut write = WriteBuilder::new()
+        .data(Data::from(b"some data".to_vec()))
+        .sign(&alice_keyring)
+        .build()
+        .await
+        .expect("should create write");
+
+    // alter the attestation descriptor_cid
+    let payload = Attestation {
+        descriptor_cid: data::cid::from_value(&"somerandomrecordid").expect("should create CID"),
+    };
+    let attestation =
+        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
+
+    let payload = SignaturePayload {
+        base: JwsPayload {
+            descriptor_cid: data::cid::from_value(&write.descriptor).unwrap(),
+            ..JwsPayload::default()
+        },
+        record_id: write.record_id.clone(),
+        context_id: write.context_id.clone(),
+        attestation_cid: Some(data::cid::from_value(&attestation).unwrap()),
+        ..SignaturePayload::default()
+    };
+    write.authorization.signature =
+        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
+
+    // endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+
+    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
+        panic!("should be BadRequest");
+    };
+    assert_eq!(e, "message and authorization attestation CIDs do not match");
 }

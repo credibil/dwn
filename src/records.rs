@@ -19,7 +19,9 @@ pub use self::encryption::{EncryptOptions, EncryptedKey, EncryptionProperty, Rec
 pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
-pub use self::write::{Data, DelegatedGrant, Write, WriteBuilder, WriteProtocol};
+pub use self::write::{
+    Attestation, Data, DelegatedGrant, SignaturePayload, Write, WriteBuilder, WriteProtocol,
+};
 pub use crate::data::DataStream;
 use crate::serde::rfc3339_micros_opt;
 use crate::{Quota, RangeFilter, Result, utils};

@@ -1,3 +1,7 @@
+//! # Utils
+//! 
+//! TODO: documentation
+
 use http::uri::Uri;
 
 use crate::{Result, unexpected};
