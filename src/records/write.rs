@@ -239,7 +239,7 @@ impl TryFrom<&Entry> for Write {
 impl Write {
     /// Use a builder to create a new [`Write`] message.
     #[must_use]
-    pub fn build() -> WriteBuilder<New, Unattested, Unsigned> {
+    pub fn build() -> WriteBuilder<'static, New, Unattested, Unsigned> {
         WriteBuilder::new()
     }
 
@@ -730,10 +730,10 @@ pub struct WriteDescriptor {
 }
 
 /// Options for use when creating a new [`Write`] message.
-pub struct WriteBuilder<O, A, S> {
+pub struct WriteBuilder<'a, O, A, S> {
     message_timestamp: DateTime<Utc>,
     recipient: Option<String>,
-    protocol: Option<ProtocolSettings>,
+    protocol: Option<ProtocolBuilder<'a>>,
     schema: Option<String>,
     tags: Option<Map<String, Value>>,
     record_id: Option<String>,
@@ -752,7 +752,7 @@ pub struct WriteBuilder<O, A, S> {
     signer: S,
 }
 
-impl Default for WriteBuilder<New, Unattested, Unsigned> {
+impl Default for WriteBuilder<'_, New, Unattested, Unsigned> {
     fn default() -> Self {
         Self::new()
     }
@@ -760,12 +760,12 @@ impl Default for WriteBuilder<New, Unattested, Unsigned> {
 
 /// The protocol to use for the Write message.
 #[derive(Clone, Debug, Default)]
-pub struct ProtocolSettings {
+pub struct ProtocolBuilder<'a> {
     /// Entry protocol.
-    pub protocol: String,
+    pub protocol: &'a str,
 
     /// Protocol path.
-    pub protocol_path: String,
+    pub protocol_path: &'a str,
 
     /// Parent context for the protocol.
     pub parent_context_id: Option<String>,
@@ -838,7 +838,7 @@ pub struct Unsigned;
 pub struct Signed<'a, S: Signer>(pub &'a S);
 
 /// Create a `Write` record from scratch.
-impl WriteBuilder<New, Unattested, Unsigned> {
+impl WriteBuilder<'_, New, Unattested, Unsigned> {
     /// Returns a new [`WriteBuilder`]
     #[must_use]
     pub fn new() -> Self {
@@ -869,7 +869,7 @@ impl WriteBuilder<New, Unattested, Unsigned> {
 }
 
 /// Create a [`Write`] record from an existing record.
-impl WriteBuilder<Existing, Unattested, Unsigned> {
+impl WriteBuilder<'_, Existing, Unattested, Unsigned> {
     /// Returns a new [`WriteBuilder`] based on an existing `Write` record.
     #[must_use]
     pub fn from(existing: Write) -> Self {
@@ -904,10 +904,10 @@ impl WriteBuilder<Existing, Unattested, Unsigned> {
 /// State: New, Unattested, Unencrypted, and Unsigned.
 ///
 /// Immutable properties are able be set.
-impl WriteBuilder<New, Unattested, Unsigned> {
+impl<'a> WriteBuilder<'a, New, Unattested, Unsigned> {
     /// Set a protocol for the record.
     #[must_use]
-    pub fn protocol(mut self, protocol: ProtocolSettings) -> Self {
+    pub fn protocol(mut self, protocol: ProtocolBuilder<'a>) -> Self {
         self.protocol = Some(protocol);
         self
     }
@@ -931,7 +931,7 @@ impl WriteBuilder<New, Unattested, Unsigned> {
 ///
 ///  Mutable properties properties are able to be set for both new and existing
 /// `Write` records.
-impl<O> WriteBuilder<O, Unattested, Unsigned> {
+impl<O> WriteBuilder<'_, O, Unattested, Unsigned> {
     /// Entry data as a CID or raw bytes.
     #[must_use]
     pub fn data(mut self, data: Data) -> Self {
@@ -1024,7 +1024,7 @@ impl<O> WriteBuilder<O, Unattested, Unsigned> {
 }
 
 /// State: Unencrypted and Unsigned.
-impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
+impl<'a, O, A> WriteBuilder<'a, O, A, Unsigned> {
     /// Logically (from user POV), have an attester sign the record.
     ///
     /// At this point, the builder simply captures the attester for use in the
@@ -1033,7 +1033,7 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
     #[must_use]
     pub fn attest<S: Signer>(
         self, attesters: &'a [&'a S],
-    ) -> WriteBuilder<O, Attested<'a, S>, Unsigned> {
+    ) -> WriteBuilder<'a, O, Attested<'a, S>, Unsigned> {
         WriteBuilder {
             attesters: Attested(attesters),
             message_timestamp: self.message_timestamp,
@@ -1059,13 +1059,13 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
 }
 
 // State: Unsigned
-impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
+impl<'a, O, A> WriteBuilder<'a, O, A, Unsigned> {
     /// Logically (from user POV), sign the record.
     ///
     /// At this point, the builder simply captures the signer for use in the final
     /// build step. Can only be done if the content hasn't been signed yet.
     #[must_use]
-    pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<O, A, Signed<'a, impl Signer>> {
+    pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<'a, O, A, Signed<'a, impl Signer>> {
         WriteBuilder {
             signer: Signed(signer),
 
@@ -1095,7 +1095,7 @@ impl<'a, O, A> WriteBuilder<O, A, Unsigned> {
 
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
-impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
+impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
     // FIXME: break into separate functions
     #[allow(clippy::too_many_lines)]
     fn to_write(&self, author_did: &str) -> Result<Write> {
@@ -1121,9 +1121,9 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
                 write.record_id = record_id;
             }
             if let Some(settings) = self.protocol.clone() {
-                let normalized = utils::clean_url(&settings.protocol)?;
+                let normalized = utils::clean_url(settings.protocol)?;
                 write.descriptor.protocol = Some(normalized);
-                write.descriptor.protocol_path = Some(settings.protocol_path);
+                write.descriptor.protocol_path = Some(settings.protocol_path.to_string());
 
                 // parent_id == last segment of  `parent_context_id`
                 if let Some(parent_context_id) = &settings.parent_context_id {
@@ -1224,7 +1224,7 @@ impl<O, A, S: Signer> WriteBuilder<O, A, Signed<'_, S>> {
     }
 }
 
-impl<O, A: Signer, S: Signer> WriteBuilder<O, Attested<'_, A>, Signed<'_, S>> {
+impl<O, A: Signer, S: Signer> WriteBuilder<'_, O, Attested<'_, A>, Signed<'_, S>> {
     async fn attestation(self, descriptor: &WriteDescriptor) -> Result<Jws> {
         let payload = Attestation {
             descriptor_cid: cid::from_value(descriptor)?,
@@ -1237,7 +1237,7 @@ impl<O, A: Signer, S: Signer> WriteBuilder<O, Attested<'_, A>, Signed<'_, S>> {
 }
 
 /// State: Unattested, Unencrypted, and Signed.
-impl<O, S: Signer> WriteBuilder<O, Unattested, Signed<'_, S>> {
+impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1264,7 +1264,7 @@ impl<O, S: Signer> WriteBuilder<O, Unattested, Signed<'_, S>> {
 }
 
 /// State: Attested, and Signed.
-impl<'a, O, A: Signer, S: Signer> WriteBuilder<O, Attested<'a, A>, Signed<'a, S>> {
+impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors

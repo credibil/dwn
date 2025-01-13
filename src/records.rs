@@ -20,7 +20,7 @@ pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 pub use self::write::{
-    Attestation, Data, DelegatedGrant, ProtocolSettings, SignaturePayload, Write, WriteBuilder,
+    Attestation, Data, DelegatedGrant, ProtocolBuilder, SignaturePayload, Write, WriteBuilder,
 };
 pub use crate::data::DataStream;
 use crate::serde::rfc3339_micros_opt;

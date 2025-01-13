@@ -9,7 +9,7 @@ use super::{Conditions, Publication, RecordsScope, Scope};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
 use crate::records::{
-    self, Data, DelegatedGrant, Delete, ProtocolSettings, Query, Read, Subscribe, Write,
+    self, Data, DelegatedGrant, Delete, ProtocolBuilder, Query, Read, Subscribe, Write,
     WriteBuilder,
 };
 use crate::serde::rfc3339_micros;
@@ -449,9 +449,9 @@ impl GrantBuilder {
 
         let mut builder = WriteBuilder::new()
             .recipient(self.granted_to)
-            .protocol(ProtocolSettings {
-                protocol: protocols::PROTOCOL_URI.to_string(),
-                protocol_path: protocols::GRANT_PATH.to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: protocols::PROTOCOL_URI,
+                protocol_path: protocols::GRANT_PATH,
                 parent_context_id: None,
             })
             .data(Data::from(grant_bytes.clone()));
@@ -533,9 +533,9 @@ impl RequestBuilder {
         })?;
 
         let mut builder = WriteBuilder::new()
-            .protocol(ProtocolSettings {
-                protocol: protocols::PROTOCOL_URI.to_string(),
-                protocol_path: protocols::REQUEST_PATH.to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: protocols::PROTOCOL_URI,
+                protocol_path: protocols::REQUEST_PATH,
                 parent_context_id: None,
             })
             .data(Data::from(request_bytes.clone()));
@@ -597,9 +597,9 @@ impl RevocationBuilder {
         })?;
 
         let mut builder = WriteBuilder::new()
-            .protocol(ProtocolSettings {
-                protocol: protocols::PROTOCOL_URI.to_string(),
-                protocol_path: protocols::REVOCATION_PATH.to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: protocols::PROTOCOL_URI,
+                protocol_path: protocols::REVOCATION_PATH,
                 parent_context_id: Some(grant.record_id.clone()),
             })
             .data(Data::from(revocation_bytes.clone()));

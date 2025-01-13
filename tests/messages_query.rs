@@ -11,7 +11,7 @@ use vercre_dwn::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use vercre_dwn::permissions::{GrantBuilder, Scope};
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{Data, ProtocolSettings, WriteBuilder};
+use vercre_dwn::records::{Data, ProtocolBuilder, WriteBuilder};
 use vercre_dwn::{Error, Interface, Message, Method, endpoint};
 
 // Should fetch all messages for owner owner beyond a provided cursor.
@@ -48,9 +48,9 @@ async fn owner_messages() {
 
     for _i in 1..=5 {
         let write = WriteBuilder::new()
-            .protocol(ProtocolSettings {
-                protocol: definition.protocol.clone(),
-                protocol_path: "post".to_string(),
+            .protocol(ProtocolBuilder {
+                protocol: &definition.protocol,
+                protocol_path: "post",
                 parent_context_id: None,
             })
             .schema(&schema)
@@ -87,9 +87,9 @@ async fn owner_messages() {
     // Alice writes an additional record.
     // --------------------------------------------------
     let message = WriteBuilder::new()
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post",
             parent_context_id: None,
         })
         .schema(&schema)
@@ -238,9 +238,9 @@ async fn match_grant_scope() {
     let schema = definition.types["post"].schema.clone().expect("should have schema");
 
     let write_any = WriteBuilder::new()
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post",
             parent_context_id: None,
         })
         .schema(schema)

@@ -9,7 +9,7 @@ use http::StatusCode;
 use vercre_dwn::protocols::{ConfigureBuilder, Definition};
 use vercre_dwn::provider::{EventLog, KeyStore, MessageStore};
 use vercre_dwn::records::{
-    Data, DeleteBuilder, DeleteDescriptor, ProtocolSettings, QueryBuilder, ReadBuilder,
+    Data, DeleteBuilder, DeleteDescriptor, ProtocolBuilder, QueryBuilder, ReadBuilder,
     RecordsFilter, WriteBuilder,
 };
 use vercre_dwn::{Error, Method, endpoint, store};
@@ -372,9 +372,9 @@ async fn anyone_delete() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol,
-            protocol_path: "doc".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "doc",
             parent_context_id: None,
         })
         .sign(&alice_keyring)
@@ -429,9 +429,9 @@ async fn ancestor_recipient() {
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post",
             parent_context_id: None,
         })
         .sign(&alice_keyring)
@@ -448,9 +448,9 @@ async fn ancestor_recipient() {
 
     let tag = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol,
-            protocol_path: "post/tag".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post/tag",
             parent_context_id: chat.context_id,
         })
         .sign(&alice_keyring)
@@ -520,9 +520,9 @@ async fn direct_recipient() {
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post",
             parent_context_id: None,
         })
         .sign(&alice_keyring)
@@ -590,9 +590,9 @@ async fn ancestor_author() {
 
     let post = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "post".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post",
             parent_context_id: None,
         })
         .sign(&bob_keyring)
@@ -609,9 +609,9 @@ async fn ancestor_author() {
 
     let comment = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "post/comment".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "post/comment",
             parent_context_id: post.context_id,
         })
         .sign(&alice_keyring)
@@ -681,9 +681,9 @@ async fn context_role() {
     let thread = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "thread".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "thread",
             parent_context_id: None,
         })
         .sign(&alice_keyring)
@@ -702,9 +702,9 @@ async fn context_role() {
     let admin = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "thread/admin".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "thread/admin",
             parent_context_id: thread.context_id.clone(),
         })
         .sign(&alice_keyring)
@@ -723,9 +723,9 @@ async fn context_role() {
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .recipient(ALICE_DID)
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "thread/chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "thread/chat",
             parent_context_id: thread.context_id.clone(),
         })
         .sign(&alice_keyring)
@@ -796,9 +796,9 @@ async fn root_role() {
     let admin = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .recipient(BOB_DID)
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "admin".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "admin",
             parent_context_id: None,
         })
         .sign(&alice_keyring)
@@ -817,9 +817,9 @@ async fn root_role() {
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .recipient(ALICE_DID)
-        .protocol(ProtocolSettings {
-            protocol: definition.protocol.clone(),
-            protocol_path: "chat".to_string(),
+        .protocol(ProtocolBuilder {
+            protocol: &definition.protocol,
+            protocol_path: "chat",
             parent_context_id: None,
         })
         .sign(&alice_keyring)
