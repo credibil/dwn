@@ -3,16 +3,17 @@
 //! This test demonstrates how a web node owner create messages and
 //! subsequently query for them.
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
-use dwn_test::provider::ProviderImpl;
-use http::StatusCode;
+use dwn_node::client::{QueryBuilder, ReadBuilder};
 use dwn_node::data::DataStream;
-use dwn_node::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
+use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{GrantBuilder, Scope};
 use dwn_node::protocols::{ConfigureBuilder, Definition};
 use dwn_node::provider::KeyStore;
 use dwn_node::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::{Error, Interface, Message, Method, endpoint};
+use dwn_test::key_store::{ALICE_DID, BOB_DID};
+use dwn_test::provider::ProviderImpl;
+use http::StatusCode;
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]

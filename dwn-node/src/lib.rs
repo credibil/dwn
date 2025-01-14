@@ -4,6 +4,7 @@
 //! # Decentralized Web Node (web node)
 
 pub mod authorization;
+pub mod client;
 pub mod data;
 pub mod endpoint;
 mod error;
@@ -14,7 +15,7 @@ pub mod permissions;
 pub mod protocols;
 pub mod provider;
 pub mod records;
-pub mod schema;
+mod schema;
 pub mod store;
 mod tasks;
 mod utils;

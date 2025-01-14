@@ -3,19 +3,20 @@
 use core::panic;
 use std::time::Duration;
 
-use dwn_test::key_store::{ALICE_DID, BOB_DID};
-use dwn_test::provider::ProviderImpl;
-use futures::StreamExt;
-use http::StatusCode;
-use tokio::time;
 use dwn_node::authorization::Authorization;
+use dwn_node::client::{QueryBuilder, SubscribeBuilder};
 use dwn_node::data::DataStream;
-use dwn_node::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
+use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{GrantBuilder, Scope};
 use dwn_node::protocols::{ConfigureBuilder, Definition};
 use dwn_node::provider::KeyStore;
 use dwn_node::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::{Error, Interface, Message, Method, endpoint};
+use dwn_test::key_store::{ALICE_DID, BOB_DID};
+use dwn_test::provider::ProviderImpl;
+use futures::StreamExt;
+use http::StatusCode;
+use tokio::time;
 
 // TODO: implement fake provider with no subscription support for this test.
 // // Should respond with a status of NotImplemented (501) if subscriptions are

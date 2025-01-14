@@ -4,19 +4,18 @@ use std::str::FromStr;
 
 use ::cid::Cid;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::authorization::{Authorization, AuthorizationBuilder};
+use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
-use crate::provider::{MessageStore, Provider, Signer};
+use crate::provider::{MessageStore, Provider};
 use crate::records::{DataStream, write};
 use crate::store::{Entry, EntryType};
-use crate::{Descriptor, Error, Interface, Method, Result, forbidden, schema, unexpected};
+use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
 
 /// Handle a read message.
 ///
@@ -201,76 +200,4 @@ pub struct ReadDescriptor {
 
     /// The CID of the message to read.
     pub message_cid: String,
-}
-
-/// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct ReadBuilder {
-    message_timestamp: DateTime<Utc>,
-    permission_grant_id: Option<String>,
-    message_cid: Option<String>,
-}
-
-/// Builder for creating a permission grant.
-impl ReadBuilder {
-    /// Returns a new [`ReadBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        // set defaults
-        Self {
-            message_timestamp: Utc::now(),
-            ..Self::default()
-        }
-    }
-
-    /// Specify a permission grant ID to use with the configuration.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    /// Specify the CID of the message to read.
-    #[must_use]
-    pub fn message_cid(mut self, message_cid: impl Into<String>) -> Self {
-        self.message_cid = Some(message_cid.into());
-        self
-    }
-
-    /// Generate the Read message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Read> {
-        // verify CID
-        let Some(message_cid) = self.message_cid else {
-            return Err(unexpected!("missing message CID"));
-        };
-        let _ = Cid::from_str(&message_cid).map_err(|e| unexpected!("invalid CID: {e}"))?;
-
-        let descriptor = ReadDescriptor {
-            base: Descriptor {
-                interface: Interface::Messages,
-                method: Method::Read,
-                message_timestamp: self.message_timestamp,
-            },
-            message_cid,
-        };
-
-        // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(id);
-        }
-        let authorization = builder.build(signer).await?;
-
-        let read = Read {
-            descriptor,
-            authorization,
-        };
-
-        schema::validate(&read)?;
-
-        Ok(read)
-    }
 }

@@ -2,17 +2,10 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use dwn_test::key_store::{
-    ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID, CAROL_DID,
-    CAROL_DID as FAKE_DID,
-};
-use dwn_test::provider::ProviderImpl;
-use http::StatusCode;
-use rand::RngCore;
 use dwn_node::authorization::JwsPayload;
 use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
-use dwn_node::messages::{self, MessagesFilter};
+use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
 use dwn_node::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use dwn_node::provider::{EventLog, KeyStore};
@@ -21,7 +14,14 @@ use dwn_node::records::{
     Recipient, RecordsFilter, SignaturePayload, WriteBuilder,
 };
 use dwn_node::store::MessagesQuery;
-use dwn_node::{Error, Interface, Message, Method, Range, data, endpoint};
+use dwn_node::{Error, Interface, Message, Method, Range, client, data, endpoint};
+use dwn_test::key_store::{
+    ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID, CAROL_DID,
+    CAROL_DID as FAKE_DID,
+};
+use dwn_test::provider::ProviderImpl;
+use http::StatusCode;
+use rand::RngCore;
 use vercre_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors
@@ -1200,7 +1200,7 @@ async fn log_initial_write() {
     // --------------------------------------------------
     // Verify an event was logged.
     // --------------------------------------------------
-    let query = messages::QueryBuilder::new()
+    let query = client::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .build(&alice_keyring)
         .await
@@ -1255,7 +1255,7 @@ async fn retain_two_writes() {
     // --------------------------------------------------
     // Verify only the initial write and latest update remain.
     // --------------------------------------------------
-    let query = messages::QueryBuilder::new()
+    let query = client::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .build(&alice_keyring)
         .await
