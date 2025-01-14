@@ -1,6 +1,6 @@
 //! # SurrealDB
 
-use vercre_dwn::store::serializer::{Clause, Op, Serializer, SortField, Value};
+use vercre_dwn_server::store::serializer::{Clause, Op, Serializer, SortField, Value};
 
 /// SurrealDB `Serializer` implements `Serializer` to generate Surreal SQL queries.
 pub struct Sql {

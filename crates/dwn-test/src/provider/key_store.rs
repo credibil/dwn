@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
 use sha2::Digest;
-use vercre_dwn::provider::{KeyStore, Keyring};
+use vercre_dwn_server::provider::{KeyStore, Keyring};
 use vercre_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 
 // use x25519_dalek::{PublicKey, StaticSecret};

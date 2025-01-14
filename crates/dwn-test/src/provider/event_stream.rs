@@ -1,7 +1,7 @@
 use anyhow::Result;
 use futures::stream::StreamExt;
-use vercre_dwn::event::{Event, Subscriber};
-use vercre_dwn::provider::EventStream;
+use vercre_dwn_server::event::{Event, Subscriber};
+use vercre_dwn_server::provider::EventStream;
 
 use crate::provider::ProviderImpl;
 

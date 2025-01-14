@@ -16,7 +16,7 @@ use anyhow::{Result, anyhow};
 use blockstore::InMemoryBlockstore;
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem};
-use vercre_dwn::provider::{DidResolver, Document, Provider};
+use vercre_dwn_server::provider::{DidResolver, Document, Provider};
 
 use self::key_store::{ALICE_DID, KeyStoreImpl};
 

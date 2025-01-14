@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 use serde_json::Value;
-use vercre_dwn::event::Event;
-use vercre_dwn::provider::EventLog;
-use vercre_dwn::store::serializer::Serialize;
-use vercre_dwn::store::{Cursor, Query};
+use vercre_dwn_server::event::Event;
+use vercre_dwn_server::provider::EventLog;
+use vercre_dwn_server::store::serializer::Serialize;
+use vercre_dwn_server::store::{Cursor, Query};
 use vercre_serialize::surrealdb;
 
 use super::ProviderImpl;

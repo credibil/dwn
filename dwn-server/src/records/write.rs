@@ -1,0 +1,1325 @@
+//! # Write
+//!
+//! `Write` is a message type used to create a new record in the web node.
+
+use std::collections::VecDeque;
+use std::io::Read;
+
+use base64ct::{Base64UrlUnpadded, Encoding};
+use chrono::format::SecondsFormat;
+use chrono::{DateTime, Utc};
+use http::StatusCode;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use vercre_infosec::Signer;
+use vercre_infosec::jose::{Jws, JwsBuilder};
+
+use crate::authorization::{self, Authorization, JwsPayload};
+use crate::data::cid;
+use crate::endpoint::{Message, Reply, Status};
+use crate::hd_key::DerivationScheme;
+use crate::permissions::{self, Grant, Protocol};
+use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
+use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
+use crate::records::{DataStream, DateRange, EncryptionProperty};
+use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
+use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
+use crate::{Descriptor, Error, Interface, Method, Result, data, forbidden, unexpected, utils};
+
+/// Handle `RecordsWrite` messages.
+///
+/// # Errors
+/// LATER: Add errors
+pub async fn handle(
+    owner: &str, write: Write, provider: &impl Provider,
+) -> Result<Reply<WriteReply>> {
+    write.authorize(owner, provider).await?;
+    write.verify_integrity(owner, provider).await?;
+
+    let is_initial = write.is_initial()?;
+
+    // find any existing entries for the `record_id`
+    let existing = existing_entries(owner, &write.record_id, provider).await?;
+    let (initial_entry, latest_entry) = earliest_and_latest(&existing);
+
+    // when no existing entries, verify this write is the initial write
+    if initial_entry.is_none() && !is_initial {
+        return Err(unexpected!("initial write not found"));
+    }
+
+    // when message is an update, verify 'immutable' properties are unchanged
+    if let Some(initial_entry) = &initial_entry {
+        let earliest = Write::try_from(initial_entry)?;
+        if !earliest.is_initial()? {
+            return Err(unexpected!("initial write is not the earliest message"));
+        }
+        write.verify_immutable(&earliest)?;
+    }
+
+    // check message is the most recent AND most recent has not been deleted
+    if let Some(latest_entry) = &latest_entry {
+        let write_ts = write.descriptor.base.message_timestamp.timestamp_micros();
+        let latest_ts = latest_entry.descriptor().message_timestamp.timestamp_micros();
+        if write_ts < latest_ts {
+            return Err(Error::Conflict("a more recent update exists".to_string()));
+        }
+        if write_ts == latest_ts && write.cid()? <= latest_entry.cid()? {
+            return Err(Error::Conflict("an update with a larger CID already exists".to_string()));
+        }
+        if latest_entry.descriptor().method == Method::Delete {
+            return Err(unexpected!("record has been deleted"));
+        }
+    }
+
+    // process data stream
+    let mut write = write;
+    if let Some(mut data) = write.data_stream.clone() {
+        write.update_data(owner, &mut data, provider).await?;
+    } else if !is_initial {
+        // no data AND NOT an initial write
+        let Some(existing) = &latest_entry else {
+            return Err(unexpected!("latest existing record not found"));
+        };
+        write.clone_data(owner, existing, provider).await?;
+    };
+
+    // response codes
+    let code = if write.data_stream.is_some() || !is_initial {
+        // queryable writes
+        StatusCode::ACCEPTED
+    } else {
+        //  private, non-queryable writes
+        StatusCode::NO_CONTENT
+    };
+
+    // set `archive` flag is set when the intial write has no data
+    // N.B. this is used to prevent malicious access to another record's data
+    let mut entry = Entry::from(&write);
+    entry.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
+
+    // save the message and log the event
+    MessageStore::put(provider, owner, &entry).await?;
+    EventLog::append(provider, owner, &entry).await?;
+    EventStream::emit(provider, owner, &entry).await?;
+
+    // when this is an update, archive the initial write (and delete its data?)
+    if let Some(mut initial_entry) = initial_entry {
+        let initial_write = Write::try_from(&initial_entry)?;
+        initial_entry.indexes.insert("archived".to_string(), Value::Bool(true));
+
+        MessageStore::put(provider, owner, &initial_entry).await?;
+        EventLog::append(provider, owner, &initial_entry).await?;
+        if !initial_write.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
+            BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
+        }
+    }
+
+    // delete any previous messages with the same `record_id` EXCEPT initial write
+    let mut deletable = VecDeque::from(existing);
+    let _ = deletable.pop_front(); // retain initial write (first entry)
+    for entry in deletable {
+        let write = Write::try_from(entry)?;
+        let cid = write.cid()?;
+        MessageStore::delete(provider, owner, &cid).await?;
+        BlockStore::delete(provider, owner, &write.descriptor.data_cid).await?;
+        EventLog::delete(provider, owner, &cid).await?;
+    }
+
+    // when message is a grant revocation, delete all grant-authorized
+    // messages with timestamp after revocation
+    if write.descriptor.protocol == Some(PROTOCOL_URI.to_string())
+        && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string())
+    {
+        write.revoke_grants(owner, provider).await?;
+    }
+
+    Ok(Reply {
+        status: Status {
+            code: code.as_u16(),
+            detail: None,
+        },
+        body: None,
+    })
+}
+
+/// Records write message payload
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Write {
+    /// Write descriptor.
+    pub descriptor: WriteDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+
+    /// Entry CID
+    pub record_id: String,
+
+    /// Entry context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+
+    /// Entry attestation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attestation: Option<Jws>,
+
+    /// Entry encryption.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encryption: Option<EncryptionProperty>,
+
+    /// The base64url encoded data of the record if the data associated with
+    /// the record is equal or smaller than `MAX_ENCODING_SIZE`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoded_data: Option<String>,
+
+    /// The data stream of the record if the data associated with the record
+    #[serde(skip)]
+    pub data_stream: Option<DataStream>,
+}
+
+impl Message for Write {
+    type Reply = WriteReply;
+
+    fn cid(&self) -> Result<String> {
+        // exclude `record_id` and `context_id` from CID calculation
+        #[derive(Serialize)]
+        struct Cid {
+            #[serde(flatten)]
+            descriptor: WriteDescriptor,
+            authorization: Authorization,
+        }
+        cid::from_value(&Cid {
+            descriptor: self.descriptor.clone(),
+            authorization: self.authorization.clone(),
+        })
+    }
+
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
+    }
+
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+        // FIXME: fix this lint
+        #[allow(clippy::large_futures)]
+        handle(owner, self, provider).await
+    }
+}
+
+/// `Write` reply
+// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct WriteReply;
+
+impl TryFrom<Entry> for Write {
+    type Error = crate::Error;
+
+    fn try_from(entry: Entry) -> Result<Self> {
+        match entry.message {
+            EntryType::Write(write) => Ok(write),
+            _ => Err(unexpected!("expected `RecordsWrite` message")),
+        }
+    }
+}
+
+impl TryFrom<&Entry> for Write {
+    type Error = crate::Error;
+
+    fn try_from(entry: &Entry) -> Result<Self> {
+        match &entry.message {
+            EntryType::Write(write) => Ok(write.clone()),
+            _ => Err(unexpected!("expected `RecordsWrite` message")),
+        }
+    }
+}
+
+impl Write {
+    /// Use a builder to create a new [`Write`] message.
+    #[must_use]
+    pub fn build() -> WriteBuilder<'static, New, Unattested, Unsigned> {
+        WriteBuilder::new()
+    }
+
+    /// Add a data stream to the write message.
+    pub fn with_stream(&mut self, data_stream: DataStream) {
+        self.data_stream = Some(data_stream);
+    }
+
+    /// Computes the deterministic Entry ID (Record ID) of the message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn entry_id(&self, author: &str) -> Result<String> {
+        #[derive(Serialize)]
+        struct EntryId<'a> {
+            #[serde(flatten)]
+            descriptor: &'a WriteDescriptor,
+            author: &'a str,
+        }
+        cid::from_value(&EntryId {
+            descriptor: &self.descriptor,
+            author,
+        })
+    }
+
+    async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let authzn = &self.authorization;
+        let record_owner = authzn.owner()?;
+
+        // if owner signature is set, it must be the same as the tenant DID
+        if record_owner.as_ref().is_some_and(|ro| ro != owner) {
+            return Err(forbidden!("record owner is not web node owner"));
+        };
+
+        let author = authzn.author()?;
+
+        // authorize author delegate
+        if let Some(delegated_grant) = &authzn.author_delegated_grant {
+            let signer = authzn.signer()?;
+            let grant = delegated_grant.to_grant()?;
+            grant.permit_write(&author, &signer, self, store).await?;
+        }
+
+        // authorize owner delegate
+        if let Some(delegated_grant) = &authzn.owner_delegated_grant {
+            let Some(owner) = &record_owner else {
+                return Err(forbidden!("owner is required to authorize owner delegate"));
+            };
+            let signer = authzn.owner_signer()?;
+            let grant = delegated_grant.to_grant()?;
+            grant.permit_write(owner, &signer, self, store).await?;
+        }
+
+        // when record owner is set, we can directly grant access
+        // (we established `record_owner`== web node owner above)
+        if record_owner.is_some() {
+            return Ok(());
+        };
+
+        // when author is the owner, we can directly grant access
+        if author == owner {
+            return Ok(());
+        }
+
+        // permission grant
+        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
+        let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
+        if let Some(permission_grant_id) = &payload.base.permission_grant_id {
+            let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+            return grant.permit_write(owner, &author, self, store).await;
+        };
+
+        // protocol-specific authorization
+        if let Some(protocol) = &self.descriptor.protocol {
+            let protocol = Protocol::new(protocol).context_id(self.context_id.as_ref());
+            return protocol.permit_write(owner, self, store).await;
+        }
+
+        Err(forbidden!("message failed authorization"))
+    }
+
+    async fn verify_integrity(&self, owner: &str, provider: &impl Provider) -> Result<()> {
+        if self.is_initial()? {
+            if self.descriptor.base.message_timestamp != self.descriptor.date_created {
+                return Err(unexpected!("`message_timestamp` and `date_created` do not match"));
+            }
+
+            // when the message is a protocol context root, the `context_id`
+            // must match the computed `entry_id`
+            if self.descriptor.protocol.is_some() && self.descriptor.parent_id.is_none() {
+                let author = self.authorization.author()?;
+                let context_id = self.entry_id(&author)?;
+                if self.context_id != Some(context_id) {
+                    return Err(unexpected!("invalid context ID"));
+                }
+            }
+        }
+
+        // verify integrity of messages with protocol
+        if self.descriptor.protocol.is_some() {
+            integrity::verify(owner, self, provider).await?;
+
+            // FIXME: extract data from stream 1x
+            // write record is a grant
+            // if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+            //     let mut stream =
+            //         self.data_stream.clone().ok_or_else(|| unexpected!("missing data stream"))?;
+            //     let mut data_bytes = Vec::new();
+            //     stream.read_to_end(&mut data_bytes)?;
+            //     integrity::verify_schema(self, &data_bytes)?;
+            // }
+        }
+
+        let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)
+            .map_err(|e| unexpected!("issue decoding header: {e}"))?;
+        let payload: SignaturePayload = serde_json::from_slice(&decoded)
+            .map_err(|e| unexpected!("issue deserializing header: {e}"))?;
+
+        // verify integrity of message against signature payload
+        if self.record_id != payload.record_id {
+            return Err(unexpected!("message and authorization record IDs do not match"));
+        }
+        if self.context_id != payload.context_id {
+            return Err(unexpected!("message and authorization context IDs do not match"));
+        }
+        if let Some(attestation_cid) = payload.attestation_cid {
+            let expected_cid = cid::from_value(&self.attestation)?;
+            if attestation_cid != expected_cid {
+                return Err(unexpected!("message and authorization attestation CIDs do not match"));
+            }
+        }
+        if let Some(encryption_cid) = payload.encryption_cid {
+            let expected_cid = cid::from_value(&self.encryption)?;
+            if encryption_cid != expected_cid {
+                return Err(unexpected!("message and authorization `encryptionCid`s do not match"));
+            }
+        }
+
+        Ok(())
+    }
+
+    // Verify immutable properties of two records are identical.
+    fn verify_immutable(&self, other: &Self) -> Result<()> {
+        let self_desc = &self.descriptor;
+        let other_desc = &other.descriptor;
+
+        if self_desc.base.interface != other_desc.base.interface
+            || self_desc.base.method != other_desc.base.method
+            || self_desc.protocol != other_desc.protocol
+            || self_desc.protocol_path != other_desc.protocol_path
+            || self_desc.recipient != other_desc.recipient
+            || self_desc.schema != other_desc.schema
+            || self_desc.parent_id != other_desc.parent_id
+            || self_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
+                != other_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
+        {
+            return Err(unexpected!("immutable properties do not match"));
+        }
+
+        Ok(())
+    }
+
+    // Determine whether the record is the initial write.
+    pub(crate) fn is_initial(&self) -> Result<bool> {
+        let entry_id = self.entry_id(&self.authorization.author()?)?;
+        Ok(entry_id == self.record_id)
+    }
+
+    async fn update_data(
+        &mut self, owner: &str, stream: &mut DataStream, block_store: &impl BlockStore,
+    ) -> Result<()> {
+        // when data is below the threshold, store it within MessageStore
+        if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {
+            // verify data integrity
+            let (data_cid, data_size) = stream.compute_cid()?;
+            if self.descriptor.data_cid != data_cid {
+                return Err(unexpected!("actual data CID does not match message `data_cid`"));
+            }
+            if self.descriptor.data_size != data_size {
+                return Err(unexpected!("actual data size does not match message `data_size`"));
+            }
+
+            // store the stream data with the message
+            let mut data_bytes = Vec::new();
+            stream.read_to_end(&mut data_bytes)?;
+            self.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
+
+            // write record is a grant
+            // TODO: move this check to `verify_integrity` method
+            if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
+                integrity::verify_schema(self, &data_bytes)?;
+            }
+        } else {
+            // store data in BlockStore
+            let (data_cid, data_size) = stream.to_store(owner, block_store).await?;
+
+            // verify integrity of stored data
+            if self.descriptor.data_cid != data_cid {
+                return Err(unexpected!("actual data CID does not match message `data_cid`"));
+            }
+            if self.descriptor.data_size != data_size {
+                return Err(unexpected!("actual data size does not match message `data_size`"));
+            }
+        }
+
+        Ok(())
+    }
+
+    // Write message has no data and is not an 'initial write':
+    //  1. verify the new message's data integrity
+    //  2. copy stored `encoded_data` to the new  message.
+    async fn clone_data(
+        &mut self, owner: &str, existing: &Entry, block_store: &impl BlockStore,
+    ) -> Result<()> {
+        let latest = Self::try_from(existing)?;
+
+        // Perform `data_cid` check in case a user attempts to gain access to data
+        // by referencing a different known `data_cid`.
+        if latest.descriptor.data_cid != self.descriptor.data_cid {
+            return Err(unexpected!("data CID does not match descriptor `data_cid`"));
+        }
+        if latest.descriptor.data_size != self.descriptor.data_size {
+            return Err(unexpected!("data size does not match descriptor `data_size`"));
+        }
+
+        // if bigger than encoding threshold, ensure data exists for this record
+        if latest.descriptor.data_size > data::MAX_ENCODED_SIZE {
+            let result = block_store.get(owner, &self.descriptor.data_cid).await?;
+            if result.is_none() {
+                return Err(unexpected!("referenced data does not exist"));
+            };
+            return Ok(());
+        }
+
+        // otherwise, copy `encoded_data` to the new message
+        if latest.encoded_data.is_none() {
+            return Err(unexpected!("referenced data does not exist"));
+        };
+        self.encoded_data = latest.encoded_data;
+
+        Ok(())
+    }
+
+    // Revoke grants if records::Write is a permission revocation.
+    async fn revoke_grants(&self, owner: &str, provider: &impl Provider) -> Result<()> {
+        // get grant from revocation message `parent_id`
+        let Some(grant_id) = &self.descriptor.parent_id else {
+            return Err(unexpected!("missing `parent_id`"));
+        };
+        let message_timestamp = self.descriptor.base.message_timestamp;
+
+        let lt = DateRange::new().lt(message_timestamp);
+        let query = RecordsQuery::new()
+            .add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
+
+        let records = MessageStore::query(provider, owner, &query.into()).await?;
+
+        // delete matching messages
+        for record in records {
+            let message_cid = record.cid()?;
+            MessageStore::delete(provider, owner, &message_cid).await?;
+            EventLog::delete(provider, owner, &message_cid).await?;
+        }
+
+        Ok(())
+    }
+}
+
+// Signing
+impl Write {
+    /// Signs the Write message body. The signer is either the author or a delegate.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn sign_as_author(
+        &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
+        signer: &impl Signer,
+    ) -> Result<()> {
+        let delegated_grant_id = if let Some(grant) = &self.authorization.author_delegated_grant {
+            Some(cid::from_value(&grant)?)
+        } else {
+            None
+        };
+
+        // compute CIDs for attestation and encryption
+        let attestation_cid = self.attestation.as_ref().map(cid::from_value).transpose()?;
+        let encryption_cid = self.encryption.as_ref().map(cid::from_value).transpose()?;
+
+        let payload = SignaturePayload {
+            base: JwsPayload {
+                descriptor_cid: cid::from_value(&self.descriptor)?,
+                permission_grant_id,
+                delegated_grant_id,
+                protocol_role,
+            },
+            record_id: self.record_id.clone(),
+            context_id: self.context_id.clone(),
+            attestation_cid,
+            encryption_cid,
+        };
+
+        self.authorization.signature =
+            JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+
+        Ok(())
+    }
+
+    /// Signs the `RecordsWrite` as the web node owner.
+    ///
+    /// This is used when the web node owner wants to retain a copy of a message that
+    /// the owner did not author.
+    /// N.B.: requires the `RecordsWrite` to already have the author's signature.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
+        if self.authorization.author().is_err() {
+            return Err(unexpected!("message signature is required in order to sign as owner"));
+        }
+
+        let payload = JwsPayload {
+            descriptor_cid: cid::from_value(&self.descriptor)?,
+            ..JwsPayload::default()
+        };
+        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+        self.authorization.owner_signature = Some(owner_jws);
+
+        Ok(())
+    }
+
+    /// Signs the `Write` record as a delegate of the web node owner. This is
+    /// used when a web node owner-delegate wants to retain a copy of a
+    /// message that the owner did not author.
+    ///
+    /// N.B. requires `Write` to have previously beeen signed by the author.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn sign_as_delegate(
+        &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
+    ) -> Result<()> {
+        if self.authorization.author().is_err() {
+            return Err(unexpected!("signature is required in order to sign as owner delegate"));
+        }
+
+        //  descriptorCid, delegatedGrantId, permissionGrantId, protocolRole
+
+        let delegated_grant_id = cid::from_value(&delegated_grant)?;
+        let descriptor_cid = cid::from_value(&self.descriptor)?;
+
+        let payload = JwsPayload {
+            descriptor_cid,
+            delegated_grant_id: Some(delegated_grant_id),
+            ..JwsPayload::default()
+        };
+        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+
+        self.authorization.owner_signature = Some(owner_jws);
+        self.authorization.owner_delegated_grant = Some(delegated_grant);
+
+        Ok(())
+    }
+}
+
+/// Signature payload.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignaturePayload {
+    /// The standard signature payload.
+    #[serde(flatten)]
+    pub base: JwsPayload,
+
+    /// The ID of the record being signed.
+    pub record_id: String,
+
+    /// The context ID of the record being signed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+
+    /// Attestation CID.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attestation_cid: Option<String>,
+
+    /// Encryption CID .
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encryption_cid: Option<String>,
+}
+
+/// Delegated Grant is a special case of `records::Write` used in
+/// `Authorization` and `Attestation` grant references
+/// (`author_delegated_grant` and `owner_delegated_grant`).
+///
+/// It is structured to cope with recursive references to `Authorization`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegatedGrant {
+    /// The grant's descriptor.
+    pub descriptor: WriteDescriptor,
+
+    ///The grant's authorization.
+    pub authorization: Box<Authorization>,
+
+    /// CID referencing the record associated with the message.
+    pub record_id: String,
+
+    /// Context id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+
+    /// Encoded grant data.
+    pub encoded_data: String,
+}
+
+impl DelegatedGrant {
+    /// Convert [`DelegatedGrant`] to `permissions::Grant`.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn to_grant(&self) -> Result<Grant> {
+        self.try_into()
+    }
+}
+
+impl From<Write> for DelegatedGrant {
+    fn from(write: Write) -> Self {
+        Self {
+            descriptor: write.descriptor,
+            authorization: Box::new(write.authorization),
+            record_id: write.record_id,
+            context_id: write.context_id,
+            encoded_data: write.encoded_data.unwrap_or_default(),
+        }
+    }
+}
+
+/// Write descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: Descriptor,
+
+    /// Entry's protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+
+    /// The protocol path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol_path: Option<String>,
+
+    /// The record's recipient.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recipient: Option<String>,
+
+    /// The record's schema.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+
+    /// Tags associated with the record
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Map<String, Value>>,
+
+    /// The CID of the record's parent (if exists).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+
+    /// CID of the record's data.
+    pub data_cid: String,
+
+    /// The record's size in bytes.
+    pub data_size: usize,
+
+    /// The record's MIME type. For example, `application/json`.
+    pub data_format: String,
+
+    /// The datatime the record was created.
+    #[serde(serialize_with = "rfc3339_micros")]
+    pub date_created: DateTime<Utc>,
+
+    /// Indicates whether the record is published.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub published: Option<bool>,
+
+    /// The datetime of publishing, if published.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(serialize_with = "rfc3339_micros_opt")]
+    pub date_published: Option<DateTime<Utc>>,
+}
+
+/// Options for use when creating a new [`Write`] message.
+pub struct WriteBuilder<'a, O, A, S> {
+    message_timestamp: DateTime<Utc>,
+    recipient: Option<String>,
+    protocol: Option<ProtocolBuilder<'a>>,
+    schema: Option<String>,
+    tags: Option<Map<String, Value>>,
+    record_id: Option<String>,
+    data: Option<Data>,
+    data_format: String,
+    date_created: DateTime<Utc>,
+    published: Option<bool>,
+    date_published: Option<DateTime<Utc>>,
+    protocol_role: Option<String>,
+    permission_grant_id: Option<String>,
+    delegated_grant: Option<DelegatedGrant>,
+    existing: Option<Write>,
+    encryption: Option<EncryptionProperty>,
+    origin: O,
+    attesters: A,
+    signer: S,
+}
+
+impl Default for WriteBuilder<'_, New, Unattested, Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The protocol to use for the Write message.
+#[derive(Clone, Debug, Default)]
+pub struct ProtocolBuilder<'a> {
+    /// Entry protocol.
+    pub protocol: &'a str,
+
+    /// Protocol path.
+    pub protocol_path: &'a str,
+
+    /// Parent context for the protocol.
+    pub parent_context_id: Option<String>,
+}
+
+/// Entry data can be raw bytes or CID.
+pub enum Data {
+    /// Data is a `DataStream`.
+    Stream(DataStream),
+
+    /// Data is use to calculate CID and size of previously stored data — as
+    /// for `Data::Cid`. The data is not added to the Write record's
+    /// `data_stream`.
+    ///
+    /// N.B. This option can only be used when the referenced data has already
+    /// been stored by the web node.
+    Bytes(Vec<u8>),
+
+    /// A CID (and size) referencing `BlockStore` data from a previous update
+    /// to the Write record.
+    ///
+    /// N.B. This option can only be used when the referenced data has already
+    /// been stored by the web node.
+    Cid {
+        /// CID of data already stored by the web node. If not set, the `data`
+        /// parameter must be set.
+        data_cid: String,
+
+        /// Size of the `data` attribute in bytes. Must be set when `data_cid` is set,
+        /// otherwise should be left unset.
+        data_size: usize,
+    },
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        Self::Stream(DataStream::default())
+    }
+}
+
+impl From<Vec<u8>> for Data {
+    fn from(data: Vec<u8>) -> Self {
+        Self::Stream(DataStream::from(data))
+    }
+}
+
+/// Attestation payload.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Attestation {
+    /// The attestation's descriptor CID.
+    pub descriptor_cid: String,
+}
+
+// State 'guards' for the WriteBuilder typestate pattern.
+pub struct New;
+pub struct Existing;
+
+pub struct Unattested;
+pub struct Attested<'a, A: Signer>(pub &'a [&'a A]);
+
+pub struct Unsigned;
+pub struct Signed<'a, S: Signer>(pub &'a S);
+
+/// Create a `Write` record from scratch.
+impl WriteBuilder<'_, New, Unattested, Unsigned> {
+    /// Returns a new [`WriteBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        let now = Utc::now();
+
+        Self {
+            message_timestamp: now,
+            date_created: now,
+            data: None,
+            data_format: "application/json".to_string(),
+            signer: Unsigned,
+            attesters: Unattested,
+            origin: New,
+            recipient: None,
+            protocol: None,
+            schema: None,
+            tags: None,
+            record_id: None,
+            published: None,
+            date_published: None,
+            protocol_role: None,
+            permission_grant_id: None,
+            delegated_grant: None,
+            existing: None,
+            encryption: None,
+        }
+    }
+}
+
+/// Create a [`Write`] record from an existing record.
+impl WriteBuilder<'_, Existing, Unattested, Unsigned> {
+    /// Returns a new [`WriteBuilder`] based on an existing `Write` record.
+    #[must_use]
+    pub fn from(existing: Write) -> Self {
+        let mut existing = existing;
+        existing.data_stream = None;
+        existing.encoded_data = None;
+
+        Self {
+            message_timestamp: Utc::now(),
+            date_created: existing.descriptor.date_created,
+            data: None,
+            data_format: existing.descriptor.data_format.clone(),
+            existing: Some(existing),
+            origin: Existing,
+            signer: Unsigned,
+            attesters: Unattested,
+            recipient: None,
+            protocol: None,
+            schema: None,
+            tags: None,
+            record_id: None,
+            published: None,
+            date_published: None,
+            protocol_role: None,
+            permission_grant_id: None,
+            delegated_grant: None,
+            encryption: None,
+        }
+    }
+}
+
+/// State: New, Unattested, Unencrypted, and Unsigned.
+///
+/// Immutable properties are able be set.
+impl<'a> WriteBuilder<'a, New, Unattested, Unsigned> {
+    /// Set a protocol for the record.
+    #[must_use]
+    pub fn protocol(mut self, protocol: ProtocolBuilder<'a>) -> Self {
+        self.protocol = Some(protocol);
+        self
+    }
+
+    /// Specify a schema to use with the record.
+    #[must_use]
+    pub fn schema(mut self, schema: impl Into<String>) -> Self {
+        self.schema = Some(schema.into());
+        self
+    }
+
+    /// Specify the write record's recipient .
+    #[must_use]
+    pub fn recipient(mut self, recipient: impl Into<String>) -> Self {
+        self.recipient = Some(recipient.into());
+        self
+    }
+}
+
+/// State: Unattested, and Unsigned.
+///
+///  Mutable properties properties are able to be set for both new and existing
+/// `Write` records.
+impl<O> WriteBuilder<'_, O, Unattested, Unsigned> {
+    /// Entry data as a CID or raw bytes.
+    #[must_use]
+    pub fn data(mut self, data: Data) -> Self {
+        self.data = Some(data);
+        self
+    }
+
+    /// The record's MIME type. Defaults to `application/json`.
+    #[must_use]
+    pub fn data_format(mut self, data_format: impl Into<String>) -> Self {
+        self.data_format = data_format.into();
+        self
+    }
+
+    /// Specify an ID to use for the permission request.
+    #[must_use]
+    pub fn record_id(mut self, record_id: impl Into<String>) -> Self {
+        self.record_id = Some(record_id.into());
+        self
+    }
+
+    /// Add a tag to the record.
+    #[must_use]
+    pub fn add_tag(mut self, name: String, value: Value) -> Self {
+        self.tags.get_or_insert_with(Map::new).insert(name, value);
+        self
+    }
+
+    /// Whether the record is published.
+    #[must_use]
+    pub const fn published(mut self, published: bool) -> Self {
+        self.published = Some(published);
+        self
+    }
+
+    /// Specify a protocol role for the record.
+    #[must_use]
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+        self.protocol_role = Some(protocol_role.into());
+        self
+    }
+
+    /// Specifies the permission grant ID.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
+        self
+    }
+
+    /// The delegated grant used with this record.
+    #[must_use]
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
+        self.delegated_grant = Some(delegated_grant);
+        self
+    }
+
+    /// The encryption properties for the record.
+    #[must_use]
+    pub fn encryption(mut self, encryption: EncryptionProperty) -> Self {
+        self.encryption = Some(encryption);
+        self
+    }
+
+    // ----------------------------------------------------------------
+    // Methods enabled soley for testing
+    // ----------------------------------------------------------------
+    /// Override message timestamp.
+    #[cfg(debug_assertions)]
+    #[must_use]
+    pub const fn message_timestamp(mut self, message_timestamp: DateTime<Utc>) -> Self {
+        self.message_timestamp = message_timestamp;
+        self
+    }
+
+    /// Override date created.
+    #[cfg(debug_assertions)]
+    #[must_use]
+    pub const fn date_created(mut self, date_created: DateTime<Utc>) -> Self {
+        self.date_created = date_created;
+        self
+    }
+
+    /// Override date published.
+    #[cfg(debug_assertions)]
+    #[must_use]
+    pub const fn date_published(mut self, date_published: DateTime<Utc>) -> Self {
+        self.date_published = Some(date_published);
+        self
+    }
+}
+
+/// State: Unencrypted and Unsigned.
+impl<'a, O, A> WriteBuilder<'a, O, A, Unsigned> {
+    /// Logically (from user POV), have an attester sign the record.
+    ///
+    /// At this point, the builder simply captures the attester for use in the
+    /// final build step. Can only be done if the content hasn't been signed
+    /// or encrypted.
+    #[must_use]
+    pub fn attest<S: Signer>(
+        self, attesters: &'a [&'a S],
+    ) -> WriteBuilder<'a, O, Attested<'a, S>, Unsigned> {
+        WriteBuilder {
+            attesters: Attested(attesters),
+            message_timestamp: self.message_timestamp,
+            recipient: self.recipient,
+            protocol: self.protocol,
+            schema: self.schema,
+            tags: self.tags,
+            record_id: self.record_id,
+            data: self.data,
+            data_format: self.data_format,
+            date_created: self.date_created,
+            published: self.published,
+            date_published: self.date_published,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+            encryption: self.encryption,
+            existing: self.existing,
+            origin: self.origin,
+            signer: self.signer,
+        }
+    }
+}
+
+// State: Unsigned
+impl<'a, O, A> WriteBuilder<'a, O, A, Unsigned> {
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the final
+    /// build step. Can only be done if the content hasn't been signed yet.
+    #[must_use]
+    pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<'a, O, A, Signed<'a, impl Signer>> {
+        WriteBuilder {
+            signer: Signed(signer),
+
+            message_timestamp: self.message_timestamp,
+            recipient: self.recipient,
+            protocol: self.protocol,
+            schema: self.schema,
+            tags: self.tags,
+            record_id: self.record_id,
+            data: self.data,
+            data_format: self.data_format,
+            date_created: self.date_created,
+            published: self.published,
+            date_published: self.date_published,
+            protocol_role: self.protocol_role,
+            permission_grant_id: self.permission_grant_id,
+            delegated_grant: self.delegated_grant,
+            encryption: self.encryption,
+            existing: self.existing,
+            origin: self.origin,
+            attesters: self.attesters,
+        }
+    }
+}
+
+// State: Signed.
+
+/// Builder is ready to build once the `sign` step is complete (i.e. the Signer
+/// is set).
+impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
+    // FIXME: break into separate functions
+    #[allow(clippy::too_many_lines)]
+    fn to_write(&self, author_did: &str) -> Result<Write> {
+        let mut write = if let Some(write) = &self.existing {
+            write.clone()
+        } else {
+            // set immutable properties
+            let mut write = Write {
+                descriptor: WriteDescriptor {
+                    base: Descriptor {
+                        interface: Interface::Records,
+                        method: Method::Write,
+                        ..Descriptor::default()
+                    },
+                    date_created: self.date_created,
+                    recipient: self.recipient.clone(),
+                    ..WriteDescriptor::default()
+                },
+                ..Write::default()
+            };
+
+            if let Some(record_id) = self.record_id.clone() {
+                write.record_id = record_id;
+            }
+            if let Some(settings) = self.protocol.clone() {
+                let normalized = utils::clean_url(settings.protocol)?;
+                write.descriptor.protocol = Some(normalized);
+                write.descriptor.protocol_path = Some(settings.protocol_path.to_string());
+
+                // parent_id == last segment of  `parent_context_id`
+                if let Some(parent_context_id) = &settings.parent_context_id {
+                    write.descriptor.parent_id =
+                        parent_context_id.split('/').next_back().map(ToString::to_string);
+                }
+            }
+            if let Some(s) = &self.schema {
+                write.descriptor.schema = Some(utils::clean_url(s)?);
+            }
+
+            write
+        };
+
+        // mutable properties
+        write.descriptor.base.message_timestamp = self.message_timestamp;
+        write.descriptor.data_format.clone_from(&self.data_format);
+
+        // tags
+        if let Some(tags) = self.tags.clone() {
+            write.descriptor.tags = Some(tags);
+        }
+
+        // published state
+        if let Some(published) = self.published {
+            write.descriptor.published = Some(published);
+
+            // set/unset `date_published`
+            if published {
+                write.descriptor.date_published =
+                    Some(self.date_published.unwrap_or(self.message_timestamp));
+            } else {
+                write.descriptor.date_published = None;
+            }
+        }
+
+        match &self.data {
+            Some(Data::Stream(stream)) => {
+                let (data_cid, data_size) = stream.compute_cid()?;
+                write.descriptor.data_cid = data_cid;
+                write.descriptor.data_size = data_size;
+                write.data_stream = Some(stream.clone());
+            }
+            Some(Data::Bytes(data)) => {
+                // calculate CID and size only — don't add to `data_stream`
+                let data_cid = cid::from_value(data)?;
+                write.descriptor.data_cid = data_cid;
+                write.descriptor.data_size = data.len();
+            }
+            Some(Data::Cid { data_cid, data_size }) => {
+                write.descriptor.data_cid.clone_from(data_cid);
+                write.descriptor.data_size = *data_size;
+            }
+            None => {}
+        };
+
+        if let Some(encryption) = &self.encryption {
+            for key in &encryption.key_encryption {
+                if key.derivation_scheme == DerivationScheme::ProtocolPath
+                    && self.protocol.is_none()
+                {
+                    return Err(unexpected!(
+                        "`protocol` must be specified when using `protocols` encryption scheme"
+                    ));
+                }
+                if key.derivation_scheme == DerivationScheme::Schemas && self.schema.is_none() {
+                    return Err(unexpected!(
+                        "`schema` must be specified when using `schema` encryption scheme"
+                    ));
+                }
+            }
+
+            write.encryption = Some(encryption.clone());
+        }
+
+        write.authorization = Authorization {
+            author_delegated_grant: self.delegated_grant.clone(),
+            ..Authorization::default()
+        };
+
+        // compute `record_id` when not provided
+        if write.record_id.is_empty() {
+            write.record_id = write.entry_id(author_did)?;
+        }
+
+        // compute `context_id` if this is a protocol-space record
+        if let Some(settings) = &self.protocol {
+            if let Some(parent_context_id) = &write.context_id {
+                write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
+            } else if let Some(parent_context_id) = &settings.parent_context_id {
+                write.context_id = Some(format!("{parent_context_id}/{}", write.record_id));
+            } else {
+                write.context_id = Some(write.record_id.clone());
+            }
+        }
+
+        Ok(write)
+    }
+}
+
+impl<O, A: Signer, S: Signer> WriteBuilder<'_, O, Attested<'_, A>, Signed<'_, S>> {
+    async fn attestation(self, descriptor: &WriteDescriptor) -> Result<Jws> {
+        let payload = Attestation {
+            descriptor_cid: cid::from_value(descriptor)?,
+        };
+        let Some(attester) = self.attesters.0.first() else {
+            return Err(unexpected!("attesters is empty"));
+        };
+        Ok(JwsBuilder::new().payload(payload).add_signer(*attester).build().await?)
+    }
+}
+
+/// State: Unattested, Unencrypted, and Signed.
+impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
+    /// Build the `Write` message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn build(self) -> Result<Write> {
+        let author_did = if let Some(grant) = &self.delegated_grant {
+            authorization::signer_did(&grant.authorization.signature)?
+        } else {
+            // TODO: add helper method to Signer trait
+            self.signer
+                .0
+                .verification_method()
+                .await?
+                .split('#')
+                .next()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+        };
+
+        let mut write = self.to_write(&author_did)?;
+        write.sign_as_author(self.permission_grant_id, self.protocol_role, self.signer.0).await?;
+        Ok(write)
+    }
+}
+
+/// State: Attested, and Signed.
+impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a, S>> {
+    /// Build the `Write` message.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn build(self) -> Result<Write> {
+        let author_did = if let Some(grant) = &self.delegated_grant {
+            authorization::signer_did(&grant.authorization.signature)?
+        } else {
+            // TODO: add helper method to Signer trait
+            self.signer
+                .0
+                .verification_method()
+                .await?
+                .split('#')
+                .next()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+        };
+
+        let signer = self.signer.0;
+        let protocol_role = self.protocol_role.clone();
+        let permission_grant_id = self.permission_grant_id.clone();
+
+        let mut write = self.to_write(&author_did)?;
+        write.attestation = Some(self.attestation(&write.descriptor).await?);
+        write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
+        Ok(write)
+    }
+}
+
+// Fetch previous entries for this record, ordered from earliest to latest.
+async fn existing_entries(
+    owner: &str, record_id: &str, store: &impl MessageStore,
+) -> Result<Vec<Entry>> {
+    let query = RecordsQuery::new()
+        .add_filter(RecordsFilter::new().record_id(record_id))
+        .include_archived(true)
+        .method(None); // both Write and Delete messages
+    store.query(owner, &query.into()).await.map_err(Into::into)
+}
+
+// Fetches the initial_write record associated for `record_id`.
+pub async fn initial_write(
+    owner: &str, record_id: &str, store: &impl MessageStore,
+) -> Result<Option<Write>> {
+    let entries = existing_entries(owner, record_id, store).await?;
+
+    // check initial write is found
+    if let Some(entry) = entries.first() {
+        let write = Write::try_from(entry)?;
+        if !write.is_initial()? {
+            return Err(unexpected!("initial write is not earliest message"));
+        }
+        Ok(Some(write))
+    } else {
+        Ok(None)
+    }
+}
+
+// Fetches the first and last `records::Write` messages associated for the
+// `record_id`.
+fn earliest_and_latest(entries: &[Entry]) -> (Option<Entry>, Option<Entry>) {
+    entries.first().map_or((None, None), |first| (Some(first.clone()), entries.last().cloned()))
+}

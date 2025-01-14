@@ -11,6 +11,6 @@ base64ct.workspace = true
 dwn-test.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
-vercre-dwn = { path = "../.." }
+vercre-dwn-server.workspace = true
 
 [dev-dependencies]
