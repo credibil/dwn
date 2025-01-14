@@ -7,8 +7,8 @@ mod subscribe;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub use self::query::{Query, QueryBuilder, QueryReply};
-pub use self::read::{Read, ReadBuilder, ReadReply};
+pub use self::query::{Query, QueryBuilder, QueryDescriptor, QueryReply};
+pub use self::read::{Read, ReadBuilder, ReadDescriptor, ReadReply};
 pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
 use crate::{Interface, Method, RangeFilter};
 

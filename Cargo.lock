@@ -1191,6 +1191,7 @@ dependencies = [
  "ciborium",
  "cid 0.11.1",
  "derive_more",
+ "dwn-node",
  "dwn-test",
  "ed25519-dalek",
  "futures",

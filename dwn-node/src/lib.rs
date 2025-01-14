@@ -14,7 +14,7 @@ pub mod permissions;
 pub mod protocols;
 pub mod provider;
 pub mod records;
-mod schema;
+pub mod schema;
 pub mod store;
 mod tasks;
 mod utils;

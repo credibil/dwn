@@ -195,7 +195,7 @@ pub fn signer_did(jws: &Jws) -> Result<String> {
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct AuthorizationBuilder {
+pub struct AuthorizationBuilder {
     descriptor_cid: Option<String>,
     delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
@@ -206,34 +206,34 @@ pub(crate) struct AuthorizationBuilder {
 impl AuthorizationBuilder {
     /// Returns a new [`AuthorizationBuilder`]
     #[must_use]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
     /// Set the `Descriptor` CID.
     #[must_use]
-    pub(crate) fn descriptor_cid(mut self, descriptor_cid: impl Into<String>) -> Self {
+    pub fn descriptor_cid(mut self, descriptor_cid: impl Into<String>) -> Self {
         self.descriptor_cid = Some(descriptor_cid.into());
         self
     }
 
     /// Set the `Descriptor`.
     #[must_use]
-    pub(crate) fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
+    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
         self.delegated_grant = Some(delegated_grant);
         self
     }
 
     /// Specify a grant ID to use.
     #[must_use]
-    pub(crate) fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
         self.permission_grant_id = Some(permission_grant_id.into());
         self
     }
 
     /// Specify a protocol role to use.
     #[must_use]
-    pub(crate) fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
+    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
         self.protocol_role = Some(protocol_role.into());
         self
     }
@@ -242,7 +242,7 @@ impl AuthorizationBuilder {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub(crate) async fn build(self, signer: &impl Signer) -> Result<Authorization> {
+    pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
         let descriptor_cid =
             self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;
         let delegated_grant_id = if let Some(grant) = &self.delegated_grant {

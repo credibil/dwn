@@ -7,13 +7,12 @@ use std::ops::Deref;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
 use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, Sort, TagFilter};
-use crate::{Descriptor, Method, Result, authorization, messages, protocols};
+use crate::{Descriptor, Method, Result, authorization, protocols};
 pub use crate::{Lower, RangeFilter, Upper};
 
 /// Entry wraps each message with a unifying type used for all stored messages
@@ -311,20 +310,6 @@ impl From<RecordsQuery> for Query {
 pub struct MessagesQuery {
     /// Message filters.
     pub filters: Vec<MessagesFilter>,
-}
-
-impl From<messages::Query> for MessagesQuery {
-    fn from(query: messages::Query) -> Self {
-        Self {
-            filters: query.descriptor.filters,
-        }
-    }
-}
-
-impl From<MessagesQuery> for Query {
-    fn from(query: MessagesQuery) -> Self {
-        Self::Messages(query)
-    }
 }
 
 /// Pagination cursor.
