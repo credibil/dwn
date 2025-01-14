@@ -5671,8 +5671,12 @@ async fn context_id_mismatch() {
         context_id: Some("somerandomrecordid".to_string()),
         ..SignaturePayload::default()
     };
-    write.authorization.signature =
-        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
+    write.authorization.signature = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&alice_keyring)
+        .build()
+        .await
+        .expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -5708,8 +5712,12 @@ async fn invalid_attestation() {
         attestation_cid: Some("somerandomrecordid".to_string()),
         ..SignaturePayload::default()
     };
-    write.authorization.signature =
-        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
+    write.authorization.signature = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&alice_keyring)
+        .build()
+        .await
+        .expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");
@@ -5746,8 +5754,12 @@ async fn attestation_descriptor_cid() {
     let payload = Attestation {
         descriptor_cid: data::cid::from_value(&"somerandomrecordid").expect("should create CID"),
     };
-    let attestation =
-        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
+    let attestation = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&alice_keyring)
+        .build()
+        .await
+        .expect("should sign");
 
     let payload = SignaturePayload {
         base: JwsPayload {
@@ -5759,10 +5771,12 @@ async fn attestation_descriptor_cid() {
         attestation_cid: Some(data::cid::from_value(&attestation).unwrap()),
         ..SignaturePayload::default()
     };
-    write.authorization.signature =
-        JwsBuilder::new().payload(payload).build(&alice_keyring).await.expect("should sign");
-
-    // endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+    write.authorization.signature = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&alice_keyring)
+        .build()
+        .await
+        .expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
         panic!("should be BadRequest");

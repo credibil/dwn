@@ -257,7 +257,7 @@ impl AuthorizationBuilder {
             delegated_grant_id,
             protocol_role: self.protocol_role,
         };
-        let signature = JwsBuilder::new().payload(payload).build(signer).await?;
+        let signature = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
 
         Ok(Authorization {
             signature,

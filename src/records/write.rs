@@ -541,7 +541,8 @@ impl Write {
             encryption_cid,
         };
 
-        self.authorization.signature = JwsBuilder::new().payload(payload).build(signer).await?;
+        self.authorization.signature =
+            JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
 
         Ok(())
     }
@@ -563,7 +564,7 @@ impl Write {
             descriptor_cid: cid::from_value(&self.descriptor)?,
             ..JwsPayload::default()
         };
-        let owner_jws = JwsBuilder::new().payload(payload).build(signer).await?;
+        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
         self.authorization.owner_signature = Some(owner_jws);
 
         Ok(())
@@ -594,7 +595,7 @@ impl Write {
             delegated_grant_id: Some(delegated_grant_id),
             ..JwsPayload::default()
         };
-        let owner_jws = JwsBuilder::new().payload(payload).build(signer).await?;
+        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
 
         self.authorization.owner_signature = Some(owner_jws);
         self.authorization.owner_delegated_grant = Some(delegated_grant);
@@ -770,13 +771,6 @@ pub struct ProtocolBuilder<'a> {
     /// Parent context for the protocol.
     pub parent_context_id: Option<String>,
 }
-
-// /// Required for a child (non-root) protocol record.
-// #[must_use]
-// pub fn parent_context_id(mut self, parent_context_id: impl Into<String>) -> Self {
-//     self.parent_context_id = Some(parent_context_id.into());
-//     self
-// }
 
 /// Entry data can be raw bytes or CID.
 pub enum Data {
@@ -1232,7 +1226,7 @@ impl<O, A: Signer, S: Signer> WriteBuilder<'_, O, Attested<'_, A>, Signed<'_, S>
         let Some(attester) = self.attesters.0.first() else {
             return Err(unexpected!("attesters is empty"));
         };
-        Ok(JwsBuilder::new().payload(payload).build(*attester).await?)
+        Ok(JwsBuilder::new().payload(payload).add_signer(*attester).build().await?)
     }
 }
 
