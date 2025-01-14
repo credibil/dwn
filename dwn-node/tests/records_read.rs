@@ -3,17 +3,11 @@
 use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_test::key_store::{ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID};
-use dwn_test::provider::ProviderImpl;
-use http::StatusCode;
-use rand::RngCore;
-use serde_json::Value;
+use dwn_node::client::protocols::ConfigureBuilder;
 use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
-use dwn_node::hd_key::{
-    self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk,
-};
+use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::permissions::{GrantBuilder, RecordsScope, Scope};
-use dwn_node::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use dwn_node::protocols::{Definition, QueryBuilder};
 use dwn_node::provider::{BlockStore, KeyStore, MessageStore};
 use dwn_node::records::{
     Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
@@ -21,6 +15,11 @@ use dwn_node::records::{
 };
 use dwn_node::store::Entry;
 use dwn_node::{Error, Method, endpoint};
+use dwn_test::key_store::{ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID};
+use dwn_test::provider::ProviderImpl;
+use http::StatusCode;
+use rand::RngCore;
+use serde_json::Value;
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.

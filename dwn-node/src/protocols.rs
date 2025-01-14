@@ -10,8 +10,8 @@ use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 
 pub use self::configure::{
-    Action, ActionRule, Actor, Configure, ConfigureBuilder, ConfigureReply, Definition,
-    ProtocolType, RuleSet,
+    Action, ActionRule, Actor, Configure, ConfigureDescriptor, ConfigureReply, Definition,
+    ProtocolType, RuleSet, validate_structure,
 };
 pub use self::query::{Query, QueryBuilder, QueryReply};
 use crate::Range;

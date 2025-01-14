@@ -5,16 +5,17 @@
 
 use std::collections::BTreeMap;
 
+use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::permissions::{GrantBuilder, RevocationBuilder, Scope};
+use dwn_node::protocols::{
+    Action, ActionRule, Actor, Definition, ProtocolType, QueryBuilder, RuleSet,
+};
+use dwn_node::provider::{EventLog, KeyStore};
+use dwn_node::{Error, Message, Method, endpoint, store};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use tokio::time;
-use dwn_node::permissions::{GrantBuilder, RevocationBuilder, Scope};
-use dwn_node::protocols::{
-    Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
-};
-use dwn_node::provider::{EventLog, KeyStore};
-use dwn_node::{Error, Message, Method, endpoint, store};
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]
