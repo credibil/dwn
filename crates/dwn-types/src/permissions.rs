@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub use self::grant::{
     Grant, GrantBuilder, GrantData, RequestBuilder, RequestData, RevocationBuilder, RevocationData,
 };
-pub(crate) use self::protocol::{Protocol, fetch_scope};
+pub(crate) use self::protocol::Protocol;
 use crate::provider::MessageStore;
 use crate::store::{RecordsFilter, RecordsQuery};
 use crate::{Interface, Method, Result, forbidden};

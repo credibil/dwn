@@ -1,16 +1,119 @@
 //! # Messages
 
-mod query;
-mod read;
-mod subscribe;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub use self::query::{Query, QueryBuilder, QueryReply};
-pub use self::read::{Read, ReadBuilder, ReadReply};
-pub use self::subscribe::{Subscribe, SubscribeBuilder, SubscribeReply};
-use crate::{Interface, Method, RangeFilter};
+use crate::authorization::Authorization;
+use crate::event::Subscriber;
+use crate::records::DataStream;
+use crate::store::{Cursor, EntryType};
+use crate::{Descriptor, Interface, Method, RangeFilter};
+
+/// `Query` payload
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Query {
+    /// The `Query` descriptor.
+    pub descriptor: QueryDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// `Query` reply
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct QueryReply {
+    /// Entries matching the message's query.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Vec<String>>,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
+}
+
+/// `Query` descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: Descriptor,
+
+    /// Filters to apply when querying messages.
+    pub filters: Vec<MessagesFilter>,
+
+    /// The pagination cursor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
+}
+
+/// `Read` payload
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Read {
+    /// The `Read` descriptor.
+    pub descriptor: ReadDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// `Read` reply
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct ReadReply {
+    /// The `Read` descriptor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<ReadReplyEntry>,
+}
+
+/// `Read` reply entry
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct ReadReplyEntry {
+    /// The CID of the message.
+    pub message_cid: String,
+
+    /// The message.
+    pub message: EntryType,
+
+    /// The data associated with the message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<DataStream>,
+}
+
+/// Read descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: Descriptor,
+
+    /// The CID of the message to read.
+    pub message_cid: String,
+}
+
+/// Subscribe reply
+#[derive(Debug, Deserialize, Serialize)]
+#[allow(clippy::module_name_repetitions)]
+pub struct SubscribeReply {
+    /// The subscription to the requested events.
+    #[serde(skip)]
+    pub subscription: Subscriber,
+}
+
+/// Subscribe descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscribeDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: Descriptor,
+
+    /// Filters to apply when subscribing to messages.
+    pub filters: Vec<MessagesFilter>,
+}
 
 /// `Messages` filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
