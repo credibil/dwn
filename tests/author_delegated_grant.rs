@@ -6,10 +6,10 @@
 
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use vercre_dwn_server::permissions::{GrantBuilder, Scope};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition, QueryBuilder};
-use vercre_dwn_server::provider::KeyStore;
-use vercre_dwn_server::{Method, endpoint};
+use dwn_node::permissions::{GrantBuilder, Scope};
+use dwn_node::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use dwn_node::provider::KeyStore;
+use dwn_node::{Method, endpoint};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;

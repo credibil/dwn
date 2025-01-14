@@ -14,9 +14,9 @@ pub mod task_store;
 
 use anyhow::{Result, anyhow};
 use blockstore::InMemoryBlockstore;
+use dwn_node::provider::{DidResolver, Document, Provider};
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem};
-use vercre_dwn_server::provider::{DidResolver, Document, Provider};
 
 use self::key_store::{ALICE_DID, KeyStoreImpl};
 
@@ -49,11 +49,11 @@ impl ProviderImpl {
 impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {
         if url == ALICE_DID {
-            return serde_json::from_slice(include_bytes!("./provider/data/alice_did.json"))
-                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")));
+            serde_json::from_slice(include_bytes!("./provider/data/alice_did.json"))
+                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
         } else {
-            return serde_json::from_slice(include_bytes!("./provider/data/bob_did.json"))
-                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")));
+            serde_json::from_slice(include_bytes!("./provider/data/bob_did.json"))
+                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
         }
     }
 }

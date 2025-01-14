@@ -20,6 +20,6 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-vercre-dwn-server.workspace = true
+dwn-node.workspace = true
 
 [dev-dependencies]

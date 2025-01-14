@@ -2,9 +2,6 @@
 
 pub mod provider;
 
-#[cfg(test)]
-mod scenarios;
-
 pub use provider::key_store;
 
 /// Configure Insta snapshot name.

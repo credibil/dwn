@@ -1,5 +1,5 @@
 [workspace]
-members = ["dwn-server", "dwn-client", "crates/*", "examples/*"]
+members = ["dwn-node", "dwn-msg", "crates/*", "examples/*"]
 resolver = "2"
 
 [workspace.package]
@@ -30,6 +30,8 @@ nursery = "warn"
 anyhow = "1.0.95"
 base64ct = { version = "1.6.0", features = ["std"] }
 cid = "0.11.1"
+dwn-msg = { path = "dwn-msg" }
+dwn-node = { path = "dwn-node" }
 dwn-test = { path = "crates/dwn-test" }
 futures = "0.3.31"
 http = "1.2.0"
@@ -39,8 +41,6 @@ serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.135", features = ["alloc"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time"] }
 vercre-did = { git = "https://github.com/vercre/did.git" }
-vercre-dwn-client = { path = "dwn-client" }
-vercre-dwn-server = { path = "dwn-server" }
 vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
 
 # [patch."https://github.com/vercre/infosec.git"]

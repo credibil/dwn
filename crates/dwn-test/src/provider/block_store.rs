@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use blockstore::Blockstore as _;
-use vercre_dwn_server::provider::BlockStore;
+use dwn_node::provider::BlockStore;
 
 use super::ProviderImpl;
 

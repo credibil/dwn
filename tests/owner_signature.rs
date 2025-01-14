@@ -9,9 +9,9 @@ use std::io::Read;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{Value, json};
-use vercre_dwn_server::endpoint;
-use vercre_dwn_server::provider::KeyStore;
-use vercre_dwn_server::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
+use dwn_node::endpoint;
+use dwn_node::provider::KeyStore;
+use dwn_node::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;

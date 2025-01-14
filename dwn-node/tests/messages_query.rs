@@ -6,13 +6,13 @@
 use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use vercre_dwn_server::data::DataStream;
-use vercre_dwn_server::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
-use vercre_dwn_server::permissions::{GrantBuilder, Scope};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition};
-use vercre_dwn_server::provider::KeyStore;
-use vercre_dwn_server::records::{Data, ProtocolBuilder, WriteBuilder};
-use vercre_dwn_server::{Error, Interface, Message, Method, endpoint};
+use dwn_node::data::DataStream;
+use dwn_node::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
+use dwn_node::permissions::{GrantBuilder, Scope};
+use dwn_node::protocols::{ConfigureBuilder, Definition};
+use dwn_node::provider::KeyStore;
+use dwn_node::records::{Data, ProtocolBuilder, WriteBuilder};
+use dwn_node::{Error, Interface, Message, Method, endpoint};
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]

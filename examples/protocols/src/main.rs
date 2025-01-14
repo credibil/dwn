@@ -1,10 +1,10 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
+use dwn_node::endpoint;
+use dwn_node::protocols::Query;
+use dwn_node::provider::{KeyStore, Signer};
 use dwn_test::key_store::ALICE_DID;
 use dwn_test::provider::ProviderImpl;
 use serde_json::json;
-use vercre_dwn_server::endpoint;
-use vercre_dwn_server::protocols::Query;
-use vercre_dwn_server::provider::{KeyStore, Signer};
 
 #[tokio::main]
 async fn main() {

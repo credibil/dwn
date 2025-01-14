@@ -8,14 +8,14 @@ use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use tokio::time;
-use vercre_dwn_server::authorization::Authorization;
-use vercre_dwn_server::data::DataStream;
-use vercre_dwn_server::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
-use vercre_dwn_server::permissions::{GrantBuilder, Scope};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition};
-use vercre_dwn_server::provider::KeyStore;
-use vercre_dwn_server::records::{Data, ProtocolBuilder, WriteBuilder};
-use vercre_dwn_server::{Error, Interface, Message, Method, endpoint};
+use dwn_node::authorization::Authorization;
+use dwn_node::data::DataStream;
+use dwn_node::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
+use dwn_node::permissions::{GrantBuilder, Scope};
+use dwn_node::protocols::{ConfigureBuilder, Definition};
+use dwn_node::provider::KeyStore;
+use dwn_node::records::{Data, ProtocolBuilder, WriteBuilder};
+use dwn_node::{Error, Interface, Message, Method, endpoint};
 
 // TODO: implement fake provider with no subscription support for this test.
 // // Should respond with a status of NotImplemented (501) if subscriptions are
@@ -413,7 +413,7 @@ async fn protocol_filter() {
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(vercre_dwn_server::records::ProtocolBuilder {
+        .protocol(dwn_node::records::ProtocolBuilder {
             protocol: "http://protocol1.xyz",
             protocol_path: "post",
             parent_context_id: None,

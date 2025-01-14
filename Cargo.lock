@@ -1180,6 +1180,72 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
+name = "dwn-msg"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "async-recursion",
+ "base64ct",
+ "chrono",
+ "ciborium",
+ "cid 0.11.1",
+ "derive_more",
+ "dwn-test",
+ "ed25519-dalek",
+ "futures",
+ "hkdf",
+ "http 1.2.0",
+ "insta",
+ "jsonschema",
+ "libipld",
+ "multihash-codetable",
+ "rand",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "thiserror 2.0.11",
+ "tokio",
+ "uuid",
+ "vercre-did",
+ "vercre-infosec",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "dwn-node"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "async-recursion",
+ "base64ct",
+ "chrono",
+ "ciborium",
+ "cid 0.11.1",
+ "derive_more",
+ "dwn-test",
+ "ed25519-dalek",
+ "futures",
+ "hkdf",
+ "http 1.2.0",
+ "insta",
+ "jsonschema",
+ "libipld",
+ "multihash-codetable",
+ "rand",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "thiserror 2.0.11",
+ "tokio",
+ "uuid",
+ "vercre-did",
+ "vercre-infosec",
+ "x25519-dalek",
+]
+
+[[package]]
 name = "dwn-test"
 version = "0.0.0"
 dependencies = [
@@ -1188,13 +1254,13 @@ dependencies = [
  "base64ct",
  "blockstore",
  "cid 0.11.1",
+ "dwn-node",
  "ed25519-dalek",
  "futures",
  "insta",
  "serde_json",
  "sha2 0.10.8",
  "surrealdb",
- "vercre-dwn-server",
  "vercre-infosec",
  "vercre-serialize",
  "x25519-dalek",
@@ -3492,10 +3558,10 @@ name = "records"
 version = "0.0.0"
 dependencies = [
  "base64ct",
+ "dwn-node",
  "dwn-test",
  "serde_json",
  "tokio",
- "vercre-dwn-server",
 ]
 
 [[package]]
@@ -5340,72 +5406,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vercre-dwn-client"
-version = "0.1.0-alpha.1"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "async-recursion",
- "base64ct",
- "chrono",
- "ciborium",
- "cid 0.11.1",
- "derive_more",
- "dwn-test",
- "ed25519-dalek",
- "futures",
- "hkdf",
- "http 1.2.0",
- "insta",
- "jsonschema",
- "libipld",
- "multihash-codetable",
- "rand",
- "serde",
- "serde_json",
- "sha2 0.10.8",
- "thiserror 2.0.11",
- "tokio",
- "uuid",
- "vercre-did",
- "vercre-infosec",
- "x25519-dalek",
-]
-
-[[package]]
-name = "vercre-dwn-server"
-version = "0.1.0-alpha.1"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "async-recursion",
- "base64ct",
- "chrono",
- "ciborium",
- "cid 0.11.1",
- "derive_more",
- "dwn-test",
- "ed25519-dalek",
- "futures",
- "hkdf",
- "http 1.2.0",
- "insta",
- "jsonschema",
- "libipld",
- "multihash-codetable",
- "rand",
- "serde",
- "serde_json",
- "sha2 0.10.8",
- "thiserror 2.0.11",
- "tokio",
- "uuid",
- "vercre-did",
- "vercre-infosec",
- "x25519-dalek",
-]
-
-[[package]]
 name = "vercre-infosec"
 version = "0.1.0-alpha.6"
 source = "git+https://github.com/vercre/infosec.git#db3df7a1dedd82f3c553d54240e7cc8578ea17e0"
@@ -5434,7 +5434,7 @@ dependencies = [
 name = "vercre-serialize"
 version = "0.1.0-alpha.1"
 dependencies = [
- "vercre-dwn-server",
+ "dwn-node",
 ]
 
 [[package]]

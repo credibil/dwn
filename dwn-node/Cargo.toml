@@ -1,5 +1,5 @@
 [package]
-name = "vercre-dwn-client"
+name = "dwn-node"
 description = "Decentralized Web Node (DWN)"
 readme = "README.md"
 authors.workspace = true
@@ -40,7 +40,6 @@ serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10.8"
 thiserror = "2.0.11"
-
 uuid = { version = "1.11.1", features = ["fast-rng", "v4"] }
 vercre-did.workspace = true
 vercre-infosec.workspace = true
@@ -52,6 +51,3 @@ tokio.workspace = true
 [dev-dependencies]
 dwn-test.workspace = true
 insta.workspace = true
-
-
-

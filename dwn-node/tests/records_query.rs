@@ -6,14 +6,14 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use rand::RngCore;
-use vercre_dwn_server::data::{DataStream, MAX_ENCODED_SIZE};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition};
-use vercre_dwn_server::provider::KeyStore;
-use vercre_dwn_server::records::{
+use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::protocols::{ConfigureBuilder, Definition};
+use dwn_node::provider::KeyStore;
+use dwn_node::records::{
     Data, DateRange, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder,
 };
-use vercre_dwn_server::store::Pagination;
-use vercre_dwn_server::{Error, Message, RangeFilter, authorization, endpoint};
+use dwn_node::store::Pagination;
+use dwn_node::{Error, Message, RangeFilter, authorization, endpoint};
 
 // Should return a status of BadRequest (400) when querying for unpublished records
 // with sort date set to `Sort::Publishedxxx`.

@@ -9,19 +9,19 @@ use dwn_test::key_store::{
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
-use vercre_dwn_server::authorization::JwsPayload;
-use vercre_dwn_server::data::{DataStream, MAX_ENCODED_SIZE};
-use vercre_dwn_server::hd_key::{DerivationScheme, PrivateKeyJwk};
-use vercre_dwn_server::messages::{self, MessagesFilter};
-use vercre_dwn_server::permissions::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
-use vercre_dwn_server::provider::{EventLog, KeyStore};
-use vercre_dwn_server::records::{
+use dwn_node::authorization::JwsPayload;
+use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
+use dwn_node::messages::{self, MessagesFilter};
+use dwn_node::permissions::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
+use dwn_node::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
+use dwn_node::provider::{EventLog, KeyStore};
+use dwn_node::records::{
     Attestation, Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, QueryBuilder, ReadBuilder,
     Recipient, RecordsFilter, SignaturePayload, WriteBuilder,
 };
-use vercre_dwn_server::store::MessagesQuery;
-use vercre_dwn_server::{Error, Interface, Message, Method, Range, data, endpoint};
+use dwn_node::store::MessagesQuery;
+use dwn_node::{Error, Interface, Message, Method, Range, data, endpoint};
 use vercre_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors

@@ -11,12 +11,12 @@ use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use tokio::time;
-use vercre_dwn_server::data::cid;
-use vercre_dwn_server::permissions::{GrantBuilder, RevocationBuilder, Scope};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition, ProtocolType, QueryBuilder};
-use vercre_dwn_server::provider::KeyStore;
-use vercre_dwn_server::store::ProtocolsFilter;
-use vercre_dwn_server::{Error, Method, endpoint};
+use dwn_node::data::cid;
+use dwn_node::permissions::{GrantBuilder, RevocationBuilder, Scope};
+use dwn_node::protocols::{ConfigureBuilder, Definition, ProtocolType, QueryBuilder};
+use dwn_node::provider::KeyStore;
+use dwn_node::store::ProtocolsFilter;
+use dwn_node::{Error, Method, endpoint};
 use vercre_infosec::jose::jws::{Jws, Protected, Signature};
 
 // Should return protocols matching the query.

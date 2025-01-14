@@ -9,12 +9,12 @@ use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use tokio::time;
-use vercre_dwn_server::permissions::{GrantBuilder, RevocationBuilder, Scope};
-use vercre_dwn_server::protocols::{
+use dwn_node::permissions::{GrantBuilder, RevocationBuilder, Scope};
+use dwn_node::protocols::{
     Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
 };
-use vercre_dwn_server::provider::{EventLog, KeyStore};
-use vercre_dwn_server::{Error, Message, Method, endpoint, store};
+use dwn_node::provider::{EventLog, KeyStore};
+use dwn_node::{Error, Message, Method, endpoint, store};
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]

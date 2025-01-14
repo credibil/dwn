@@ -6,13 +6,13 @@ use chrono::Days;
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition};
-use vercre_dwn_server::provider::{EventLog, KeyStore, MessageStore};
-use vercre_dwn_server::records::{
+use dwn_node::protocols::{ConfigureBuilder, Definition};
+use dwn_node::provider::{EventLog, KeyStore, MessageStore};
+use dwn_node::records::{
     Data, DeleteBuilder, DeleteDescriptor, ProtocolBuilder, QueryBuilder, ReadBuilder,
     RecordsFilter, WriteBuilder,
 };
-use vercre_dwn_server::{Error, Method, endpoint, store};
+use dwn_node::{Error, Method, endpoint, store};
 
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]

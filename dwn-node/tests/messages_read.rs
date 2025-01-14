@@ -9,13 +9,13 @@ use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID, INVALID_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
-use vercre_dwn_server::data::{DataStream, MAX_ENCODED_SIZE};
-use vercre_dwn_server::messages::ReadBuilder;
-use vercre_dwn_server::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
-use vercre_dwn_server::provider::{KeyStore, MessageStore};
-use vercre_dwn_server::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
-use vercre_dwn_server::{Error, Interface, Message, Method, endpoint, store};
+use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::messages::ReadBuilder;
+use dwn_node::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
+use dwn_node::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
+use dwn_node::provider::{KeyStore, MessageStore};
+use dwn_node::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
+use dwn_node::{Error, Interface, Message, Method, endpoint, store};
 
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]

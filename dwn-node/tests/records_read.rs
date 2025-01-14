@@ -8,19 +8,19 @@ use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
 use serde_json::Value;
-use vercre_dwn_server::data::{DataStream, MAX_ENCODED_SIZE};
-use vercre_dwn_server::hd_key::{
+use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::hd_key::{
     self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk,
 };
-use vercre_dwn_server::permissions::{GrantBuilder, RecordsScope, Scope};
-use vercre_dwn_server::protocols::{ConfigureBuilder, Definition, QueryBuilder};
-use vercre_dwn_server::provider::{BlockStore, KeyStore, MessageStore};
-use vercre_dwn_server::records::{
+use dwn_node::permissions::{GrantBuilder, RecordsScope, Scope};
+use dwn_node::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use dwn_node::provider::{BlockStore, KeyStore, MessageStore};
+use dwn_node::records::{
     Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
     WriteBuilder, decrypt,
 };
-use vercre_dwn_server::store::Entry;
-use vercre_dwn_server::{Error, Method, endpoint};
+use dwn_node::store::Entry;
+use dwn_node::{Error, Method, endpoint};
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.

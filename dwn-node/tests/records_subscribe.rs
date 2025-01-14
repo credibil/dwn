@@ -7,11 +7,11 @@ use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
 use tokio::time;
-use vercre_dwn_server::provider::KeyStore;
-use vercre_dwn_server::records::{
+use dwn_node::provider::KeyStore;
+use dwn_node::records::{
     Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
 };
-use vercre_dwn_server::{Message, endpoint};
+use dwn_node::{Message, endpoint};
 
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]
