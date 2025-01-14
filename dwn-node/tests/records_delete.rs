@@ -4,11 +4,11 @@ use std::io::Read;
 
 use chrono::Days;
 use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::records::DeleteBuilder;
 use dwn_node::protocols::Definition;
 use dwn_node::provider::{EventLog, KeyStore, MessageStore};
 use dwn_node::records::{
-    Data, DeleteBuilder, DeleteDescriptor, ProtocolBuilder, QueryBuilder, ReadBuilder,
-    RecordsFilter, WriteBuilder,
+    Data, DeleteDescriptor, ProtocolBuilder, QueryBuilder, ReadBuilder, RecordsFilter, WriteBuilder,
 };
 use dwn_node::{Error, Method, endpoint, store};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};

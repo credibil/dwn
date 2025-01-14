@@ -4,6 +4,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::authorization::JwsPayload;
 use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::records::DeleteBuilder;
 use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::messages::MessagesFilter;
@@ -11,8 +12,8 @@ use dwn_node::permissions::{Conditions, GrantBuilder, Publication, RecordsScope,
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
 use dwn_node::provider::{EventLog, KeyStore};
 use dwn_node::records::{
-    Attestation, Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, QueryBuilder, ReadBuilder,
-    Recipient, RecordsFilter, SignaturePayload, WriteBuilder,
+    Attestation, Data, EncryptOptions, ProtocolBuilder, QueryBuilder, ReadBuilder, Recipient,
+    RecordsFilter, SignaturePayload, WriteBuilder,
 };
 use dwn_node::store::MessagesQuery;
 use dwn_node::{Error, Interface, Message, Method, Range, client, data, endpoint};

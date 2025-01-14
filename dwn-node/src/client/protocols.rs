@@ -4,7 +4,9 @@ use chrono::{DateTime, Utc};
 
 use crate::authorization::AuthorizationBuilder;
 use crate::data::cid;
-use crate::protocols::{self, Configure, ConfigureDescriptor, Definition};
+use crate::protocols::{
+    self, Configure, ConfigureDescriptor, Definition, ProtocolsFilter, Query, QueryDescriptor,
+};
 use crate::provider::Signer;
 use crate::records::DelegatedGrant;
 use crate::{Descriptor, Interface, Method, Result, schema, unexpected, utils};
@@ -97,5 +99,94 @@ impl ConfigureBuilder {
         schema::validate(&configure)?;
 
         Ok(configure)
+    }
+}
+
+/// Options to use when creating a permission grant.
+#[derive(Clone, Debug, Default)]
+pub struct QueryBuilder {
+    message_timestamp: DateTime<Utc>,
+    filter: Option<ProtocolsFilter>,
+    permission_grant_id: Option<String>,
+}
+
+/// Builder for creating a permission grant.
+impl QueryBuilder {
+    /// Returns a new [`QueryBuilder`]
+    #[must_use]
+    pub fn new() -> Self {
+        // set defaults
+        Self {
+            message_timestamp: Utc::now(),
+            ..Self::default()
+        }
+    }
+
+    /// Specify a permission grant ID to use with the configuration.
+    #[must_use]
+    pub fn filter(mut self, protocol: impl Into<String>) -> Self {
+        self.filter = Some(ProtocolsFilter {
+            protocol: protocol.into(),
+        });
+        self
+    }
+
+    /// Specify a permission grant ID to use with the configuration.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
+        self
+    }
+
+    /// Build the query.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
+        let descriptor = QueryDescriptor {
+            base: Descriptor {
+                interface: Interface::Protocols,
+                method: Method::Query,
+                message_timestamp: self.message_timestamp,
+            },
+            filter: self.filter,
+        };
+
+        let mut authorization =
+            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
+        if let Some(id) = self.permission_grant_id {
+            authorization = authorization.permission_grant_id(id);
+        }
+
+        let query = Query {
+            descriptor,
+            authorization: Some(authorization.build(signer).await?),
+        };
+
+        schema::validate(&query)?;
+
+        Ok(query)
+    }
+
+    /// Build an anonymous query.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn anonymous(self) -> Result<Query> {
+        let query = Query {
+            descriptor: QueryDescriptor {
+                base: Descriptor {
+                    interface: Interface::Protocols,
+                    method: Method::Query,
+                    message_timestamp: self.message_timestamp,
+                },
+                filter: self.filter,
+            },
+            authorization: None,
+        };
+
+        schema::validate(&query)?;
+
+        Ok(query)
     }
 }

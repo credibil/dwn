@@ -5,11 +5,9 @@
 
 use std::collections::BTreeMap;
 
-use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::permissions::{GrantBuilder, RevocationBuilder, Scope};
-use dwn_node::protocols::{
-    Action, ActionRule, Actor, Definition, ProtocolType, QueryBuilder, RuleSet,
-};
+use dwn_node::protocols::{Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
 use dwn_node::provider::{EventLog, KeyStore};
 use dwn_node::{Error, Message, Method, endpoint, store};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};

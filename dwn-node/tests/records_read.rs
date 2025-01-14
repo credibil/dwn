@@ -3,15 +3,16 @@
 use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::protocols::{ConfigureBuilder, QueryBuilder};
+use dwn_node::client::records::DeleteBuilder;
 use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::permissions::{GrantBuilder, RecordsScope, Scope};
-use dwn_node::protocols::{Definition, QueryBuilder};
+use dwn_node::protocols::Definition;
 use dwn_node::provider::{BlockStore, KeyStore, MessageStore};
 use dwn_node::records::{
-    Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
-    WriteBuilder, decrypt,
+    Data, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter, WriteBuilder,
+    decrypt,
 };
 use dwn_node::store::Entry;
 use dwn_node::{Error, Method, endpoint};

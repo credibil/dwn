@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use self::delete::{Delete, DeleteBuilder, DeleteDescriptor};
+pub use self::delete::{Delete, DeleteDescriptor};
 pub use self::encryption::{EncryptOptions, EncryptedKey, EncryptionProperty, Recipient, decrypt};
 pub use self::query::{Query, QueryBuilder};
 pub use self::read::{Read, ReadBuilder};

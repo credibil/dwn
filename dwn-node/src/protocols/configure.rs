@@ -494,6 +494,9 @@ pub struct Tags {
 }
 
 /// Verify the structure (rule sets) of the protocol definition.
+///
+/// # Errors
+/// LATER: Add errors
 pub fn validate_structure(definition: &Definition) -> Result<()> {
     let keys = definition.types.keys().collect::<Vec<&String>>();
 
