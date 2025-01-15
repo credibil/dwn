@@ -10,10 +10,10 @@ use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 
 pub use self::configure::{
-    Action, ActionRule, Actor, Configure, ConfigureBuilder, ConfigureReply, Definition,
-    ProtocolType, RuleSet,
+    Action, ActionRule, Actor, Configure, ConfigureDescriptor, ConfigureReply, Definition,
+    ProtocolType, RuleSet, validate_structure,
 };
-pub use self::query::{Query, QueryBuilder, QueryReply};
+pub use self::query::{Query, QueryDescriptor, QueryReply};
 use crate::Range;
 
 /// Default protocol for managing web node permission grants.

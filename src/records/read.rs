@@ -3,18 +3,17 @@
 //! `Read` is a message type used to read a record in the web node.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::authorization::{Authorization, AuthorizationBuilder};
+use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
-use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::{DataStream, DelegatedGrant, Delete, RecordsFilter, Write, write};
+use crate::provider::{MessageStore, Provider};
+use crate::records::{DataStream, Delete, RecordsFilter, Write, write};
 use crate::store::RecordsQuery;
-use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
+use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
 ///
@@ -250,157 +249,4 @@ pub struct ReadDescriptor {
 
     /// Defines the filter for the read.
     pub filter: RecordsFilter,
-}
-
-/// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct ReadBuilder<F, S> {
-    message_timestamp: DateTime<Utc>,
-    filter: F,
-    permission_grant_id: Option<String>,
-    protocol_role: Option<String>,
-    delegated_grant: Option<DelegatedGrant>,
-    signer: S,
-}
-
-pub struct Unsigned;
-pub struct Signed<'a, S: Signer>(pub &'a S);
-
-pub struct Unfiltered;
-pub struct Filtered(RecordsFilter);
-
-impl Default for ReadBuilder<Unfiltered, Unsigned> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ReadBuilder<Unfiltered, Unsigned> {
-    /// Returns a new [`ReadBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            message_timestamp: Utc::now(),
-            filter: Unfiltered,
-            permission_grant_id: None,
-            protocol_role: None,
-            delegated_grant: None,
-            signer: Unsigned,
-        }
-    }
-
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn filter(self, filter: RecordsFilter) -> ReadBuilder<Filtered, Unsigned> {
-        ReadBuilder {
-            message_timestamp: self.message_timestamp,
-            filter: Filtered(filter),
-            permission_grant_id: self.permission_grant_id,
-            protocol_role: self.protocol_role,
-            delegated_grant: self.delegated_grant,
-            signer: Unsigned,
-        }
-    }
-}
-
-impl<'a, F> ReadBuilder<F, Unsigned> {
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    // /// Specify a protocol role for the record.
-    // #[must_use]
-    // pub const fn authorize(mut self, authorize: bool) -> Self {
-    //     self.authorize = Some(authorize);
-    //     self
-    // }
-
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
-        self.protocol_role = Some(protocol_role.into());
-        self
-    }
-
-    /// The delegated grant used with this record.
-    #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
-        self.delegated_grant = Some(delegated_grant);
-        self
-    }
-
-    /// Logically (from user POV), sign the record.
-    ///
-    /// At this point, the builder simply captures the signer for use in the
-    /// final build step.
-    #[must_use]
-    pub fn sign<S: Signer>(self, signer: &'a S) -> ReadBuilder<F, Signed<'a, S>> {
-        ReadBuilder {
-            message_timestamp: self.message_timestamp,
-            filter: self.filter,
-            permission_grant_id: self.permission_grant_id,
-            protocol_role: self.protocol_role,
-            delegated_grant: self.delegated_grant,
-            signer: Signed(signer),
-        }
-    }
-}
-
-impl ReadBuilder<Filtered, Unsigned> {
-    /// Build and return an anonymous (unsigned) Read message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn build(self) -> Result<Read> {
-        let descriptor = ReadDescriptor {
-            base: Descriptor {
-                interface: Interface::Records,
-                method: Method::Read,
-                message_timestamp: self.message_timestamp,
-            },
-            filter: self.filter.0,
-        };
-
-        Ok(Read {
-            descriptor,
-            authorization: None,
-        })
-    }
-}
-
-impl<S: Signer> ReadBuilder<Filtered, Signed<'_, S>> {
-    /// Build the write message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self) -> Result<Read> {
-        let descriptor = ReadDescriptor {
-            base: Descriptor {
-                interface: Interface::Records,
-                method: Method::Read,
-                message_timestamp: self.message_timestamp,
-            },
-            filter: self.filter.0.normalize()?,
-        };
-
-        let mut auth_builder =
-            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            auth_builder = auth_builder.permission_grant_id(id);
-        }
-        if let Some(role) = self.protocol_role {
-            auth_builder = auth_builder.protocol_role(role);
-        }
-        if let Some(delegated_grant) = self.delegated_grant {
-            auth_builder = auth_builder.delegated_grant(delegated_grant);
-        }
-
-        Ok(Read {
-            descriptor,
-            authorization: Some(auth_builder.build(self.signer.0).await?),
-        })
-    }
 }

@@ -1,8 +1,6 @@
 #![feature(let_chains)]
 
 pub mod provider;
-
-#[cfg(test)]
 mod scenarios;
 
 pub use provider::key_store;

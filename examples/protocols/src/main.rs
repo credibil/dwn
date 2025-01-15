@@ -1,10 +1,10 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_test::key_store::ALICE_DID;
+use dwn_node::endpoint;
+use dwn_node::protocols::Query;
+use dwn_node::provider::Signer;
+use dwn_test::key_store::{self, ALICE_DID};
 use dwn_test::provider::ProviderImpl;
 use serde_json::json;
-use vercre_dwn::endpoint;
-use vercre_dwn::protocols::Query;
-use vercre_dwn::provider::{KeyStore, Signer};
 
 #[tokio::main]
 async fn main() {
@@ -19,7 +19,7 @@ async fn main() {
         br#"{"alg":"EdDSA","typ":"jwt","kid":"did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"}"#
     );
 
-    let keyring = KeyStore::keyring(&provider, ALICE_DID).expect("should get keyring");
+    let keyring = key_store::signer(ALICE_DID);
     let sig_bytes =
         keyring.try_sign(format!("{protected}.{payload}").as_bytes()).await.expect("should sign");
     let signature = Base64UrlUnpadded::encode_string(&sig_bytes);

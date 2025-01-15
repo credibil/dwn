@@ -1,30 +1,29 @@
 //! Records Query
 
 use chrono::{DateTime, Duration, Utc};
-use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
+use dwn_node::clients::protocols::ConfigureBuilder;
+use dwn_node::clients::records::{Data, ProtocolBuilder, QueryBuilder, WriteBuilder};
+use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::protocols::Definition;
+use dwn_node::records::{DateRange, RecordsFilter, Sort};
+use dwn_node::store::Pagination;
+use dwn_node::{Error, Message, RangeFilter, authorization, endpoint};
+use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use rand::RngCore;
-use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
-use vercre_dwn::protocols::{ConfigureBuilder, Definition};
-use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{
-    Data, DateRange, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder,
-};
-use vercre_dwn::store::Pagination;
-use vercre_dwn::{Error, Message, RangeFilter, authorization, endpoint};
 
 // Should return a status of BadRequest (400) when querying for unpublished records
 // with sort date set to `Sort::Publishedxxx`.
 #[tokio::test]
 async fn invalid_sort() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().published(false))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -47,19 +46,19 @@ async fn invalid_sort() {
 #[tokio::test]
 async fn response() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .data_format("awesome_data_format")
-        .attest(&[&bob_keyring])
-        .sign(&alice_keyring)
+        .attest(&[&bob_signer])
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -72,7 +71,7 @@ async fn response() {
     let filter = RecordsFilter::new().add_author(ALICE_DID).data_format("awesome_data_format");
     let query = QueryBuilder::new()
         .filter(filter)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -98,7 +97,7 @@ async fn response() {
 #[tokio::test]
 async fn matches() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records.
@@ -112,7 +111,7 @@ async fn matches() {
             builder = builder.data_format("awesome_data_format").schema(format!("schema_{i}"));
         }
 
-        let write = builder.sign(&alice_keyring).build().await.expect("should create write");
+        let write = builder.sign(&alice_signer).build().await.expect("should create write");
         let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
@@ -122,7 +121,7 @@ async fn matches() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_format("awesome_data_format"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -138,7 +137,7 @@ async fn matches() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_format("awesome_data_format").schema("schema_2"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -154,16 +153,16 @@ async fn matches() {
 #[tokio::test]
 async fn encoded_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -175,7 +174,7 @@ async fn encoded_data() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -192,7 +191,7 @@ async fn encoded_data() {
 #[tokio::test]
 async fn no_encoded_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates a record.
@@ -200,9 +199,9 @@ async fn no_encoded_data() {
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -214,7 +213,7 @@ async fn no_encoded_data() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -231,15 +230,15 @@ async fn no_encoded_data() {
 #[tokio::test]
 async fn initial_write() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 2 records.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -248,7 +247,7 @@ async fn initial_write() {
 
     // update existing record
     let write =
-        WriteBuilder::from(write).sign(&alice_keyring).build().await.expect("should create write");
+        WriteBuilder::from(write).sign(&alice_signer).build().await.expect("should create write");
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
@@ -257,7 +256,7 @@ async fn initial_write() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -274,28 +273,28 @@ async fn initial_write() {
 #[tokio::test]
 async fn attester() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice creates 2 records, 1 attested by her and the other by Bob.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
-        .attest(&[&alice_keyring])
-        .sign(&alice_keyring)
+        .attest(&[&alice_signer])
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .schema("schema_2")
-        .attest(&[&bob_keyring])
-        .sign(&alice_keyring)
+        .attest(&[&bob_signer])
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -307,7 +306,7 @@ async fn attester() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().attester(ALICE_DID))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -326,7 +325,7 @@ async fn attester() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().attester(BOB_DID).schema("schema_2"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -345,7 +344,7 @@ async fn attester() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().attester(CAROL_DID))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -358,17 +357,17 @@ async fn attester() {
 #[tokio::test]
 async fn author() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let allow_any = include_bytes!("protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -379,7 +378,7 @@ async fn author() {
     // Alice and Bob write a record each.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
-    let alice_write = Write::build()
+    let alice_write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -388,7 +387,7 @@ async fn author() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -396,7 +395,7 @@ async fn author() {
         endpoint::handle(ALICE_DID, alice_write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_write = Write::build()
+    let bob_write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -405,7 +404,7 @@ async fn author() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -424,7 +423,7 @@ async fn author() {
                 .schema("post")
                 .data_format("application/json"),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -447,7 +446,7 @@ async fn author() {
                 .schema("post")
                 .data_format("application/json"),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -472,7 +471,7 @@ async fn author() {
                 .schema("post")
                 .data_format("application/json"),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -488,16 +487,16 @@ async fn author() {
 #[tokio::test]
 async fn owner_recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let allow_any = include_bytes!("protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -507,7 +506,7 @@ async fn owner_recipient() {
     // --------------------------------------------------
     // Alice creates 2 records, 1 for Bob and 1 for Carol.
     // --------------------------------------------------
-    let alice_bob = Write::build()
+    let alice_bob = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -517,7 +516,7 @@ async fn owner_recipient() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -525,7 +524,7 @@ async fn owner_recipient() {
         endpoint::handle(ALICE_DID, alice_bob.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol = Write::build()
+    let alice_carol = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -535,7 +534,7 @@ async fn owner_recipient() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -554,7 +553,7 @@ async fn owner_recipient() {
                 .schema("post")
                 .data_format("application/json"),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -577,7 +576,7 @@ async fn owner_recipient() {
                 .schema("post")
                 .data_format("application/json"),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -601,7 +600,7 @@ async fn owner_recipient() {
                 .schema("post")
                 .data_format("application/json"),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -626,7 +625,7 @@ async fn owner_recipient() {
                 .schema("post")
                 .data_format("application/json"),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -642,17 +641,17 @@ async fn owner_recipient() {
 #[tokio::test]
 async fn published() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice creates 2 records: 1 published and 1 unpublished.
     // --------------------------------------------------
-    let published = Write::build()
+    let published = WriteBuilder::new()
         .data(Data::from(b"published".to_vec()))
         .schema("post")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -660,10 +659,10 @@ async fn published() {
         endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"unpublished".to_vec()))
         .schema("post")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -676,7 +675,7 @@ async fn published() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post").published(true))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -693,7 +692,7 @@ async fn published() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post").published(true))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -725,7 +724,7 @@ async fn published() {
     // --------------------------------------------------
     let published = WriteBuilder::from(unpublished)
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -738,7 +737,7 @@ async fn published() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post").published(true))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -768,17 +767,17 @@ async fn published() {
 #[tokio::test]
 async fn unpublished() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice creates 2 records: 1 published and 1 unpublished.
     // --------------------------------------------------
-    let published = Write::build()
+    let published = WriteBuilder::new()
         .data(Data::from(b"record 1".to_vec()))
         .schema("post")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -786,10 +785,10 @@ async fn unpublished() {
         endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"record 1".to_vec()))
         .schema("post")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -802,7 +801,7 @@ async fn unpublished() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post").published(false))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -818,7 +817,7 @@ async fn unpublished() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post").published(false))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -832,7 +831,7 @@ async fn unpublished() {
     // --------------------------------------------------
     let published = WriteBuilder::from(unpublished)
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -845,7 +844,7 @@ async fn unpublished() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post"))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -861,7 +860,7 @@ async fn unpublished() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post").published(true))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -877,7 +876,7 @@ async fn unpublished() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("post").published(false))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -891,16 +890,16 @@ async fn unpublished() {
 #[tokio::test]
 async fn data_cid() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -912,7 +911,7 @@ async fn data_cid() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_cid(write.descriptor.data_cid))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -928,7 +927,7 @@ async fn data_cid() {
 #[tokio::test]
 async fn dat_size_part_range() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records with varying data sizes.
@@ -936,9 +935,9 @@ async fn dat_size_part_range() {
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write10 = Write::build()
+    let write10 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -949,9 +948,9 @@ async fn dat_size_part_range() {
     let mut data = [0u8; 50];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write50 = Write::build()
+    let write50 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -962,9 +961,9 @@ async fn dat_size_part_range() {
     let mut data = [0u8; 100];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write100 = Write::build()
+    let write100 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -977,7 +976,7 @@ async fn dat_size_part_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(10)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -993,7 +992,7 @@ async fn dat_size_part_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().lt(100)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1009,7 +1008,7 @@ async fn dat_size_part_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1025,7 +1024,7 @@ async fn dat_size_part_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().le(100)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1041,7 +1040,7 @@ async fn dat_size_part_range() {
 #[tokio::test]
 async fn data_size_full_range() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records with varying data sizes.
@@ -1049,9 +1048,9 @@ async fn data_size_full_range() {
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write10 = Write::build()
+    let write10 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1062,9 +1061,9 @@ async fn data_size_full_range() {
     let mut data = [0u8; 50];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write50 = Write::build()
+    let write50 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1075,9 +1074,9 @@ async fn data_size_full_range() {
     let mut data = [0u8; 100];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write100 = Write::build()
+    let write100 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1090,7 +1089,7 @@ async fn data_size_full_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(10).lt(60)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1106,7 +1105,7 @@ async fn data_size_full_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10).lt(60)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1122,7 +1121,7 @@ async fn data_size_full_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(50).le(100)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1138,7 +1137,7 @@ async fn data_size_full_range() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10).le(100)))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1154,17 +1153,17 @@ async fn data_size_full_range() {
 #[tokio::test]
 async fn date_created_range() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1173,11 +1172,11 @@ async fn date_created_range() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1186,11 +1185,11 @@ async fn date_created_range() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1206,7 +1205,7 @@ async fn date_created_range() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_created(DateRange::new().gt(last_2022.into())))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1227,7 +1226,7 @@ async fn date_created_range() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_created(DateRange::new().lt(last_2023.into())))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1251,7 +1250,7 @@ async fn date_created_range() {
                 .date_created(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
         )
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1272,7 +1271,7 @@ async fn date_created_range() {
                 .date_created(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
         )
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1289,19 +1288,19 @@ async fn date_created_range() {
 #[tokio::test]
 async fn published_unpublished() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
         .published(true)
         .date_published(first_2022.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1310,13 +1309,13 @@ async fn published_unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
         .published(true)
         .date_published(first_2023.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1325,13 +1324,13 @@ async fn published_unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
         .published(true)
         .date_published(first_2024.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1347,7 +1346,7 @@ async fn published_unpublished() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_created(DateRange::new().gt(last_2022.into())))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1366,7 +1365,7 @@ async fn published_unpublished() {
     let owner_range = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1377,7 +1376,7 @@ async fn published_unpublished() {
     // owner-requested date range
     let owner_published = QueryBuilder::new()
         .filter(RecordsFilter::new().published(true))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1439,7 +1438,7 @@ async fn published_unpublished() {
     // --------------------------------------------------
     let unwrite_2022 = WriteBuilder::from(write_2022)
         .published(false)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1450,7 +1449,7 @@ async fn published_unpublished() {
 
     let unwrite_2023 = WriteBuilder::from(write_2023)
         .published(false)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1460,7 +1459,7 @@ async fn published_unpublished() {
 
     let unwrite_2024 = WriteBuilder::from(write_2024)
         .published(false)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1500,20 +1499,20 @@ async fn published_unpublished() {
 #[tokio::test]
 async fn date_published() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
         .published(true)
         .date_published(first_2022.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1522,13 +1521,13 @@ async fn date_published() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
         .published(true)
         .date_published(first_2023.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1537,13 +1536,13 @@ async fn date_published() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
         .published(true)
         .date_published(first_2024.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1558,7 +1557,7 @@ async fn date_published() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1578,7 +1577,7 @@ async fn date_published() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().lt(last_2023.into())))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1601,7 +1600,7 @@ async fn date_published() {
                 .date_published(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
         )
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1622,7 +1621,7 @@ async fn date_published() {
                 .date_published(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
         )
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1657,7 +1656,7 @@ async fn date_published() {
     let anon_range = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
         .date_sort(Sort::CreatedAscending)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -1675,18 +1674,18 @@ async fn date_published() {
 #[tokio::test]
 async fn date_updated() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2021 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00-00:00").unwrap();
 
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"write_1".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1694,11 +1693,11 @@ async fn date_updated() {
         endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"write_2".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1706,11 +1705,11 @@ async fn date_updated() {
         endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_3 = Write::build()
+    let write_3 = WriteBuilder::new()
         .data(Data::from(b"write_3".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1730,7 +1729,7 @@ async fn date_updated() {
         .message_timestamp(first_2022.into())
         .published(true)
         .date_published(first_2022.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1743,7 +1742,7 @@ async fn date_updated() {
         .message_timestamp(first_2023.into())
         .published(true)
         .date_published(first_2023.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1756,7 +1755,7 @@ async fn date_updated() {
         .message_timestamp(first_2024.into())
         .published(true)
         .date_published(first_2024.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1774,7 +1773,7 @@ async fn date_updated() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_updated(DateRange::new().gt(last_2022.into())))
         .date_sort(Sort::PublishedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1791,7 +1790,7 @@ async fn date_updated() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_updated(DateRange::new().lt(last_2023.into())))
         .date_sort(Sort::PublishedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1813,7 +1812,7 @@ async fn date_updated() {
                 .date_updated(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
         )
         .date_sort(Sort::PublishedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1834,7 +1833,7 @@ async fn date_updated() {
                 .date_updated(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
         )
         .date_sort(Sort::PublishedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1851,18 +1850,18 @@ async fn date_updated() {
 #[tokio::test]
 async fn range_and_match() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
         .schema("2022And2023Schema")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1871,12 +1870,12 @@ async fn range_and_match() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
         .schema("2022And2023Schema")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1885,11 +1884,11 @@ async fn range_and_match() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1909,7 +1908,7 @@ async fn range_and_match() {
                 .schema("2022And2023Schema")
                 .date_created(DateRange::new().gt(last_2022.into()).lt(last_2024.into())),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1926,15 +1925,15 @@ async fn range_and_match() {
 #[tokio::test]
 async fn authorization() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::from(b"data".to_vec()))
         .schema("schema")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1946,7 +1945,7 @@ async fn authorization() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -1967,16 +1966,16 @@ async fn authorization() {
 #[tokio::test]
 async fn attestation() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::from(b"data".to_vec()))
         .schema("schema")
-        .attest(&[&alice_keyring])
-        .sign(&alice_keyring)
+        .attest(&[&alice_signer])
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1988,7 +1987,7 @@ async fn attestation() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2009,16 +2008,16 @@ async fn attestation() {
 #[tokio::test]
 async fn exclude_unpublished() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 2 records, 1 published the other unpublished.
     // --------------------------------------------------
-    let published = Write::build()
+    let published = WriteBuilder::new()
         .data(Data::from(b"published".to_vec()))
         .schema("schema")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should) create write");
@@ -2026,10 +2025,10 @@ async fn exclude_unpublished() {
         endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"unpublised".to_vec()))
         .schema("schema")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2043,7 +2042,7 @@ async fn exclude_unpublished() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::PublishedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2060,7 +2059,7 @@ async fn exclude_unpublished() {
 #[tokio::test]
 async fn date_sort() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records.
@@ -2069,13 +2068,13 @@ async fn date_sort() {
     let ts_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
     let ts_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
 
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"write_1".to_vec()))
         .schema("schema")
         .published(true)
         .date_created(ts_2022.into())
         .message_timestamp(ts_2022.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2083,13 +2082,13 @@ async fn date_sort() {
         endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"write_2".to_vec()))
         .schema("schema")
         .published(true)
         .date_created(ts_2023.into())
         .message_timestamp(ts_2023.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2097,13 +2096,13 @@ async fn date_sort() {
         endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_3 = Write::build()
+    let write_3 = WriteBuilder::new()
         .data(Data::from(b"write_3".to_vec()))
         .schema("schema")
         .published(true)
         .date_created(ts_2024.into())
         .message_timestamp(ts_2024.into())
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2117,7 +2116,7 @@ async fn date_sort() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2137,7 +2136,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedAscending)
         .pagination(Pagination::new().limit(1))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2156,7 +2155,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedAscending)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2174,7 +2173,7 @@ async fn date_sort() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedDescending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2194,7 +2193,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedDescending)
         .pagination(Pagination::new().limit(1))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2213,7 +2212,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedDescending)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2231,7 +2230,7 @@ async fn date_sort() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::PublishedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2251,7 +2250,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::PublishedAscending)
         .pagination(Pagination::new().limit(1))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2270,7 +2269,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::PublishedAscending)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2288,7 +2287,7 @@ async fn date_sort() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::PublishedDescending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2308,7 +2307,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::PublishedDescending)
         .pagination(Pagination::new().limit(1))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2327,7 +2326,7 @@ async fn date_sort() {
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::PublishedDescending)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2345,42 +2344,42 @@ async fn date_sort() {
 #[tokio::test]
 async fn sort_identical() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 3 records.
     // --------------------------------------------------
     let timestamp = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
 
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"write_1".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
         .schema("schema")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"write_2".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
         .schema("schema")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
 
-    let write_3 = Write::build()
+    let write_3 = WriteBuilder::new()
         .data(Data::from(b"write_3".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
         .schema("schema")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2405,7 +2404,7 @@ async fn sort_identical() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedAscending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2424,7 +2423,7 @@ async fn sort_identical() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
         .date_sort(Sort::CreatedDescending)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2442,7 +2441,7 @@ async fn sort_identical() {
 #[tokio::test]
 async fn paginate_ascending() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 12 records.
@@ -2453,13 +2452,13 @@ async fn paginate_ascending() {
     for i in 0..12 {
         date_created -= Duration::days(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .date_created(date_created.into())
             .message_timestamp(date_created.into())
             .data(Data::from(format!("write_{}", i).into_bytes()))
             .schema("schema")
             .published(true)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -2483,7 +2482,7 @@ async fn paginate_ascending() {
                 limit: Some(5),
                 cursor,
             })
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create query");
@@ -2511,7 +2510,7 @@ async fn paginate_ascending() {
 #[tokio::test]
 async fn paginate_descending() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice creates 12 records.
@@ -2522,13 +2521,13 @@ async fn paginate_descending() {
     for i in 0..12 {
         date_created += Duration::days(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .data(Data::from(format!("write_{}", i).into_bytes()))
             .schema("schema")
             .published(true)
             .date_created(date_created.into())
             .message_timestamp(date_created.into())
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -2552,7 +2551,7 @@ async fn paginate_descending() {
                 limit: Some(5),
                 cursor,
             })
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create query");
@@ -2580,16 +2579,16 @@ async fn paginate_descending() {
 #[tokio::test]
 async fn anonymous() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Create records.
     // --------------------------------------------------
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"schema1".to_vec()))
         .schema("http://schema1")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2597,10 +2596,10 @@ async fn anonymous() {
         endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"schema2".to_vec()))
         .schema("http://schema2")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2630,18 +2629,18 @@ async fn anonymous() {
 #[tokio::test]
 async fn recipient_query() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let allow_any = include_bytes!("protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -2651,7 +2650,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Alice creates 2 records each for Bob and Carol; 2 public, 2 private.
     // --------------------------------------------------
-    let alice_bob_private = Write::build()
+    let alice_bob_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2661,7 +2660,7 @@ async fn recipient_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2670,7 +2669,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_bob_public = Write::build()
+    let alice_bob_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2681,7 +2680,7 @@ async fn recipient_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2690,7 +2689,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_private = Write::build()
+    let alice_carol_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -2700,7 +2699,7 @@ async fn recipient_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2709,7 +2708,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_public = Write::build()
+    let alice_carol_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -2720,7 +2719,7 @@ async fn recipient_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2732,7 +2731,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Carol creates 2 records each for Alice and Bob; 2 public, 2 private.
     // --------------------------------------------------
-    let carol_alice_private = Write::build()
+    let carol_alice_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2742,7 +2741,7 @@ async fn recipient_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -2751,7 +2750,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_alice_public = Write::build()
+    let carol_alice_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2762,7 +2761,7 @@ async fn recipient_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -2771,7 +2770,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_private = Write::build()
+    let carol_bob_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2781,7 +2780,7 @@ async fn recipient_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -2790,7 +2789,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_public = Write::build()
+    let carol_bob_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2801,7 +2800,7 @@ async fn recipient_query() {
         .schema("post")
         .published(true)
         .data_format("application/json")
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -2813,7 +2812,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Bob creates 2 records each for Alice and Carol; 2 public, 2 private.
     // --------------------------------------------------
-    let bob_alice_private = Write::build()
+    let bob_alice_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2823,7 +2822,7 @@ async fn recipient_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -2832,7 +2831,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_alice_public = Write::build()
+    let bob_alice_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2843,7 +2842,7 @@ async fn recipient_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -2852,7 +2851,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_private = Write::build()
+    let bob_carol_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -2862,7 +2861,7 @@ async fn recipient_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -2871,7 +2870,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_public = Write::build()
+    let bob_carol_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -2882,7 +2881,7 @@ async fn recipient_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -2902,7 +2901,7 @@ async fn recipient_query() {
                 .add_recipient(BOB_DID)
                 .add_recipient(ALICE_DID),
         )
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -2932,7 +2931,7 @@ async fn recipient_query() {
                 .protocol_path("post")
                 .add_recipient(CAROL_DID),
         )
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create query");
@@ -2961,7 +2960,7 @@ async fn recipient_query() {
                 .add_recipient(BOB_DID)
                 .published(true),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2990,7 +2989,7 @@ async fn recipient_query() {
                 .add_recipient(ALICE_DID)
                 .published(false),
         )
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create query");
@@ -3011,18 +3010,18 @@ async fn recipient_query() {
 #[tokio::test]
 async fn author_query() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let allow_any = include_bytes!("protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -3032,7 +3031,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Alice creates 2 records each for Bob and Carol: 2 public, 2 private.
     // --------------------------------------------------
-    let alice_bob_private = Write::build()
+    let alice_bob_private = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3042,7 +3041,7 @@ async fn author_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3051,7 +3050,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_bob_public = Write::build()
+    let alice_bob_public = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3062,7 +3061,7 @@ async fn author_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3071,7 +3070,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_private = Write::build()
+    let alice_carol_private = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3081,7 +3080,7 @@ async fn author_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3090,7 +3089,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_public = Write::build()
+    let alice_carol_public = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3101,7 +3100,7 @@ async fn author_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3113,7 +3112,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Carol creates 2 records each for Alice and Bob: 2 public, 2 private.
     // --------------------------------------------------
-    let carol_alice_private = Write::build()
+    let carol_alice_private = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3123,7 +3122,7 @@ async fn author_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -3132,7 +3131,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_alice_public = Write::build()
+    let carol_alice_public = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3143,7 +3142,7 @@ async fn author_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -3152,7 +3151,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_private = Write::build()
+    let carol_bob_private = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3162,7 +3161,7 @@ async fn author_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -3171,7 +3170,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_public = Write::build()
+    let carol_bob_public = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3182,7 +3181,7 @@ async fn author_query() {
         .schema("post")
         .published(true)
         .data_format("application/json")
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create write");
@@ -3194,7 +3193,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Bob creates 2 records each for Alice and Carol: 2 public, 2 private.
     // --------------------------------------------------
-    let bob_alice_private = Write::build()
+    let bob_alice_private = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3204,7 +3203,7 @@ async fn author_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -3213,7 +3212,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_alice_public = Write::build()
+    let bob_alice_public = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3224,7 +3223,7 @@ async fn author_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -3233,7 +3232,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_private = Write::build()
+    let bob_carol_private = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3243,7 +3242,7 @@ async fn author_query() {
         })
         .schema("post")
         .data_format("application/json")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -3252,7 +3251,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_public = Write::build()
+    let bob_carol_public = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3263,7 +3262,7 @@ async fn author_query() {
         .schema("post")
         .data_format("application/json")
         .published(true)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -3283,7 +3282,7 @@ async fn author_query() {
                 .add_author(BOB_DID)
                 .add_author(ALICE_DID),
         )
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -3313,7 +3312,7 @@ async fn author_query() {
                 .protocol_path("post")
                 .add_author(CAROL_DID),
         )
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create query");
@@ -3342,7 +3341,7 @@ async fn author_query() {
                 .add_author(BOB_DID)
                 .published(true),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3371,7 +3370,7 @@ async fn author_query() {
                 .add_author(ALICE_DID)
                 .published(false),
         )
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create query");
@@ -3392,17 +3391,17 @@ async fn author_query() {
 #[tokio::test]
 async fn paginate_non_owner() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("../crates/dwn-test/protocols/allow-any.json");
+    let allow_any = include_bytes!("protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -3419,7 +3418,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("bob_private_{}", i).into_bytes()))
@@ -3430,7 +3429,7 @@ async fn paginate_non_owner() {
             })
             .schema("post")
             .published(true)
-            .sign(&bob_keyring)
+            .sign(&bob_signer)
             .build()
             .await
             .expect("should create write");
@@ -3444,7 +3443,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_private_{}", i).into_bytes()))
@@ -3455,7 +3454,7 @@ async fn paginate_non_owner() {
             })
             .schema("post")
             .published(true)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -3472,7 +3471,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_public_{}", i).into_bytes()))
@@ -3482,7 +3481,7 @@ async fn paginate_non_owner() {
                 parent_context_id: None,
             })
             .schema("post")
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -3496,7 +3495,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("bob_public_{}", i).into_bytes()))
@@ -3506,7 +3505,7 @@ async fn paginate_non_owner() {
                 parent_context_id: None,
             })
             .schema("post")
-            .sign(&bob_keyring)
+            .sign(&bob_signer)
             .build()
             .await
             .expect("should create write");
@@ -3520,7 +3519,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_public_{}", i).into_bytes()))
@@ -3531,7 +3530,7 @@ async fn paginate_non_owner() {
             })
             .schema("post")
             .recipient(BOB_DID)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -3556,7 +3555,7 @@ async fn paginate_non_owner() {
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
         .date_sort(Sort::CreatedAscending)
         .pagination(Pagination::new().limit(10))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3573,7 +3572,7 @@ async fn paginate_non_owner() {
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
         .date_sort(Sort::CreatedAscending)
         .pagination(Pagination::new().limit(10).cursor(query_reply.cursor.unwrap()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3590,7 +3589,7 @@ async fn paginate_non_owner() {
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
         .date_sort(Sort::CreatedAscending)
         .pagination(Pagination::new().limit(5).cursor(query_reply.cursor.unwrap()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3617,7 +3616,7 @@ async fn paginate_non_owner() {
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
         .date_sort(Sort::CreatedAscending)
         .pagination(Pagination::new().limit(10))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -3634,7 +3633,7 @@ async fn paginate_non_owner() {
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
         .date_sort(Sort::CreatedAscending)
         .pagination(Pagination::new().limit(10).cursor(query_reply.cursor.unwrap()))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -3667,17 +3666,17 @@ async fn paginate_non_owner() {
 #[tokio::test]
 async fn published_false() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice creates an unpublished record.
     // -------------------------------------------------
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
         .published(false)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3690,7 +3689,7 @@ async fn published_false() {
     // -------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("http://schema1"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3706,7 +3705,7 @@ async fn published_false() {
     // -------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("http://schema1"))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -3719,26 +3718,26 @@ async fn published_false() {
 #[tokio::test]
 async fn tenant_bound() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // 2 owners create records.
     // -------------------------------------------------
-    let alice_write = Write::build()
+    let alice_write = WriteBuilder::new()
         .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
     let reply = endpoint::handle(ALICE_DID, alice_write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_write = Write::build()
+    let bob_write = WriteBuilder::new()
         .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -3750,7 +3749,7 @@ async fn tenant_bound() {
     // -------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("http://schema1"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3766,11 +3765,11 @@ async fn tenant_bound() {
 #[tokio::test]
 async fn bad_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("example.com/"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3788,11 +3787,11 @@ async fn bad_protocol() {
 #[tokio::test]
 async fn bad_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("example.com/"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3810,13 +3809,13 @@ async fn bad_schema() {
 #[tokio::test]
 async fn bad_date_published() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let query = QueryBuilder::new()
         .filter(
             RecordsFilter::new().published(false).date_published(DateRange::new().gt(Utc::now())),
         )
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3846,16 +3845,16 @@ async fn anonymous_unpublished() {
 #[tokio::test]
 async fn context_id() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures a nested protocol (foo->bar->baz).
     // --------------------------------------------------
-    let nested = include_bytes!("../crates/dwn-test/protocols/nested.json");
+    let nested = include_bytes!("protocols/nested.json");
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -3865,7 +3864,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice writes 2 foo records.
     // --------------------------------------------------
-    let foo_1 = Write::build()
+    let foo_1 = WriteBuilder::new()
         .data(Data::from(b"foo_1".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3874,14 +3873,14 @@ async fn context_id() {
         })
         .schema("foo")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
     let reply = endpoint::handle(ALICE_DID, foo_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let foo_2 = Write::build()
+    let foo_2 = WriteBuilder::new()
         .data(Data::from(b"foo_2".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3890,7 +3889,7 @@ async fn context_id() {
         })
         .schema("foo")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3900,7 +3899,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice writes 2 foo/bar records.
     // --------------------------------------------------
-    let bar_1 = Write::build()
+    let bar_1 = WriteBuilder::new()
         .data(Data::from(b"bar_1".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3909,14 +3908,14 @@ async fn context_id() {
         })
         .schema("bar")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
     let reply = endpoint::handle(ALICE_DID, bar_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bar_2 = Write::build()
+    let bar_2 = WriteBuilder::new()
         .data(Data::from(b"bar_2".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3925,7 +3924,7 @@ async fn context_id() {
         })
         .schema("bar")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3935,7 +3934,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice writes 2 foo/bar/baz records.
     // --------------------------------------------------
-    let baz_1 = Write::build()
+    let baz_1 = WriteBuilder::new()
         .data(Data::from(b"baz_1".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3944,14 +3943,14 @@ async fn context_id() {
         })
         .schema("baz")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
     let reply = endpoint::handle(ALICE_DID, baz_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let baz_2 = Write::build()
+    let baz_2 = WriteBuilder::new()
         .data(Data::from(b"baz_2".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3960,7 +3959,7 @@ async fn context_id() {
         })
         .schema("baz")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -3972,7 +3971,7 @@ async fn context_id() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().context_id(foo_1.context_id.unwrap()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -3995,7 +3994,7 @@ async fn context_id() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().context_id(bar_1.context_id.unwrap()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -4016,7 +4015,7 @@ async fn context_id() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().context_id(baz_1.context_id.unwrap()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -4035,17 +4034,17 @@ async fn context_id() {
 #[tokio::test]
 async fn protocol_no_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a thread protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let thread_role = include_bytes!("protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -4055,14 +4054,14 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     // Alice writes a thread record.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"A new thread".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4072,7 +4071,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     // Alice writes a chat record addressed to Bob.
     // --------------------------------------------------
-    let chat_bob = Write::build()
+    let chat_bob = WriteBuilder::new()
         .data(Data::from(b"Bob can read this".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4081,7 +4080,7 @@ async fn protocol_no_role() {
             parent_context_id: thread.context_id.clone(),
         })
         .published(false)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4093,7 +4092,7 @@ async fn protocol_no_role() {
     // Alice writes 2 more chat records NOT addressed to Bob.
     // --------------------------------------------------
     for _ in 0..2 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob cannot read this".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4102,7 +4101,7 @@ async fn protocol_no_role() {
                 parent_context_id: thread.context_id.clone(),
             })
             .published(false)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -4116,7 +4115,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://thread-role.xyz"))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4133,7 +4132,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://thread-role.xyz").published(false))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4150,17 +4149,17 @@ async fn protocol_no_role() {
 #[tokio::test]
 async fn protocol_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let friend_role = include_bytes!("protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -4170,7 +4169,7 @@ async fn protocol_role() {
     // --------------------------------------------------
     // Alice writes a 'friend' role record with Bob as recipient.
     // --------------------------------------------------
-    let bob_friend = Write::build()
+    let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4178,7 +4177,7 @@ async fn protocol_role() {
             protocol_path: "friend",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4190,7 +4189,7 @@ async fn protocol_role() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4199,7 +4198,7 @@ async fn protocol_role() {
                 parent_context_id: None,
             })
             .published(false)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -4214,7 +4213,7 @@ async fn protocol_role() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://friend-role.xyz").protocol_path("chat"))
         .protocol_role("friend")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4236,7 +4235,7 @@ async fn protocol_role() {
                 .published(false),
         )
         .protocol_role("friend")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4252,17 +4251,17 @@ async fn protocol_role() {
 #[tokio::test]
 async fn context_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let thread_role = include_bytes!("protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -4272,7 +4271,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice writes a thread.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4280,7 +4279,7 @@ async fn context_role() {
             protocol_path: "thread",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4290,7 +4289,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice writes a 'participant' role record with Bob as recipient.
     // --------------------------------------------------
-    let participant_role = Write::build()
+    let participant_role = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4298,7 +4297,7 @@ async fn context_role() {
             protocol_path: "thread/participant",
             parent_context_id: thread.context_id.clone(),
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4311,7 +4310,7 @@ async fn context_role() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4320,7 +4319,7 @@ async fn context_role() {
                 parent_context_id: thread.context_id.clone(),
             })
             .published(false)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -4340,7 +4339,7 @@ async fn context_role() {
                 .context_id(thread.context_id.unwrap()),
         )
         .protocol_role("thread/participant")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4356,17 +4355,17 @@ async fn context_role() {
 #[tokio::test]
 async fn no_protocol_path() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let friend_role = include_bytes!("protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -4376,7 +4375,7 @@ async fn no_protocol_path() {
     // --------------------------------------------------
     // Alice writes a friend role record.
     // --------------------------------------------------
-    let friend = Write::build()
+    let friend = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4384,7 +4383,7 @@ async fn no_protocol_path() {
             protocol_path: "friend",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4395,7 +4394,7 @@ async fn no_protocol_path() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4404,7 +4403,7 @@ async fn no_protocol_path() {
                 parent_context_id: None,
             })
             .published(false)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -4419,7 +4418,7 @@ async fn no_protocol_path() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://friend-role.xyz"))
         .protocol_role("friend")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4433,17 +4432,17 @@ async fn no_protocol_path() {
 #[tokio::test]
 async fn no_context_id() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let thread_role = include_bytes!("protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -4453,7 +4452,7 @@ async fn no_context_id() {
     // --------------------------------------------------
     // Alice writes a friend role record.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4462,7 +4461,7 @@ async fn no_context_id() {
             parent_context_id: None,
         })
         // .context_id() deliberately omitted
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4472,7 +4471,7 @@ async fn no_context_id() {
     // --------------------------------------------------
     // Alice writes a 'participant' role record with Bob as recipient.
     // --------------------------------------------------
-    let participant_role = Write::build()
+    let participant_role = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4480,7 +4479,7 @@ async fn no_context_id() {
             protocol_path: "thread/participant",
             parent_context_id: thread.context_id.clone(),
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4493,7 +4492,7 @@ async fn no_context_id() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4502,7 +4501,7 @@ async fn no_context_id() {
                 parent_context_id: thread.context_id.clone(),
             })
             .published(false)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -4519,7 +4518,7 @@ async fn no_context_id() {
             RecordsFilter::new().protocol("http://thread-role.xyz").protocol_path("thread/chat"),
         )
         .protocol_role("thread/participant")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4534,17 +4533,17 @@ async fn no_context_id() {
 #[tokio::test]
 async fn no_root_role_record() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let friend_role = include_bytes!("protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -4555,7 +4554,7 @@ async fn no_root_role_record() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4564,7 +4563,7 @@ async fn no_root_role_record() {
                 parent_context_id: None,
             })
             .published(false)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -4579,7 +4578,7 @@ async fn no_root_role_record() {
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://friend-role.xyz").protocol_path("chat"))
         .protocol_role("friend")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4593,17 +4592,17 @@ async fn no_root_role_record() {
 #[tokio::test]
 async fn no_context_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let thread_role = include_bytes!("protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -4613,7 +4612,7 @@ async fn no_context_role() {
     // --------------------------------------------------
     // Alice writes a thread role record.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4622,7 +4621,7 @@ async fn no_context_role() {
             parent_context_id: None,
         })
         // .context_id() deliberately omitted
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -4633,7 +4632,7 @@ async fn no_context_role() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4642,7 +4641,7 @@ async fn no_context_role() {
                 parent_context_id: thread.context_id.clone(),
             })
             .published(false)
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -4662,7 +4661,7 @@ async fn no_context_role() {
                 .context_id(thread.context_id.unwrap()),
         )
         .protocol_role("thread/participant")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create query");
@@ -4676,11 +4675,11 @@ async fn no_context_role() {
 #[tokio::test]
 async fn bad_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("http://schema"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -4698,11 +4697,11 @@ async fn bad_signature() {
 #[tokio::test]
 async fn bad_message() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("http://schema"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");

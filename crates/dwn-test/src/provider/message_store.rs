@@ -1,6 +1,6 @@
 use anyhow::Result;
-use vercre_dwn::provider::{Entry, MessageStore, Query};
-use vercre_dwn::store::serializer::Serialize;
+use dwn_node::provider::{Entry, MessageStore, Query};
+use dwn_node::store::serializer::Serialize;
 use vercre_serialize::surrealdb;
 
 use super::ProviderImpl;

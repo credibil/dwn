@@ -4,22 +4,23 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
+use dwn_node::clients::grants::GrantBuilder;
+use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
+use dwn_node::permissions::Scope;
+use dwn_node::protocols::Definition;
+use dwn_node::{Method, endpoint};
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-use vercre_dwn::permissions::{GrantBuilder, Scope};
-use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
-use vercre_dwn::provider::KeyStore;
-use vercre_dwn::{Method, endpoint};
 
-use crate::key_store::{ALICE_DID, BOB_DID};
+use crate::key_store::{self, ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;
 
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]
 async fn configure_any() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice grants Bob the ability to configure any protocol
@@ -34,7 +35,7 @@ async fn configure_any() {
             protocol: None,
         });
 
-    let bob_grant = builder.build(&alice_keyring).await.expect("should create grant");
+    let bob_grant = builder.build(&alice_signer).await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
@@ -45,7 +46,7 @@ async fn configure_any() {
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .delegated_grant(bob_grant.try_into().expect("should convert"))
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -70,7 +71,7 @@ async fn configure_any() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(definition.protocol)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 

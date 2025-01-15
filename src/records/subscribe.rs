@@ -2,19 +2,18 @@
 //!
 //! `Subscribe` is a message type used to subscribe a record in the web node.
 
-use chrono::{DateTime, Utc};
 use futures::{StreamExt, future};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::authorization::{Authorization, AuthorizationBuilder};
+use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
 use crate::permissions::{Grant, Protocol};
-use crate::provider::{EventStream, Provider, Signer};
-use crate::records::{DelegatedGrant, RecordsFilter, Write};
-use crate::{Descriptor, Interface, Method, Quota, Result, forbidden};
+use crate::provider::{EventStream, Provider};
+use crate::records::{RecordsFilter, Write};
+use crate::{Descriptor, Quota, Result, forbidden};
 
 /// Process `Subscribe` message.
 ///
@@ -162,105 +161,4 @@ pub struct SubscribeDescriptor {
 
     /// Filter Records for subscribe.
     pub filter: RecordsFilter,
-}
-
-// export enum DateSort {
-//   CreatedAscending = 'createdAscending',
-//   CreatedDescending = 'createdDescending',
-//   PublishedAscending = 'publishedAscending',
-//   PublishedDescending = 'publishedDescending'
-// }
-
-/// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct SubscribeBuilder {
-    message_timestamp: DateTime<Utc>,
-    filter: RecordsFilter,
-    permission_grant_id: Option<String>,
-    protocol_role: Option<String>,
-    delegated_grant: Option<DelegatedGrant>,
-    authorize: Option<bool>,
-}
-
-impl SubscribeBuilder {
-    /// Returns a new [`SubscribeBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            message_timestamp: Utc::now(),
-            ..Self::default()
-        }
-    }
-
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn filter(mut self, filter: RecordsFilter) -> Self {
-        self.filter = filter;
-        self
-    }
-
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub const fn authorize(mut self, authorize: bool) -> Self {
-        self.authorize = Some(authorize);
-        self
-    }
-
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
-        self.protocol_role = Some(protocol_role.into());
-        self
-    }
-
-    /// The delegated grant used with this record.
-    #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
-        self.delegated_grant = Some(delegated_grant);
-        self
-    }
-
-    /// Build the write message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
-        let descriptor = SubscribeDescriptor {
-            base: Descriptor {
-                interface: Interface::Records,
-                method: Method::Subscribe,
-                message_timestamp: self.message_timestamp,
-            },
-            filter: self.filter.normalize()?,
-        };
-
-        let authorization = if self.authorize.unwrap_or(true) {
-            let mut auth_builder =
-                AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-            if let Some(id) = self.permission_grant_id {
-                auth_builder = auth_builder.permission_grant_id(id);
-            }
-            if let Some(role) = self.protocol_role {
-                auth_builder = auth_builder.protocol_role(role);
-            }
-            if let Some(delegated_grant) = self.delegated_grant {
-                auth_builder = auth_builder.delegated_grant(delegated_grant);
-            }
-            Some(auth_builder.build(signer).await?)
-        } else {
-            None
-        };
-
-        Ok(Subscribe {
-            descriptor,
-            authorization,
-        })
-    }
 }

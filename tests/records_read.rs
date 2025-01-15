@@ -3,38 +3,38 @@
 use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_test::key_store::{ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID};
+use dwn_node::clients::grants::GrantBuilder;
+use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
+use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder};
+use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
+use dwn_node::permissions::{RecordsScope, Scope};
+use dwn_node::protocols::Definition;
+use dwn_node::provider::{BlockStore, MessageStore};
+use dwn_node::records::{EncryptOptions, Recipient, RecordsFilter, decrypt};
+use dwn_node::store::Entry;
+use dwn_node::{Error, Method, endpoint};
+use dwn_test::key_store::{
+    self, ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID,
+};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
 use serde_json::Value;
-use vercre_dwn::data::{DataStream, MAX_ENCODED_SIZE};
-use vercre_dwn::hd_key::{
-    self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk,
-};
-use vercre_dwn::permissions::{GrantBuilder, RecordsScope, Scope};
-use vercre_dwn::protocols::{ConfigureBuilder, Definition, QueryBuilder};
-use vercre_dwn::provider::{BlockStore, KeyStore, MessageStore};
-use vercre_dwn::records::{
-    Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
-    WriteBuilder, decrypt,
-};
-use vercre_dwn::store::Entry;
-use vercre_dwn::{Error, Method, endpoint};
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.
 #[tokio::test]
 async fn owner() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Add a `write` record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -46,7 +46,7 @@ async fn owner() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -62,15 +62,15 @@ async fn owner() {
 #[tokio::test]
 async fn disallow_non_owner() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -82,7 +82,7 @@ async fn disallow_non_owner() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -96,7 +96,7 @@ async fn disallow_non_owner() {
 #[tokio::test]
 async fn published_anonymous() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Add a `write` record.
@@ -104,7 +104,7 @@ async fn published_anonymous() {
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -129,8 +129,8 @@ async fn published_anonymous() {
 #[tokio::test]
 async fn published_authenticated() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -138,7 +138,7 @@ async fn published_authenticated() {
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -150,7 +150,7 @@ async fn published_authenticated() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -165,8 +165,8 @@ async fn published_authenticated() {
 #[tokio::test]
 async fn non_owner_recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -174,7 +174,7 @@ async fn non_owner_recipient() {
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
         .recipient(BOB_DID)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -186,7 +186,7 @@ async fn non_owner_recipient() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -202,7 +202,7 @@ async fn non_owner_recipient() {
 #[tokio::test]
 async fn deleted_write() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Mock write and delete, saving only the `RecordsDelete`.
@@ -210,14 +210,14 @@ async fn deleted_write() {
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
         .recipient(BOB_DID)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
 
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create delete");
 
@@ -233,7 +233,7 @@ async fn deleted_write() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -248,9 +248,9 @@ async fn deleted_write() {
 #[tokio::test]
 async fn non_author_deleted_write() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice configures a protocol allowing anyone to write.
@@ -274,7 +274,7 @@ async fn non_author_deleted_write() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -291,7 +291,7 @@ async fn non_author_deleted_write() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -303,7 +303,7 @@ async fn non_author_deleted_write() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
@@ -314,7 +314,7 @@ async fn non_author_deleted_write() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create read");
@@ -328,9 +328,9 @@ async fn non_author_deleted_write() {
 #[tokio::test]
 async fn non_owner_author() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice configures a protocol allowing anyone to write.
@@ -354,7 +354,7 @@ async fn non_owner_author() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -371,7 +371,7 @@ async fn non_owner_author() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -383,7 +383,7 @@ async fn non_owner_author() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -398,7 +398,7 @@ async fn non_owner_author() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create read");
@@ -412,14 +412,14 @@ async fn non_owner_author() {
 #[tokio::test]
 async fn initial_write_included() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice writes a record and then an update.
     // --------------------------------------------------
     let write_1 = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -429,7 +429,7 @@ async fn initial_write_included() {
 
     let write_2 = WriteBuilder::from(write_1)
         .data(Data::from(b"some data".to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -442,7 +442,7 @@ async fn initial_write_included() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write_2.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -457,17 +457,17 @@ async fn initial_write_included() {
 #[tokio::test]
 async fn allow_anyone() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a social media protocol.
     // --------------------------------------------------
-    let social_media = include_bytes!("../crates/dwn-test/protocols/social-media.json");
+    let social_media = include_bytes!("protocols/social-media.json");
     let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -486,7 +486,7 @@ async fn allow_anyone() {
         })
         .schema("imageSchema")
         .data_format("image/jpeg")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -498,7 +498,7 @@ async fn allow_anyone() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -513,16 +513,16 @@ async fn allow_anyone() {
 #[tokio::test]
 async fn no_anonymous() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures an email protocol.
     // --------------------------------------------------
-    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let email = include_bytes!("protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -541,7 +541,7 @@ async fn no_anonymous() {
         })
         .schema("email")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -565,18 +565,18 @@ async fn no_anonymous() {
 #[tokio::test]
 async fn allow_recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice configures an email protocol.
     // --------------------------------------------------
-    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let email = include_bytes!("protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -596,7 +596,7 @@ async fn allow_recipient() {
         })
         .schema("email")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -608,7 +608,7 @@ async fn allow_recipient() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -623,7 +623,7 @@ async fn allow_recipient() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create read");
@@ -637,18 +637,18 @@ async fn allow_recipient() {
 #[tokio::test]
 async fn allow_author() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice configures an email protocol.
     // --------------------------------------------------
-    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let email = include_bytes!("protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -668,7 +668,7 @@ async fn allow_author() {
         })
         .schema("email")
         .data_format("text/plain")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -680,7 +680,7 @@ async fn allow_author() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -695,7 +695,7 @@ async fn allow_author() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&carol_keyring)
+        .sign(&carol_signer)
         .build()
         .await
         .expect("should create read");
@@ -709,16 +709,16 @@ async fn allow_author() {
 #[tokio::test]
 async fn filter_one() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures a nested protocol.
     // --------------------------------------------------
-    let nested = include_bytes!("../crates/dwn-test/protocols/nested.json");
+    let nested = include_bytes!("protocols/nested.json");
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -738,7 +738,7 @@ async fn filter_one() {
         })
         .schema("foo")
         .data_format("text/plain")
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -750,7 +750,7 @@ async fn filter_one() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().protocol("http://nested.xyz").protocol_path("foo"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -765,16 +765,16 @@ async fn filter_one() {
 #[tokio::test]
 async fn filter_many() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures a nested protocol.
     // --------------------------------------------------
-    let nested = include_bytes!("../crates/dwn-test/protocols/nested.json");
+    let nested = include_bytes!("protocols/nested.json");
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -795,7 +795,7 @@ async fn filter_many() {
             })
             .schema("foo")
             .data_format("text/plain")
-            .sign(&alice_keyring)
+            .sign(&alice_signer)
             .build()
             .await
             .expect("should create write");
@@ -809,7 +809,7 @@ async fn filter_many() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().protocol("http://nested.xyz").protocol_path("foo"))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -823,17 +823,17 @@ async fn filter_many() {
 #[tokio::test]
 async fn root_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let friend = include_bytes!("protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -851,7 +851,7 @@ async fn root_role() {
             protocol_path: "friend",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -867,7 +867,7 @@ async fn root_role() {
             protocol_path: "chat",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -880,7 +880,7 @@ async fn root_role() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(chat.record_id))
         .protocol_role("friend")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -893,17 +893,17 @@ async fn root_role() {
 #[tokio::test]
 async fn invalid_protocol_path() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let friend = include_bytes!("protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -921,7 +921,7 @@ async fn invalid_protocol_path() {
             protocol_path: "chat",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -934,7 +934,7 @@ async fn invalid_protocol_path() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(chat.record_id))
         .protocol_role("chat")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -948,17 +948,17 @@ async fn invalid_protocol_path() {
 #[tokio::test]
 async fn no_recipient_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend = include_bytes!("../crates/dwn-test/protocols/friend-role.json");
+    let friend = include_bytes!("protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -976,7 +976,7 @@ async fn no_recipient_role() {
             protocol_path: "chat",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -989,7 +989,7 @@ async fn no_recipient_role() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(chat.record_id))
         .protocol_role("friend")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1003,17 +1003,17 @@ async fn no_recipient_role() {
 #[tokio::test]
 async fn context_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a thread protocol.
     // --------------------------------------------------
-    let thread = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let thread = include_bytes!("protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1031,7 +1031,7 @@ async fn context_role() {
             protocol_path: "thread",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1049,7 +1049,7 @@ async fn context_role() {
             protocol_path: "thread/participant",
             parent_context_id: thread.context_id.clone(),
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1067,7 +1067,7 @@ async fn context_role() {
             protocol_path: "thread/chat",
             parent_context_id: thread.context_id.clone(),
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1084,7 +1084,7 @@ async fn context_role() {
                 .add_recipient(BOB_DID)
                 .context_id(thread.context_id.as_ref().unwrap()),
         )
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1098,7 +1098,7 @@ async fn context_role() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(participant.descriptor.parent_id.as_ref().unwrap()))
         .protocol_role("thread/participant")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1112,7 +1112,7 @@ async fn context_role() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(chat.record_id))
         .protocol_role("thread/participant")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1125,17 +1125,17 @@ async fn context_role() {
 #[tokio::test]
 async fn invalid_context_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a thread protocol.
     // --------------------------------------------------
-    let thread = include_bytes!("../crates/dwn-test/protocols/thread-role.json");
+    let thread = include_bytes!("protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1153,7 +1153,7 @@ async fn invalid_context_role() {
             protocol_path: "thread",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1169,7 +1169,7 @@ async fn invalid_context_role() {
             protocol_path: "thread",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1188,7 +1188,7 @@ async fn invalid_context_role() {
             protocol_path: "thread/participant",
             parent_context_id: thread_1.context_id.clone(),
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1206,7 +1206,7 @@ async fn invalid_context_role() {
             protocol_path: "thread/chat",
             parent_context_id: thread_2.context_id.clone(),
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1219,7 +1219,7 @@ async fn invalid_context_role() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(chat.record_id))
         .protocol_role("thread/participant")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1233,15 +1233,15 @@ async fn invalid_context_role() {
 #[tokio::test]
 async fn invalid_grant_method() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"Bob can read this because I have granted him permission".to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1258,7 +1258,7 @@ async fn invalid_grant_method() {
             protocol: "https://example.com/protocol/test".to_string(),
             limited_to: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1271,7 +1271,7 @@ async fn invalid_grant_method() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1285,17 +1285,17 @@ async fn invalid_grant_method() {
 #[tokio::test]
 async fn unrestricted_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let minimal = include_bytes!("protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1312,7 +1312,7 @@ async fn unrestricted_grant() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1329,7 +1329,7 @@ async fn unrestricted_grant() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1341,7 +1341,7 @@ async fn unrestricted_grant() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1356,7 +1356,7 @@ async fn unrestricted_grant() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1369,17 +1369,17 @@ async fn unrestricted_grant() {
 #[tokio::test]
 async fn grant_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let minimal = include_bytes!("protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1396,7 +1396,7 @@ async fn grant_protocol() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1413,7 +1413,7 @@ async fn grant_protocol() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: Some(RecordsScope::ProtocolPath("foo".to_string())),
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1425,7 +1425,7 @@ async fn grant_protocol() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1440,7 +1440,7 @@ async fn grant_protocol() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1453,17 +1453,17 @@ async fn grant_protocol() {
 #[tokio::test]
 async fn invalid_grant_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let minimal = include_bytes!("protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1480,7 +1480,7 @@ async fn invalid_grant_protocol() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1497,7 +1497,7 @@ async fn invalid_grant_protocol() {
             protocol: "http://a-different-protocol.com".to_string(),
             limited_to: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1510,7 +1510,7 @@ async fn invalid_grant_protocol() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1524,17 +1524,17 @@ async fn invalid_grant_protocol() {
 #[tokio::test]
 async fn grant_context() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let minimal = include_bytes!("protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1551,7 +1551,7 @@ async fn grant_context() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1568,7 +1568,7 @@ async fn grant_context() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: Some(RecordsScope::ContextId(write.context_id.clone().unwrap())),
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1581,7 +1581,7 @@ async fn grant_context() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1593,17 +1593,17 @@ async fn grant_context() {
 #[tokio::test]
 async fn invalid_grant_context() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let minimal = include_bytes!("protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1620,7 +1620,7 @@ async fn invalid_grant_context() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1637,7 +1637,7 @@ async fn invalid_grant_context() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: Some(RecordsScope::ContextId("somerandomgrant".to_string())),
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1650,7 +1650,7 @@ async fn invalid_grant_context() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1664,17 +1664,17 @@ async fn invalid_grant_context() {
 #[tokio::test]
 async fn grant_protocol_path() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let minimal = include_bytes!("protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1691,7 +1691,7 @@ async fn grant_protocol_path() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1708,7 +1708,7 @@ async fn grant_protocol_path() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: Some(RecordsScope::ProtocolPath("foo".to_string())),
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1721,7 +1721,7 @@ async fn grant_protocol_path() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1733,17 +1733,17 @@ async fn grant_protocol_path() {
 #[tokio::test]
 async fn invalid_grant_protocol_path() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("../crates/dwn-test/protocols/minimal.json");
+    let minimal = include_bytes!("protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -1760,7 +1760,7 @@ async fn invalid_grant_protocol_path() {
             protocol_path: "foo",
             parent_context_id: None,
         })
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1777,7 +1777,7 @@ async fn invalid_grant_protocol_path() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: Some(RecordsScope::ProtocolPath("different-protocol-path".to_string())),
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -1790,7 +1790,7 @@ async fn invalid_grant_protocol_path() {
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(write.record_id))
         .permission_grant_id(bob_grant.record_id)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -1804,11 +1804,11 @@ async fn invalid_grant_protocol_path() {
 #[tokio::test]
 async fn record_not_found() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id("non-existent-record".to_string()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -1822,7 +1822,7 @@ async fn record_not_found() {
 #[tokio::test]
 async fn record_deleted() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice writes then  deletes a record.
@@ -1830,7 +1830,7 @@ async fn record_deleted() {
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1839,7 +1839,7 @@ async fn record_deleted() {
 
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
@@ -1850,7 +1850,7 @@ async fn record_deleted() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -1868,7 +1868,7 @@ async fn record_deleted() {
 #[tokio::test]
 async fn data_blocks_deleted() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice writes a record and then deletes its data from BlockStore.
@@ -1879,7 +1879,7 @@ async fn data_blocks_deleted() {
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1896,7 +1896,7 @@ async fn data_blocks_deleted() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -1911,7 +1911,7 @@ async fn data_blocks_deleted() {
 #[tokio::test]
 async fn encoded_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice writes a record and then deletes data from BlockStore.
@@ -1919,7 +1919,7 @@ async fn encoded_data() {
     let write = WriteBuilder::new()
         .data(Data::from(b"data small enough to be encoded".to_vec()))
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1936,7 +1936,7 @@ async fn encoded_data() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -1949,7 +1949,7 @@ async fn encoded_data() {
 #[tokio::test]
 async fn block_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice writes a record and then deletes its data from BlockStore.
@@ -1961,7 +1961,7 @@ async fn block_data() {
     let write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
         .published(true)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -1973,7 +1973,7 @@ async fn block_data() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -1993,7 +1993,8 @@ async fn block_data() {
 #[tokio::test]
 async fn decrypt_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let alice_receiver = key_store::receiver(ALICE_DID);
 
     let alice_kid = format!("{ALICE_DID}#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX");
 
@@ -2071,7 +2072,7 @@ async fn decrypt_schema() {
         .schema(schema)
         .data_format(&data_format)
         .encryption(settings)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2083,7 +2084,7 @@ async fn decrypt_schema() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -2100,22 +2101,22 @@ async fn decrypt_schema() {
 
     // decrypt using schema descendant key
     let plaintext =
-        decrypt(&encrypted, &write, &schema_leaf, &alice_keyring).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &schema_leaf, &alice_receiver).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // decrypt using data format descendant key
-    let plaintext = decrypt(&encrypted, &write, &data_formats_leaf, &alice_keyring)
+    let plaintext = decrypt(&encrypted, &write, &data_formats_leaf, &alice_receiver)
         .await
         .expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // decrypt using schema root key
     let plaintext =
-        decrypt(&encrypted, &write, &schema_root, &alice_keyring).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &schema_root, &alice_receiver).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // decrypt using data format root key
-    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_keyring)
+    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_receiver)
         .await
         .expect("should decrypt");
     assert_eq!(plaintext, data);
@@ -2128,7 +2129,8 @@ async fn decrypt_schema() {
         hd_key::derive_jwk(data_formats_root.clone(), &DerivationPath::Full(&invalid_path))
             .expect("should derive private key");
 
-    let Err(Error::BadRequest(_)) = decrypt(&encrypted, &write, &invalid_key, &alice_keyring).await
+    let Err(Error::BadRequest(_)) =
+        decrypt(&encrypted, &write, &invalid_key, &alice_receiver).await
     else {
         panic!("should be BadRequest");
     };
@@ -2138,7 +2140,8 @@ async fn decrypt_schema() {
 #[tokio::test]
 async fn decrypt_schemaless() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let alice_receiver = key_store::receiver(ALICE_DID);
 
     // --------------------------------------------------
     // Alice derives participants' keys.
@@ -2194,7 +2197,7 @@ async fn decrypt_schemaless() {
         .data(Data::from(ciphertext))
         .data_format(&data_format)
         .encryption(settings)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -2206,7 +2209,7 @@ async fn decrypt_schemaless() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -2222,7 +2225,7 @@ async fn decrypt_schemaless() {
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
     // decrypt using schema descendant key
-    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_keyring)
+    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_receiver)
         .await
         .expect("should decrypt");
     assert_eq!(plaintext, data);
@@ -2233,8 +2236,10 @@ async fn decrypt_schemaless() {
 #[tokio::test]
 async fn decrypt_context() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let alice_receiver = key_store::receiver(ALICE_DID);
+    let bob_receiver = key_store::receiver(BOB_DID);
 
     // --------------------------------------------------
     // Alice's keys.
@@ -2281,7 +2286,7 @@ async fn decrypt_context() {
     // --------------------------------------------------
     // Alice configures the chat protocol with encryption.
     // --------------------------------------------------
-    let chat = include_bytes!("../crates/dwn-test/protocols/chat.json");
+    let chat = include_bytes!("protocols/chat.json");
     let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
     let definition = definition
         .add_encryption(&alice_kid, alice_private_jwk.clone())
@@ -2289,7 +2294,7 @@ async fn decrypt_context() {
 
     let configure_alice = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, configure_alice, &provider)
@@ -2307,7 +2312,7 @@ async fn decrypt_context() {
 
     let configure_bob = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
     let reply = endpoint::handle(BOB_DID, configure_bob, &provider)
@@ -2320,7 +2325,7 @@ async fn decrypt_context() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://chat-protocol.xyz")
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -2350,7 +2355,7 @@ async fn decrypt_context() {
         })
         .schema("thread")
         .data_format("application/json")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -2390,7 +2395,7 @@ async fn decrypt_context() {
 
     // finalize Write record
     write.encryption = Some(encryption);
-    write.sign_as_author(None, None, &bob_keyring).await.expect("should sign");
+    write.sign_as_author(None, None, &bob_signer).await.expect("should sign");
 
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -2407,7 +2412,7 @@ async fn decrypt_context() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -2424,7 +2429,7 @@ async fn decrypt_context() {
 
     // decrypt using context-derived descendant key
     let plaintext =
-        decrypt(&encrypted, &write, &context_jwk, &alice_keyring).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &context_jwk, &alice_receiver).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // --------------------------------------------------
@@ -2446,7 +2451,7 @@ async fn decrypt_context() {
         })
         .schema("message")
         .data_format("application/json")
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -2472,7 +2477,7 @@ async fn decrypt_context() {
 
     // finalize Write record
     write.encryption = Some(encryption);
-    write.sign_as_author(None, None, &bob_keyring).await.expect("should sign");
+    write.sign_as_author(None, None, &bob_signer).await.expect("should sign");
 
     let reply = endpoint::handle(BOB_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -2482,7 +2487,7 @@ async fn decrypt_context() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create read");
@@ -2499,7 +2504,7 @@ async fn decrypt_context() {
 
     // decrypt using context-derived descendant key
     let plaintext =
-        decrypt(&encrypted, &write, &context_jwk, &bob_keyring).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &context_jwk, &bob_receiver).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 }
 
@@ -2508,8 +2513,9 @@ async fn decrypt_context() {
 #[tokio::test]
 async fn decrypt_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let bob_receiver = key_store::receiver(BOB_DID);
 
     // --------------------------------------------------
     // Alice's keys.
@@ -2535,7 +2541,7 @@ async fn decrypt_protocol() {
     // --------------------------------------------------
     // Alice configures the email protocol with encryption.
     // --------------------------------------------------
-    let email = include_bytes!("../crates/dwn-test/protocols/email.json");
+    let email = include_bytes!("protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let definition = definition
         .add_encryption(&alice_kid, alice_private_jwk.clone())
@@ -2543,7 +2549,7 @@ async fn decrypt_protocol() {
 
     let email = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply =
@@ -2555,7 +2561,7 @@ async fn decrypt_protocol() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://email-protocol.xyz")
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -2601,7 +2607,7 @@ async fn decrypt_protocol() {
         .schema("email")
         .data_format("text/plain")
         .encryption(encryption)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -2614,7 +2620,7 @@ async fn decrypt_protocol() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create read");
@@ -2638,7 +2644,7 @@ async fn decrypt_protocol() {
     };
 
     let plaintext =
-        decrypt(&encrypted, &write, &alice_jwk, &bob_keyring).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &alice_jwk, &bob_receiver).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 }
 
@@ -2646,11 +2652,11 @@ async fn decrypt_protocol() {
 #[tokio::test]
 async fn invalid_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id("somerecordid".to_string()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");
@@ -2668,11 +2674,11 @@ async fn invalid_signature() {
 #[tokio::test]
 async fn invalid_message() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id("somerecordid".to_string()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");

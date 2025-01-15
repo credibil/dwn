@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vercre_dwn::provider::{ResumableTask, TaskStore};
+use dwn_node::provider::{ResumableTask, TaskStore};
 
 use super::ProviderImpl;
 use crate::provider::NAMESPACE;

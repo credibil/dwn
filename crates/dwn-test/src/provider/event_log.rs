@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
+use dwn_node::event::Event;
+use dwn_node::provider::EventLog;
+use dwn_node::store::serializer::Serialize;
+use dwn_node::store::{Cursor, Query};
 use serde_json::Value;
-use vercre_dwn::event::Event;
-use vercre_dwn::provider::EventLog;
-use vercre_dwn::store::serializer::Serialize;
-use vercre_dwn::store::{Cursor, Query};
 use vercre_serialize::surrealdb;
 
 use super::ProviderImpl;

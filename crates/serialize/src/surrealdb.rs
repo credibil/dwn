@@ -1,23 +1,30 @@
-//! # SurrealDB
+//! # Surreal DB
 
-use vercre_dwn::store::serializer::{Clause, Op, Serializer, SortField, Value};
+use dwn_node::store::serializer::{Clause, Op, Serializer, SortField, Value};
 
-/// SurrealDB `Serializer` implements `Serializer` to generate Surreal SQL queries.
+/// Surreal DB `Serializer` implements `Serializer` to generate Surreal SQL queries.
 pub struct Sql {
     has_clause: bool,
     output: String,
     clauses: Vec<SqlClause>,
 }
 
-/// SqlClause is used to store the conjunction and condition state of a clause.
+/// `SqlClause` is used to store the conjunction and condition state of a clause.
 pub struct SqlClause {
     conjunction: String,
     has_condition: bool,
 }
 
+impl Default for Sql {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Sql {
     /// Create a new `Serializer` with the minimum output required to query a
-    /// SurrealDB database.
+    /// `SurrealDB` database.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             has_clause: false,
@@ -27,6 +34,7 @@ impl Sql {
     }
 
     /// Returns the generated SQL query.
+    #[must_use]
     pub fn output(&self) -> &str {
         &self.output
     }
@@ -46,7 +54,7 @@ impl Sql {
             }
             current.has_condition = true;
         }
-        self.output.push_str("(");
+        self.output.push('(');
     }
 }
 
@@ -119,9 +127,9 @@ impl Clause for Sql {
             Value::Int(i) => self.output.push_str(&format!("{field}{op}{i}")),
             Value::Bool(b) => {
                 if b {
-                    self.output.push_str(&format!("{field} = true"))
+                    self.output.push_str(&format!("{field} = true"));
                 } else {
-                    self.output.push_str(&format!("(!{field} OR {field} = false)"))
+                    self.output.push_str(&format!("(!{field} OR {field} = false)"));
                 }
             }
         }
@@ -129,6 +137,6 @@ impl Clause for Sql {
 
     fn close(&mut self) {
         self.clauses.pop();
-        self.output.push_str(")");
+        self.output.push(')');
     }
 }

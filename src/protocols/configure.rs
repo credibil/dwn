@@ -4,24 +4,19 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
-use crate::authorization::{Authorization, AuthorizationBuilder};
+use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use crate::protocols::query;
-use crate::provider::{EventLog, EventStream, MessageStore, Provider, Signer};
-use crate::records::DelegatedGrant;
+use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, EntryType};
-use crate::{
-    Descriptor, Error, Interface, Method, Range, Result, forbidden, permissions, schema,
-    unexpected, utils,
-};
+use crate::{Descriptor, Error, Range, Result, forbidden, permissions, unexpected, utils};
 
 /// Process query message.
 ///
@@ -498,99 +493,11 @@ pub struct Tags {
     pub undefined_tags: BTreeMap<String, Value>,
 }
 
-/// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct ConfigureBuilder {
-    message_timestamp: DateTime<Utc>,
-    definition: Option<Definition>,
-    delegated_grant: Option<DelegatedGrant>,
-    permission_grant_id: Option<String>,
-}
-
-/// Builder for creating a permission grant.
-impl ConfigureBuilder {
-    /// Returns a new [`ConfigureBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        // set defaults
-        Self {
-            message_timestamp: Utc::now(),
-            ..Self::default()
-        }
-    }
-
-    /// Specify the protocol's definition.
-    #[must_use]
-    pub fn definition(mut self, definition: Definition) -> Self {
-        self.definition = Some(definition);
-        self
-    }
-
-    /// The delegated grant invoked to sign on behalf of the logical author,
-    /// who is the grantor of the delegated grant.
-    #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
-        self.delegated_grant = Some(delegated_grant);
-        self
-    }
-
-    /// Specify a permission grant ID to use with the configuration.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    /// Generate the Configure message body..
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self, signer: &impl Signer) -> Result<Configure> {
-        // check definition has been set
-        let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;
-
-        // normalize definition urls
-        definition.protocol = utils::clean_url(&definition.protocol)?;
-        for t in definition.types.values_mut() {
-            if let Some(schema) = &t.schema {
-                t.schema = Some(utils::clean_url(schema)?);
-            }
-        }
-        validate_structure(&definition)?;
-
-        let descriptor = ConfigureDescriptor {
-            base: Descriptor {
-                interface: Interface::Protocols,
-                method: Method::Configure,
-                message_timestamp: self.message_timestamp,
-            },
-            definition,
-        };
-
-        // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(permission_grant_id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(permission_grant_id);
-        }
-        if let Some(delegated_grant) = self.delegated_grant {
-            builder = builder.delegated_grant(delegated_grant);
-        }
-        let authorization = builder.build(signer).await?;
-
-        let configure = Configure {
-            descriptor,
-            authorization,
-        };
-
-        // TODO: move validation out of message
-        schema::validate(&configure)?;
-
-        Ok(configure)
-    }
-}
-
-// Verify the structure (rule sets) of the protocol definition.
-fn validate_structure(definition: &Definition) -> Result<()> {
+/// Verify the structure (rule sets) of the protocol definition.
+///
+/// # Errors
+/// LATER: Add errors
+pub fn validate_structure(definition: &Definition) -> Result<()> {
     let keys = definition.types.keys().collect::<Vec<&String>>();
 
     // parse rule set for roles

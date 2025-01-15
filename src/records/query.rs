@@ -2,18 +2,17 @@
 //!
 //! `Query` is a message type used to query a record in the web node.
 
-use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use crate::authorization::{Authorization, AuthorizationBuilder};
+use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{Grant, Protocol};
-use crate::provider::{MessageStore, Provider, Signer};
-use crate::records::{DelegatedGrant, RecordsFilter, Write};
+use crate::provider::{MessageStore, Provider};
+use crate::records::{RecordsFilter, Write};
 use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
-use crate::{Descriptor, Interface, Method, Result, forbidden, unauthorized, unexpected, utils};
+use crate::{Descriptor, Result, forbidden, unauthorized, unexpected, utils};
 
 /// Process `Query` message.
 ///
@@ -298,180 +297,4 @@ pub struct QueryDescriptor {
     /// The pagination cursor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pagination: Option<Pagination>,
-}
-
-/// Options to use when creating a permission grant.
-pub struct QueryBuilder<F, S> {
-    message_timestamp: DateTime<Utc>,
-    filter: F,
-    date_sort: Option<Sort>,
-    pagination: Option<Pagination>,
-    protocol_role: Option<String>,
-    permission_grant_id: Option<String>,
-    delegated_grant: Option<DelegatedGrant>,
-    signer: S,
-}
-
-pub struct Unsigned;
-pub struct Signed<'a, S: Signer>(pub &'a S);
-
-pub struct Unfiltered;
-pub struct Filtered(RecordsFilter);
-
-impl Default for QueryBuilder<Unfiltered, Unsigned> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl QueryBuilder<Unfiltered, Unsigned> {
-    /// Returns a new [`QueryBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            message_timestamp: Utc::now(),
-            filter: Unfiltered,
-            signer: Unsigned,
-            date_sort: None,
-            pagination: None,
-            protocol_role: None,
-            permission_grant_id: None,
-            delegated_grant: None,
-        }
-    }
-
-    /// Set the filter to use when querying.
-    #[must_use]
-    pub fn filter(self, filter: RecordsFilter) -> QueryBuilder<Filtered, Unsigned> {
-        QueryBuilder {
-            filter: Filtered(filter),
-            message_timestamp: self.message_timestamp,
-            date_sort: self.date_sort,
-            pagination: self.pagination,
-            signer: self.signer,
-            protocol_role: self.protocol_role,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant: self.delegated_grant,
-        }
-    }
-}
-
-/// State: Unsigned
-impl<'a, F> QueryBuilder<F, Unsigned> {
-    /// Specifies the permission grant ID.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-
-    /// Specify a protocol role for the record.
-    #[must_use]
-    pub fn protocol_role(mut self, protocol_role: impl Into<String>) -> Self {
-        self.protocol_role = Some(protocol_role.into());
-        self
-    }
-
-    /// The delegated grant used with this record.
-    #[must_use]
-    pub fn delegated_grant(mut self, delegated_grant: DelegatedGrant) -> Self {
-        self.delegated_grant = Some(delegated_grant);
-        self
-    }
-
-    /// Determines which date to use when sorting query results.
-    #[must_use]
-    pub const fn date_sort(mut self, date_sort: Sort) -> Self {
-        self.date_sort = Some(date_sort);
-        self
-    }
-
-    /// Sets the limit (size) and offset of the resultset pagination cursor.
-    #[must_use]
-    pub fn pagination(mut self, pagination: Pagination) -> Self {
-        self.pagination = Some(pagination);
-        self
-    }
-
-    /// Logically (from user POV), sign the record.
-    ///
-    /// At this point, the builder simply captures the signer for use in the
-    /// final build step.
-    #[must_use]
-    pub fn sign<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, Signed<'a, S>> {
-        QueryBuilder {
-            signer: Signed(signer),
-
-            message_timestamp: self.message_timestamp,
-            filter: self.filter,
-            date_sort: self.date_sort,
-            pagination: self.pagination,
-            protocol_role: self.protocol_role,
-            permission_grant_id: self.permission_grant_id,
-            delegated_grant: self.delegated_grant,
-        }
-    }
-}
-
-// Build without signing
-impl QueryBuilder<Filtered, Unsigned> {
-    /// Build the write message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn build(self) -> Result<Query> {
-        // validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
-
-        Ok(Query {
-            descriptor: QueryDescriptor {
-                base: Descriptor {
-                    interface: Interface::Records,
-                    method: Method::Query,
-                    message_timestamp: self.message_timestamp,
-                },
-                filter: self.filter.0.normalize()?,
-                date_sort: self.date_sort,
-                pagination: self.pagination,
-            },
-            authorization: None,
-        })
-    }
-}
-
-// Build includes signing
-impl<S: Signer> QueryBuilder<Filtered, Signed<'_, S>> {
-    /// Build the write message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn build(self) -> Result<Query> {
-        let descriptor = QueryDescriptor {
-            base: Descriptor {
-                interface: Interface::Records,
-                method: Method::Query,
-                message_timestamp: self.message_timestamp,
-            },
-            filter: self.filter.0.normalize()?,
-            date_sort: self.date_sort,
-            pagination: self.pagination,
-        };
-
-        let mut auth_builder =
-            AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            auth_builder = auth_builder.permission_grant_id(id);
-        }
-        if let Some(role) = self.protocol_role {
-            auth_builder = auth_builder.protocol_role(role);
-        }
-        if let Some(delegated_grant) = self.delegated_grant {
-            auth_builder = auth_builder.delegated_grant(delegated_grant);
-        }
-        let authorization = Some(auth_builder.build(self.signer.0).await?);
-
-        Ok(Query {
-            descriptor,
-            authorization,
-        })
-    }
 }

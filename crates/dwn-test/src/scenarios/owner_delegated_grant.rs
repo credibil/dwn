@@ -4,21 +4,20 @@
 //! an app to perform an action on their behalf. In this case, Alice
 //! grants App X the ability to post as her for the `chat` protocol.
 
+use dwn_node::Method;
+use dwn_node::clients::grants::GrantBuilder;
+use dwn_node::clients::records::{Data, WriteBuilder};
+use dwn_node::permissions::Scope;
+use dwn_node::records::DelegatedGrant;
 use rand::RngCore;
-use vercre_dwn::Method;
-use vercre_dwn::permissions::{GrantBuilder, Scope};
-use vercre_dwn::provider::KeyStore;
-use vercre_dwn::records::{Data, DelegatedGrant, WriteBuilder};
 
-use crate::key_store::{ALICE_DID, APP_DID, BOB_DID};
-use crate::provider::ProviderImpl;
+use crate::key_store::{self, ALICE_DID, APP_DID, BOB_DID};
 
 #[tokio::test]
 async fn configure() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bobs's keyring");
-    let appx_keyring = provider.keyring(APP_DID).expect("should get AppX's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let appx_signer = key_store::signer(APP_DID);
 
     // --------------------------------------------------
     // Alice grants App X to write as her for the `chat` protocol
@@ -33,7 +32,7 @@ async fn configure() {
             protocol: "chat".to_string(),
             limited_to: None,
         });
-    let grant_to_appx = builder.build(&alice_keyring).await.expect("should create grant");
+    let grant_to_appx = builder.build(&alice_signer).await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob creates a RecordsWrite message
@@ -45,7 +44,7 @@ async fn configure() {
     let mut write = WriteBuilder::new()
         .data_format("application/octet-stream")
         .data(write_data)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -62,7 +61,7 @@ async fn configure() {
         context_id: grant_to_appx.context_id,
         encoded_data: grant_to_appx.encoded_data.unwrap_or_default(),
     };
-    write.sign_as_delegate(delegated_grant, &appx_keyring).await.expect("should sign");
+    write.sign_as_delegate(delegated_grant, &appx_signer).await.expect("should sign");
 
     // intentionally remove `owner_delegated_grant` to cause exception
     write.authorization.owner_delegated_grant = None;

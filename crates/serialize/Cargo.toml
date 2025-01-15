@@ -20,6 +20,6 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-vercre-dwn = { path = "../.." }
+dwn-node.workspace = true
 
 [dev-dependencies]
