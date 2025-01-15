@@ -5,11 +5,12 @@
 
 use std::io::Read;
 
+use dwn_node::client::grants::{GrantBuilder, RequestBuilder, RevocationBuilder};
 use dwn_node::client::messages::ReadBuilder;
 use dwn_node::client::protocols::ConfigureBuilder;
 use dwn_node::client::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
 use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
-use dwn_node::permissions::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
+use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
 use dwn_node::provider::{KeyStore, MessageStore};
 use dwn_node::{Error, Interface, Message, Method, endpoint, store};

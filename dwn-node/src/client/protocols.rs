@@ -1,10 +1,13 @@
-//! # Protocols Query
+//! # Protocols Client
+//!
+//! The Protocols client provides a builder and related types to use in
+//! building Protocol-related messages (Configure and Query).
 
 use chrono::{DateTime, Utc};
 
 use crate::authorization::AuthorizationBuilder;
 use crate::data::cid;
-use crate::protocols::{
+pub use crate::protocols::{
     self, Configure, ConfigureDescriptor, Definition, ProtocolsFilter, Query, QueryDescriptor,
 };
 use crate::provider::Signer;
