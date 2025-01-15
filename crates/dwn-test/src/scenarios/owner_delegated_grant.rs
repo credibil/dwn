@@ -5,8 +5,8 @@
 //! grants App X the ability to post as her for the `chat` protocol.
 
 use dwn_node::Method;
-use dwn_node::client::grants::GrantBuilder;
-use dwn_node::client::records::{Data, WriteBuilder};
+use dwn_node::clients::grants::GrantBuilder;
+use dwn_node::clients::records::{Data, WriteBuilder};
 use dwn_node::permissions::Scope;
 use dwn_node::provider::KeyStore;
 use dwn_node::records::DelegatedGrant;

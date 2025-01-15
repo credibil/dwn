@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use dwn_node::client::records::{Data, QueryBuilder, SubscribeBuilder, WriteBuilder};
+use dwn_node::clients::records::{Data, QueryBuilder, SubscribeBuilder, WriteBuilder};
 use dwn_node::provider::KeyStore;
 use dwn_node::records::RecordsFilter;
 use dwn_node::{Message, endpoint};

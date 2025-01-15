@@ -3,9 +3,9 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::authorization::JwsPayload;
-use dwn_node::client::grants::GrantBuilder;
-use dwn_node::client::protocols::ConfigureBuilder;
-use dwn_node::client::records::{
+use dwn_node::clients::grants::GrantBuilder;
+use dwn_node::clients::protocols::ConfigureBuilder;
+use dwn_node::clients::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
 use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
@@ -16,7 +16,7 @@ use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
 use dwn_node::provider::{EventLog, KeyStore};
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
 use dwn_node::store::MessagesQuery;
-use dwn_node::{Error, Interface, Message, Method, Range, client, data, endpoint};
+use dwn_node::{Error, Interface, Message, Method, Range, clients, data, endpoint};
 use dwn_test::key_store::{
     ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID, CAROL_DID,
     CAROL_DID as FAKE_DID,
@@ -1202,7 +1202,7 @@ async fn log_initial_write() {
     // --------------------------------------------------
     // Verify an event was logged.
     // --------------------------------------------------
-    let query = client::messages::QueryBuilder::new()
+    let query = clients::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .build(&alice_keyring)
         .await
@@ -1257,7 +1257,7 @@ async fn retain_two_writes() {
     // --------------------------------------------------
     // Verify only the initial write and latest update remain.
     // --------------------------------------------------
-    let query = client::messages::QueryBuilder::new()
+    let query = clients::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .build(&alice_keyring)
         .await

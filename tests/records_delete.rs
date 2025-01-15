@@ -3,8 +3,8 @@
 use std::io::Read;
 
 use chrono::Days;
-use dwn_node::client::protocols::ConfigureBuilder;
-use dwn_node::client::records::{
+use dwn_node::clients::protocols::ConfigureBuilder;
+use dwn_node::clients::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
 use dwn_node::protocols::Definition;

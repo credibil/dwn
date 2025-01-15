@@ -4,10 +4,10 @@ use core::panic;
 use std::time::Duration;
 
 use dwn_node::authorization::Authorization;
-use dwn_node::client::grants::GrantBuilder;
-use dwn_node::client::messages::{QueryBuilder, SubscribeBuilder};
-use dwn_node::client::protocols::ConfigureBuilder;
-use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use dwn_node::clients::grants::GrantBuilder;
+use dwn_node::clients::messages::{QueryBuilder, SubscribeBuilder};
+use dwn_node::clients::protocols::ConfigureBuilder;
+use dwn_node::clients::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::data::DataStream;
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::Scope;

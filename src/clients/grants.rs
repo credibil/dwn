@@ -5,7 +5,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use serde_json::Value;
 
-use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use crate::clients::records::{Data, ProtocolBuilder, WriteBuilder};
 use crate::permissions::{Conditions, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{self};
 use crate::provider::Keyring;

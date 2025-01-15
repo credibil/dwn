@@ -3,10 +3,10 @@
 //! This test demonstrates how a web node owner create messages and
 //! subsequently query for them.
 
-use dwn_node::client::grants::GrantBuilder;
-use dwn_node::client::messages::{QueryBuilder, ReadBuilder};
-use dwn_node::client::protocols::ConfigureBuilder;
-use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use dwn_node::clients::grants::GrantBuilder;
+use dwn_node::clients::messages::{QueryBuilder, ReadBuilder};
+use dwn_node::clients::protocols::ConfigureBuilder;
+use dwn_node::clients::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::data::DataStream;
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::Scope;

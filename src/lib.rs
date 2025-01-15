@@ -4,7 +4,7 @@
 //! # Decentralized Web Node (web node)
 
 pub mod authorization;
-pub mod client;
+pub mod clients;
 pub mod data;
 pub mod endpoint;
 mod error;

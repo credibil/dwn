@@ -6,7 +6,7 @@
 
 use std::io::Read;
 
-use dwn_node::client::records::{Data, ReadBuilder, WriteBuilder};
+use dwn_node::clients::records::{Data, ReadBuilder, WriteBuilder};
 use dwn_node::endpoint;
 use dwn_node::provider::KeyStore;
 use dwn_node::records::RecordsFilter;
