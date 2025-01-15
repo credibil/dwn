@@ -8,21 +8,20 @@ use std::io::Read;
 
 use dwn_node::clients::records::{Data, ReadBuilder, WriteBuilder};
 use dwn_node::endpoint;
-use dwn_node::provider::KeyStore;
 use dwn_node::records::RecordsFilter;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{Value, json};
 
-use crate::key_store::{ALICE_DID, BOB_DID};
+use crate::key_store::{self, ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
 async fn flat_space() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Bob writes a message to his web node
@@ -35,7 +34,7 @@ async fn flat_space() {
     let bob_msg = WriteBuilder::new()
         .data(Data::from(bob_data))
         .published(true)
-        .sign(&bob_keyring)
+        .sign(&bob_signer)
         .build()
         .await
         .expect("should create write");
@@ -49,7 +48,7 @@ async fn flat_space() {
     let filter = RecordsFilter::new().record_id(bob_msg.record_id);
     let alice_read = ReadBuilder::new()
         .filter(filter)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -76,7 +75,7 @@ async fn flat_space() {
     let alice_data = read_reply.entry.data.expect("should have data");
 
     let mut bob_msg = read_reply.entry.records_write.expect("should have records write entry");
-    bob_msg.sign_as_owner(&alice_keyring).await.expect("should sign as owner");
+    bob_msg.sign_as_owner(&alice_signer).await.expect("should sign as owner");
     bob_msg.with_stream(alice_data);
 
     let reply = endpoint::handle(ALICE_DID, bob_msg, &provider).await.expect("should write");

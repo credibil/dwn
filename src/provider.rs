@@ -2,64 +2,18 @@
 
 use anyhow::{Result, anyhow};
 pub use vercre_did::{DidResolver, Document};
-pub use vercre_infosec::{KeyOps, Receiver, Signer};
+pub use vercre_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
 use crate::store::Cursor;
 pub use crate::store::{Entry, Query};
 pub use crate::tasks::ResumableTask;
 
-/// Issuer Provider trait.
+/// Provider trait.
 pub trait Provider:
-    MessageStore + BlockStore + TaskStore + EventLog + EventStream + KeyStore + DidResolver
+    MessageStore + BlockStore + TaskStore + EventLog + EventStream + DidResolver
 {
 }
-
-/// The `KeyStore` trait is used to provide methods needed for signing,
-/// encrypting, verifying, and decrypting data.
-///
-/// Implementers of this trait are expected to provide the necessary
-/// cryptographic functionality to support Verifiable Credential issuance and
-/// Verifiable Presentation submissions.
-pub trait KeyStore: Send + Sync {
-    /// Signer provides digital signing function.
-    ///
-    /// The `controller` parameter uniquely identifies the controller of the
-    /// private key used in the signing operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the signer cannot be created.
-    fn keyring(&self, controller: &str) -> Result<impl Keyring>;
-
-    // /// Signer provides digital signing function.
-    // ///
-    // /// The `controller` parameter uniquely identifies the controller of the
-    // /// private key used in the signing operation.
-    // ///
-    // /// # Errors
-    // ///
-    // /// Returns an error if the signer cannot be created.
-    // fn signer(&self, controller: &str) -> impl Future<Output = Result<impl Signer>>+Send;
-
-    // /// Cipher provides data encryption/decryption functionality.
-    // ///
-    // /// The `controller` parameter uniquely identifies the controller of the
-    // /// private key used in the signing operation.
-    // ///
-    // /// # Errors
-    // ///
-    // /// Returns an error if the encryptor cannot be created.
-    // fn cipher(&self, controller: &str) -> impl Future<Output = Result<impl Cipher>>+Send;
-}
-
-/// The `Keyring` trait provides the methods needed for signing, encrypting,
-/// verifying, and decrypting data.
-///
-/// Implementers of this trait are expected to provide the necessary
-/// cryptographic functionality to support Verifiable Credential issuance and
-/// Verifiable Presentation submissions.
-pub trait Keyring: Signer + Receiver {}
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.

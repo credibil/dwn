@@ -3,10 +3,9 @@
 use std::time::Duration;
 
 use dwn_node::clients::records::{Data, QueryBuilder, SubscribeBuilder, WriteBuilder};
-use dwn_node::provider::KeyStore;
 use dwn_node::records::RecordsFilter;
 use dwn_node::{Message, endpoint};
-use dwn_test::key_store::ALICE_DID;
+use dwn_test::key_store::{self, ALICE_DID};
 use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
@@ -16,14 +15,14 @@ use tokio::time;
 #[tokio::test]
 async fn owner_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice subscribes to own event stream.
     // --------------------------------------------------
     let filter = RecordsFilter::new().add_author(ALICE_DID);
     let subscribe =
-        SubscribeBuilder::new().filter(filter).build(&alice_keyring).await.expect("should build");
+        SubscribeBuilder::new().filter(filter).build(&alice_signer).await.expect("should build");
     let reply =
         endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
@@ -36,7 +35,7 @@ async fn owner_events() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create write");
@@ -52,7 +51,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .sign(&alice_keyring)
+        .sign(&alice_signer)
         .build()
         .await
         .expect("should create query");

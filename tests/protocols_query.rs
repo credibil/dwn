@@ -12,10 +12,9 @@ use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::data::cid;
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType};
-use dwn_node::provider::KeyStore;
 use dwn_node::store::ProtocolsFilter;
 use dwn_node::{Error, Method, endpoint};
-use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
+use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use tokio::time;
@@ -25,7 +24,7 @@ use vercre_infosec::jose::jws::{Jws, Protected, Signature};
 #[tokio::test]
 async fn authorized() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures 3 protocols.
@@ -33,7 +32,7 @@ async fn authorized() {
     for i in 1..=3 {
         let configure = ConfigureBuilder::new()
             .definition(Definition::new(format!("http://protocol-{i}.xyz")))
-            .build(&alice_keyring)
+            .build(&alice_signer)
             .await
             .expect("should build");
         let reply =
@@ -46,7 +45,7 @@ async fn authorized() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://protocol-1.xyz")
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
@@ -58,7 +57,7 @@ async fn authorized() {
     // --------------------------------------------------
     // Execute a 'fetch-all' query without filter.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&alice_keyring).await.expect("should build");
+    let query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -70,8 +69,8 @@ async fn authorized() {
 #[tokio::test]
 async fn unauthorized() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice configures 3 protocols: 1 unpublished + 2 published.
@@ -83,7 +82,7 @@ async fn unauthorized() {
                     .add_type("foo", ProtocolType::default())
                     .published(i > 1),
             )
-            .build(&alice_keyring)
+            .build(&alice_signer)
             .await
             .expect("should build");
         let reply =
@@ -107,7 +106,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://protocol-3.xyz")
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
@@ -129,7 +128,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query all published protocols as an unauthorized user.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&bob_keyring).await.expect("should build");
+    let query = QueryBuilder::new().build(&bob_signer).await.expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -141,11 +140,11 @@ async fn unauthorized() {
 #[tokio::test]
 async fn bad_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut query = QueryBuilder::new()
         .filter("http://protocol-3.xyz")
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -164,9 +163,9 @@ async fn bad_protocol() {
 #[tokio::test]
 async fn tampered_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
-    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should build");
+    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
     let authorization = query.authorization.as_mut().unwrap();
 
     let mut payload = authorization.payload().expect("should have payload");
@@ -185,9 +184,9 @@ async fn tampered_signature() {
 #[tokio::test]
 async fn bad_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
-    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should build");
+    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
     let authorization = query.authorization.as_mut().unwrap();
 
     authorization.signature = Jws {
@@ -207,9 +206,9 @@ async fn bad_signature() {
 #[tokio::test]
 async fn valid_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice creates 2 protocols, 1 published and 1 unpublished.
@@ -217,7 +216,7 @@ async fn valid_grant() {
     for i in 1..=2 {
         let configure = ConfigureBuilder::new()
             .definition(Definition::new(format!("http://protocol-{i}.xyz")))
-            .build(&alice_keyring)
+            .build(&alice_signer)
             .await
             .expect("should build");
         let reply =
@@ -234,7 +233,7 @@ async fn valid_grant() {
             method: Method::Query,
             protocol: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
 
@@ -249,7 +248,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
@@ -263,7 +262,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .build(&carol_keyring)
+        .build(&carol_signer)
         .await
         .expect("should build");
 
@@ -277,7 +276,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_revocation = RevocationBuilder::new()
         .grant(bob_grant)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create revocation");
 
@@ -287,7 +286,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     // Bob attempts to query Alice's protocols but fails.
     // --------------------------------------------------
-    let mut query = QueryBuilder::new().build(&alice_keyring).await.expect("should build");
+    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
     let authorization = query.authorization.as_mut().unwrap();
 
     authorization.signature = Jws {
@@ -307,8 +306,8 @@ async fn valid_grant() {
 #[tokio::test]
 async fn valid_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice creates 2 unpublished protocols, 2 unpublished and 1 published.
@@ -316,7 +315,7 @@ async fn valid_scope() {
     for i in 1..=3 {
         let configure = ConfigureBuilder::new()
             .definition(Definition::new(format!("http://protocol-{i}.xyz")).published(i > 2))
-            .build(&alice_keyring)
+            .build(&alice_signer)
             .await
             .expect("should build");
         let reply =
@@ -333,7 +332,7 @@ async fn valid_scope() {
             method: Method::Query,
             protocol: Some("http://protocol-1.xyz".to_string()),
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
 
@@ -349,7 +348,7 @@ async fn valid_scope() {
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
         .filter("http://protocol-1.xyz")
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -367,7 +366,7 @@ async fn valid_scope() {
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
         .filter("http://protocol-2.xyz")
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -384,7 +383,7 @@ async fn valid_scope() {
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
         .filter("http://protocol-3.xyz")
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -401,7 +400,7 @@ async fn valid_scope() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -418,8 +417,8 @@ async fn valid_scope() {
 #[tokio::test]
 async fn expired_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice grants Bob permission to query protocols.
@@ -431,7 +430,7 @@ async fn expired_grant() {
             protocol: None,
         })
         .expires_in(1)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
 
@@ -448,7 +447,7 @@ async fn expired_grant() {
 
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -462,8 +461,8 @@ async fn expired_grant() {
 #[tokio::test]
 async fn inactive_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice grants Bob permission to query protocols.
@@ -474,7 +473,7 @@ async fn inactive_grant() {
             method: Method::Query,
             protocol: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
 
@@ -489,7 +488,7 @@ async fn inactive_grant() {
     // --------------------------------------------------
     let mut query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -512,8 +511,8 @@ async fn inactive_grant() {
 #[tokio::test]
 async fn invalid_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records.
@@ -525,7 +524,7 @@ async fn invalid_scope() {
             protocol: "https://example.com/protocol/test".to_string(),
             limited_to: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
 
@@ -540,7 +539,7 @@ async fn invalid_scope() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -554,15 +553,15 @@ async fn invalid_scope() {
 #[tokio::test]
 async fn missing_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    // let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    // let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Bob attempts to query protocols using a grant that cannot be found in the database.
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id("somerandomgrantid")
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -576,9 +575,9 @@ async fn missing_grant() {
 #[tokio::test]
 async fn incorrect_grantor() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice gives Carol a permission grant with scope ProtocolsQuery.
@@ -590,7 +589,7 @@ async fn incorrect_grantor() {
             protocol: "https://example.com/protocol/test".to_string(),
             limited_to: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
     let reply =
@@ -601,7 +600,7 @@ async fn incorrect_grantor() {
     // Bob (for some unknown reason) stores the grant on his web node.
     // --------------------------------------------------
     let mut grant = carol_grant.clone();
-    grant.sign_as_owner(&bob_keyring).await.expect("should sign");
+    grant.sign_as_owner(&bob_signer).await.expect("should sign");
 
     let reply = endpoint::handle(BOB_DID, grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -611,7 +610,7 @@ async fn incorrect_grantor() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(carol_grant.record_id)
-        .build(&carol_keyring)
+        .build(&carol_signer)
         .await
         .expect("should build");
 

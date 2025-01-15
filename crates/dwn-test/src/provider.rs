@@ -18,7 +18,7 @@ use dwn_node::provider::{DidResolver, Document, Provider};
 use surrealdb::Surreal;
 use surrealdb::engine::local::{Db, Mem};
 
-use self::key_store::{ALICE_DID, KeyStoreImpl};
+use self::key_store::ALICE_DID;
 
 const NAMESPACE: &str = "integration-test";
 
@@ -27,7 +27,6 @@ pub struct ProviderImpl {
     db: Surreal<Db>,
     blockstore: InMemoryBlockstore<64>,
     pub nats_client: async_nats::Client,
-    pub keystore: KeyStoreImpl,
 }
 
 impl Provider for ProviderImpl {}
@@ -41,7 +40,6 @@ impl ProviderImpl {
             db,
             blockstore: InMemoryBlockstore::<64>::new(),
             nats_client: async_nats::connect("demo.nats.io").await?,
-            keystore: KeyStoreImpl::new(),
         })
     }
 }

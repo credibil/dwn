@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::clients::records::{Data, ProtocolBuilder, WriteBuilder};
 use crate::permissions::{Conditions, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{self};
-use crate::provider::Keyring;
+use crate::provider::Signer;
 use crate::records::{self, Write};
 use crate::{Interface, utils};
 
@@ -94,7 +94,7 @@ impl GrantBuilder {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
+    pub async fn build(self, signer: &impl Signer) -> Result<records::Write> {
         let Some(scope) = self.scope else {
             return Err(anyhow!("missing `scope`"));
         };
@@ -131,7 +131,7 @@ impl GrantBuilder {
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
-        let mut write = builder.sign(keyring).build().await?;
+        let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
 
         Ok(write)
@@ -187,7 +187,7 @@ impl RequestBuilder {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
+    pub async fn build(self, signer: &impl Signer) -> Result<records::Write> {
         let Some(scope) = self.scope else {
             return Err(anyhow!("missing `scope`"));
         };
@@ -215,7 +215,7 @@ impl RequestBuilder {
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
-        let mut write = builder.sign(keyring).build().await?;
+        let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&request_bytes));
 
         Ok(write)
@@ -248,7 +248,7 @@ impl RevocationBuilder {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub async fn build(self, keyring: &impl Keyring) -> Result<records::Write> {
+    pub async fn build(self, signer: &impl Signer) -> Result<records::Write> {
         let Some(grant) = self.grant else {
             return Err(anyhow!("missing `grant`"));
         };
@@ -279,7 +279,7 @@ impl RevocationBuilder {
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
-        let mut write = builder.sign(keyring).build().await?;
+        let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&revocation_bytes));
 
         Ok(write)

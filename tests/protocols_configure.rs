@@ -9,9 +9,9 @@ use dwn_node::clients::grants::{GrantBuilder, RevocationBuilder};
 use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
-use dwn_node::provider::{EventLog, KeyStore};
+use dwn_node::provider::EventLog;
 use dwn_node::{Error, Message, Method, endpoint, store};
-use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
+use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use tokio::time;
@@ -20,14 +20,14 @@ use tokio::time;
 #[tokio::test]
 async fn minimal() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -45,12 +45,12 @@ async fn minimal() {
 #[tokio::test]
 async fn forbidden() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // configure a protocol
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -67,7 +67,7 @@ async fn forbidden() {
 #[tokio::test]
 async fn overwrite_older() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let definition = Definition::new("http://minimal.xyz");
 
@@ -76,7 +76,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let older = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -87,7 +87,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let newer = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -108,7 +108,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let update = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -121,7 +121,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://minimal.xyz")
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -137,7 +137,7 @@ async fn overwrite_older() {
 #[tokio::test]
 async fn overwrite_smaller() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let definition_1 = Definition::new("http://minimal.xyz").add_type("foo1", ProtocolType {
         schema: None,
@@ -158,17 +158,17 @@ async fn overwrite_smaller() {
     let mut messages = vec![
         ConfigureBuilder::new()
             .definition(definition_1)
-            .build(&alice_keyring)
+            .build(&alice_signer)
             .await
             .expect("should build"),
         ConfigureBuilder::new()
             .definition(definition_2)
-            .build(&alice_keyring)
+            .build(&alice_signer)
             .await
             .expect("should build"),
         ConfigureBuilder::new()
             .definition(definition_3)
-            .build(&alice_keyring)
+            .build(&alice_signer)
             .await
             .expect("should build"),
     ];
@@ -208,7 +208,7 @@ async fn overwrite_smaller() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://minimal.xyz")
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -223,11 +223,11 @@ async fn overwrite_smaller() {
 #[tokio::test]
 async fn invalid_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("bad-protocol.xyz/"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -244,14 +244,14 @@ async fn invalid_protocol() {
 #[tokio::test]
 async fn invalid_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz").add_type("foo", ProtocolType {
             schema: Some("bad-schema.xyz/".to_string()),
             data_formats: None,
         }))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -271,11 +271,11 @@ async fn invalid_schema() {
 #[tokio::test]
 async fn no_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let bob_signer = key_store::signer(BOB_DID);
 
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -290,14 +290,14 @@ async fn no_grant() {
 #[tokio::test]
 async fn duplicate_actor() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Duplicate 'who' with 'can'.
     // --------------------------------------------------
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -330,7 +330,7 @@ async fn duplicate_actor() {
     // --------------------------------------------------
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -370,11 +370,11 @@ async fn duplicate_actor() {
 #[tokio::test]
 async fn duplicate_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://foo.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -416,11 +416,11 @@ async fn duplicate_role() {
 #[tokio::test]
 async fn invalid_read_action() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://foo.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -527,9 +527,9 @@ async fn invalid_read_action() {
 #[tokio::test]
 async fn valid_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
-    let carol_keyring = provider.keyring(CAROL_DID).expect("should get Carol's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
+    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice grants Bob permission to configure protocols.
@@ -540,7 +540,7 @@ async fn valid_grant() {
             method: Method::Configure,
             protocol: None,
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
 
@@ -556,7 +556,7 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -570,7 +570,7 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .build(&carol_keyring)
+        .build(&carol_signer)
         .await
         .expect("should build");
 
@@ -585,7 +585,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_revocation = RevocationBuilder::new()
         .grant(bob_grant)
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create revocation");
 
@@ -598,7 +598,7 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(bob_grant_id)
-        .build(&carol_keyring)
+        .build(&carol_signer)
         .await
         .expect("should build");
 
@@ -612,8 +612,8 @@ async fn valid_grant() {
 #[tokio::test]
 async fn configure_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
-    let bob_keyring = provider.keyring(BOB_DID).expect("should get Bob's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
+    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice grants Bob permission to configure protoocols for a specific protocol.
@@ -624,7 +624,7 @@ async fn configure_scope() {
             method: Method::Configure,
             protocol: Some("https://example.com/protocol/allowed".to_string()),
         })
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should create grant");
 
@@ -640,7 +640,7 @@ async fn configure_scope() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://example.com/protocol/allowed"))
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -654,7 +654,7 @@ async fn configure_scope() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://example.com/protocol/not-allowed"))
         .permission_grant_id(bob_grant_id)
-        .build(&bob_keyring)
+        .build(&bob_signer)
         .await
         .expect("should build");
 
@@ -669,11 +669,11 @@ async fn configure_scope() {
 #[tokio::test]
 async fn configure_event() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -695,11 +695,11 @@ async fn configure_event() {
 #[tokio::test]
 async fn delete_older_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_keyring = provider.keyring(ALICE_DID).expect("should get Alice's keyring");
+    let alice_signer = key_store::signer(ALICE_DID);
 
     let oldest = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
@@ -711,7 +711,7 @@ async fn delete_older_events() {
 
     let newest = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .build(&alice_keyring)
+        .build(&alice_signer)
         .await
         .expect("should build");
 
