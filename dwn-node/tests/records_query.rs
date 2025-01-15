@@ -2,12 +2,11 @@
 
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::records::{Data, ProtocolBuilder, QueryBuilder, WriteBuilder};
 use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::protocols::Definition;
 use dwn_node::provider::KeyStore;
-use dwn_node::records::{
-    Data, DateRange, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, Write, WriteBuilder,
-};
+use dwn_node::records::{DateRange, RecordsFilter, Sort};
 use dwn_node::store::Pagination;
 use dwn_node::{Error, Message, RangeFilter, authorization, endpoint};
 use dwn_test::key_store::{ALICE_DID, BOB_DID, CAROL_DID};
@@ -56,7 +55,7 @@ async fn response() {
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .data_format("awesome_data_format")
         .attest(&[&bob_keyring])
@@ -162,7 +161,7 @@ async fn encoded_data() {
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .sign(&alice_keyring)
         .build()
@@ -201,7 +200,7 @@ async fn no_encoded_data() {
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
@@ -238,7 +237,7 @@ async fn initial_write() {
     // Alice creates 2 records.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .sign(&alice_keyring)
         .build()
@@ -282,7 +281,7 @@ async fn attester() {
     // Alice creates 2 records, 1 attested by her and the other by Bob.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .attest(&[&alice_keyring])
         .sign(&alice_keyring)
@@ -292,7 +291,7 @@ async fn attester() {
     let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .schema("schema_2")
         .attest(&[&bob_keyring])
@@ -380,7 +379,7 @@ async fn author() {
     // Alice and Bob write a record each.
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
-    let alice_write = Write::build()
+    let alice_write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -397,7 +396,7 @@ async fn author() {
         endpoint::handle(ALICE_DID, alice_write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_write = Write::build()
+    let bob_write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -508,7 +507,7 @@ async fn owner_recipient() {
     // --------------------------------------------------
     // Alice creates 2 records, 1 for Bob and 1 for Carol.
     // --------------------------------------------------
-    let alice_bob = Write::build()
+    let alice_bob = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -526,7 +525,7 @@ async fn owner_recipient() {
         endpoint::handle(ALICE_DID, alice_bob.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol = Write::build()
+    let alice_carol = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -649,7 +648,7 @@ async fn published() {
     // --------------------------------------------------
     // Alice creates 2 records: 1 published and 1 unpublished.
     // --------------------------------------------------
-    let published = Write::build()
+    let published = WriteBuilder::new()
         .data(Data::from(b"published".to_vec()))
         .schema("post")
         .published(true)
@@ -661,7 +660,7 @@ async fn published() {
         endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"unpublished".to_vec()))
         .schema("post")
         .sign(&alice_keyring)
@@ -775,7 +774,7 @@ async fn unpublished() {
     // --------------------------------------------------
     // Alice creates 2 records: 1 published and 1 unpublished.
     // --------------------------------------------------
-    let published = Write::build()
+    let published = WriteBuilder::new()
         .data(Data::from(b"record 1".to_vec()))
         .schema("post")
         .published(true)
@@ -787,7 +786,7 @@ async fn unpublished() {
         endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"record 1".to_vec()))
         .schema("post")
         .sign(&alice_keyring)
@@ -899,7 +898,7 @@ async fn data_cid() {
     // --------------------------------------------------
     let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
 
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::Stream(stream))
         .sign(&alice_keyring)
         .build()
@@ -937,7 +936,7 @@ async fn dat_size_part_range() {
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write10 = Write::build()
+    let write10 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
@@ -950,7 +949,7 @@ async fn dat_size_part_range() {
     let mut data = [0u8; 50];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write50 = Write::build()
+    let write50 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
@@ -963,7 +962,7 @@ async fn dat_size_part_range() {
     let mut data = [0u8; 100];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write100 = Write::build()
+    let write100 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
@@ -1050,7 +1049,7 @@ async fn data_size_full_range() {
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write10 = Write::build()
+    let write10 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
@@ -1063,7 +1062,7 @@ async fn data_size_full_range() {
     let mut data = [0u8; 50];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write50 = Write::build()
+    let write50 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
@@ -1076,7 +1075,7 @@ async fn data_size_full_range() {
     let mut data = [0u8; 100];
     rand::thread_rng().fill_bytes(&mut data);
 
-    let write100 = Write::build()
+    let write100 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .sign(&alice_keyring)
         .build()
@@ -1161,7 +1160,7 @@ async fn date_created_range() {
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
@@ -1174,7 +1173,7 @@ async fn date_created_range() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
@@ -1187,7 +1186,7 @@ async fn date_created_range() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
@@ -1296,7 +1295,7 @@ async fn published_unpublished() {
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
@@ -1311,7 +1310,7 @@ async fn published_unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
@@ -1326,7 +1325,7 @@ async fn published_unpublished() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
@@ -1508,7 +1507,7 @@ async fn date_published() {
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
@@ -1523,7 +1522,7 @@ async fn date_published() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
@@ -1538,7 +1537,7 @@ async fn date_published() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
@@ -1683,7 +1682,7 @@ async fn date_updated() {
     // --------------------------------------------------
     let first_2021 = DateTime::parse_from_rfc3339("2021-01-01T00:00:00-00:00").unwrap();
 
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"write_1".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
@@ -1695,7 +1694,7 @@ async fn date_updated() {
         endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"write_2".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
@@ -1707,7 +1706,7 @@ async fn date_updated() {
         endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_3 = Write::build()
+    let write_3 = WriteBuilder::new()
         .data(Data::from(b"write_3".to_vec()))
         .message_timestamp(first_2021.into())
         .date_created(first_2021.into())
@@ -1858,7 +1857,7 @@ async fn range_and_match() {
     // Alice creates 3 records with varying created dates.
     // --------------------------------------------------
     let first_2022 = DateTime::parse_from_rfc3339("2022-01-01T00:00:00-00:00").unwrap();
-    let write_2022 = Write::build()
+    let write_2022 = WriteBuilder::new()
         .data(Data::from(b"2022".to_vec()))
         .date_created(first_2022.into())
         .message_timestamp(first_2022.into())
@@ -1872,7 +1871,7 @@ async fn range_and_match() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
-    let write_2023 = Write::build()
+    let write_2023 = WriteBuilder::new()
         .data(Data::from(b"2023".to_vec()))
         .date_created(first_2023.into())
         .message_timestamp(first_2023.into())
@@ -1886,7 +1885,7 @@ async fn range_and_match() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
-    let write_2024 = Write::build()
+    let write_2024 = WriteBuilder::new()
         .data(Data::from(b"2024".to_vec()))
         .date_created(first_2024.into())
         .message_timestamp(first_2024.into())
@@ -1932,7 +1931,7 @@ async fn authorization() {
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::from(b"data".to_vec()))
         .schema("schema")
         .sign(&alice_keyring)
@@ -1973,7 +1972,7 @@ async fn attestation() {
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
-    let write = Write::build()
+    let write = WriteBuilder::new()
         .data(Data::from(b"data".to_vec()))
         .schema("schema")
         .attest(&[&alice_keyring])
@@ -2015,7 +2014,7 @@ async fn exclude_unpublished() {
     // --------------------------------------------------
     // Alice creates 2 records, 1 published the other unpublished.
     // --------------------------------------------------
-    let published = Write::build()
+    let published = WriteBuilder::new()
         .data(Data::from(b"published".to_vec()))
         .schema("schema")
         .published(true)
@@ -2027,7 +2026,7 @@ async fn exclude_unpublished() {
         endpoint::handle(ALICE_DID, published.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"unpublised".to_vec()))
         .schema("schema")
         .sign(&alice_keyring)
@@ -2070,7 +2069,7 @@ async fn date_sort() {
     let ts_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
     let ts_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
 
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"write_1".to_vec()))
         .schema("schema")
         .published(true)
@@ -2084,7 +2083,7 @@ async fn date_sort() {
         endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"write_2".to_vec()))
         .schema("schema")
         .published(true)
@@ -2098,7 +2097,7 @@ async fn date_sort() {
         endpoint::handle(ALICE_DID, write_2.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_3 = Write::build()
+    let write_3 = WriteBuilder::new()
         .data(Data::from(b"write_3".to_vec()))
         .schema("schema")
         .published(true)
@@ -2353,7 +2352,7 @@ async fn sort_identical() {
     // --------------------------------------------------
     let timestamp = DateTime::parse_from_rfc3339("2024-12-31T00:00:00-00:00").unwrap();
 
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"write_1".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
@@ -2364,7 +2363,7 @@ async fn sort_identical() {
         .await
         .expect("should create write");
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"write_2".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
@@ -2375,7 +2374,7 @@ async fn sort_identical() {
         .await
         .expect("should create write");
 
-    let write_3 = Write::build()
+    let write_3 = WriteBuilder::new()
         .data(Data::from(b"write_3".to_vec()))
         .date_created(timestamp.into())
         .message_timestamp(timestamp.into())
@@ -2454,7 +2453,7 @@ async fn paginate_ascending() {
     for i in 0..12 {
         date_created -= Duration::days(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .date_created(date_created.into())
             .message_timestamp(date_created.into())
             .data(Data::from(format!("write_{}", i).into_bytes()))
@@ -2523,7 +2522,7 @@ async fn paginate_descending() {
     for i in 0..12 {
         date_created += Duration::days(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .data(Data::from(format!("write_{}", i).into_bytes()))
             .schema("schema")
             .published(true)
@@ -2586,7 +2585,7 @@ async fn anonymous() {
     // --------------------------------------------------
     // Create records.
     // --------------------------------------------------
-    let write_1 = Write::build()
+    let write_1 = WriteBuilder::new()
         .data(Data::from(b"schema1".to_vec()))
         .schema("http://schema1")
         .published(true)
@@ -2598,7 +2597,7 @@ async fn anonymous() {
         endpoint::handle(ALICE_DID, write_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let write_2 = Write::build()
+    let write_2 = WriteBuilder::new()
         .data(Data::from(b"schema2".to_vec()))
         .schema("http://schema2")
         .sign(&alice_keyring)
@@ -2652,7 +2651,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Alice creates 2 records each for Bob and Carol; 2 public, 2 private.
     // --------------------------------------------------
-    let alice_bob_private = Write::build()
+    let alice_bob_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2671,7 +2670,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_bob_public = Write::build()
+    let alice_bob_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2691,7 +2690,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_private = Write::build()
+    let alice_carol_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -2710,7 +2709,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_public = Write::build()
+    let alice_carol_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -2733,7 +2732,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Carol creates 2 records each for Alice and Bob; 2 public, 2 private.
     // --------------------------------------------------
-    let carol_alice_private = Write::build()
+    let carol_alice_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2752,7 +2751,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_alice_public = Write::build()
+    let carol_alice_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2772,7 +2771,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_private = Write::build()
+    let carol_bob_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2791,7 +2790,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_public = Write::build()
+    let carol_bob_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -2814,7 +2813,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Bob creates 2 records each for Alice and Carol; 2 public, 2 private.
     // --------------------------------------------------
-    let bob_alice_private = Write::build()
+    let bob_alice_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2833,7 +2832,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_alice_public = Write::build()
+    let bob_alice_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -2853,7 +2852,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_private = Write::build()
+    let bob_carol_private = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -2872,7 +2871,7 @@ async fn recipient_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_public = Write::build()
+    let bob_carol_public = WriteBuilder::new()
         .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3033,7 +3032,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Alice creates 2 records each for Bob and Carol: 2 public, 2 private.
     // --------------------------------------------------
-    let alice_bob_private = Write::build()
+    let alice_bob_private = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3052,7 +3051,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_bob_public = Write::build()
+    let alice_bob_public = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3072,7 +3071,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_private = Write::build()
+    let alice_carol_private = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3091,7 +3090,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let alice_carol_public = Write::build()
+    let alice_carol_public = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3114,7 +3113,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Carol creates 2 records each for Alice and Bob: 2 public, 2 private.
     // --------------------------------------------------
-    let carol_alice_private = Write::build()
+    let carol_alice_private = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3133,7 +3132,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_alice_public = Write::build()
+    let carol_alice_public = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3153,7 +3152,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_private = Write::build()
+    let carol_bob_private = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3172,7 +3171,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let carol_bob_public = Write::build()
+    let carol_bob_public = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -3195,7 +3194,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Bob creates 2 records each for Alice and Carol: 2 public, 2 private.
     // --------------------------------------------------
-    let bob_alice_private = Write::build()
+    let bob_alice_private = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3214,7 +3213,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_alice_public = Write::build()
+    let bob_alice_public = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
         .recipient(ALICE_DID)
         .protocol(ProtocolBuilder {
@@ -3234,7 +3233,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_private = Write::build()
+    let bob_carol_private = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3253,7 +3252,7 @@ async fn author_query() {
         .expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_carol_public = Write::build()
+    let bob_carol_public = WriteBuilder::new()
         .data(Data::from(b"Hello Carol".to_vec()))
         .recipient(CAROL_DID)
         .protocol(ProtocolBuilder {
@@ -3420,7 +3419,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("bob_private_{}", i).into_bytes()))
@@ -3445,7 +3444,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_private_{}", i).into_bytes()))
@@ -3473,7 +3472,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_public_{}", i).into_bytes()))
@@ -3497,7 +3496,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("bob_public_{}", i).into_bytes()))
@@ -3521,7 +3520,7 @@ async fn paginate_non_owner() {
     for i in 0..5 {
         timestamp += Duration::minutes(1);
 
-        let write = Write::build()
+        let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
             .data(Data::from(format!("alice_public_{}", i).into_bytes()))
@@ -3674,7 +3673,7 @@ async fn published_false() {
     // --------------------------------------------------
     // Alice creates an unpublished record.
     // -------------------------------------------------
-    let unpublished = Write::build()
+    let unpublished = WriteBuilder::new()
         .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
         .published(false)
@@ -3726,7 +3725,7 @@ async fn tenant_bound() {
     // --------------------------------------------------
     // 2 owners create records.
     // -------------------------------------------------
-    let alice_write = Write::build()
+    let alice_write = WriteBuilder::new()
         .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
         .sign(&alice_keyring)
@@ -3736,7 +3735,7 @@ async fn tenant_bound() {
     let reply = endpoint::handle(ALICE_DID, alice_write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bob_write = Write::build()
+    let bob_write = WriteBuilder::new()
         .data(Data::from(b"1".to_vec()))
         .schema("http://schema1")
         .sign(&bob_keyring)
@@ -3866,7 +3865,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice writes 2 foo records.
     // --------------------------------------------------
-    let foo_1 = Write::build()
+    let foo_1 = WriteBuilder::new()
         .data(Data::from(b"foo_1".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3882,7 +3881,7 @@ async fn context_id() {
     let reply = endpoint::handle(ALICE_DID, foo_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let foo_2 = Write::build()
+    let foo_2 = WriteBuilder::new()
         .data(Data::from(b"foo_2".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3901,7 +3900,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice writes 2 foo/bar records.
     // --------------------------------------------------
-    let bar_1 = Write::build()
+    let bar_1 = WriteBuilder::new()
         .data(Data::from(b"bar_1".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3917,7 +3916,7 @@ async fn context_id() {
     let reply = endpoint::handle(ALICE_DID, bar_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let bar_2 = Write::build()
+    let bar_2 = WriteBuilder::new()
         .data(Data::from(b"bar_2".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3936,7 +3935,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice writes 2 foo/bar/baz records.
     // --------------------------------------------------
-    let baz_1 = Write::build()
+    let baz_1 = WriteBuilder::new()
         .data(Data::from(b"baz_1".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -3952,7 +3951,7 @@ async fn context_id() {
     let reply = endpoint::handle(ALICE_DID, baz_1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
-    let baz_2 = Write::build()
+    let baz_2 = WriteBuilder::new()
         .data(Data::from(b"baz_2".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://nested.xyz",
@@ -4056,7 +4055,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     // Alice writes a thread record.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"A new thread".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
@@ -4073,7 +4072,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     // Alice writes a chat record addressed to Bob.
     // --------------------------------------------------
-    let chat_bob = Write::build()
+    let chat_bob = WriteBuilder::new()
         .data(Data::from(b"Bob can read this".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4094,7 +4093,7 @@ async fn protocol_no_role() {
     // Alice writes 2 more chat records NOT addressed to Bob.
     // --------------------------------------------------
     for _ in 0..2 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob cannot read this".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4171,7 +4170,7 @@ async fn protocol_role() {
     // --------------------------------------------------
     // Alice writes a 'friend' role record with Bob as recipient.
     // --------------------------------------------------
-    let bob_friend = Write::build()
+    let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4191,7 +4190,7 @@ async fn protocol_role() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4273,7 +4272,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice writes a thread.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4291,7 +4290,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice writes a 'participant' role record with Bob as recipient.
     // --------------------------------------------------
-    let participant_role = Write::build()
+    let participant_role = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4312,7 +4311,7 @@ async fn context_role() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4377,7 +4376,7 @@ async fn no_protocol_path() {
     // --------------------------------------------------
     // Alice writes a friend role record.
     // --------------------------------------------------
-    let friend = Write::build()
+    let friend = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4396,7 +4395,7 @@ async fn no_protocol_path() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4454,7 +4453,7 @@ async fn no_context_id() {
     // --------------------------------------------------
     // Alice writes a friend role record.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4473,7 +4472,7 @@ async fn no_context_id() {
     // --------------------------------------------------
     // Alice writes a 'participant' role record with Bob as recipient.
     // --------------------------------------------------
-    let participant_role = Write::build()
+    let participant_role = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4494,7 +4493,7 @@ async fn no_context_id() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4556,7 +4555,7 @@ async fn no_root_role_record() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {
@@ -4614,7 +4613,7 @@ async fn no_context_role() {
     // --------------------------------------------------
     // Alice writes a thread role record.
     // --------------------------------------------------
-    let thread = Write::build()
+    let thread = WriteBuilder::new()
         .data(Data::from(b"Bob is a friend".to_vec()))
         .recipient(BOB_DID)
         .protocol(ProtocolBuilder {
@@ -4634,7 +4633,7 @@ async fn no_context_role() {
     // Alice writes 3 chat records.
     // --------------------------------------------------
     for _ in 0..3 {
-        let chat = Write::build()
+        let chat = WriteBuilder::new()
             .data(Data::from(b"Bob can read this because he is a friend".to_vec()))
             .recipient(ALICE_DID)
             .protocol(ProtocolBuilder {

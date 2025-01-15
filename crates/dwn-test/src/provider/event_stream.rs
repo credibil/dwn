@@ -1,7 +1,7 @@
 use anyhow::Result;
-use futures::stream::StreamExt;
 use dwn_node::event::{Event, Subscriber};
 use dwn_node::provider::EventStream;
+use futures::stream::StreamExt;
 
 use crate::provider::ProviderImpl;
 

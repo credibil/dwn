@@ -4,9 +4,9 @@ use std::collections::HashMap;
 
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
+use dwn_node::provider::{KeyStore, Keyring};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
 use sha2::Digest;
-use dwn_node::provider::{KeyStore, Keyring};
 use vercre_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 
 // use x25519_dalek::{PublicKey, StaticSecret};

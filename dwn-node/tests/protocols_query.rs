@@ -6,9 +6,8 @@
 use std::time::Duration;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_node::client::protocols::QueryBuilder;
 use chrono::Days;
-use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::data::cid;
 use dwn_node::permissions::{GrantBuilder, RevocationBuilder, Scope};
 use dwn_node::protocols::{Definition, ProtocolType};

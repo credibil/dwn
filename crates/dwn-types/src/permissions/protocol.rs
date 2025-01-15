@@ -1,13 +1,7 @@
 //! # Protocol Permissions
 
-
-
 use crate::authorization::Authorization;
-
-use crate::protocols::{
-    Action, ActionRule, Actor,  RuleSet,
-    integrity,
-};
+use crate::protocols::{Action, ActionRule, Actor, RuleSet, integrity};
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, Subscribe, Write, write};
 use crate::store::{RecordsFilter, RecordsQuery};

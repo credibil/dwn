@@ -47,11 +47,13 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             Ok(serde_json::from_slice(schema)?)
         }
         "messages-subscribe" => {
-            let schema = include_bytes!("../../../schemas/interface-methods/messages-subscribe.json");
+            let schema =
+                include_bytes!("../../../schemas/interface-methods/messages-subscribe.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "protocols-configure" => {
-            let schema = include_bytes!("../../../schemas/interface-methods/protocols-configure.json");
+            let schema =
+                include_bytes!("../../../schemas/interface-methods/protocols-configure.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "protocols-query" => {
@@ -63,8 +65,9 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             Ok(serde_json::from_slice(schema)?)
         }
         "records-write-encoded" => {
-            let schema =
-                include_bytes!("../../../schemas/interface-methods/records-write-data-encoded.json");
+            let schema = include_bytes!(
+                "../../../schemas/interface-methods/records-write-data-encoded.json"
+            );
             Ok(serde_json::from_slice(schema)?)
         }
         "records-query" => {
@@ -76,7 +79,8 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             Ok(serde_json::from_slice(schema)?)
         }
         "records-subscribe" => {
-            let schema = include_bytes!("../../../schemas/interface-methods/records-subscribe.json");
+            let schema =
+                include_bytes!("../../../schemas/interface-methods/records-subscribe.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-delete" => {
@@ -84,7 +88,8 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             Ok(serde_json::from_slice(schema)?)
         }
         "PermissionRequestData" => {
-            let schema = include_bytes!("../../../schemas/permissions/permission-request-data.json");
+            let schema =
+                include_bytes!("../../../schemas/permissions/permission-request-data.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "PermissionGrantData" => {
@@ -119,7 +124,8 @@ impl Retrieve for Retriever {
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/messages-filter.json" => {
-                let schema = include_bytes!("../../../schemas/interface-methods/messages-filter.json");
+                let schema =
+                    include_bytes!("../../../schemas/interface-methods/messages-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/pagination-cursor.json" => {
@@ -150,7 +156,8 @@ impl Retrieve for Retriever {
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/records-filter.json" => {
-                let schema = include_bytes!("../../../schemas/interface-methods/records-filter.json");
+                let schema =
+                    include_bytes!("../../../schemas/interface-methods/records-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/string-range-filter.json" => {

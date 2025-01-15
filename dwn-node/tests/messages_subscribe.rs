@@ -6,12 +6,12 @@ use std::time::Duration;
 use dwn_node::authorization::Authorization;
 use dwn_node::client::messages::{QueryBuilder, SubscribeBuilder};
 use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::data::DataStream;
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{GrantBuilder, Scope};
 use dwn_node::protocols::Definition;
 use dwn_node::provider::KeyStore;
-use dwn_node::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::{Error, Interface, Message, Method, endpoint};
 use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
@@ -415,7 +415,7 @@ async fn protocol_filter() {
     let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .protocol(dwn_node::records::ProtocolBuilder {
+        .protocol(ProtocolBuilder {
             protocol: "http://protocol1.xyz",
             protocol_path: "post",
             parent_context_id: None,

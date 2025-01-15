@@ -6,12 +6,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{Conditions, Publication, RecordsScope, Scope};
+use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use crate::protocols::{self, REVOCATION_PATH};
 use crate::provider::{Keyring, MessageStore};
-use crate::records::{
-    self, Data, DelegatedGrant, Delete, ProtocolBuilder, Query, Read, Subscribe, Write,
-    WriteBuilder,
-};
+use crate::records::{self, DelegatedGrant, Delete, Query, Read, Subscribe, Write};
 use crate::serde::rfc3339_micros;
 use crate::store::{RecordsFilter, RecordsQuery};
 use crate::{Descriptor, Interface, Result, forbidden, unexpected, utils};

@@ -5,12 +5,12 @@
 
 use dwn_node::client::messages::{QueryBuilder, ReadBuilder};
 use dwn_node::client::protocols::ConfigureBuilder;
+use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::data::DataStream;
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{GrantBuilder, Scope};
 use dwn_node::protocols::Definition;
 use dwn_node::provider::KeyStore;
-use dwn_node::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::{Error, Interface, Message, Method, endpoint};
 use dwn_test::key_store::{ALICE_DID, BOB_DID};
 use dwn_test::provider::ProviderImpl;
