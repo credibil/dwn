@@ -1,5 +1,5 @@
 [workspace]
-members = ["dwn-node", "dwn-msg", "crates/*", "examples/*"]
+members = ["dwn-node", "crates/*", "examples/*"]
 resolver = "2"
 
 [workspace.package]
@@ -30,10 +30,8 @@ nursery = "warn"
 anyhow = "1.0.95"
 base64ct = { version = "1.6.0", features = ["std"] }
 cid = "0.11.1"
-dwn-msg = { path = "dwn-msg" }
 dwn-node = { path = "dwn-node" }
 dwn-test = { path = "crates/dwn-test" }
-dwn-types = { path = "crates/dwn-types" }
 futures = "0.3.31"
 http = "1.2.0"
 insta = { version = "1.42.0", features = ["redactions", "yaml"] }
