@@ -39,61 +39,60 @@ pub fn validate_value<T: Serialize + ?Sized>(schema: &str, value: &T) -> Result<
 fn precompiled(schema_name: &str) -> Result<Value> {
     match schema_name {
         "messages-query" => {
-            let schema = include_bytes!("../../schemas/interface-methods/messages-query.json");
+            let schema = include_bytes!("../schemas/interface-methods/messages-query.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "messages-read" => {
-            let schema = include_bytes!("../../schemas/interface-methods/messages-read.json");
+            let schema = include_bytes!("../schemas/interface-methods/messages-read.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "messages-subscribe" => {
-            let schema = include_bytes!("../../schemas/interface-methods/messages-subscribe.json");
+            let schema = include_bytes!("../schemas/interface-methods/messages-subscribe.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "protocols-configure" => {
-            let schema = include_bytes!("../../schemas/interface-methods/protocols-configure.json");
+            let schema = include_bytes!("../schemas/interface-methods/protocols-configure.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "protocols-query" => {
-            let schema = include_bytes!("../../schemas/interface-methods/protocols-query.json");
+            let schema = include_bytes!("../schemas/interface-methods/protocols-query.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-write" => {
-            let schema = include_bytes!("../../schemas/interface-methods/records-write.json");
+            let schema = include_bytes!("../schemas/interface-methods/records-write.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-write-encoded" => {
             let schema =
-                include_bytes!("../../schemas/interface-methods/records-write-data-encoded.json");
+                include_bytes!("../schemas/interface-methods/records-write-data-encoded.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-query" => {
-            let schema = include_bytes!("../../schemas/interface-methods/records-query.json");
+            let schema = include_bytes!("../schemas/interface-methods/records-query.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-read" => {
-            let schema = include_bytes!("../../schemas/interface-methods/records-read.json");
+            let schema = include_bytes!("../schemas/interface-methods/records-read.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-subscribe" => {
-            let schema = include_bytes!("../../schemas/interface-methods/records-subscribe.json");
+            let schema = include_bytes!("../schemas/interface-methods/records-subscribe.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "records-delete" => {
-            let schema = include_bytes!("../../schemas/interface-methods/records-delete.json");
+            let schema = include_bytes!("../schemas/interface-methods/records-delete.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "PermissionRequestData" => {
-            let schema = include_bytes!("../../schemas/permissions/permission-request-data.json");
+            let schema = include_bytes!("../schemas/permissions/permission-request-data.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "PermissionGrantData" => {
-            let schema = include_bytes!("../../schemas/permissions/permission-grant-data.json");
+            let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
             Ok(serde_json::from_slice(schema)?)
         }
         "PermissionRevocationData" => {
-            let schema =
-                include_bytes!("../../schemas/permissions/permission-revocation-data.json");
+            let schema = include_bytes!("../schemas/permissions/permission-revocation-data.json");
             Ok(serde_json::from_slice(schema)?)
         }
 
@@ -115,99 +114,94 @@ impl Retrieve for Retriever {
 
         match uri.path().as_str() {
             "/dwn/json-schemas/defs.json" => {
-                let schema = include_bytes!("../../schemas/definitions.json");
+                let schema = include_bytes!("../schemas/definitions.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/messages-filter.json" => {
-                let schema = include_bytes!("../../schemas/interface-methods/messages-filter.json");
+                let schema = include_bytes!("../schemas/interface-methods/messages-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/pagination-cursor.json" => {
-                let schema =
-                    include_bytes!("../../schemas/interface-methods/pagination-cursor.json");
+                let schema = include_bytes!("../schemas/interface-methods/pagination-cursor.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/protocol-definition.json" => {
                 let schema =
-                    include_bytes!("../../schemas/interface-methods/protocol-definition.json");
+                    include_bytes!("../schemas/interface-methods/protocol-definition.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/protocol-rule-set.json" => {
-                let schema =
-                    include_bytes!("../../schemas/interface-methods/protocol-rule-set.json");
+                let schema = include_bytes!("../schemas/interface-methods/protocol-rule-set.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/records-write-data-encoded.json" => {
-                let schema = include_bytes!(
-                    "../../schemas/interface-methods/records-write-data-encoded.json"
-                );
+                let schema =
+                    include_bytes!("../schemas/interface-methods/records-write-data-encoded.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/records-write-unidentified.json" => {
-                let schema = include_bytes!(
-                    "../../schemas/interface-methods/records-write-unidentified.json"
-                );
+                let schema =
+                    include_bytes!("../schemas/interface-methods/records-write-unidentified.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/records-filter.json" => {
-                let schema = include_bytes!("../../schemas/interface-methods/records-filter.json");
+                let schema = include_bytes!("../schemas/interface-methods/records-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/string-range-filter.json" => {
                 let schema =
-                    include_bytes!("../../schemas/interface-methods/string-range-filter.json");
+                    include_bytes!("../schemas/interface-methods/string-range-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/number-range-filter.json" => {
                 let schema =
-                    include_bytes!("../../schemas/interface-methods/number-range-filter.json");
+                    include_bytes!("../schemas/interface-methods/number-range-filter.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/authorization.json" => {
-                let schema = include_bytes!("../../schemas/authorization.json");
+                let schema = include_bytes!("../schemas/authorization.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/authorization-owner.json" => {
-                let schema = include_bytes!("../../schemas/authorization-owner.json");
+                let schema = include_bytes!("../schemas/authorization-owner.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/authorization-delegated-grant.json" => {
-                let schema = include_bytes!("../../schemas/authorization-delegated-grant.json");
+                let schema = include_bytes!("../schemas/authorization-delegated-grant.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/general-jws.json" => {
-                let schema = include_bytes!("../../schemas/general-jws.json");
+                let schema = include_bytes!("../schemas/general-jws.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/public-jwk.json" => {
-                let schema = include_bytes!("../../schemas/jwk/public-jwk.json");
+                let schema = include_bytes!("../schemas/jwk/public-jwk.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/general-jwk.json" => {
-                let schema = include_bytes!("../../schemas/jwk/general-jwk.json");
+                let schema = include_bytes!("../schemas/jwk/general-jwk.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             // "/dwn/json-schemas/permission-grant-data.json" => {
-            //     let schema = include_bytes!("../../schemas/permissions/permission-grant-data.json");
+            //     let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
             //     Ok(serde_json::from_slice(schema)?)
             // }
             // "/dwn/json-schemas/permissions/permission-request-data.json" =>
             // {
-            //     let schema = include_bytes!("../../schemas/permissions/permission-request-data.json");
+            //     let schema = include_bytes!("../schemas/permissions/permission-request-data.json");
             //     Ok(serde_json::from_slice(schema)?)
             // }
             // "/dwn/json-schemas/permissions/permission-revocation-data.json" =>
             // {
-            //     let schema = include_bytes!("../../schemas/permissions/permission-revocation-data.json");
+            //     let schema = include_bytes!("../schemas/permissions/permission-revocation-data.json");
             //     Ok(serde_json::from_slice(schema)?)
             // }
             "/dwn/json-schemas/permissions/defs.json" => {
-                let schema =
-                    include_bytes!("../../schemas/permissions/permissions-definitions.json");
+                let schema = include_bytes!("../schemas/permissions/permissions-definitions.json");
                 Ok(serde_json::from_slice(schema)?)
             }
             "/dwn/json-schemas/permissions/scopes.json" => {
-                let schema = include_bytes!("../../schemas/permissions/scopes.json");
+                let schema = include_bytes!("../schemas/permissions/scopes.json");
                 Ok(serde_json::from_slice(schema)?)
             }
 

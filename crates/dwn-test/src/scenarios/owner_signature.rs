@@ -6,12 +6,13 @@
 
 use std::io::Read;
 
+use dwn_node::client::records::{Data, ReadBuilder, WriteBuilder};
+use dwn_node::endpoint;
+use dwn_node::provider::KeyStore;
+use dwn_node::records::RecordsFilter;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{Value, json};
-use dwn_node::endpoint;
-use dwn_node::provider::KeyStore;
-use dwn_node::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;

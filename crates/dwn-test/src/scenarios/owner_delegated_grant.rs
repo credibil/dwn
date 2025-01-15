@@ -4,11 +4,13 @@
 //! an app to perform an action on their behalf. In this case, Alice
 //! grants App X the ability to post as her for the `chat` protocol.
 
-use rand::RngCore;
 use dwn_node::Method;
-use dwn_node::permissions::{GrantBuilder, Scope};
+use dwn_node::client::grants::GrantBuilder;
+use dwn_node::client::records::{Data, WriteBuilder};
+use dwn_node::permissions::Scope;
 use dwn_node::provider::KeyStore;
-use dwn_node::records::{Data, DelegatedGrant, WriteBuilder};
+use dwn_node::records::DelegatedGrant;
+use rand::RngCore;
 
 use crate::key_store::{ALICE_DID, APP_DID, BOB_DID};
 use crate::provider::ProviderImpl;

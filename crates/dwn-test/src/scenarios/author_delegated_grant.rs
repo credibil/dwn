@@ -4,12 +4,14 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
-use http::StatusCode;
-use insta::assert_yaml_snapshot as assert_snapshot;
-use dwn_node::permissions::{GrantBuilder, Scope};
-use dwn_node::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use dwn_node::client::grants::GrantBuilder;
+use dwn_node::client::protocols::{ConfigureBuilder, QueryBuilder};
+use dwn_node::permissions::Scope;
+use dwn_node::protocols::Definition;
 use dwn_node::provider::KeyStore;
 use dwn_node::{Method, endpoint};
+use http::StatusCode;
+use insta::assert_yaml_snapshot as assert_snapshot;
 
 use crate::key_store::{ALICE_DID, BOB_DID};
 use crate::provider::ProviderImpl;
