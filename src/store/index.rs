@@ -11,34 +11,31 @@ use anyhow::Result;
 use ipld_core::codec::Codec;
 use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
-use serde_json::{Map, Value};
 
 use crate::provider::BlockStore;
-use crate::store::block;
+use crate::store::{Entry, block};
 
-// #[derive(Debug)]
+pub async fn build(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
+    let message_cid = entry.cid()?;
+    let write = entry.as_write().unwrap();
+    let fields = write.indexes();
 
-pub async fn put(
-    owner: &str, message_cid: &str, values: &Map<String, Value>, store: &impl BlockStore,
-) -> Result<()> {
     let mut indexes = IndexesBuilder::new().owner(owner).store(store).build().await?;
 
-    println!("before: {:?}", indexes.inner);
-
-    for (field, value) in values {
-        let mut index = indexes.get(field).await?;
-        index.insert(value.to_string(), message_cid);
+    for (field, value) in fields {
+        let mut index = indexes.get(&field).await?;
+        index.insert(value.to_string(), &message_cid);
         indexes.update(index).await?;
     }
 
-    println!("after: {:?}", indexes.inner);
+    println!("indexed: {:?}", indexes.inner);
 
     Ok(())
 }
 
 pub struct Indexes<'a, S: BlockStore> {
     owner: &'a str,
-    inner: BTreeMap<String, String>,
+    pub inner: BTreeMap<String, String>,
     store: &'a S,
 }
 
@@ -195,35 +192,23 @@ mod tests {
     use std::str::FromStr;
 
     use blockstore::{Blockstore as _, InMemoryBlockstore};
-    use dwn_test::key_store::ALICE_DID;
-    use serde_json::json;
+    use dwn_test::key_store::{self, ALICE_DID};
 
     use super::*;
-    // use crate::clients::records::WriteBuilder;
+    use crate::clients::records::WriteBuilder;
     // use crate::data::MAX_ENCODED_SIZE;
     // use crate::store::block;
 
     #[tokio::test]
-    async fn test_put() {
+    async fn test_index() {
         let block_store = BlockStoreImpl::new();
+        let alice_signer = key_store::signer(ALICE_DID);
 
-        let indexes = json!({
-            "message_timestamp": "2025-01-01T00:00:00-00:00",
-            "published": "true",
-        });
+        let write = WriteBuilder::new().published(true).sign(&alice_signer).build().await.unwrap();
+        let entry = Entry::from(&write);
 
-        put(ALICE_DID, "message_cid_1", &indexes.as_object().unwrap(), &block_store).await.unwrap();
-        put(ALICE_DID, "message_cid_2", &indexes.as_object().unwrap(), &block_store).await.unwrap();
+        build(ALICE_DID, &entry, &block_store).await.unwrap();
     }
-
-    // #[tokio::test]
-    // async fn test_ipld() {
-    //     let alice_signer = key_store::signer(ALICE_DID);
-
-    //     let write = WriteBuilder::new().sign(&alice_signer).build().await.unwrap();
-    //     let block = block::encode(&write).unwrap();
-    //     println!("{:?}", block.cid());
-    // }
 
     struct BlockStoreImpl {
         blockstore: InMemoryBlockstore<64>,

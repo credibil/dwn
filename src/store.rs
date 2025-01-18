@@ -1,9 +1,9 @@
 //! # Store
 
-pub mod serializer;
-mod message;
 mod block;
 mod index;
+mod message;
+pub mod serializer;
 
 use std::ops::Deref;
 

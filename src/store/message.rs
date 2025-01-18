@@ -1,12 +1,10 @@
-
-
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
 use anyhow::Result;
 
 use crate::provider::{BlockStore, Entry, MessageStore, Query};
-use crate::store::block;
+use crate::store::{block, index};
 
 struct Store<'a, T: BlockStore> {
     block_store: &'a T,
@@ -19,9 +17,8 @@ impl<'a, T: BlockStore> Store<'a, T> {
 }
 
 impl<T: BlockStore> MessageStore for Store<'_, T> {
-     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
-        // store indexes
-        // let indexes = &entry.indexes;
+    async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
+        index::build(owner, entry, self.block_store).await?;
 
         // store entry as IPLD block(s)
         let block = block::encode(entry).unwrap();

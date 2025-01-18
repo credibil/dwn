@@ -23,7 +23,7 @@ use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider}
 use crate::records::{DataStream, DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
-use crate::{Descriptor, Error, Method, Result, data, forbidden, unexpected};
+use crate::{Descriptor, Error, Method, Result, authorization, data, forbidden, unexpected};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -236,6 +236,42 @@ impl TryFrom<&Entry> for Write {
 }
 
 impl Write {
+    /// Build flattened indexes for the write message.
+    pub fn indexes(&self) -> Map<String, Value> {
+        let mut indexes = Map::new();
+
+        //indexes.insert("archived".to_string(), Value::Bool(false));
+
+        // FIXME: build full indexes for each record
+        indexes.insert(
+            "author".to_string(),
+            Value::String(self.authorization.author().unwrap_or_default()),
+        );
+        indexes.insert("messageCid".to_string(), Value::String(self.cid().unwrap_or_default()));
+
+        if let Some(attestation) = &self.attestation {
+            let attester = authorization::signer_did(attestation).unwrap_or_default();
+            indexes.insert("attester".to_string(), Value::String(attester));
+        }
+
+        // --------------------------------------------------------------------
+        // LATER: `dateUpdated` should not be needed as we use `message_timestamp`
+        // let date_updated =
+        //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
+        // indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
+        // --------------------------------------------------------------------
+
+        if let Some(tags) = &self.descriptor.tags {
+            let mut tag_map = Map::new();
+            for (k, v) in tags {
+                tag_map.insert(format!("tag.{k}"), v.clone());
+            }
+            indexes.insert("tags".to_string(), Value::Object(tag_map));
+        }
+
+        indexes
+    }
+
     /// Add a data stream to the write message.
     pub fn with_stream(&mut self, data_stream: DataStream) {
         self.data_stream = Some(data_stream);
