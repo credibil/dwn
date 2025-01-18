@@ -1,5 +1,7 @@
 //! # Provider
 
+use std::io::Read;
+
 use anyhow::{Result, anyhow};
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
@@ -13,6 +15,23 @@ pub use crate::tasks::ResumableTask;
 pub trait Provider:
     MessageStore + BlockStore + TaskStore + EventLog + EventStream + DidResolver
 {
+}
+
+/// The `BlockStore` trait is used by implementers to provide data storage
+/// capability.
+pub trait BlockStore: Send + Sync {
+    /// Store a data block in the underlying block store.
+    fn put(&self, owner: &str, cid: &str, data: &[u8]) -> impl Future<Output = Result<()>> + Send;
+
+    /// Fetches a single block by CID from the underlying store, returning
+    /// `None` if no match was found.
+    fn get(&self, owner: &str, cid: &str) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
+
+    /// Delete the data block associated with the specified CID.
+    fn delete(&self, owner: &str, cid: &str) -> impl Future<Output = Result<()>> + Send;
+
+    /// Purge all blocks from the store.
+    fn purge(&self) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// The `MessageStore` trait is used by implementers to provide message
@@ -98,21 +117,33 @@ pub trait MessageStore: Send + Sync {
     fn purge(&self) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// The `BlockStore` trait is used by implementers to provide data storage
+/// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
-pub trait BlockStore: Send + Sync {
-    /// Store a data block in the underlying block store.
-    fn put(&self, owner: &str, cid: &str, block: &[u8]) -> impl Future<Output = Result<()>> + Send;
+pub trait DataStore: Send + Sync {
+    // /// Open a connection to the underlying store.
+    // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Fetches a single block by CID from the underlying store, returning
+    // /// Close the connection to the underlying store.
+    // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Store data in the underlying store.
+    fn put(
+        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no match was found.
-    fn get(&self, owner: &str, cid: &str) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
+    fn get(
+        &self, owner: &str, record_id: &str, data_cid: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send;
 
-    /// Delete the data block associated with the specified CID.
-    fn delete(&self, owner: &str, cid: &str) -> impl Future<Output = Result<()>> + Send;
+    /// Delete data associated with the specified id.
+    fn delete(
+        &self, owner: &str, record_id: &str, data_cid: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Purge all blocks from the store.
-    fn purge(&self) -> impl Future<Output = Result<()>> + Send;
+    /// Purge all data from the store.
+    fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// The `TaskStore` trait is used by implementers to provide data storage
