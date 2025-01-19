@@ -16,7 +16,7 @@ pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, Sort, TagFilter};
-use crate::{Descriptor, Method, Result, authorization, messages, protocols};
+use crate::{Descriptor, Method, Result, messages, protocols};
 pub use crate::{Lower, RangeFilter, Upper};
 
 /// Entry wraps each message with a unifying type used for all stored messages
@@ -100,59 +100,27 @@ impl Deref for Entry {
 // LATER: perhaps should be TryFrom?
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
-        let mut record = Self {
+        Self {
             message: EntryType::Write(write.clone()),
-            indexes: Map::new(),
-        };
-
-        // FIXME: build full indexes for each record
-        record.indexes.insert(
-            "author".to_string(),
-            Value::String(write.authorization.author().unwrap_or_default()),
-        );
-        record
-            .indexes
-            .insert("messageCid".to_string(), Value::String(write.cid().unwrap_or_default()));
-
-        if let Some(attestation) = &write.attestation {
-            let attester = authorization::signer_did(attestation).unwrap_or_default();
-            record.indexes.insert("attester".to_string(), Value::String(attester));
+            indexes: write.indexes(),
         }
-
-        // --------------------------------------------------------------------
-        // LATER: `dateUpdated` should not be needed as we use `message_timestamp`
-        // let date_updated =
-        //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
-        // record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
-        // --------------------------------------------------------------------
-
-        if let Some(tags) = &write.descriptor.tags {
-            let mut tag_map = Map::new();
-            for (k, v) in tags {
-                tag_map.insert(format!("tag.{k}"), v.clone());
-            }
-            record.indexes.insert("tags".to_string(), Value::Object(tag_map));
-        }
-
-        record
     }
 }
 
 impl From<&Delete> for Entry {
     fn from(delete: &Delete) -> Self {
-        let mut record = Self {
+        let mut entry = Self {
             message: EntryType::Delete(delete.clone()),
             indexes: Map::new(),
         };
 
         // FIXME: build full indexes for each record
         // flatten record_id so it queries correctly
-        record
+        entry
             .indexes
             .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
-        record.indexes.insert("archived".to_string(), Value::Bool(false));
-
-        record
+        entry.indexes.insert("archived".to_string(), Value::Bool(false));
+        entry
     }
 }
 

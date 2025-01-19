@@ -30,9 +30,9 @@ use crate::{Quota, RangeFilter, Result, utils};
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordsFilter {
-    /// Whether the record is published.
+    /// Get a single object by its ID.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
+    pub record_id: Option<String>,
 
     /// Records matching the specified author.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,9 +58,9 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
-    /// Get a single object by its ID.
+    /// The MIME type of the requested data. For example, `application/json`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub record_id: Option<String>,
+    pub data_format: Option<String>,
 
     /// The CID of the parent object .
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -74,25 +74,25 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<BTreeMap<String, TagFilter>>,
 
-    /// The MIME type of the requested data. For example, `application/json`.
+    /// CID of the data.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_format: Option<String>,
+    pub data_cid: Option<String>,
 
     /// Records with a size within the range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_size: Option<RangeFilter<usize>>,
 
-    /// CID of the data.
+    /// Whether the record is published.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_cid: Option<String>,
-
-    /// Filter messages created within the specified range.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<DateRange>,
+    pub published: Option<bool>,
 
     /// Filter messages published within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<DateRange>,
+
+    /// Filter messages created within the specified range.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_created: Option<DateRange>,
 
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]

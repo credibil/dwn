@@ -184,7 +184,6 @@ mod tests {
         let entry = Entry::from(&write);
 
         let message_cid = entry.cid().unwrap();
-        println!("put: {:?}", message_cid);
 
         let block = block::encode(&entry).unwrap();
         block_store.put(ALICE_DID, &message_cid, &block).await.unwrap();

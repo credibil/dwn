@@ -241,31 +241,59 @@ impl Write {
     pub fn indexes(&self) -> Map<String, Value> {
         let mut indexes = Map::new();
 
-        //indexes.insert("archived".to_string(), Value::Bool(false));
+        let descriptor = &self.descriptor;
 
-        // FIXME: build full indexes for each record
+        indexes.insert("message_cid".to_string(), Value::String(self.cid().unwrap_or_default()));
+        indexes.insert(
+            "message_timestamp".to_string(),
+            Value::String(
+                descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
+            ),
+        );
+        indexes.insert("record_id".to_string(), Value::String(self.record_id.clone()));
         indexes.insert(
             "author".to_string(),
             Value::String(self.authorization.author().unwrap_or_default()),
         );
+        indexes.insert("data_format".to_string(), Value::String(descriptor.data_format.clone()));
+        indexes.insert("data_cid".to_string(), Value::String(descriptor.data_cid.clone()));
+        indexes.insert("data_size".to_string(), Value::String(descriptor.data_size.to_string()));
         indexes.insert(
-            "published".to_string(),
-            Value::Bool(self.descriptor.published.unwrap_or_default()),
+            "date_created".to_string(),
+            Value::String(descriptor.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)),
         );
-        indexes.insert("messageCid".to_string(), Value::String(self.cid().unwrap_or_default()));
 
         if let Some(attestation) = &self.attestation {
             let attester = authorization::signer_did(attestation).unwrap_or_default();
             indexes.insert("attester".to_string(), Value::String(attester));
         }
-
-        // --------------------------------------------------------------------
-        // LATER: `dateUpdated` should not be needed as we use `message_timestamp`
-        // let date_updated =
-        //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
-        // indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
-        // --------------------------------------------------------------------
-
+        if let Some(recipient) = &descriptor.recipient {
+            indexes.insert("recipient".to_string(), Value::String(recipient.clone()));
+        }
+        if let Some(protocol) = &descriptor.protocol {
+            indexes.insert("protocol".to_string(), Value::String(protocol.clone()));
+        }
+        if let Some(protocol_path) = &descriptor.protocol_path {
+            indexes.insert("protocol_path".to_string(), Value::String(protocol_path.clone()));
+        }
+        if let Some(schema) = &descriptor.schema {
+            indexes.insert("schema".to_string(), Value::String(schema.clone()));
+        }
+        if let Some(parent_id) = &descriptor.parent_id {
+            indexes.insert("parent_id".to_string(), Value::String(parent_id.clone()));
+        }
+        if let Some(context_id) = &self.context_id {
+            indexes.insert("context_id".to_string(), Value::String(context_id.clone()));
+        }
+        if let Some(published) = descriptor.published {
+            indexes.insert("published".to_string(), Value::Bool(published));
+        }
+        if let Some(date_published) = &descriptor.date_published {
+            indexes.insert(
+                "date_published".to_string(),
+                Value::String(date_published.to_rfc3339_opts(SecondsFormat::Micros, true)),
+            );
+        }
         if let Some(tags) = &self.descriptor.tags {
             let mut tag_map = Map::new();
             for (k, v) in tags {
