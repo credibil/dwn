@@ -35,8 +35,6 @@ impl ProviderImpl {
     pub async fn new() -> Result<Self> {
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns(NAMESPACE).use_db(ALICE_DID).await?;
-        
-        
 
         Ok(Self {
             db,

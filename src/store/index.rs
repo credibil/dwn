@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, Query, block};
+use crate::store::{Entry, Query, RecordsFilter, block};
 
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
@@ -22,7 +22,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 
     for (field, value) in fields {
         let mut index = indexes.get(&field).await?;
-        index.insert(value.to_string(), &message_cid);
+        index.insert(value.as_str().unwrap(), &message_cid);
         indexes.update(index).await?;
     }
 
@@ -36,20 +36,20 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
         return Err(anyhow!("unsupported query type"));
     };
 
-    let filter = &rq.filters[0];
-    let mut entries = Vec::new();
-
-    if let Some(published) = &filter.published {
-        let index = indexes.get("published").await?;
-
-        for (value, message_cid) in index.values {
-            if value == "true" {
-                let bytes = store.get(owner, &message_cid).await?.unwrap();
-                let entry = block::decode(&bytes)?;
-                entries.push(entry);
-            }
-        }
+    let concise = true;
+    for filter in &rq.filters {
+        // if !filter.is_concise() {
+        //  concise = false;
+        //  break;
+        // }
     }
+
+    // choose strategy for query
+    let entries = if concise {
+        indexes.query_concise(&rq.filters).await?
+    } else {
+        indexes.query_full(&rq.filters).await?
+    };
 
     Ok(entries)
 }
@@ -81,6 +81,48 @@ impl<S: BlockStore> Indexes<'_, S> {
         // update the index block
         self.store.delete(self.owner, &index_cid).await?;
         self.store.put(self.owner, &index_cid, &block::encode(&index)?).await
+    }
+
+    // This query is used when the filter contains a property that leads to a
+    // concise set of results. For example, if the filter contains one of
+    // `record_id`, `context_id`, `protocol_path`, `parent_id`, or `schema`.
+    async fn query_concise(&self, filters: &[RecordsFilter]) -> Result<Vec<Entry>> {
+        let mut entries = Vec::new();
+
+        for filter in filters {
+            if let Some(published) = &filter.published {
+                let index = self.get("data_format").await?;
+                for (value, message_cid) in index.values {
+                    if value == "application/json" {
+                        let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                        let entry: Entry = block::decode(&bytes)?;
+                        entries.push(entry);
+                    }
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+
+    // This query is used when the filter will return a larger set of results.
+    async fn query_full(&self, filters: &[RecordsFilter]) -> Result<Vec<Entry>> {
+        let mut entries = Vec::new();
+
+        for filter in filters {
+            if let Some(published) = &filter.published {
+                let index = self.get("data_format").await?;
+                for (value, message_cid) in index.values {
+                    if value == "application/json" {
+                        let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                        let entry: Entry = block::decode(&bytes)?;
+                        entries.push(entry);
+                    }
+                }
+            }
+        }
+
+        Ok(entries)
     }
 }
 

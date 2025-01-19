@@ -105,7 +105,7 @@ impl DataStream {
             let mut buffer = [0u8; CHUNK_SIZE];
             if let Ok(bytes_read) = self.read(&mut buffer[..]) {
                 if bytes_read == 0 {
-                    break
+                    break;
                 }
                 // encode buffer to IPLD block
                 let ipld = Ipld::Bytes(buffer[..bytes_read].to_vec());

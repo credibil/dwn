@@ -286,7 +286,7 @@ impl Write {
             indexes.insert("context_id".to_string(), Value::String(context_id.clone()));
         }
         if let Some(published) = descriptor.published {
-            indexes.insert("published".to_string(), Value::Bool(published));
+            indexes.insert("published".to_string(), Value::String(published.to_string()));
         }
         if let Some(date_published) = &descriptor.date_published {
             indexes.insert(
