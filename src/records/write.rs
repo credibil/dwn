@@ -237,6 +237,7 @@ impl TryFrom<&Entry> for Write {
 
 impl Write {
     /// Build flattened indexes for the write message.
+    #[must_use]
     pub fn indexes(&self) -> Map<String, Value> {
         let mut indexes = Map::new();
 

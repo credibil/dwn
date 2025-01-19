@@ -11,7 +11,7 @@ struct Store<'a, T: BlockStore> {
 }
 
 impl<'a, T: BlockStore> Store<'a, T> {
-    pub fn new(block_store: &'a T) -> Self {
+    pub const fn new(block_store: &'a T) -> Self {
         Self { block_store }
     }
 }
@@ -23,8 +23,8 @@ impl<T: BlockStore> MessageStore for Store<'_, T> {
         // store entry as IPLD block(s)
         let message_cid = entry.cid()?;
 
-        let block = block::encode(entry).unwrap();
-        self.block_store.put(owner, &entry.cid()?, block.data()).await?;
+        let block = block::encode(entry)?;
+        self.block_store.put(owner, &entry.cid()?, &block).await?;
 
         Ok(())
     }
@@ -103,7 +103,7 @@ mod tests {
 
         let write = WriteBuilder::new().sign(&alice_signer).build().await.unwrap();
         let block = block::encode(&write).unwrap();
-        println!("{:?}", block.cid());
+        // println!("{:?}", block.cid());
     }
 
     struct BlockStoreImpl {

@@ -149,7 +149,7 @@ impl RecordsScope {
     #[must_use]
     pub fn context_id(&self) -> Option<&str> {
         match self {
-            Self::ContextId(id) => Some(id),
+            Self::ContextId(id) => Some(id.as_str()),
             Self::ProtocolPath(_) => None,
         }
     }
@@ -158,7 +158,7 @@ impl RecordsScope {
     #[must_use]
     pub fn protocol_path(&self) -> Option<&str> {
         match self {
-            Self::ProtocolPath(path) => Some(path),
+            Self::ProtocolPath(path) => Some(path.as_str()),
             Self::ContextId(_) => None,
         }
     }

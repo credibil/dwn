@@ -8,9 +8,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{Result, anyhow};
-use ipld_core::codec::Codec;
 use serde::{Deserialize, Serialize};
-use serde_ipld_dagcbor::codec::DagCborCodec;
 
 use crate::provider::BlockStore;
 use crate::store::{Entry, Query, block};
@@ -20,7 +18,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
     let write = entry.as_write().unwrap();
     let fields = write.indexes();
 
-    let indexes = IndexesBuilder::new().owner(owner).store(store).build().await?;
+    let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
     for (field, value) in fields {
         let mut index = indexes.get(&field).await?;
@@ -32,7 +30,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 }
 
 pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<Entry>> {
-    let indexes = IndexesBuilder::new().owner(owner).store(store).build().await?;
+    let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
     let Query::Records(rq) = query else {
         return Err(anyhow!("unsupported query type"));
@@ -70,10 +68,10 @@ impl<S: BlockStore> Indexes<'_, S> {
         let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, field)))?;
 
         // get the index block or return empty index
-        let Some(data) = self.store.get(&self.owner, &index_cid).await? else {
+        let Some(data) = self.store.get(self.owner, &index_cid).await? else {
             return Ok(Index::new(field));
         };
-        DagCborCodec::decode_from_slice(&data).map_err(|e| e.into())
+        block::decode(&data)
     }
 
     /// Update an index.
@@ -81,8 +79,8 @@ impl<S: BlockStore> Indexes<'_, S> {
         let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
         // update the index block
-        self.store.delete(&self.owner, &index_cid).await?;
-        self.store.put(&self.owner, &index_cid, &block::encode(&index)?.data()).await
+        self.store.delete(self.owner, &index_cid).await?;
+        self.store.put(self.owner, &index_cid, &block::encode(&index)?).await
     }
 }
 
@@ -126,7 +124,7 @@ pub struct NoStore;
 pub struct Store<'a, S: BlockStore>(&'a S);
 
 impl IndexesBuilder<NoOwner, NoStore> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             owner: NoOwner,
             indexes: None,
@@ -156,21 +154,11 @@ impl<O> IndexesBuilder<O, NoStore> {
 }
 
 impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Store<'a, S>> {
-    pub async fn build(self) -> Result<Indexes<'a, S>> {
-        let indexes = Indexes {
+    pub fn build(self) -> Indexes<'a, S> {
+        Indexes {
             owner: self.owner.0,
-            // cids: BTreeMap::new(),
             store: self.store.0,
-        };
-
-        // let indexes_cid = indexes.cid()?;
-        // indexes.cids = if let Some(bytes) = self.store.0.get(&indexes.owner, &indexes_cid).await? {
-        //     DagCborCodec::decode_from_slice(&bytes)?
-        // } else {
-        //     BTreeMap::new()
-        // };
-
-        Ok(indexes)
+        }
     }
 }
 
@@ -199,7 +187,7 @@ mod tests {
         println!("put: {:?}", message_cid);
 
         let block = block::encode(&entry).unwrap();
-        block_store.put(ALICE_DID, &message_cid, block.data()).await.unwrap();
+        block_store.put(ALICE_DID, &message_cid, &block).await.unwrap();
 
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
 

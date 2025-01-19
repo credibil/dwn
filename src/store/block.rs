@@ -17,9 +17,8 @@ const MAX_BLOCK_SIZE: usize = 1_048_576; // 1 MiB
 const RAW: u64 = 0x55;
 const DAG_CBOR: u64 = 0x71;
 
-
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
-pub fn encode<T>(payload: &T) -> Result<Block>
+pub fn encode<T>(payload: &T) -> Result<Vec<u8>>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
@@ -28,17 +27,9 @@ where
     if data.len() > MAX_BLOCK_SIZE {
         return Err(anyhow!("block is too large"));
     }
-
     // let links = DagCborCodec::links(&data).unwrap().collect::<Vec<_>>();
 
-    // compute CID
-    let cid = compute_cid(payload)?;
-
-    Ok(Block {
-        cid,
-        data,
-        linked: None,
-    })
+    Ok(data)
 }
 
 /// Decodes a block.
@@ -46,7 +37,7 @@ pub fn decode<T>(data: &[u8]) -> Result<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
-    DagCborCodec::decode_from_slice(data).map_err(|e| e.into())
+    DagCborCodec::decode_from_slice(data).map_err(Into::into)
 }
 
 pub fn compute_cid<T>(payload: &T) -> Result<String>
@@ -66,7 +57,7 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(cid: String, data: Vec<u8>) -> Self {
+    pub const fn new(cid: String, data: Vec<u8>) -> Self {
         Self {
             cid,
             data,
@@ -75,13 +66,13 @@ impl Block {
     }
 
     /// Returns the cid.
-    pub fn cid(&self) -> &String {
-        &self.cid
+    pub fn cid(&self) -> &str {
+        self.cid.as_str()
     }
 
     /// Returns the payload.
     pub fn data(&self) -> &[u8] {
-        &self.data
+        self.data.as_slice()
     }
 
     /// Decodes a block.
@@ -89,6 +80,6 @@ impl Block {
     where
         T: Serialize + for<'a> Deserialize<'a>,
     {
-        DagCborCodec::decode_from_slice(&self.data).map_err(|e| e.into())
+        DagCborCodec::decode_from_slice(&self.data).map_err(Into::into)
     }
 }
