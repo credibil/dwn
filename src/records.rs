@@ -46,6 +46,14 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipient: Option<Quota<String>>,
 
+    /// Records with the specified context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+
+    /// The CID of the parent object .
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+
     /// Entry matching the specified protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
@@ -61,14 +69,6 @@ pub struct RecordsFilter {
     /// The MIME type of the requested data. For example, `application/json`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_format: Option<String>,
-
-    /// The CID of the parent object .
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_id: Option<String>,
-
-    /// Records with the specified context.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
 
     /// Match records with the specified tags.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,6 +99,27 @@ pub struct RecordsFilter {
     pub date_updated: Option<DateRange>,
 }
 
+/// Filter value.
+pub enum FilterOn<'a> {
+    /// Filter on a string value.
+    String(&'a str),
+
+    /// Filter on a boolean value.
+    Bool(bool),
+
+    /// Filter on one or more values.
+    Quota(&'a Quota<String>),
+
+    /// Filter on one or more tags.
+    Tags(&'a BTreeMap<String, TagFilter>),
+
+    /// Filter on a range.
+    Range(&'a RangeFilter<usize>),
+
+    /// Filter on a date range.
+    DateRange(&'a DateRange),
+}
+
 impl RecordsFilter {
     /// Normalizes `RecordsFilter` protocol and schema URLs within a provided.
     pub(crate) fn normalize(&self) -> Result<Self> {
@@ -112,6 +133,65 @@ impl RecordsFilter {
             if let Some(schema) = &self.schema { Some(utils::clean_url(schema)?) } else { None };
 
         Ok(filter)
+    }
+
+    /// Create an optimized filter to use with single-field indexes. This
+    /// method chooses the best filter property, in order of priority, to use
+    /// when querying.
+    pub(crate) fn optimize(&self) -> Option<(&str, FilterOn)> {
+        if let Some(record_id) = &self.record_id {
+            return Some(("record_id", FilterOn::String(record_id.as_str())));
+        }
+        if let Some(attester) = &self.attester {
+            return Some(("attester", FilterOn::String(attester.as_str())));
+        }
+        if let Some(parent_id) = &self.parent_id {
+            return Some(("parent_id", FilterOn::String(parent_id.as_str())));
+        }
+        if let Some(recipient) = &self.recipient {
+            return Some(("recipient", FilterOn::Quota(recipient)));
+        }
+        if let Some(context_id) = &self.context_id {
+            return Some(("context_id", FilterOn::String(context_id.as_str())));
+        }
+        if let Some(protocol_path) = &self.protocol_path {
+            return Some(("protocol_path", FilterOn::String(protocol_path.as_str())));
+        }
+        if let Some(schema) = &self.schema {
+            return Some(("schema", FilterOn::String(schema.as_str())));
+        }
+        if let Some(protocol) = &self.protocol {
+            return Some(("protocol", FilterOn::String(protocol.as_str())));
+        }
+        if let Some(tags) = &self.tags {
+            return Some(("tags", FilterOn::Tags(tags)));
+        }
+        if let Some(data_cid) = &self.data_cid {
+            return Some(("data_cid", FilterOn::String(data_cid.as_str())));
+        }
+        if let Some(data_size) = &self.data_size {
+            return Some(("data_size", FilterOn::Range(data_size)));
+        }
+        if let Some(date_published) = &self.date_published {
+            return Some(("date_published", FilterOn::DateRange(date_published)));
+        }
+        if let Some(date_created) = &self.date_created {
+            return Some(("date_created", FilterOn::DateRange(date_created)));
+        }
+        if let Some(date_updated) = &self.date_updated {
+            return Some(("date_updated", FilterOn::DateRange(date_updated)));
+        }
+        if let Some(data_format) = &self.data_format {
+            return Some(("data_format", FilterOn::String(data_format)));
+        }
+        if let Some(published) = &self.published {
+            return Some(("published", FilterOn::Bool(*published)));
+        }
+        if let Some(author) = &self.author {
+            return Some(("author", FilterOn::Quota(author)));
+        }
+
+        None
     }
 }
 

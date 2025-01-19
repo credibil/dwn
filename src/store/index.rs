@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, Query, RecordsFilter, block};
+use crate::store::{Entry, FilterOn, Query, RecordsFilter, block};
 
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
@@ -90,14 +90,28 @@ impl<S: BlockStore> Indexes<'_, S> {
         let mut entries = Vec::new();
 
         for filter in filters {
-            if let Some(published) = &filter.published {
-                let index = self.get("data_format").await?;
-                for (value, message_cid) in index.values {
-                    if value == "application/json" {
-                        let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                        let entry: Entry = block::decode(&bytes)?;
-                        entries.push(entry);
+            let Some((index, filter_on)) = filter.optimize() else {
+                continue;
+            };
+
+            let index = self.get(index).await?;
+            for (value, message_cid) in index.values {
+                match filter_on {
+                    FilterOn::String(filter_on) => {
+                        if value == filter_on {
+                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                            let entry: Entry = block::decode(&bytes)?;
+                            entries.push(entry);
+                        }
                     }
+                    FilterOn::Bool(filter_on) => {
+                        if value == filter_on.to_string() {
+                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                            let entry: Entry = block::decode(&bytes)?;
+                            entries.push(entry);
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
