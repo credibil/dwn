@@ -18,11 +18,13 @@ impl<'a, T: BlockStore> Store<'a, T> {
 
 impl<T: BlockStore> MessageStore for Store<'_, T> {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
-        index::build(owner, entry, self.block_store).await?;
+        index::insert(owner, entry, self.block_store).await?;
 
         // store entry as IPLD block(s)
+        let message_cid = entry.cid()?;
+
         let block = block::encode(entry).unwrap();
-        self.block_store.put(owner, &block.cid().to_string(), block.data()).await?;
+        self.block_store.put(owner, &entry.cid()?, block.data()).await?;
 
         Ok(())
     }

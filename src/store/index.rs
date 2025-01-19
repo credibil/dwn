@@ -7,20 +7,20 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use ipld_core::codec::Codec;
 use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, block};
+use crate::store::{Entry, Query, block};
 
-pub async fn build(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
+pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
     let write = entry.as_write().unwrap();
     let fields = write.indexes();
 
-    let mut indexes = IndexesBuilder::new().owner(owner).store(store).build().await?;
+    let indexes = IndexesBuilder::new().owner(owner).store(store).build().await?;
 
     for (field, value) in fields {
         let mut index = indexes.get(&field).await?;
@@ -28,88 +28,76 @@ pub async fn build(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resul
         indexes.update(index).await?;
     }
 
-    println!("indexed: {:?}", indexes.inner);
-
     Ok(())
 }
 
+pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<Entry>> {
+    let indexes = IndexesBuilder::new().owner(owner).store(store).build().await?;
+
+    let Query::Records(rq) = query else {
+        return Err(anyhow!("unsupported query type"));
+    };
+
+    let filter = &rq.filters[0];
+    let mut entries = Vec::new();
+
+    if let Some(published) = &filter.published {
+        let index = indexes.get("published").await?;
+
+        for (value, message_cid) in index.values {
+            if value == "true" {
+                let bytes = store.get(owner, &message_cid).await?.unwrap();
+                let entry = block::decode(&bytes)?;
+                entries.push(entry);
+            }
+        }
+    }
+
+    Ok(entries)
+}
+
+#[derive(Serialize)]
+struct Cid(String);
+
 pub struct Indexes<'a, S: BlockStore> {
     owner: &'a str,
-    pub inner: BTreeMap<String, String>,
     store: &'a S,
 }
 
 impl<S: BlockStore> Indexes<'_, S> {
-    // pub fn builder() -> IndexesBuilder<NoOwner, NoStore> {
-    //     IndexesBuilder::new()
-    // }
+    /// Get an index.
+    pub async fn get(&self, field: &str) -> Result<Index> {
+        let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, field)))?;
 
-    pub fn cid(&self) -> Result<String> {
-        #[derive(Serialize)]
-        struct Cid(String);
-        block::compute_cid(&Cid(self.owner.to_string()))
-    }
-
-    pub async fn get(&mut self, field: &str) -> Result<Index> {
-        let index_data = if let Some(index_cid) = self.inner.get(field) {
-            let index_data = self.store.get(&self.owner, index_cid).await?.unwrap();
-            let index_data: Index = DagCborCodec::decode_from_slice(&index_data)?;
-            index_data
-        } else {
-            let index = Index {
-                field: field.to_string(),
-                values: BTreeMap::new(),
-            };
-            let index_cid = index.cid()?;
-
-            let block = block::encode(&index)?;
-            self.store.put(&self.owner, &index_cid, &block.data()).await?;
-
-            self.inner.insert(field.to_string(), index_cid);
-
-            let indexes_block = block::encode(&self.inner)?;
-            self.store.put(&self.owner, &self.cid()?, &indexes_block.data()).await?;
-            index
+        // get the index block or return empty index
+        let Some(data) = self.store.get(&self.owner, &index_cid).await? else {
+            return Ok(Index::new(field));
         };
-
-        Ok(index_data)
+        DagCborCodec::decode_from_slice(&data).map_err(|e| e.into())
     }
 
-    pub async fn update(&mut self, index: Index) -> Result<()> {
-        let index_cid = index.cid()?;
+    /// Update an index.
+    pub async fn update(&self, index: Index) -> Result<()> {
+        let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
+        // update the index block
         self.store.delete(&self.owner, &index_cid).await?;
-        self.store.put(&self.owner, &index_cid, &block::encode(&index)?.data()).await?;
-        self.inner.insert(index.field, index_cid);
-
-        // save the updated indexes block
-        let indexes_block = block::encode(&self.inner)?;
-        self.store.delete(&self.owner, &self.cid()?).await?;
-        self.store.put(&self.owner, &self.cid()?, &indexes_block.data()).await?;
-
-        Ok(())
+        self.store.put(&self.owner, &index_cid, &block::encode(&index)?.data()).await
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Index {
     field: String,
     values: BTreeMap<String, String>,
 }
 
 impl Index {
-    pub fn new(field: String) -> Self {
+    pub fn new(field: impl Into<String>) -> Self {
         Self {
-            field,
+            field: field.into(),
             values: BTreeMap::new(),
         }
-    }
-
-    pub fn cid(&self) -> Result<String> {
-        block::compute_cid(&Self {
-            field: self.field.clone(),
-            values: BTreeMap::new(),
-        })
     }
 
     pub fn insert(&mut self, value: impl Into<String>, message_cid: impl Into<String>) {
@@ -169,19 +157,18 @@ impl<O> IndexesBuilder<O, NoStore> {
 
 impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Store<'a, S>> {
     pub async fn build(self) -> Result<Indexes<'a, S>> {
-        let mut indexes = Indexes {
+        let indexes = Indexes {
             owner: self.owner.0,
-            inner: BTreeMap::new(),
+            // cids: BTreeMap::new(),
             store: self.store.0,
         };
 
-        let indexes_cid = indexes.cid()?;
-
-        indexes.inner = if let Some(bytes) = self.store.0.get(&indexes.owner, &indexes_cid).await? {
-            DagCborCodec::decode_from_slice(&bytes)?
-        } else {
-            BTreeMap::new()
-        };
+        // let indexes_cid = indexes.cid()?;
+        // indexes.cids = if let Some(bytes) = self.store.0.get(&indexes.owner, &indexes_cid).await? {
+        //     DagCborCodec::decode_from_slice(&bytes)?
+        // } else {
+        //     BTreeMap::new()
+        // };
 
         Ok(indexes)
     }
@@ -196,6 +183,7 @@ mod tests {
 
     use super::*;
     use crate::clients::records::WriteBuilder;
+    use crate::store::{RecordsFilter, RecordsQuery};
     // use crate::data::MAX_ENCODED_SIZE;
     // use crate::store::block;
 
@@ -207,7 +195,24 @@ mod tests {
         let write = WriteBuilder::new().published(true).sign(&alice_signer).build().await.unwrap();
         let entry = Entry::from(&write);
 
-        build(ALICE_DID, &entry, &block_store).await.unwrap();
+        let message_cid = entry.cid().unwrap();
+        println!("put: {:?}", message_cid);
+
+        let block = block::encode(&entry).unwrap();
+        block_store.put(ALICE_DID, &message_cid, block.data()).await.unwrap();
+
+        super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
+
+        let query = Query::Records(RecordsQuery {
+            filters: vec![RecordsFilter {
+                published: Some(true),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+
+        let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
+        println!("{:?}", entries);
     }
 
     struct BlockStoreImpl {

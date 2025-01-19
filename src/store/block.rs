@@ -17,6 +17,7 @@ const MAX_BLOCK_SIZE: usize = 1_048_576; // 1 MiB
 const RAW: u64 = 0x55;
 const DAG_CBOR: u64 = 0x71;
 
+
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
 pub fn encode<T>(payload: &T) -> Result<Block>
 where
@@ -38,6 +39,14 @@ where
         data,
         linked: None,
     })
+}
+
+/// Decodes a block.
+pub fn decode<T>(data: &[u8]) -> Result<T>
+where
+    T: Serialize + for<'a> Deserialize<'a>,
+{
+    DagCborCodec::decode_from_slice(data).map_err(|e| e.into())
 }
 
 pub fn compute_cid<T>(payload: &T) -> Result<String>

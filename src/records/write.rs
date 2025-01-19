@@ -247,6 +247,10 @@ impl Write {
             "author".to_string(),
             Value::String(self.authorization.author().unwrap_or_default()),
         );
+        indexes.insert(
+            "published".to_string(),
+            Value::Bool(self.descriptor.published.unwrap_or_default()),
+        );
         indexes.insert("messageCid".to_string(), Value::String(self.cid().unwrap_or_default()));
 
         if let Some(attestation) = &self.attestation {
