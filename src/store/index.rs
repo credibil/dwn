@@ -6,12 +6,13 @@
 #![allow(unused_variables)]
 
 use std::collections::{BTreeMap, HashMap};
+use std::ops::Bound::{Excluded, Included, Unbounded};
 
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
 use crate::store::{Entry, FilterVal, Query, RecordsFilter, RecordsQuery, Sort, block};
-use crate::{Result, unexpected};
+use crate::{Lower, Result, Upper, unexpected};
 
 const SEPARATOR: u8 = 0x00;
 
@@ -104,26 +105,93 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let index = self.get(index).await?;
 
-            for (index_val, message_cid) in index.values {
-                // short circuit when previous match
-                if matches.contains_key(&message_cid) {
-                    continue;
+            let ranges = match filter_val {
+                FilterVal::Equal(ref equal) => {
+                    let excl = equal[..equal.len() - 1].to_string();
+                    let range =
+                        index.values.range((Excluded(excl.clone()), Included(equal.clone())));
+                    vec![range]
                 }
+                FilterVal::OneOf(ref one_of) => {
+                    let mut ranges = vec![];
+                    let values = &index.values;
 
-                // match indexed value against filter
-                let is_match = match filter_val {
-                    FilterVal::Equal(ref equal) => equal == &index_val,
-                    FilterVal::OneOf(ref one_of) => one_of.contains(&index_val),
-                    FilterVal::NumericRange(ref range) => {
-                        let num = index_val
-                            .parse::<usize>()
-                            .map_err(|e| unexpected!("issue parsing value: {e}"))?;
-                        range.contains(&num)
+                    for equal in one_of {
+                        let range =
+                            values.range((Included(equal.clone()), Included(equal.clone())));
+                        ranges.push(range);
+
+                        // for (index_val, message_cid) in range {
+                        //     // short circuit when previous match
+                        //     if matches.contains_key(message_cid) {
+                        //         continue;
+                        //     }
+
+                        //     // retrieve complete entry
+                        //     let Some(bytes) = self.store.get(self.owner, &message_cid).await?
+                        //     else {
+                        //         return Err(unexpected!("entry not found"));
+                        //     };
+                        //     let entry: Entry = block::decode(&bytes)?;
+
+                        //     // check for match against other filter properties
+                        //     if filter.is_match(&entry) {
+                        //         matches.insert(message_cid.clone(), entry);
+                        //     }
+                        // }
                     }
-                    FilterVal::StringRange(ref range) => range.contains(&index_val),
-                };
+                    ranges
+                }
+                FilterVal::NumericRange(ref range) => {
+                    todo!()
+                }
+                FilterVal::StringRange(ref range) => {
+                    let lower = if let Some(lower) = &range.lower {
+                        match lower {
+                            Lower::Inclusive(val) => Included(val.clone()),
+                            Lower::Exclusive(val) => Excluded(val.clone()),
+                        }
+                    } else {
+                        Unbounded
+                    };
+                    let upper = if let Some(upper) = &range.upper {
+                        match upper {
+                            Upper::Inclusive(val) => Included(val.clone()),
+                            Upper::Exclusive(val) => Excluded(val.clone()),
+                        }
+                    } else {
+                        Unbounded
+                    };
 
-                if is_match {
+                    let range = index.values.range((lower, upper));
+                    vec![range]
+                    // for (index_val, message_cid) in range {
+                    //     // short circuit when previous match
+                    //     if matches.contains_key(message_cid) {
+                    //         continue;
+                    //     }
+
+                    //     // retrieve complete entry
+                    //     let Some(bytes) = self.store.get(self.owner, &message_cid).await? else {
+                    //         return Err(unexpected!("entry not found"));
+                    //     };
+                    //     let entry: Entry = block::decode(&bytes)?;
+
+                    //     // check for match against other filter properties
+                    //     if filter.is_match(&entry) {
+                    //         matches.insert(message_cid.clone(), entry);
+                    //     }
+                    // }
+                }
+            };
+
+            for range in ranges {
+                for (index_val, message_cid) in range {
+                    // short circuit when previous match
+                    if matches.contains_key(message_cid) {
+                        continue;
+                    }
+
                     // retrieve complete entry
                     let Some(bytes) = self.store.get(self.owner, &message_cid).await? else {
                         return Err(unexpected!("entry not found"));
@@ -132,7 +200,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
                     // check for match against other filter properties
                     if filter.is_match(&entry) {
-                        matches.insert(message_cid, entry);
+                        matches.insert(message_cid.clone(), entry);
                     }
                 }
             }
@@ -172,6 +240,8 @@ impl<S: BlockStore> Indexes<'_, S> {
                     .cmp(&write_b.descriptor.base.message_timestamp),
             }
         });
+
+        // paging
 
         Ok(entries)
     }
@@ -286,7 +356,6 @@ mod tests {
     use rand::RngCore;
 
     use super::*;
-    use crate::Range;
     use crate::clients::records::{Data, WriteBuilder};
     use crate::data::DataStream;
     use crate::store::{RecordsFilter, RecordsQuery};
@@ -319,12 +388,15 @@ mod tests {
         // update indexes
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
 
+        println!("{}", write.record_id);
+
         // execute query
         let query = Query::Records(RecordsQuery {
             filters: vec![
-                RecordsFilter::new().add_author(ALICE_DID).data_size(Range::new().gt(0).le(10)),
+                // RecordsFilter::new().add_author(ALICE_DID).data_size(Range::new().gt(0).le(10)),
+                // RecordsFilter::new().add_author(ALICE_DID),
+                RecordsFilter::new().record_id(write.record_id),
             ],
-
             ..Default::default()
         });
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();

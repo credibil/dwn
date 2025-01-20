@@ -294,19 +294,19 @@ impl Serialize for RecordsFilter {
             let field = "descriptor.dataSize";
             let range_and = outer_and.and_clause();
             match size_range.lower {
-                Some(Lower::GreaterThan(lower)) => {
+                Some(Lower::Exclusive(lower)) => {
                     range_and.condition(field, Op::Gt, Value::Int(lower));
                 }
-                Some(Lower::GreaterThanOrEqual(lower)) => {
+                Some(Lower::Inclusive(lower)) => {
                     range_and.condition(field, Op::Ge, Value::Int(lower));
                 }
                 None => {}
             }
             match size_range.upper {
-                Some(Upper::LessThan(upper)) => {
+                Some(Upper::Exclusive(upper)) => {
                     range_and.condition(field, Op::Lt, Value::Int(upper));
                 }
-                Some(Upper::LessThanOrEqual(upper)) => {
+                Some(Upper::Inclusive(upper)) => {
                     range_and.condition(field, Op::Le, Value::Int(upper));
                 }
                 None => {}
@@ -381,19 +381,19 @@ fn serialize_tags<S: Serializer>(tags: &BTreeMap<String, TagFilter>, serializer:
             TagFilter::Range(range) => {
                 let range_and = tags_and.and_clause();
                 match range.lower {
-                    Some(Lower::GreaterThan(lower)) => {
+                    Some(Lower::Exclusive(lower)) => {
                         range_and.condition(field, Op::Gt, Value::Int(lower));
                     }
-                    Some(Lower::GreaterThanOrEqual(lower)) => {
+                    Some(Lower::Inclusive(lower)) => {
                         range_and.condition(field, Op::Ge, Value::Int(lower));
                     }
                     None => {}
                 }
                 match range.upper {
-                    Some(Upper::LessThan(upper)) => {
+                    Some(Upper::Exclusive(upper)) => {
                         range_and.condition(field, Op::Lt, Value::Int(upper));
                     }
-                    Some(Upper::LessThanOrEqual(upper)) => {
+                    Some(Upper::Inclusive(upper)) => {
                         range_and.condition(field, Op::Le, Value::Int(upper));
                     }
                     None => {}

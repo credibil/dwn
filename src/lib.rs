@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![feature(btree_cursors)]
 // #![feature(type_changing_struct_update)]
 
 //! # Decentralized Web Node (web node)
@@ -136,16 +137,16 @@ pub struct Range<T: PartialEq> {
 pub enum Lower<T: PartialEq> {
     /// Lower bound compare is greater than the specified value.
     #[serde(rename = "gt")]
-    GreaterThan(T),
+    Exclusive(T),
 
     /// Lower bound compare is greater than or equal to.
     #[serde(rename = "gte")]
-    GreaterThanOrEqual(T),
+    Inclusive(T),
 }
 
 impl<T: PartialEq + Default> Default for Lower<T> {
     fn default() -> Self {
-        Self::GreaterThan(T::default())
+        Self::Exclusive(T::default())
     }
 }
 
@@ -154,16 +155,16 @@ impl<T: PartialEq + Default> Default for Lower<T> {
 pub enum Upper<T: PartialEq> {
     /// Lower bound compare is greater than the specified value.
     #[serde(rename = "lt")]
-    LessThan(T),
+    Exclusive(T),
 
     /// Lower bound compare is greater than or equal to.
     #[serde(rename = "lte")]
-    LessThanOrEqual(T),
+    Inclusive(T),
 }
 
 impl<T: PartialEq + Default> Default for Upper<T> {
     fn default() -> Self {
-        Self::LessThan(T::default())
+        Self::Exclusive(T::default())
     }
 }
 
@@ -180,28 +181,28 @@ impl<T: PartialEq> Range<T> {
     /// Specify a 'greater-than' lower bound for the filter.
     #[must_use]
     pub fn gt(mut self, gt: T) -> Self {
-        self.lower = Some(Lower::GreaterThan(gt));
+        self.lower = Some(Lower::Exclusive(gt));
         self
     }
 
     /// Specify a 'greater-than-or-equal' lower bound for the filter.
     #[must_use]
     pub fn ge(mut self, ge: T) -> Self {
-        self.lower = Some(Lower::GreaterThanOrEqual(ge));
+        self.lower = Some(Lower::Inclusive(ge));
         self
     }
 
     /// Specify a 'less-than' upper bound for the filter.
     #[must_use]
     pub fn lt(mut self, lt: T) -> Self {
-        self.upper = Some(Upper::LessThan(lt));
+        self.upper = Some(Upper::Exclusive(lt));
         self
     }
 
     /// Specify a 'less-than-or-equal' upper bound for the filter.
     #[must_use]
     pub fn le(mut self, le: T) -> Self {
-        self.upper = Some(Upper::LessThanOrEqual(le));
+        self.upper = Some(Upper::Inclusive(le));
         self
     }
 
@@ -211,8 +212,8 @@ impl<T: PartialEq> Range<T> {
         T: PartialOrd,
     {
         let lower_ok = match &self.lower {
-            Some(Lower::GreaterThan(lower)) => value > lower,
-            Some(Lower::GreaterThanOrEqual(lower)) => value >= lower,
+            Some(Lower::Exclusive(lower)) => value > lower,
+            Some(Lower::Inclusive(lower)) => value >= lower,
             None => true,
         };
         if !lower_ok {
@@ -220,8 +221,8 @@ impl<T: PartialEq> Range<T> {
         }
 
         match &self.upper {
-            Some(Upper::LessThan(upper)) => value < upper,
-            Some(Upper::LessThanOrEqual(upper)) => value <= upper,
+            Some(Upper::Exclusive(upper)) => value < upper,
+            Some(Upper::Inclusive(upper)) => value <= upper,
             None => true,
         }
     }
