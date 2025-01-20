@@ -99,14 +99,16 @@ pub struct RecordsFilter {
 }
 
 /// Filter value.
-pub enum FilterVal {
-    // /// Filter on a string value.
-    // Equal(&'a str),
+pub enum ValueIs {
+    /// Filter on an exact value.
+    Equal(String),
+
     /// Filter on one or more values.
     OneOf(Vec<String>),
+
+    // /// Match tags starting with a string value.
+    // StartsWith(String),
     //
-    // /// Filter on a string range.
-    // Range(Range<String>),
     /// Filter on a numeric data range.
     NumericRange(Range<usize>),
 
@@ -115,15 +117,6 @@ pub enum FilterVal {
     //
     // /// Filter on one or more tags.
     // Tags(BTreeMap<String, TagFilter>),
-
-    // /// Match tags starting with a string value.
-    // StartsWith(String),
-
-    // /// Filter tags by range.
-    // Range(Range<usize>),
-
-    // /// Filter by a specific value.
-    // Equal(Value),
 }
 
 impl RecordsFilter {
@@ -144,40 +137,40 @@ impl RecordsFilter {
     /// Create an optimized filter to use with single-field indexes. This
     /// method chooses the best filter property, in order of priority, to use
     /// when querying.
-    pub(crate) fn optimize(&self) -> Option<(&str, FilterVal)> {
+    pub(crate) fn optimize(&self) -> Option<(&str, ValueIs)> {
         if let Some(record_id) = &self.record_id {
-            return Some(("record_id", FilterVal::OneOf(vec![record_id.clone()])));
+            return Some(("record_id", ValueIs::Equal(record_id.clone())));
         }
         if let Some(attester) = &self.attester {
-            return Some(("attester", FilterVal::OneOf(vec![attester.clone()])));
+            return Some(("attester", ValueIs::Equal(attester.clone())));
         }
         if let Some(parent_id) = &self.parent_id {
-            return Some(("parent_id", FilterVal::OneOf(vec![parent_id.clone()])));
+            return Some(("parent_id", ValueIs::Equal(parent_id.clone())));
         }
         if let Some(recipient) = &self.recipient {
             let recipients = match recipient {
                 OneOrMany::One(recipient) => vec![recipient.clone()],
                 OneOrMany::Many(recipients) => recipients.clone(),
             };
-            return Some(("recipient", FilterVal::OneOf(recipients)));
+            return Some(("recipient", ValueIs::OneOf(recipients)));
         }
         if let Some(context_id) = &self.context_id {
-            return Some(("context_id", FilterVal::OneOf(vec![context_id.clone()])));
+            return Some(("context_id", ValueIs::Equal(context_id.clone())));
         }
         if let Some(protocol_path) = &self.protocol_path {
-            return Some(("protocol_path", FilterVal::OneOf(vec![protocol_path.clone()])));
+            return Some(("protocol_path", ValueIs::Equal(protocol_path.clone())));
         }
         if let Some(schema) = &self.schema {
-            return Some(("schema", FilterVal::OneOf(vec![schema.clone()])));
+            return Some(("schema", ValueIs::Equal(schema.clone())));
         }
         if let Some(protocol) = &self.protocol {
-            return Some(("protocol", FilterVal::OneOf(vec![protocol.clone()])));
+            return Some(("protocol", ValueIs::Equal(protocol.clone())));
         }
         if let Some(data_cid) = &self.data_cid {
-            return Some(("data_cid", FilterVal::OneOf(vec![data_cid.clone()])));
+            return Some(("data_cid", ValueIs::Equal(data_cid.clone())));
         }
         if let Some(data_size) = &self.data_size {
-            return Some(("data_size", FilterVal::NumericRange(data_size.clone())));
+            return Some(("data_size", ValueIs::NumericRange(data_size.clone())));
         }
 
         // TODO: move DateRange -> Range<String> conversion to a separate method
@@ -191,7 +184,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::LessThanOrEqual(upper));
             }
-            return Some(("date_published", FilterVal::StringRange(range)));
+            return Some(("date_published", ValueIs::StringRange(range)));
         }
         if let Some(date_created) = &self.date_created {
             let mut range = Range::default();
@@ -203,7 +196,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::LessThanOrEqual(upper));
             }
-            return Some(("date_created", FilterVal::StringRange(range)));
+            return Some(("date_created", ValueIs::StringRange(range)));
         }
         if let Some(date_updated) = &self.date_updated {
             let mut range = Range::default();
@@ -215,21 +208,21 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::LessThanOrEqual(upper));
             }
-            return Some(("date_updated", FilterVal::StringRange(range)));
+            return Some(("date_updated", ValueIs::StringRange(range)));
         }
 
         if let Some(data_format) = &self.data_format {
-            return Some(("data_format", FilterVal::OneOf(vec![data_format.clone()])));
+            return Some(("data_format", ValueIs::Equal(data_format.clone())));
         }
         if let Some(published) = self.published {
-            return Some(("published", FilterVal::OneOf(vec![published.to_string()])));
+            return Some(("published", ValueIs::Equal(published.to_string())));
         }
         if let Some(author) = &self.author {
             let authors = match author {
                 OneOrMany::One(author) => vec![author.to_string()],
                 OneOrMany::Many(authors) => authors.clone(),
             };
-            return Some(("author", FilterVal::OneOf(authors)));
+            return Some(("author", ValueIs::OneOf(authors)));
         }
 
         // FIXME: add Tags filter fields

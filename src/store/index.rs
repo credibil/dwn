@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, FilterVal, Query, RecordsFilter, block};
+use crate::store::{Entry, Query, RecordsFilter, ValueIs, block};
 
 const SEPARATOR: u8 = 0x00;
 
@@ -102,14 +102,21 @@ impl<S: BlockStore> Indexes<'_, S> {
             let index = self.get(index).await?;
             for (value, message_cid) in index.values {
                 match filter_on {
-                    FilterVal::OneOf(ref one_of) => {
+                    ValueIs::Equal(ref equal) => {
+                        if equal == &value {
+                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                            let entry: Entry = block::decode(&bytes)?;
+                            entries.push(entry);
+                        }
+                    }
+                    ValueIs::OneOf(ref one_of) => {
                         if one_of.contains(&value) {
                             let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
                             let entry: Entry = block::decode(&bytes)?;
                             entries.push(entry);
                         }
                     }
-                    FilterVal::NumericRange(ref range) => {
+                    ValueIs::NumericRange(ref range) => {
                         let num = value.parse::<usize>()?;
                         if range.contains(&num) {
                             let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
@@ -117,7 +124,7 @@ impl<S: BlockStore> Indexes<'_, S> {
                             entries.push(entry);
                         }
                     }
-                    FilterVal::StringRange(ref range) => {
+                    ValueIs::StringRange(ref range) => {
                         if range.contains(&value) {
                             let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
                             let entry: Entry = block::decode(&bytes)?;
@@ -236,9 +243,12 @@ mod tests {
 
     use blockstore::{Blockstore as _, InMemoryBlockstore};
     use dwn_test::key_store::{self, ALICE_DID};
+    use rand::RngCore;
 
     use super::*;
-    use crate::clients::records::WriteBuilder;
+    use crate::Range;
+    use crate::clients::records::{Data, WriteBuilder};
+    use crate::data::DataStream;
     use crate::store::{RecordsFilter, RecordsQuery};
     // use crate::data::MAX_ENCODED_SIZE;
     // use crate::store::block;
@@ -248,25 +258,34 @@ mod tests {
         let block_store = BlockStoreImpl::new();
         let alice_signer = key_store::signer(ALICE_DID);
 
-        let write = WriteBuilder::new().published(true).sign(&alice_signer).build().await.unwrap();
+        let mut data = [0u8; 10];
+        rand::thread_rng().fill_bytes(&mut data);
+        let stream = DataStream::from(data.to_vec());
+
+        let write = WriteBuilder::new()
+            .data(Data::Stream(stream.clone()))
+            .published(true)
+            .sign(&alice_signer)
+            .build()
+            .await
+            .unwrap();
         let entry = Entry::from(&write);
 
+        // add message
         let message_cid = entry.cid().unwrap();
-
         let block = block::encode(&entry).unwrap();
         block_store.put(ALICE_DID, &message_cid, &block).await.unwrap();
 
+        // update indexes
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
 
+        // execute query
         let query = Query::Records(RecordsQuery {
-            filters: vec![RecordsFilter {
-                published: Some(true),
-                ..Default::default()
-            }],
+            filters: vec![RecordsFilter::new().data_size(Range::new().gt(0).le(10))],
             ..Default::default()
         });
-
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
+
         println!("{:?}", entries);
     }
 

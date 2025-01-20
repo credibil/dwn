@@ -119,7 +119,7 @@ impl<T> From<Vec<T>> for OneOrMany<T> {
 
 /// Range to use in filters.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Range<T: PartialOrd> {
+pub struct Range<T: PartialEq> {
     /// The filter's lower bound.
     #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -133,7 +133,7 @@ pub struct Range<T: PartialOrd> {
 
 /// Range lower bound comparision options.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Lower<T: PartialOrd> {
+pub enum Lower<T: PartialEq> {
     /// Lower bound compare is greater than the specified value.
     #[serde(rename = "gt")]
     GreaterThan(T),
@@ -143,7 +143,7 @@ pub enum Lower<T: PartialOrd> {
     GreaterThanOrEqual(T),
 }
 
-impl<T: PartialOrd + Default> Default for Lower<T> {
+impl<T: PartialEq + Default> Default for Lower<T> {
     fn default() -> Self {
         Self::GreaterThan(T::default())
     }
@@ -151,7 +151,7 @@ impl<T: PartialOrd + Default> Default for Lower<T> {
 
 /// Range upper bound comparision options.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Upper<T: PartialOrd> {
+pub enum Upper<T: PartialEq> {
     /// Lower bound compare is greater than the specified value.
     #[serde(rename = "lt")]
     LessThan(T),
@@ -161,13 +161,13 @@ pub enum Upper<T: PartialOrd> {
     LessThanOrEqual(T),
 }
 
-impl<T: PartialOrd + Default> Default for Upper<T> {
+impl<T: PartialEq + Default> Default for Upper<T> {
     fn default() -> Self {
         Self::LessThan(T::default())
     }
 }
 
-impl<T: PartialOrd> Range<T> {
+impl<T: PartialEq> Range<T> {
     /// Create a new range filter.
     #[must_use]
     pub const fn new() -> Self {
