@@ -10,7 +10,7 @@ use crate::store::{
     Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
     TagFilter, Upper,
 };
-use crate::{DateRange, Interface, Method, Quota};
+use crate::{DateRange, Interface, Method, OneOrMany};
 
 /// Serializer is used by DWN to generate queries native to the database(s)
 /// selected when implementing a DWN node.
@@ -262,10 +262,10 @@ impl Serialize for RecordsFilter {
         // descriptor fields
         if let Some(recipient) = &self.recipient {
             match recipient {
-                Quota::One(recipient) => {
+                OneOrMany::One(recipient) => {
                     outer_and.condition("descriptor.recipient", Op::Eq, Value::Str(recipient));
                 }
-                Quota::Many(recipients) => {
+                OneOrMany::Many(recipients) => {
                     let many_and = outer_and.or_clause();
                     for recipient in recipients {
                         many_and.condition("descriptor.recipient", Op::Eq, Value::Str(recipient));
@@ -323,18 +323,16 @@ impl Serialize for RecordsFilter {
             serialize_date_range("descriptor.datePublished", date_range, outer_and);
         }
         if let Some(date_range) = &self.date_updated {
-            // N.B. `dateUpdated` is set in the Write record's auxilary indexes in `store.rs`
-            // serialize_date_range("dateUpdated", date_range, outer_and);
             serialize_date_range("descriptor.messageTimestamp", date_range, outer_and);
         }
 
         // index fields
         if let Some(author) = &self.author {
             match author {
-                Quota::One(author) => {
+                OneOrMany::One(author) => {
                     outer_and.condition("author", Op::Eq, Value::Str(author));
                 }
-                Quota::Many(authors) => {
+                OneOrMany::Many(authors) => {
                     let many_and = outer_and.or_clause();
                     for author in authors {
                         many_and.condition("author", Op::Eq, Value::Str(author));

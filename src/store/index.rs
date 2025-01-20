@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, FilterOn, Query, RecordsFilter, block};
+use crate::store::{Entry, FilterVal, Query, RecordsFilter, block};
 
 const SEPARATOR: u8 = 0x00;
 
@@ -102,21 +102,28 @@ impl<S: BlockStore> Indexes<'_, S> {
             let index = self.get(index).await?;
             for (value, message_cid) in index.values {
                 match filter_on {
-                    FilterOn::Equal(filter_on) => {
-                        if value == filter_on {
+                    FilterVal::OneOf(ref one_of) => {
+                        if one_of.contains(&value) {
                             let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
                             let entry: Entry = block::decode(&bytes)?;
                             entries.push(entry);
                         }
                     }
-                    // FilterOn::Bool(filter_on) => {
-                    //     if value == filter_on.to_string() {
-                    //         let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                    //         let entry: Entry = block::decode(&bytes)?;
-                    //         entries.push(entry);
-                    //     }
-                    // }
-                    _ => {}
+                    FilterVal::NumericRange(ref range) => {
+                        let num = value.parse::<usize>()?;
+                        if range.contains(&num) {
+                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                            let entry: Entry = block::decode(&bytes)?;
+                            entries.push(entry);
+                        }
+                    }
+                    FilterVal::StringRange(ref range) => {
+                        if range.contains(&value) {
+                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                            let entry: Entry = block::decode(&bytes)?;
+                            entries.push(entry);
+                        }
+                    }
                 }
             }
         }
@@ -261,6 +268,20 @@ mod tests {
 
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
         println!("{:?}", entries);
+    }
+
+    #[test]
+    fn string_compare() {
+        let a = "109";
+        let b = "108";
+
+        let a_str = format!("{a:0>8}");
+        let b_str = format!("{b:0>8}");
+
+        println!("{a_str}");
+        println!("{b_str}");
+
+        println!("{}", a_str < b_str);
     }
 
     struct BlockStoreImpl {

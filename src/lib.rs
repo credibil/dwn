@@ -79,23 +79,23 @@ pub enum Protocol {
     Http,
 }
 
-/// `Quota` allows serde to serialize/deserialize a single object or a set of
+/// `OneOrMany` allows serde to serialize/deserialize a single object or a set of
 /// objects.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 #[allow(missing_docs)]
-pub enum Quota<T> {
+pub enum OneOrMany<T> {
     One(T),
     Many(Vec<T>),
 }
 
-impl<T: Default> Default for Quota<T> {
+impl<T: Default> Default for OneOrMany<T> {
     fn default() -> Self {
         Self::One(T::default())
     }
 }
 
-impl<T: Clone> Quota<T> {
+impl<T: Clone> OneOrMany<T> {
     /// Convert the quota to a vector.
     pub fn to_vec(&self) -> Vec<T> {
         match self {
@@ -105,13 +105,13 @@ impl<T: Clone> Quota<T> {
     }
 }
 
-impl<T> From<T> for Quota<T> {
+impl<T> From<T> for OneOrMany<T> {
     fn from(value: T) -> Self {
         Self::One(value)
     }
 }
 
-impl<T> From<Vec<T>> for Quota<T> {
+impl<T> From<Vec<T>> for OneOrMany<T> {
     fn from(value: Vec<T>) -> Self {
         Self::Many(value)
     }

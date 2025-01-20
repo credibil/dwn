@@ -10,6 +10,7 @@ pub(crate) mod write;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
+use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -20,7 +21,7 @@ pub use self::read::{Read, ReadDescriptor};
 pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Write, WriteDescriptor};
 pub use crate::data::DataStream;
-use crate::{DateRange, Quota, Range, Result, utils};
+use crate::{DateRange, Lower, OneOrMany, Range, Result, Upper, utils};
 
 // TODO: add builder for RecordsFilter
 
@@ -34,7 +35,7 @@ pub struct RecordsFilter {
 
     /// Records matching the specified author.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub author: Option<Quota<String>>,
+    pub author: Option<OneOrMany<String>>,
 
     /// Records matching the specified creator.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,7 +43,7 @@ pub struct RecordsFilter {
 
     /// Records matching the specified recipient(s).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub recipient: Option<Quota<String>>,
+    pub recipient: Option<OneOrMany<String>>,
 
     /// Records with the specified context.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -98,28 +99,31 @@ pub struct RecordsFilter {
 }
 
 /// Filter value.
-pub enum FilterOn<'a> {
-    /// Filter on a string value.
-    Equal(&'a str),
-
+pub enum FilterVal {
+    // /// Filter on a string value.
+    // Equal(&'a str),
     /// Filter on one or more values.
-    OneOf(&'a Quota<String>),
+    OneOf(Vec<String>),
+    //
+    // /// Filter on a string range.
+    // Range(Range<String>),
+    /// Filter on a numeric data range.
+    NumericRange(Range<usize>),
 
-    /// Filter on a range.
-    Range(&'a Range<RangeIs<'a>>),
+    /// Filter on a date range.
+    StringRange(Range<String>),
+    //
+    // /// Filter on one or more tags.
+    // Tags(BTreeMap<String, TagFilter>),
 
-    /// Filter on one or more tags.
-    Tags(&'a BTreeMap<String, TagFilter>),
-}
+    // /// Match tags starting with a string value.
+    // StartsWith(String),
 
-/// Range value.
-#[derive(Eq, PartialEq, PartialOrd)]
-pub enum RangeIs<'a> {
-    /// Range is comprised of string values.
-    String(&'a str),
+    // /// Filter tags by range.
+    // Range(Range<usize>),
 
-    /// Range is comprised of numbers.
-    Number(usize),
+    // /// Filter by a specific value.
+    // Equal(Value),
 }
 
 impl RecordsFilter {
@@ -140,59 +144,100 @@ impl RecordsFilter {
     /// Create an optimized filter to use with single-field indexes. This
     /// method chooses the best filter property, in order of priority, to use
     /// when querying.
-    pub(crate) fn optimize(&self) -> Option<(&str, FilterOn)> {
+    pub(crate) fn optimize(&self) -> Option<(&str, FilterVal)> {
         if let Some(record_id) = &self.record_id {
-            return Some(("record_id", FilterOn::Equal(record_id.as_str())));
+            return Some(("record_id", FilterVal::OneOf(vec![record_id.clone()])));
         }
         if let Some(attester) = &self.attester {
-            return Some(("attester", FilterOn::Equal(attester.as_str())));
+            return Some(("attester", FilterVal::OneOf(vec![attester.clone()])));
         }
         if let Some(parent_id) = &self.parent_id {
-            return Some(("parent_id", FilterOn::Equal(parent_id.as_str())));
+            return Some(("parent_id", FilterVal::OneOf(vec![parent_id.clone()])));
         }
         if let Some(recipient) = &self.recipient {
-            return Some(("recipient", FilterOn::OneOf(recipient)));
+            let recipients = match recipient {
+                OneOrMany::One(recipient) => vec![recipient.clone()],
+                OneOrMany::Many(recipients) => recipients.clone(),
+            };
+            return Some(("recipient", FilterVal::OneOf(recipients)));
         }
         if let Some(context_id) = &self.context_id {
-            return Some(("context_id", FilterOn::Equal(context_id.as_str())));
+            return Some(("context_id", FilterVal::OneOf(vec![context_id.clone()])));
         }
         if let Some(protocol_path) = &self.protocol_path {
-            return Some(("protocol_path", FilterOn::Equal(protocol_path.as_str())));
+            return Some(("protocol_path", FilterVal::OneOf(vec![protocol_path.clone()])));
         }
         if let Some(schema) = &self.schema {
-            return Some(("schema", FilterOn::Equal(schema.as_str())));
+            return Some(("schema", FilterVal::OneOf(vec![schema.clone()])));
         }
         if let Some(protocol) = &self.protocol {
-            return Some(("protocol", FilterOn::Equal(protocol.as_str())));
-        }
-        if let Some(tags) = &self.tags {
-            return Some(("tags", FilterOn::Tags(tags)));
+            return Some(("protocol", FilterVal::OneOf(vec![protocol.clone()])));
         }
         if let Some(data_cid) = &self.data_cid {
-            return Some(("data_cid", FilterOn::Equal(data_cid.as_str())));
+            return Some(("data_cid", FilterVal::OneOf(vec![data_cid.clone()])));
         }
-        // if let Some(data_size) = &self.data_size {
-        //     return Some(("data_size", FilterOn::Range(data_size)));
-        // }
-        // if let Some(date_published) = &self.date_published {
-        //     return Some(("date_published", FilterOn::Range(date_published)));
-        // }
-        // if let Some(date_created) = &self.date_created {
-        //     return Some(("date_created", FilterOn::Range(date_created)));
-        // }
-        // if let Some(date_updated) = &self.date_updated {
-        //     return Some(("date_updated", FilterOn::Range(date_updated)));
-        // }
+        if let Some(data_size) = &self.data_size {
+            return Some(("data_size", FilterVal::NumericRange(data_size.clone())));
+        }
+
+        // TODO: move DateRange -> Range<String> conversion to a separate method
+        if let Some(date_published) = &self.date_published {
+            let mut range = Range::default();
+            if let Some(lower) = &date_published.lower {
+                let lower = lower.to_rfc3339_opts(SecondsFormat::Micros, true);
+                range.lower = Some(Lower::GreaterThanOrEqual(lower));
+            }
+            if let Some(upper) = &date_published.upper {
+                let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
+                range.upper = Some(Upper::LessThanOrEqual(upper));
+            }
+            return Some(("date_published", FilterVal::StringRange(range)));
+        }
+        if let Some(date_created) = &self.date_created {
+            let mut range = Range::default();
+            if let Some(lower) = &date_created.lower {
+                let lower = lower.to_rfc3339_opts(SecondsFormat::Micros, true);
+                range.lower = Some(Lower::GreaterThanOrEqual(lower));
+            }
+            if let Some(upper) = &date_created.upper {
+                let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
+                range.upper = Some(Upper::LessThanOrEqual(upper));
+            }
+            return Some(("date_created", FilterVal::StringRange(range)));
+        }
+        if let Some(date_updated) = &self.date_updated {
+            let mut range = Range::default();
+            if let Some(lower) = &date_updated.lower {
+                let lower = lower.to_rfc3339_opts(SecondsFormat::Micros, true);
+                range.lower = Some(Lower::GreaterThanOrEqual(lower));
+            }
+            if let Some(upper) = &date_updated.upper {
+                let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
+                range.upper = Some(Upper::LessThanOrEqual(upper));
+            }
+            return Some(("date_updated", FilterVal::StringRange(range)));
+        }
+
         if let Some(data_format) = &self.data_format {
-            return Some(("data_format", FilterOn::Equal(data_format)));
+            return Some(("data_format", FilterVal::OneOf(vec![data_format.clone()])));
         }
         if let Some(published) = self.published {
-            let published = if published { "true" } else { "false" };
-            return Some(("published", FilterOn::Equal(published)));
+            return Some(("published", FilterVal::OneOf(vec![published.to_string()])));
         }
         if let Some(author) = &self.author {
-            return Some(("author", FilterOn::OneOf(author)));
+            let authors = match author {
+                OneOrMany::One(author) => vec![author.to_string()],
+                OneOrMany::Many(authors) => authors.clone(),
+            };
+            return Some(("author", FilterVal::OneOf(authors)));
         }
+
+        // FIXME: add Tags filter fields
+        // if let Some(tags) = &self.tags {
+        //     for (key, value) in tags {
+        //         //return Some((key, value.clone()));
+        //     }
+        // }
 
         None
     }
@@ -264,14 +309,14 @@ impl RecordsFilter {
     #[must_use]
     pub fn add_author(mut self, author: impl Into<String>) -> Self {
         match &mut self.author {
-            Some(Quota::Many(existing)) => {
+            Some(OneOrMany::Many(existing)) => {
                 existing.push(author.into());
             }
-            Some(Quota::One(existing)) => {
-                self.author = Some(Quota::Many(vec![existing.clone(), author.into()]));
+            Some(OneOrMany::One(existing)) => {
+                self.author = Some(OneOrMany::Many(vec![existing.clone(), author.into()]));
             }
             None => {
-                self.author = Some(Quota::One(author.into()));
+                self.author = Some(OneOrMany::One(author.into()));
             }
         }
         self
@@ -288,14 +333,14 @@ impl RecordsFilter {
     #[must_use]
     pub fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
         match &mut self.recipient {
-            Some(Quota::Many(existing)) => {
+            Some(OneOrMany::Many(existing)) => {
                 existing.push(recipient.into());
             }
-            Some(Quota::One(existing)) => {
-                self.recipient = Some(Quota::Many(vec![existing.clone(), recipient.into()]));
+            Some(OneOrMany::One(existing)) => {
+                self.recipient = Some(OneOrMany::Many(vec![existing.clone(), recipient.into()]));
             }
             None => {
-                self.recipient = Some(Quota::One(recipient.into()));
+                self.recipient = Some(OneOrMany::One(recipient.into()));
             }
         }
         self
