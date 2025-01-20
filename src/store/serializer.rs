@@ -6,12 +6,11 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 
-use crate::records::DateRange;
 use crate::store::{
     Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
     TagFilter, Upper,
 };
-use crate::{Interface, Method, Quota};
+use crate::{DateRange, Interface, Method, Quota};
 
 /// Serializer is used by DWN to generate queries native to the database(s)
 /// selected when implementing a DWN node.
@@ -176,28 +175,8 @@ impl Serialize for MessagesFilter {
             protocol_or.close();
         }
 
-        if let Some(ts_range) = &self.message_timestamp {
-            let field = "descriptor.messageTimestamp";
-            let range_and = outer_and.and_clause();
-            match ts_range.lower {
-                Some(Lower::GreaterThan(lower)) => {
-                    range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                Some(Lower::GreaterThanOrEqual(lower)) => {
-                    range_and.condition(field, Op::Ge, Value::Str(&lower.to_string()));
-                }
-                None => {}
-            }
-            match ts_range.upper {
-                Some(Upper::LessThan(upper)) => {
-                    range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                Some(Upper::LessThanOrEqual(upper)) => {
-                    range_and.condition(field, Op::Le, Value::Str(&upper.to_string()));
-                }
-                None => {}
-            }
-            range_and.close();
+        if let Some(date_range) = &self.message_timestamp {
+            serialize_date_range("descriptor.dateCreated", date_range, outer_and);
         }
 
         outer_and.close();

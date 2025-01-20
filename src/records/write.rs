@@ -243,7 +243,10 @@ impl Write {
 
         let descriptor = &self.descriptor;
 
+        // TODO: remove this after cut over to new indexes
+        indexes.insert("messageCid".to_string(), Value::String(self.cid().unwrap_or_default()));
         indexes.insert("message_cid".to_string(), Value::String(self.cid().unwrap_or_default()));
+
         indexes.insert(
             "message_timestamp".to_string(),
             Value::String(

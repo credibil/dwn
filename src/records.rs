@@ -10,7 +10,6 @@ pub(crate) mod write;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,8 +20,7 @@ pub use self::read::{Read, ReadDescriptor};
 pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Write, WriteDescriptor};
 pub use crate::data::DataStream;
-use crate::serde::rfc3339_micros_opt;
-use crate::{Quota, Range, Result, utils};
+use crate::{DateRange, Quota, Range, Result, utils};
 
 // TODO: add builder for RecordsFilter
 
@@ -115,7 +113,7 @@ pub enum FilterOn<'a> {
 }
 
 /// Range value.
-#[derive(PartialEq, PartialOrd)]
+#[derive(Eq, PartialEq, PartialOrd)]
 pub enum RangeIs<'a> {
     /// Range is comprised of string values.
     String(&'a str),
@@ -197,64 +195,6 @@ impl RecordsFilter {
         }
 
         None
-    }
-}
-
-/// Range filter.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct DateRange {
-    /// The filter's lower bound.
-    #[serde(rename = "from")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "rfc3339_micros_opt")]
-    pub lower: Option<DateTime<Utc>>,
-
-    /// The filter's upper bound.
-    #[serde(rename = "to")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "rfc3339_micros_opt")]
-    pub upper: Option<DateTime<Utc>>,
-}
-
-impl DateRange {
-    /// Create a new range filter.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            lower: None,
-            upper: None,
-        }
-    }
-
-    /// Specify a 'greater-than' lower bound for the filter.
-    #[must_use]
-    pub const fn gt(mut self, gt: DateTime<Utc>) -> Self {
-        self.lower = Some(gt);
-        self
-    }
-
-    /// Specify a 'less-than' upper bound for the filter.
-    #[must_use]
-    pub const fn lt(mut self, lt: DateTime<Utc>) -> Self {
-        self.upper = Some(lt);
-        self
-    }
-
-    /// Check if the range contains the value.
-    #[must_use]
-    pub fn contains(&self, value: &DateTime<Utc>) -> bool {
-        if let Some(lower) = &self.lower {
-            if value < lower {
-                return false;
-            }
-        }
-        if let Some(upper) = &self.upper {
-            if value > upper {
-                return false;
-            }
-        }
-
-        true
     }
 }
 

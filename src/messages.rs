@@ -4,13 +4,12 @@ mod query;
 mod read;
 mod subscribe;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub use self::query::{Query, QueryDescriptor, QueryReply};
 pub use self::read::{Read, ReadDescriptor, ReadReply};
 pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
-use crate::{Interface, Method, Range};
+use crate::{DateRange, Interface, Method};
 
 /// `Messages` filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -30,7 +29,7 @@ pub struct MessagesFilter {
 
     /// Filter messages timestamped within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_timestamp: Option<Range<DateTime<Utc>>>,
+    pub message_timestamp: Option<DateRange>,
 }
 
 /// Implement  builder-like behaviour.
@@ -62,9 +61,9 @@ impl MessagesFilter {
         self
     }
 
-    /// Add message timestamp to the filter.
+    /// Filter by message timestamp.
     #[must_use]
-    pub const fn message_timestamp(mut self, message_timestamp: Range<DateTime<Utc>>) -> Self {
+    pub const fn message_timestamp(mut self, message_timestamp: DateRange) -> Self {
         self.message_timestamp = Some(message_timestamp);
         self
     }
