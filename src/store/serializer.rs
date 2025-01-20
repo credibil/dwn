@@ -359,10 +359,10 @@ impl Serialize for RecordsFilter {
 fn serialize_date_range<S: Serializer>(field: &str, date_range: &DateRange, serializer: &mut S) {
     let range_and = serializer.and_clause();
     if let Some(lower) = date_range.lower {
-        range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
+        range_and.condition(field, Op::Ge, Value::Str(&lower.to_string()));
     }
     if let Some(upper) = date_range.upper {
-        range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
+        range_and.condition(field, Op::Le, Value::Str(&upper.to_string()));
     }
     range_and.close();
 }
