@@ -7,7 +7,7 @@ use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::protocols::Definition;
 use dwn_node::records::{DateRange, RecordsFilter, Sort};
 use dwn_node::store::Pagination;
-use dwn_node::{Error, Message, RangeFilter, authorization, endpoint};
+use dwn_node::{Error, Message, Range, authorization, endpoint};
 use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -975,7 +975,7 @@ async fn dat_size_part_range() {
     // Greater than 10.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(10)))
+        .filter(RecordsFilter::new().data_size(Range::new().gt(10)))
         .sign(&alice_signer)
         .build()
         .await
@@ -991,7 +991,7 @@ async fn dat_size_part_range() {
     // Less than 100.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().lt(100)))
+        .filter(RecordsFilter::new().data_size(Range::new().lt(100)))
         .sign(&alice_signer)
         .build()
         .await
@@ -1007,7 +1007,7 @@ async fn dat_size_part_range() {
     // Greater than or equal to 10.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10)))
+        .filter(RecordsFilter::new().data_size(Range::new().ge(10)))
         .sign(&alice_signer)
         .build()
         .await
@@ -1023,7 +1023,7 @@ async fn dat_size_part_range() {
     // Less than or equal to 10.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().le(100)))
+        .filter(RecordsFilter::new().data_size(Range::new().le(100)))
         .sign(&alice_signer)
         .build()
         .await
@@ -1088,7 +1088,7 @@ async fn data_size_full_range() {
     // Greater than 10, less than 60.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(10).lt(60)))
+        .filter(RecordsFilter::new().data_size(Range::new().gt(10).lt(60)))
         .sign(&alice_signer)
         .build()
         .await
@@ -1104,7 +1104,7 @@ async fn data_size_full_range() {
     // Greater than or equal to 10, less than 60.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10).lt(60)))
+        .filter(RecordsFilter::new().data_size(Range::new().ge(10).lt(60)))
         .sign(&alice_signer)
         .build()
         .await
@@ -1120,7 +1120,7 @@ async fn data_size_full_range() {
     // Greater than 50, less than or equal to 100.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().gt(50).le(100)))
+        .filter(RecordsFilter::new().data_size(Range::new().gt(50).le(100)))
         .sign(&alice_signer)
         .build()
         .await
@@ -1136,7 +1136,7 @@ async fn data_size_full_range() {
     // Greater than or equal to 10, less than or equal to 100.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(RecordsFilter::new().data_size(RangeFilter::new().ge(10).le(100)))
+        .filter(RecordsFilter::new().data_size(Range::new().ge(10).le(100)))
         .sign(&alice_signer)
         .build()
         .await

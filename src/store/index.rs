@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use crate::provider::BlockStore;
 use crate::store::{Entry, FilterOn, Query, RecordsFilter, block};
 
+const SEPARATOR: u8 = 0x00;
+
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
     let write = entry.as_write().unwrap();
@@ -25,6 +27,9 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
         index.insert(value.as_str().unwrap(), &message_cid);
         indexes.update(index).await?;
     }
+
+    // TODO: add reverse lookup for deletes: {"message_cid": fields[]}
+    // index.insert(message_cid, &indexes);
 
     Ok(())
 }
@@ -97,20 +102,20 @@ impl<S: BlockStore> Indexes<'_, S> {
             let index = self.get(index).await?;
             for (value, message_cid) in index.values {
                 match filter_on {
-                    FilterOn::String(filter_on) => {
+                    FilterOn::Equal(filter_on) => {
                         if value == filter_on {
                             let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
                             let entry: Entry = block::decode(&bytes)?;
                             entries.push(entry);
                         }
                     }
-                    FilterOn::Bool(filter_on) => {
-                        if value == filter_on.to_string() {
-                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                            let entry: Entry = block::decode(&bytes)?;
-                            entries.push(entry);
-                        }
-                    }
+                    // FilterOn::Bool(filter_on) => {
+                    //     if value == filter_on.to_string() {
+                    //         let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
+                    //         let entry: Entry = block::decode(&bytes)?;
+                    //         entries.push(entry);
+                    //     }
+                    // }
                     _ => {}
                 }
             }

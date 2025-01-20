@@ -22,7 +22,7 @@ pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Write, WriteDescriptor};
 pub use crate::data::DataStream;
 use crate::serde::rfc3339_micros_opt;
-use crate::{Quota, RangeFilter, Result, utils};
+use crate::{Quota, Range, Result, utils};
 
 // TODO: add builder for RecordsFilter
 
@@ -80,7 +80,7 @@ pub struct RecordsFilter {
 
     /// Records with a size within the range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_size: Option<RangeFilter<usize>>,
+    pub data_size: Option<Range<usize>>,
 
     /// Whether the record is published.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -102,22 +102,26 @@ pub struct RecordsFilter {
 /// Filter value.
 pub enum FilterOn<'a> {
     /// Filter on a string value.
-    String(&'a str),
-
-    /// Filter on a boolean value.
-    Bool(bool),
+    Equal(&'a str),
 
     /// Filter on one or more values.
-    Quota(&'a Quota<String>),
+    OneOf(&'a Quota<String>),
+
+    /// Filter on a range.
+    Range(&'a Range<RangeIs<'a>>),
 
     /// Filter on one or more tags.
     Tags(&'a BTreeMap<String, TagFilter>),
+}
 
-    /// Filter on a range.
-    Range(&'a RangeFilter<usize>),
+/// Range value.
+#[derive(PartialEq, PartialOrd)]
+pub enum RangeIs<'a> {
+    /// Range is comprised of string values.
+    String(&'a str),
 
-    /// Filter on a date range.
-    DateRange(&'a DateRange),
+    /// Range is comprised of numbers.
+    Number(usize),
 }
 
 impl RecordsFilter {
@@ -140,55 +144,56 @@ impl RecordsFilter {
     /// when querying.
     pub(crate) fn optimize(&self) -> Option<(&str, FilterOn)> {
         if let Some(record_id) = &self.record_id {
-            return Some(("record_id", FilterOn::String(record_id.as_str())));
+            return Some(("record_id", FilterOn::Equal(record_id.as_str())));
         }
         if let Some(attester) = &self.attester {
-            return Some(("attester", FilterOn::String(attester.as_str())));
+            return Some(("attester", FilterOn::Equal(attester.as_str())));
         }
         if let Some(parent_id) = &self.parent_id {
-            return Some(("parent_id", FilterOn::String(parent_id.as_str())));
+            return Some(("parent_id", FilterOn::Equal(parent_id.as_str())));
         }
         if let Some(recipient) = &self.recipient {
-            return Some(("recipient", FilterOn::Quota(recipient)));
+            return Some(("recipient", FilterOn::OneOf(recipient)));
         }
         if let Some(context_id) = &self.context_id {
-            return Some(("context_id", FilterOn::String(context_id.as_str())));
+            return Some(("context_id", FilterOn::Equal(context_id.as_str())));
         }
         if let Some(protocol_path) = &self.protocol_path {
-            return Some(("protocol_path", FilterOn::String(protocol_path.as_str())));
+            return Some(("protocol_path", FilterOn::Equal(protocol_path.as_str())));
         }
         if let Some(schema) = &self.schema {
-            return Some(("schema", FilterOn::String(schema.as_str())));
+            return Some(("schema", FilterOn::Equal(schema.as_str())));
         }
         if let Some(protocol) = &self.protocol {
-            return Some(("protocol", FilterOn::String(protocol.as_str())));
+            return Some(("protocol", FilterOn::Equal(protocol.as_str())));
         }
         if let Some(tags) = &self.tags {
             return Some(("tags", FilterOn::Tags(tags)));
         }
         if let Some(data_cid) = &self.data_cid {
-            return Some(("data_cid", FilterOn::String(data_cid.as_str())));
+            return Some(("data_cid", FilterOn::Equal(data_cid.as_str())));
         }
-        if let Some(data_size) = &self.data_size {
-            return Some(("data_size", FilterOn::Range(data_size)));
-        }
-        if let Some(date_published) = &self.date_published {
-            return Some(("date_published", FilterOn::DateRange(date_published)));
-        }
-        if let Some(date_created) = &self.date_created {
-            return Some(("date_created", FilterOn::DateRange(date_created)));
-        }
-        if let Some(date_updated) = &self.date_updated {
-            return Some(("date_updated", FilterOn::DateRange(date_updated)));
-        }
+        // if let Some(data_size) = &self.data_size {
+        //     return Some(("data_size", FilterOn::Range(data_size)));
+        // }
+        // if let Some(date_published) = &self.date_published {
+        //     return Some(("date_published", FilterOn::Range(date_published)));
+        // }
+        // if let Some(date_created) = &self.date_created {
+        //     return Some(("date_created", FilterOn::Range(date_created)));
+        // }
+        // if let Some(date_updated) = &self.date_updated {
+        //     return Some(("date_updated", FilterOn::Range(date_updated)));
+        // }
         if let Some(data_format) = &self.data_format {
-            return Some(("data_format", FilterOn::String(data_format)));
+            return Some(("data_format", FilterOn::Equal(data_format)));
         }
-        if let Some(published) = &self.published {
-            return Some(("published", FilterOn::Bool(*published)));
+        if let Some(published) = self.published {
+            let published = if published { "true" } else { "false" };
+            return Some(("published", FilterOn::Equal(published)));
         }
         if let Some(author) = &self.author {
-            return Some(("author", FilterOn::Quota(author)));
+            return Some(("author", FilterOn::OneOf(author)));
         }
 
         None
@@ -295,7 +300,7 @@ pub enum TagFilter {
     StartsWith(String),
 
     /// Filter tags by range.
-    Range(RangeFilter<usize>),
+    Range(Range<usize>),
 
     /// Filter by a specific value.
     Equal(Value),
@@ -427,7 +432,7 @@ impl RecordsFilter {
 
     /// Add a data size to the filter.
     #[must_use]
-    pub const fn data_size(mut self, data_size: RangeFilter<usize>) -> Self {
+    pub const fn data_size(mut self, data_size: Range<usize>) -> Self {
         self.data_size = Some(data_size);
         self
     }

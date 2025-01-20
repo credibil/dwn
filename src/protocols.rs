@@ -14,7 +14,6 @@ pub use self::configure::{
     ProtocolType, RuleSet, validate_structure,
 };
 pub use self::query::{Query, QueryDescriptor, QueryReply};
-use crate::Range;
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL_URI: &str = "https://vercre.website/dwn/permissions";
@@ -36,6 +35,18 @@ pub struct ProtocolsFilter {
     pub protocol: String,
 }
 
+/// Data size range.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Size {
+    /// The range's minimum value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<usize>,
+
+    /// The range's maximum value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<usize>,
+}
+
 /// Default protocol definition.
 pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
     // default types
@@ -49,7 +60,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
     types.insert("revocation".to_string(), default_type);
 
     // default structure (aka rules)
-    let default_size = Range {
+    let default_size = Size {
         min: None,
         max: Some(10000),
     };

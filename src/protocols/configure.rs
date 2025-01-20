@@ -13,10 +13,10 @@ use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
-use crate::protocols::query;
+use crate::protocols::{Size, query};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, EntryType};
-use crate::{Descriptor, Error, Range, Result, forbidden, permissions, unexpected, utils};
+use crate::{Descriptor, Error, Result, forbidden, permissions, unexpected, utils};
 
 /// Process query message.
 ///
@@ -344,7 +344,7 @@ pub struct RuleSet {
     /// If $size is set, the record size in bytes must be within the limits.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$size")]
-    pub size: Option<Range<usize>>,
+    pub size: Option<Size>,
 
     /// Tags for this protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]

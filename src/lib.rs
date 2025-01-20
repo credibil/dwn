@@ -117,21 +117,9 @@ impl<T> From<Vec<T>> for Quota<T> {
     }
 }
 
-/// Range filter.
+/// Range to use in filters.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Range<T: PartialOrd> {
-    /// The range's minimum value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub min: Option<T>,
-
-    /// The range's maximum value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max: Option<T>,
-}
-
-/// Range filter.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct RangeFilter<T: PartialOrd> {
     /// The filter's lower bound.
     #[serde(flatten)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -179,7 +167,7 @@ impl<T: PartialOrd + Default> Default for Upper<T> {
     }
 }
 
-impl<T: PartialOrd> RangeFilter<T> {
+impl<T: PartialOrd> Range<T> {
     /// Create a new range filter.
     #[must_use]
     pub const fn new() -> Self {
