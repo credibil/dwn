@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+use std::collections::btree_map::Range;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound::{Excluded, Included, Unbounded};
 
@@ -105,100 +106,21 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let index = self.get(index).await?;
 
-            let ranges = match filter_val {
-                FilterVal::Equal(ref equal) => {
-                    let excl = equal[..equal.len() - 1].to_string();
-                    let range =
-                        index.values.range((Excluded(excl.clone()), Included(equal.clone())));
-                    vec![range]
-                }
-                FilterVal::OneOf(ref one_of) => {
-                    let mut ranges = vec![];
-                    let values = &index.values;
-
-                    for equal in one_of {
-                        let range =
-                            values.range((Included(equal.clone()), Included(equal.clone())));
-                        ranges.push(range);
-
-                        // for (index_val, message_cid) in range {
-                        //     // short circuit when previous match
-                        //     if matches.contains_key(message_cid) {
-                        //         continue;
-                        //     }
-
-                        //     // retrieve complete entry
-                        //     let Some(bytes) = self.store.get(self.owner, &message_cid).await?
-                        //     else {
-                        //         return Err(unexpected!("entry not found"));
-                        //     };
-                        //     let entry: Entry = block::decode(&bytes)?;
-
-                        //     // check for match against other filter properties
-                        //     if filter.is_match(&entry) {
-                        //         matches.insert(message_cid.clone(), entry);
-                        //     }
-                        // }
-                    }
-                    ranges
-                }
-                FilterVal::NumericRange(ref range) => {
-                    todo!()
-                }
-                FilterVal::StringRange(ref range) => {
-                    let lower = if let Some(lower) = &range.lower {
-                        match lower {
-                            Lower::Inclusive(val) => Included(val.clone()),
-                            Lower::Exclusive(val) => Excluded(val.clone()),
-                        }
-                    } else {
-                        Unbounded
-                    };
-                    let upper = if let Some(upper) = &range.upper {
-                        match upper {
-                            Upper::Inclusive(val) => Included(val.clone()),
-                            Upper::Exclusive(val) => Excluded(val.clone()),
-                        }
-                    } else {
-                        Unbounded
-                    };
-
-                    let range = index.values.range((lower, upper));
-                    vec![range]
-                    // for (index_val, message_cid) in range {
-                    //     // short circuit when previous match
-                    //     if matches.contains_key(message_cid) {
-                    //         continue;
-                    //     }
-
-                    //     // retrieve complete entry
-                    //     let Some(bytes) = self.store.get(self.owner, &message_cid).await? else {
-                    //         return Err(unexpected!("entry not found"));
-                    //     };
-                    //     let entry: Entry = block::decode(&bytes)?;
-
-                    //     // check for match against other filter properties
-                    //     if filter.is_match(&entry) {
-                    //         matches.insert(message_cid.clone(), entry);
-                    //     }
-                    // }
-                }
-            };
-
-            for range in ranges {
+            for range in index.ranges(&filter_val) {
                 for (index_val, message_cid) in range {
                     // short circuit when previous match
                     if matches.contains_key(message_cid) {
                         continue;
                     }
 
-                    // retrieve complete entry
-                    let Some(bytes) = self.store.get(self.owner, &message_cid).await? else {
+                    // TODO: save indexable fields with each index entry to 
+                    // avoid retrieving the entry unnecessarily
+
+                    // use full entry to  match against other filter properties
+                    let Some(bytes) = self.store.get(self.owner, message_cid).await? else {
                         return Err(unexpected!("entry not found"));
                     };
-                    let entry: Entry = block::decode(&bytes)?;
-
-                    // check for match against other filter properties
+                    let entry = block::decode(&bytes)?;
                     if filter.is_match(&entry) {
                         matches.insert(message_cid.clone(), entry);
                     }
@@ -284,6 +206,41 @@ impl Index {
 
     pub fn insert(&mut self, value: impl Into<String>, message_cid: impl Into<String>) {
         self.values.insert(value.into(), message_cid.into());
+    }
+
+    fn ranges<'a>(&'a self, filter_val: &FilterVal) -> Vec<Range<'a, String, String>> {
+        let index = &self.values;
+
+        match filter_val {
+            FilterVal::Equal(equal) => {
+                let excl = equal[..equal.len() - 1].to_string();
+                let range = index.range((Excluded(excl), Included(equal.clone())));
+                vec![range]
+            }
+            FilterVal::OneOf(one_of) => {
+                let mut ranges = vec![];
+                for equal in one_of {
+                    let range = index.range((Included(equal.clone()), Included(equal.clone())));
+                    ranges.push(range);
+                }
+                ranges
+            }
+            FilterVal::NumericRange(range) => {
+                todo!()
+            }
+            FilterVal::StringRange(range) => {
+                let lower = range.lower.as_ref().map_or(Unbounded, |lower| match lower {
+                    Lower::Inclusive(val) => Included(val.clone()),
+                    Lower::Exclusive(val) => Excluded(val.clone()),
+                });
+                let upper = range.upper.as_ref().map_or(Unbounded, |upper| match upper {
+                    Upper::Inclusive(val) => Included(val.clone()),
+                    Upper::Exclusive(val) => Excluded(val.clone()),
+                });
+
+                vec![index.range((lower, upper))]
+            }
+        }
     }
 }
 
