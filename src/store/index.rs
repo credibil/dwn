@@ -5,13 +5,13 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, Query, RecordsFilter, ValueIs, block};
+use crate::store::{Entry, FilterVal, Query, RecordsFilter, RecordsQuery, Sort, block};
+use crate::{Result, unexpected};
 
 const SEPARATOR: u8 = 0x00;
 
@@ -38,7 +38,7 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
     let Query::Records(rq) = query else {
-        return Err(anyhow!("unsupported query type"));
+        return Err(unexpected!("unsupported query type"));
     };
 
     let concise = true;
@@ -51,7 +51,7 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
 
     // choose strategy for query
     let entries = if concise {
-        indexes.query_concise(&rq.filters).await?
+        indexes.query_concise(rq).await?
     } else {
         indexes.query_full(&rq.filters).await?
     };
@@ -76,7 +76,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         let Some(data) = self.store.get(self.owner, &index_cid).await? else {
             return Ok(Index::new(field));
         };
-        block::decode(&data)
+        block::decode(&data).map_err(Into::into)
     }
 
     /// Update an index.
@@ -85,60 +85,99 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         // update the index block
         self.store.delete(self.owner, &index_cid).await?;
-        self.store.put(self.owner, &index_cid, &block::encode(&index)?).await
+        self.store.put(self.owner, &index_cid, &block::encode(&index)?).await.map_err(Into::into)
     }
 
-    // This query is used when the filter contains a property that leads to a
-    // concise set of results. For example, if the filter contains one of
-    // `record_id`, `context_id`, `protocol_path`, `parent_id`, or `schema`.
-    async fn query_concise(&self, filters: &[RecordsFilter]) -> Result<Vec<Entry>> {
-        let mut entries = Vec::new();
+    // This query strategy is used when the filter contains a property that
+    // leads to a concise, or small, set of results that can be sorted and
+    // paged in memory.
+    //
+    // This strategy is employed when the filter contains one of `record_id`,
+    // `context_id`, `protocol_path`, `parent_id`, or `schema`.
+    async fn query_concise(&self, query: &RecordsQuery) -> Result<Vec<Entry>> {
+        let mut matches = HashMap::new();
 
-        for filter in filters {
-            let Some((index, filter_on)) = filter.optimize() else {
+        for filter in &query.filters {
+            // determine the best index to use for the filter
+            let Some((index, filter_val)) = filter.optimize() else {
                 continue;
             };
-
             let index = self.get(index).await?;
-            for (value, message_cid) in index.values {
-                match filter_on {
-                    ValueIs::Equal(ref equal) => {
-                        if equal == &value {
-                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                            let entry: Entry = block::decode(&bytes)?;
-                            entries.push(entry);
-                        }
+
+            for (index_val, message_cid) in index.values {
+                // short circuit when previous match
+                if matches.contains_key(&message_cid) {
+                    continue;
+                }
+
+                // match indexed value against filter
+                let is_match = match filter_val {
+                    FilterVal::Equal(ref equal) => equal == &index_val,
+                    FilterVal::OneOf(ref one_of) => one_of.contains(&index_val),
+                    FilterVal::NumericRange(ref range) => {
+                        let num = index_val
+                            .parse::<usize>()
+                            .map_err(|e| unexpected!("issue parsing value: {e}"))?;
+                        range.contains(&num)
                     }
-                    ValueIs::OneOf(ref one_of) => {
-                        if one_of.contains(&value) {
-                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                            let entry: Entry = block::decode(&bytes)?;
-                            entries.push(entry);
-                        }
-                    }
-                    ValueIs::NumericRange(ref range) => {
-                        let num = value.parse::<usize>()?;
-                        if range.contains(&num) {
-                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                            let entry: Entry = block::decode(&bytes)?;
-                            entries.push(entry);
-                        }
-                    }
-                    ValueIs::StringRange(ref range) => {
-                        if range.contains(&value) {
-                            let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                            let entry: Entry = block::decode(&bytes)?;
-                            entries.push(entry);
-                        }
+                    FilterVal::StringRange(ref range) => range.contains(&index_val),
+                };
+
+                if is_match {
+                    // retrieve complete entry
+                    let Some(bytes) = self.store.get(self.owner, &message_cid).await? else {
+                        return Err(unexpected!("entry not found"));
+                    };
+                    let entry: Entry = block::decode(&bytes)?;
+
+                    // check for match against other filter properties
+                    if filter.is_match(&entry) {
+                        matches.insert(message_cid, entry);
                     }
                 }
             }
         }
 
+        // sort (sort property & direction)
+        let mut entries = matches.values().cloned().collect::<Vec<Entry>>();
+
+        entries.sort_by(|a, b| {
+            let write_a = a.as_write().unwrap();
+            let write_b = b.as_write().unwrap();
+
+            match query.sort {
+                Some(Sort::CreatedAscending) => {
+                    write_a.descriptor.date_created.cmp(&write_b.descriptor.date_created)
+                }
+                Some(Sort::CreatedDescending) => {
+                    write_b.descriptor.date_created.cmp(&write_a.descriptor.date_created)
+                }
+                Some(Sort::PublishedAscending) => {
+                    write_a.descriptor.date_published.cmp(&write_b.descriptor.date_published)
+                }
+                Some(Sort::PublishedDescending) => {
+                    write_b.descriptor.date_published.cmp(&write_a.descriptor.date_published)
+                }
+                Some(Sort::TimestampDescending) => write_b
+                    .descriptor
+                    .base
+                    .message_timestamp
+                    .cmp(&write_a.descriptor.base.message_timestamp),
+
+                // otherwise, Sort::TimestampAscending
+                _ => write_a
+                    .descriptor
+                    .base
+                    .message_timestamp
+                    .cmp(&write_b.descriptor.base.message_timestamp),
+            }
+        });
+
         Ok(entries)
     }
 
-    // This query is used when the filter will return a larger set of results.
+    // This query strategy is used when the filter will return a larger set of
+    // results.
     async fn query_full(&self, filters: &[RecordsFilter]) -> Result<Vec<Entry>> {
         let mut entries = Vec::new();
 
@@ -241,6 +280,7 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Store<'a, S>> {
 mod tests {
     use std::str::FromStr;
 
+    use anyhow::Result;
     use blockstore::{Blockstore as _, InMemoryBlockstore};
     use dwn_test::key_store::{self, ALICE_DID};
     use rand::RngCore;
@@ -281,7 +321,10 @@ mod tests {
 
         // execute query
         let query = Query::Records(RecordsQuery {
-            filters: vec![RecordsFilter::new().data_size(Range::new().gt(0).le(10))],
+            filters: vec![
+                RecordsFilter::new().add_author(ALICE_DID).data_size(Range::new().gt(0).le(10)),
+            ],
+
             ..Default::default()
         });
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();

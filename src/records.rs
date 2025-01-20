@@ -99,7 +99,7 @@ pub struct RecordsFilter {
 }
 
 /// Filter value.
-pub enum ValueIs {
+pub enum FilterVal {
     /// Filter on an exact value.
     Equal(String),
 
@@ -137,40 +137,40 @@ impl RecordsFilter {
     /// Create an optimized filter to use with single-field indexes. This
     /// method chooses the best filter property, in order of priority, to use
     /// when querying.
-    pub(crate) fn optimize(&self) -> Option<(&str, ValueIs)> {
+    pub(crate) fn optimize(&self) -> Option<(&str, FilterVal)> {
         if let Some(record_id) = &self.record_id {
-            return Some(("record_id", ValueIs::Equal(record_id.clone())));
+            return Some(("record_id", FilterVal::Equal(record_id.clone())));
         }
         if let Some(attester) = &self.attester {
-            return Some(("attester", ValueIs::Equal(attester.clone())));
+            return Some(("attester", FilterVal::Equal(attester.clone())));
         }
         if let Some(parent_id) = &self.parent_id {
-            return Some(("parent_id", ValueIs::Equal(parent_id.clone())));
+            return Some(("parent_id", FilterVal::Equal(parent_id.clone())));
         }
         if let Some(recipient) = &self.recipient {
             let recipients = match recipient {
                 OneOrMany::One(recipient) => vec![recipient.clone()],
                 OneOrMany::Many(recipients) => recipients.clone(),
             };
-            return Some(("recipient", ValueIs::OneOf(recipients)));
+            return Some(("recipient", FilterVal::OneOf(recipients)));
         }
         if let Some(context_id) = &self.context_id {
-            return Some(("context_id", ValueIs::Equal(context_id.clone())));
+            return Some(("context_id", FilterVal::Equal(context_id.clone())));
         }
         if let Some(protocol_path) = &self.protocol_path {
-            return Some(("protocol_path", ValueIs::Equal(protocol_path.clone())));
+            return Some(("protocol_path", FilterVal::Equal(protocol_path.clone())));
         }
         if let Some(schema) = &self.schema {
-            return Some(("schema", ValueIs::Equal(schema.clone())));
+            return Some(("schema", FilterVal::Equal(schema.clone())));
         }
         if let Some(protocol) = &self.protocol {
-            return Some(("protocol", ValueIs::Equal(protocol.clone())));
+            return Some(("protocol", FilterVal::Equal(protocol.clone())));
         }
         if let Some(data_cid) = &self.data_cid {
-            return Some(("data_cid", ValueIs::Equal(data_cid.clone())));
+            return Some(("data_cid", FilterVal::Equal(data_cid.clone())));
         }
         if let Some(data_size) = &self.data_size {
-            return Some(("data_size", ValueIs::NumericRange(data_size.clone())));
+            return Some(("data_size", FilterVal::NumericRange(data_size.clone())));
         }
 
         // TODO: move DateRange -> Range<String> conversion to a separate method
@@ -184,7 +184,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::LessThanOrEqual(upper));
             }
-            return Some(("date_published", ValueIs::StringRange(range)));
+            return Some(("date_published", FilterVal::StringRange(range)));
         }
         if let Some(date_created) = &self.date_created {
             let mut range = Range::default();
@@ -196,7 +196,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::LessThanOrEqual(upper));
             }
-            return Some(("date_created", ValueIs::StringRange(range)));
+            return Some(("date_created", FilterVal::StringRange(range)));
         }
         if let Some(date_updated) = &self.date_updated {
             let mut range = Range::default();
@@ -208,21 +208,21 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::LessThanOrEqual(upper));
             }
-            return Some(("date_updated", ValueIs::StringRange(range)));
+            return Some(("date_updated", FilterVal::StringRange(range)));
         }
 
         if let Some(data_format) = &self.data_format {
-            return Some(("data_format", ValueIs::Equal(data_format.clone())));
+            return Some(("data_format", FilterVal::Equal(data_format.clone())));
         }
         if let Some(published) = self.published {
-            return Some(("published", ValueIs::Equal(published.to_string())));
+            return Some(("published", FilterVal::Equal(published.to_string())));
         }
         if let Some(author) = &self.author {
             let authors = match author {
                 OneOrMany::One(author) => vec![author.to_string()],
                 OneOrMany::Many(authors) => authors.clone(),
             };
-            return Some(("author", ValueIs::OneOf(authors)));
+            return Some(("author", FilterVal::OneOf(authors)));
         }
 
         // FIXME: add Tags filter fields

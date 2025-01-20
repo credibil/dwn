@@ -15,7 +15,7 @@ use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
-pub use crate::records::{RecordsFilter, Sort, TagFilter, ValueIs};
+pub use crate::records::{FilterVal, RecordsFilter, Sort, TagFilter};
 use crate::{Descriptor, Method, Result, messages, protocols};
 pub use crate::{Lower, Range, Upper};
 

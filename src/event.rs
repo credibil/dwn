@@ -96,8 +96,10 @@ impl SubscribeFilter {
 }
 
 impl RecordsFilter {
+    /// Determine whether the specified `Entry` matches the filter.
     #[allow(clippy::too_many_lines)]
-    fn is_match(&self, event: &Entry) -> bool {
+    #[must_use]
+    pub fn is_match(&self, event: &Entry) -> bool {
         let EventType::Write(write) = &event.message else {
             return false;
         };
