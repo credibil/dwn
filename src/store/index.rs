@@ -132,19 +132,17 @@ impl<S: BlockStore> Indexes<'_, S> {
                     if filter.is_match(&entry) {
                         matches.insert(item.message_cid.clone());
 
-                        // create sort key for BTreeMap (i.e. sort ascending as we go)
-                        let sort_key = match query.sort {
+                        // sort results (ascending) as we collect — `message_cid` is tie-breaker
+                        let sort_val = match query.sort {
                             Some(Sort::CreatedAscending | Sort::CreatedDescending) => {
-                                format!("{}{}", item.fields["date_created"], item.message_cid)
+                                &item.fields["date_created"]
                             }
                             Some(Sort::PublishedAscending | Sort::PublishedDescending) => {
-                                format!("{}{}", item.fields["date_published"], item.message_cid)
+                                &item.fields["date_published"]
                             }
-                            _ => {
-                                format!("{}{}", item.fields["message_timestamp"], item.message_cid)
-                            }
+                            _ => &item.fields["message_timestamp"],
                         };
-                        results.insert(sort_key, entry);
+                        results.insert(format!("{sort_val}{}", item.message_cid), entry);
                     }
                 }
             }
@@ -160,54 +158,17 @@ impl<S: BlockStore> Indexes<'_, S> {
             entries.reverse();
         }
 
-        // let def_write = Write::default();
-
-        // entries.sort_by(|a, b| {
-        //     // TODO: make dependencies infallible
-        //     let a = a.as_write().unwrap_or(&def_write);
-        //     let a_cid = a.cid().unwrap_or_default();
-        //     let b = b.as_write().unwrap_or(&def_write);
-        //     let b_cid = b.cid().unwrap_or_default();
-
-        //     match query.sort {
-        //         Some(Sort::CreatedAscending) => {
-        //             let a_date = format!("{}{a_cid}", a.descriptor.date_created);
-        //             let b_date = format!("{}{b_cid}", b.descriptor.date_created);
-        //             a_date.cmp(&b_date)
-        //         }
-        //         Some(Sort::CreatedDescending) => {
-        //             let a_date = format!("{}{a_cid}", a.descriptor.date_created);
-        //             let b_date = format!("{}{b_cid}", b.descriptor.date_created);
-        //             b_date.cmp(&a_date)
-        //         }
-        //         Some(Sort::PublishedAscending) => {
-        //             let a_date =
-        //                 format!("{}{a_cid}", a.descriptor.date_published.unwrap_or_default());
-        //             let b_date =
-        //                 format!("{}{b_cid}", b.descriptor.date_published.unwrap_or_default());
-        //             a_date.cmp(&b_date)
-        //         }
-        //         Some(Sort::PublishedDescending) => {
-        //             let a_date =
-        //                 format!("{}{a_cid}", a.descriptor.date_published.unwrap_or_default());
-        //             let b_date =
-        //                 format!("{}{b_cid}", b.descriptor.date_published.unwrap_or_default());
-        //             b_date.cmp(&a_date)
-        //         }
-        //         Some(Sort::TimestampDescending) => {
-        //             let a_date = format!("{}{a_cid}", a.descriptor.base.message_timestamp);
-        //             let b_date = format!("{}{b_cid}", b.descriptor.base.message_timestamp);
-        //             b_date.cmp(&a_date)
-        //         }
-        //         _ => {
-        //             let a_date = format!("{}{a_cid}", a.descriptor.base.message_timestamp);
-        //             let b_date = format!("{}{b_cid}", b.descriptor.base.message_timestamp);
-        //             a_date.cmp(&b_date)
-        //         }
-        //     }
-        // });
-
         // paging
+        if let Some(pagination) = &query.pagination {
+            let limit = pagination.limit.unwrap_or(entries.len());
+            let start = pagination.cursor.as_ref().map_or(0, |cursor| {
+                entries
+                    .iter()
+                    .position(|e| e.cid().unwrap_or_default() == cursor.message_cid)
+                    .unwrap_or(0)
+            });
+            entries = entries[start..start + limit].to_vec();
+        }
 
         Ok(entries)
     }
