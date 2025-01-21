@@ -106,14 +106,16 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let index = self.get(index).await?;
 
-            for range in index.ranges(&filter_val) {
+            // 1. narrow index values to one or more sets of candidate matches
+            // 2. iterate over subsets comparing each entry with the full filter
+            for range in index.matches(&filter_val) {
                 for (index_val, message_cid) in range {
-                    // short circuit when previous match
+                    // short circuit when previously matched
                     if matches.contains_key(message_cid) {
                         continue;
                     }
 
-                    // TODO: save indexable fields with each index entry to 
+                    // TODO: save indexable fields with each index entry to
                     // avoid retrieving the entry unnecessarily
 
                     // use full entry to  match against other filter properties
@@ -208,7 +210,7 @@ impl Index {
         self.values.insert(value.into(), message_cid.into());
     }
 
-    fn ranges<'a>(&'a self, filter_val: &FilterVal) -> Vec<Range<'a, String, String>> {
+    fn matches<'a>(&'a self, filter_val: &FilterVal) -> Vec<Range<'a, String, String>> {
         let index = &self.values;
 
         match filter_val {
@@ -225,10 +227,7 @@ impl Index {
                 }
                 ranges
             }
-            FilterVal::NumericRange(range) => {
-                todo!()
-            }
-            FilterVal::StringRange(range) => {
+            FilterVal::Range(range) => {
                 let lower = range.lower.as_ref().map_or(Unbounded, |lower| match lower {
                     Lower::Inclusive(val) => Included(val.clone()),
                     Lower::Exclusive(val) => Excluded(val.clone()),
@@ -237,7 +236,6 @@ impl Index {
                     Upper::Inclusive(val) => Included(val.clone()),
                     Upper::Exclusive(val) => Excluded(val.clone()),
                 });
-
                 vec![index.range((lower, upper))]
             }
         }
@@ -315,7 +313,7 @@ mod tests {
     use super::*;
     use crate::clients::records::{Data, WriteBuilder};
     use crate::data::DataStream;
-    use crate::store::{RecordsFilter, RecordsQuery};
+    use crate::store::{Range, RecordsFilter, RecordsQuery};
     // use crate::data::MAX_ENCODED_SIZE;
     // use crate::store::block;
 
@@ -345,14 +343,12 @@ mod tests {
         // update indexes
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
 
-        println!("{}", write.record_id);
-
         // execute query
         let query = Query::Records(RecordsQuery {
             filters: vec![
-                // RecordsFilter::new().add_author(ALICE_DID).data_size(Range::new().gt(0).le(10)),
+                RecordsFilter::new().add_author(ALICE_DID).data_size(Range::new().gt(0).le(10)).record_id(write.record_id),
                 // RecordsFilter::new().add_author(ALICE_DID),
-                RecordsFilter::new().record_id(write.record_id),
+                // RecordsFilter::new().record_id(write.record_id),
             ],
             ..Default::default()
         });

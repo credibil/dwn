@@ -109,11 +109,8 @@ pub enum FilterVal {
     // /// Match tags starting with a string value.
     // StartsWith(String),
     //
-    /// Filter on a numeric data range.
-    NumericRange(Range<usize>),
-
     /// Filter on a date range.
-    StringRange(Range<String>),
+    Range(Range<String>),
     //
     // /// Filter on one or more tags.
     // Tags(BTreeMap<String, TagFilter>),
@@ -170,7 +167,15 @@ impl RecordsFilter {
             return Some(("data_cid", FilterVal::Equal(data_cid.clone())));
         }
         if let Some(data_size) = &self.data_size {
-            return Some(("data_size", FilterVal::NumericRange(data_size.clone())));
+            let lower = data_size.lower.as_ref().map(|lower| match lower {
+                Lower::Inclusive(val) => Lower::Inclusive(format!("{val:0>10}")),
+                Lower::Exclusive(val) => Lower::Exclusive(format!("{val:0>10}")),
+            });
+            let upper = data_size.upper.as_ref().map(|upper| match upper {
+                Upper::Inclusive(val) => Upper::Inclusive(format!("{val:0>10}")),
+                Upper::Exclusive(val) => Upper::Exclusive(format!("{val:0>10}")),
+            });
+            return Some(("data_size", FilterVal::Range(Range { lower, upper })));
         }
 
         // TODO: move DateRange -> Range<String> conversion to a separate method
@@ -184,7 +189,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::Inclusive(upper));
             }
-            return Some(("date_published", FilterVal::StringRange(range)));
+            return Some(("date_published", FilterVal::Range(range)));
         }
         if let Some(date_created) = &self.date_created {
             let mut range = Range::default();
@@ -196,7 +201,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::Inclusive(upper));
             }
-            return Some(("date_created", FilterVal::StringRange(range)));
+            return Some(("date_created", FilterVal::Range(range)));
         }
         if let Some(date_updated) = &self.date_updated {
             let mut range = Range::default();
@@ -208,7 +213,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::Inclusive(upper));
             }
-            return Some(("date_updated", FilterVal::StringRange(range)));
+            return Some(("date_updated", FilterVal::Range(range)));
         }
 
         if let Some(data_format) = &self.data_format {

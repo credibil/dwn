@@ -260,7 +260,10 @@ impl Write {
         );
         indexes.insert("data_format".to_string(), Value::String(descriptor.data_format.clone()));
         indexes.insert("data_cid".to_string(), Value::String(descriptor.data_cid.clone()));
-        indexes.insert("data_size".to_string(), Value::String(descriptor.data_size.to_string()));
+        indexes.insert(
+            "data_size".to_string(),
+            Value::String(format!("{:0>10}", descriptor.data_size)),
+        );
         indexes.insert(
             "date_created".to_string(),
             Value::String(descriptor.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)),
