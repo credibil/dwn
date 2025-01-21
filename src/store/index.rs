@@ -6,7 +6,7 @@
 #![allow(unused_variables)]
 
 use std::collections::btree_map::Range;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Bound::{Excluded, Included, Unbounded};
 
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,9 @@ use crate::provider::BlockStore;
 use crate::store::{Entry, FilterVal, Query, RecordsFilter, RecordsQuery, Sort, block};
 use crate::{Lower, Result, Upper, unexpected};
 
-const SEPARATOR: u8 = 0x00;
+const NULL: u8 = 0x00;
+// const MIN: u8 = 0x20;
+const MAX: u8 = 0x7E;
 
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
@@ -24,9 +26,15 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
-    for (field, value) in fields {
+    for (field, value) in write.indexes() {
         let mut index = indexes.get(&field).await?;
-        index.insert(value, &message_cid);
+
+        let item = IndexItem {
+            fields: fields.clone(),
+            message_cid: message_cid.clone(),
+        };
+
+        index.insert(&value, item);
         indexes.update(index).await?;
     }
 
@@ -97,7 +105,8 @@ impl<S: BlockStore> Indexes<'_, S> {
     // This strategy is employed when the filter contains one of `record_id`,
     // `context_id`, `protocol_path`, `parent_id`, or `schema`.
     async fn query_concise(&self, query: &RecordsQuery) -> Result<Vec<Entry>> {
-        let mut matches = HashMap::new();
+        let mut matches = HashSet::new();
+        let mut results = BTreeMap::new();
 
         for filter in &query.filters {
             // determine the best index to use for the filter
@@ -107,55 +116,96 @@ impl<S: BlockStore> Indexes<'_, S> {
             let index = self.get(index).await?;
 
             // 1. narrow full index to one or more subsets of candidate matches
-            // 2. iterate over subsets comparing each entry with the full filter
+            // 2. iterate over subsets comparing each entry against the filter
             for range in index.matches(&filter_val) {
-                for (index_val, message_cid) in range {
+                for (value, item) in range {
                     // short circuit when previously matched
-                    if matches.contains_key(message_cid) {
+                    if matches.contains(&item.message_cid) {
                         continue;
                     }
 
-                    // TODO: save indexable fields with each index entry to
-                    // avoid retrieving the entry unnecessarily
-
                     // use full entry to  match against other filter properties
-                    let Some(bytes) = self.store.get(self.owner, message_cid).await? else {
+                    let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
                         return Err(unexpected!("entry not found"));
                     };
                     let entry = block::decode(&bytes)?;
                     if filter.is_match(&entry) {
-                        matches.insert(message_cid.clone(), entry);
+                        matches.insert(item.message_cid.clone());
+
+                        // create sort key for BTreeMap (i.e. sort ascending as we go)
+                        let sort_key = match query.sort {
+                            Some(Sort::CreatedAscending | Sort::CreatedDescending) => {
+                                format!("{}{}", item.fields["date_created"], item.message_cid)
+                            }
+                            Some(Sort::PublishedAscending | Sort::PublishedDescending) => {
+                                format!("{}{}", item.fields["date_published"], item.message_cid)
+                            }
+                            _ => {
+                                format!("{}{}", item.fields["message_timestamp"], item.message_cid)
+                            }
+                        };
+                        results.insert(sort_key, entry);
                     }
                 }
             }
         }
 
-        // sort (sort property & direction)
-        let mut entries = matches.values().cloned().collect::<Vec<Entry>>();
+        let mut entries = results.values().cloned().collect::<Vec<Entry>>();
 
-        entries.sort_by(|a, b| {
-            let a = a.as_write().unwrap();
-            let b = b.as_write().unwrap();
+        // reverse built-in sort if descending
+        if let Some(
+            Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending,
+        ) = query.sort
+        {
+            entries.reverse();
+        }
 
-            match query.sort {
-                Some(Sort::CreatedAscending) => {
-                    a.descriptor.date_created.cmp(&b.descriptor.date_created)
-                }
-                Some(Sort::CreatedDescending) => {
-                    b.descriptor.date_created.cmp(&a.descriptor.date_created)
-                }
-                Some(Sort::PublishedAscending) => {
-                    a.descriptor.date_published.cmp(&b.descriptor.date_published)
-                }
-                Some(Sort::PublishedDescending) => {
-                    b.descriptor.date_published.cmp(&a.descriptor.date_published)
-                }
-                Some(Sort::TimestampDescending) => {
-                    b.descriptor.base.message_timestamp.cmp(&a.descriptor.base.message_timestamp)
-                }
-                _ => a.descriptor.base.message_timestamp.cmp(&b.descriptor.base.message_timestamp),
-            }
-        });
+        // let def_write = Write::default();
+
+        // entries.sort_by(|a, b| {
+        //     // TODO: make dependencies infallible
+        //     let a = a.as_write().unwrap_or(&def_write);
+        //     let a_cid = a.cid().unwrap_or_default();
+        //     let b = b.as_write().unwrap_or(&def_write);
+        //     let b_cid = b.cid().unwrap_or_default();
+
+        //     match query.sort {
+        //         Some(Sort::CreatedAscending) => {
+        //             let a_date = format!("{}{a_cid}", a.descriptor.date_created);
+        //             let b_date = format!("{}{b_cid}", b.descriptor.date_created);
+        //             a_date.cmp(&b_date)
+        //         }
+        //         Some(Sort::CreatedDescending) => {
+        //             let a_date = format!("{}{a_cid}", a.descriptor.date_created);
+        //             let b_date = format!("{}{b_cid}", b.descriptor.date_created);
+        //             b_date.cmp(&a_date)
+        //         }
+        //         Some(Sort::PublishedAscending) => {
+        //             let a_date =
+        //                 format!("{}{a_cid}", a.descriptor.date_published.unwrap_or_default());
+        //             let b_date =
+        //                 format!("{}{b_cid}", b.descriptor.date_published.unwrap_or_default());
+        //             a_date.cmp(&b_date)
+        //         }
+        //         Some(Sort::PublishedDescending) => {
+        //             let a_date =
+        //                 format!("{}{a_cid}", a.descriptor.date_published.unwrap_or_default());
+        //             let b_date =
+        //                 format!("{}{b_cid}", b.descriptor.date_published.unwrap_or_default());
+        //             b_date.cmp(&a_date)
+        //         }
+        //         Some(Sort::TimestampDescending) => {
+        //             let a_date = format!("{}{a_cid}", a.descriptor.base.message_timestamp);
+        //             let b_date = format!("{}{b_cid}", b.descriptor.base.message_timestamp);
+        //             b_date.cmp(&a_date)
+        //         }
+        //         _ => {
+        //             let a_date = format!("{}{a_cid}", a.descriptor.base.message_timestamp);
+        //             let b_date = format!("{}{b_cid}", b.descriptor.base.message_timestamp);
+        //             a_date.cmp(&b_date)
+        //         }
+        //     }
+        // });
 
         // paging
 
@@ -170,10 +220,10 @@ impl<S: BlockStore> Indexes<'_, S> {
         for filter in filters {
             if let Some(published) = &filter.published {
                 let index = self.get("data_format").await?;
-                for (value, message_cid) in index.values {
+                for (value, item) in index.items {
                     if value == "application/json" {
-                        let bytes = self.store.get(self.owner, &message_cid).await?.unwrap();
-                        let entry: Entry = block::decode(&bytes)?;
+                        let bytes = self.store.get(self.owner, &item.message_cid).await?.unwrap();
+                        let entry = block::decode(&bytes)?;
                         entries.push(entry);
                     }
                 }
@@ -187,34 +237,40 @@ impl<S: BlockStore> Indexes<'_, S> {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Index {
     field: String,
-    values: BTreeMap<String, String>,
+    items: BTreeMap<String, IndexItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct IndexItem {
+    message_cid: String,
+    fields: HashMap<String, String>,
 }
 
 impl Index {
-    pub fn new(field: impl Into<String>) -> Self {
+    fn new(field: impl Into<String>) -> Self {
         Self {
             field: field.into(),
-            values: BTreeMap::new(),
+            items: BTreeMap::new(),
         }
     }
 
-    pub fn insert(&mut self, value: impl Into<String>, message_cid: impl Into<String>) {
-        self.values.insert(value.into(), message_cid.into());
+    fn insert(&mut self, value: &str, entry: IndexItem) {
+        let key = format!("{value}{NULL}{}", entry.message_cid);
+        self.items.insert(key, entry);
     }
 
-    fn matches<'a>(&'a self, filter_val: &FilterVal) -> Vec<Range<'a, String, String>> {
-        let index = &self.values;
+    fn matches<'a>(&'a self, filter_val: &FilterVal) -> Vec<Range<'a, String, IndexItem>> {
+        let index = &self.items;
 
         match filter_val {
             FilterVal::Equal(equal) => {
-                let excl = equal[..equal.len() - 1].to_string();
-                let range = index.range((Excluded(excl), Included(equal.clone())));
-                vec![range]
+                vec![index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))))]
             }
             FilterVal::OneOf(one_of) => {
                 let mut ranges = vec![];
                 for equal in one_of {
-                    let range = index.range((Included(equal.clone()), Included(equal.clone())));
+                    let range =
+                        index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
                     ranges.push(range);
                 }
                 ranges
@@ -222,10 +278,10 @@ impl Index {
             FilterVal::Range(range) => {
                 let lower = range.lower.as_ref().map_or(Unbounded, |lower| match lower {
                     Lower::Inclusive(val) => Included(val.clone()),
-                    Lower::Exclusive(val) => Excluded(val.clone()),
+                    Lower::Exclusive(val) => Excluded(format!("{val}{MAX}")),
                 });
                 let upper = range.upper.as_ref().map_or(Unbounded, |upper| match upper {
-                    Upper::Inclusive(val) => Included(val.clone()),
+                    Upper::Inclusive(val) => Included(format!("{val}{MAX}")),
                     Upper::Exclusive(val) => Excluded(val.clone()),
                 });
                 vec![index.range((lower, upper))]
@@ -234,7 +290,7 @@ impl Index {
     }
 }
 
-pub struct IndexesBuilder<O, S> {
+struct IndexesBuilder<O, S> {
     owner: O,
     indexes: Option<BTreeMap<String, String>>,
     store: S,
@@ -242,20 +298,20 @@ pub struct IndexesBuilder<O, S> {
 
 /// Store not set on IndexesBuilder.
 #[doc(hidden)]
-pub struct NoOwner;
+struct NoOwner;
 /// Store has been set on IndexesBuilder.
 #[doc(hidden)]
-pub struct Owner<'a>(&'a str);
+struct Owner<'a>(&'a str);
 
 /// Store not set on IndexesBuilder.
 #[doc(hidden)]
-pub struct NoStore;
+struct NoStore;
 /// Store has been set on IndexesBuilder.
 #[doc(hidden)]
-pub struct Store<'a, S: BlockStore>(&'a S);
+struct Store<'a, S: BlockStore>(&'a S);
 
 impl IndexesBuilder<NoOwner, NoStore> {
-    pub const fn new() -> Self {
+    const fn new() -> Self {
         Self {
             owner: NoOwner,
             indexes: None,
@@ -265,7 +321,7 @@ impl IndexesBuilder<NoOwner, NoStore> {
 }
 
 impl<S> IndexesBuilder<NoOwner, S> {
-    pub fn owner(self, owner: &str) -> IndexesBuilder<Owner, S> {
+    fn owner(self, owner: &str) -> IndexesBuilder<Owner, S> {
         IndexesBuilder {
             owner: Owner(owner),
             indexes: None,
@@ -275,7 +331,7 @@ impl<S> IndexesBuilder<NoOwner, S> {
 }
 
 impl<O> IndexesBuilder<O, NoStore> {
-    pub fn store<S: BlockStore>(self, store: &S) -> IndexesBuilder<O, Store<'_, S>> {
+    fn store<S: BlockStore>(self, store: &S) -> IndexesBuilder<O, Store<'_, S>> {
         IndexesBuilder {
             owner: self.owner,
             indexes: self.indexes,
@@ -285,7 +341,7 @@ impl<O> IndexesBuilder<O, NoStore> {
 }
 
 impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Store<'a, S>> {
-    pub fn build(self) -> Indexes<'a, S> {
+    fn build(self) -> Indexes<'a, S> {
         Indexes {
             owner: self.owner.0,
             store: self.store.0,
@@ -339,9 +395,9 @@ mod tests {
         let query = Query::Records(RecordsQuery {
             filters: vec![
                 RecordsFilter::new()
-                    .add_author(ALICE_DID)
-                    .data_size(Range::new().gt(0).le(10))
-                    .record_id(write.record_id),
+                    // .add_author(ALICE_DID)
+                    .data_size(Range::new().gt(8)),
+                // .record_id(write.record_id),
             ],
             ..Default::default()
         });
