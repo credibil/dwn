@@ -2,7 +2,7 @@
 //!
 //! `Write` is a message type used to create a new record in the web node.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
@@ -94,7 +94,7 @@ pub async fn handle(
     // set `archive` flag is set when the intial write has no data
     // N.B. this is used to prevent malicious access to another record's data
     let mut entry = Entry::from(&write);
-    entry.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
+    entry.indexes.insert("archived".to_string(), (code == StatusCode::NO_CONTENT).to_string());
 
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
@@ -104,7 +104,7 @@ pub async fn handle(
     // when this is an update, archive the initial write (and delete its data?)
     if let Some(mut initial_entry) = initial_entry {
         let initial_write = Write::try_from(&initial_entry)?;
-        initial_entry.indexes.insert("archived".to_string(), Value::Bool(true));
+        initial_entry.indexes.insert("archived".to_string(), true.to_string());
 
         MessageStore::put(provider, owner, &initial_entry).await?;
         EventLog::append(provider, owner, &initial_entry).await?;
@@ -238,75 +238,69 @@ impl TryFrom<&Entry> for Write {
 impl Write {
     /// Build flattened indexes for the write message.
     #[must_use]
-    pub fn indexes(&self) -> Map<String, Value> {
-        let mut indexes = Map::new();
+    pub fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = HashMap::new();
 
         let descriptor = &self.descriptor;
 
         // TODO: remove this after cut over to new indexes
-        indexes.insert("messageCid".to_string(), Value::String(self.cid().unwrap_or_default()));
-        indexes.insert("message_cid".to_string(), Value::String(self.cid().unwrap_or_default()));
+        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert("message_cid".to_string(), self.cid().unwrap_or_default());
 
         indexes.insert(
             "message_timestamp".to_string(),
-            Value::String(
-                descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
-            ),
+            descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
         );
-        indexes.insert("record_id".to_string(), Value::String(self.record_id.clone()));
-        indexes.insert(
-            "author".to_string(),
-            Value::String(self.authorization.author().unwrap_or_default()),
-        );
-        indexes.insert("data_format".to_string(), Value::String(descriptor.data_format.clone()));
-        indexes.insert("data_cid".to_string(), Value::String(descriptor.data_cid.clone()));
-        indexes.insert(
-            "data_size".to_string(),
-            Value::String(format!("{:0>10}", descriptor.data_size)),
-        );
+        indexes.insert("record_id".to_string(), self.record_id.clone());
+        indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
+        indexes.insert("data_format".to_string(), descriptor.data_format.clone());
+        indexes.insert("data_cid".to_string(), descriptor.data_cid.clone());
+        indexes.insert("data_size".to_string(), format!("{:0>10}", descriptor.data_size));
         indexes.insert(
             "date_created".to_string(),
-            Value::String(descriptor.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)),
+            descriptor.date_created.to_rfc3339_opts(SecondsFormat::Micros, true),
         );
 
         if let Some(attestation) = &self.attestation {
             let attester = authorization::signer_did(attestation).unwrap_or_default();
-            indexes.insert("attester".to_string(), Value::String(attester));
+            indexes.insert("attester".to_string(), attester);
         }
         if let Some(recipient) = &descriptor.recipient {
-            indexes.insert("recipient".to_string(), Value::String(recipient.clone()));
+            indexes.insert("recipient".to_string(), recipient.clone());
         }
         if let Some(protocol) = &descriptor.protocol {
-            indexes.insert("protocol".to_string(), Value::String(protocol.clone()));
+            indexes.insert("protocol".to_string(), protocol.clone());
         }
         if let Some(protocol_path) = &descriptor.protocol_path {
-            indexes.insert("protocol_path".to_string(), Value::String(protocol_path.clone()));
+            indexes.insert("protocol_path".to_string(), protocol_path.clone());
         }
         if let Some(schema) = &descriptor.schema {
-            indexes.insert("schema".to_string(), Value::String(schema.clone()));
+            indexes.insert("schema".to_string(), schema.clone());
         }
         if let Some(parent_id) = &descriptor.parent_id {
-            indexes.insert("parent_id".to_string(), Value::String(parent_id.clone()));
+            indexes.insert("parent_id".to_string(), parent_id.clone());
         }
         if let Some(context_id) = &self.context_id {
-            indexes.insert("context_id".to_string(), Value::String(context_id.clone()));
+            indexes.insert("context_id".to_string(), context_id.clone());
         }
         if let Some(published) = descriptor.published {
-            indexes.insert("published".to_string(), Value::String(published.to_string()));
+            indexes.insert("published".to_string(), published.to_string());
         }
         if let Some(date_published) = &descriptor.date_published {
             indexes.insert(
                 "date_published".to_string(),
-                Value::String(date_published.to_rfc3339_opts(SecondsFormat::Micros, true)),
+                date_published.to_rfc3339_opts(SecondsFormat::Micros, true),
             );
         }
-        if let Some(tags) = &self.descriptor.tags {
-            let mut tag_map = Map::new();
-            for (k, v) in tags {
-                tag_map.insert(format!("tag.{k}"), v.clone());
-            }
-            indexes.insert("tags".to_string(), Value::Object(tag_map));
-        }
+
+        // TODO: index tags
+        // if let Some(tags) = &self.descriptor.tags {
+        //     let mut tag_map = Map::new();
+        //     for (k, v) in tags {
+        //         tag_map.insert(format!("tag.{k}"), v.clone());
+        //     }
+        //     indexes.insert("tags".to_string(), Value::Object(tag_map));
+        // }
 
         indexes
     }

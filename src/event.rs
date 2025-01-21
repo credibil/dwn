@@ -95,9 +95,11 @@ impl SubscribeFilter {
     }
 }
 
+// TODO: move this close to RecordsFilter
 impl RecordsFilter {
     /// Determine whether the specified `Entry` matches the filter.
     #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity)]
     #[must_use]
     pub fn is_match(&self, event: &Entry) -> bool {
         let EventType::Write(write) = &event.message else {
@@ -112,7 +114,7 @@ impl RecordsFilter {
             }
         }
         if let Some(attester) = self.attester.clone() {
-            if Some(&Value::String(attester)) != indexes.get("attester") {
+            if Some(&attester) != indexes.get("attester") {
                 return false;
             }
         }
@@ -197,9 +199,6 @@ impl RecordsFilter {
         // `date_updated` is found in indexes
         if let Some(date_updated) = &self.date_updated {
             let Some(updated) = indexes.get("dateUpdated") else {
-                return false;
-            };
-            let Some(updated) = updated.as_str() else {
                 return false;
             };
             let Some(date) = updated.parse::<DateTime<Utc>>().ok() else {

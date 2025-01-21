@@ -5,10 +5,10 @@ mod index;
 mod message;
 pub mod serializer;
 
+use std::collections::HashMap;
 use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 // pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
 use crate::endpoint::Message;
@@ -35,7 +35,7 @@ pub struct Entry {
     /// ease of querying.
     #[serde(flatten)]
     #[serde(skip_deserializing)]
-    pub indexes: Map<String, Value>,
+    pub indexes: HashMap<String, String>,
 }
 
 impl Entry {
@@ -111,15 +111,13 @@ impl From<&Delete> for Entry {
     fn from(delete: &Delete) -> Self {
         let mut entry = Self {
             message: EntryType::Delete(delete.clone()),
-            indexes: Map::new(),
+            indexes: HashMap::new(),
         };
 
         // FIXME: build full indexes for each record
         // flatten record_id so it queries correctly
-        entry
-            .indexes
-            .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
-        entry.indexes.insert("archived".to_string(), Value::Bool(false));
+        entry.indexes.insert("recordId".to_string(), delete.descriptor.record_id.clone());
+        entry.indexes.insert("archived".to_string(), false.to_string());
         entry
     }
 }

@@ -26,7 +26,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 
     for (field, value) in fields {
         let mut index = indexes.get(&field).await?;
-        index.insert(value.as_str().unwrap(), &message_cid);
+        index.insert(value, &message_cid);
         indexes.update(index).await?;
     }
 
@@ -106,7 +106,7 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let index = self.get(index).await?;
 
-            // 1. narrow index values to one or more sets of candidate matches
+            // 1. narrow full index to one or more subsets of candidate matches
             // 2. iterate over subsets comparing each entry with the full filter
             for range in index.matches(&filter_val) {
                 for (index_val, message_cid) in range {
@@ -134,34 +134,26 @@ impl<S: BlockStore> Indexes<'_, S> {
         let mut entries = matches.values().cloned().collect::<Vec<Entry>>();
 
         entries.sort_by(|a, b| {
-            let write_a = a.as_write().unwrap();
-            let write_b = b.as_write().unwrap();
+            let a = a.as_write().unwrap();
+            let b = b.as_write().unwrap();
 
             match query.sort {
                 Some(Sort::CreatedAscending) => {
-                    write_a.descriptor.date_created.cmp(&write_b.descriptor.date_created)
+                    a.descriptor.date_created.cmp(&b.descriptor.date_created)
                 }
                 Some(Sort::CreatedDescending) => {
-                    write_b.descriptor.date_created.cmp(&write_a.descriptor.date_created)
+                    b.descriptor.date_created.cmp(&a.descriptor.date_created)
                 }
                 Some(Sort::PublishedAscending) => {
-                    write_a.descriptor.date_published.cmp(&write_b.descriptor.date_published)
+                    a.descriptor.date_published.cmp(&b.descriptor.date_published)
                 }
                 Some(Sort::PublishedDescending) => {
-                    write_b.descriptor.date_published.cmp(&write_a.descriptor.date_published)
+                    b.descriptor.date_published.cmp(&a.descriptor.date_published)
                 }
-                Some(Sort::TimestampDescending) => write_b
-                    .descriptor
-                    .base
-                    .message_timestamp
-                    .cmp(&write_a.descriptor.base.message_timestamp),
-
-                // otherwise, Sort::TimestampAscending
-                _ => write_a
-                    .descriptor
-                    .base
-                    .message_timestamp
-                    .cmp(&write_b.descriptor.base.message_timestamp),
+                Some(Sort::TimestampDescending) => {
+                    b.descriptor.base.message_timestamp.cmp(&a.descriptor.base.message_timestamp)
+                }
+                _ => a.descriptor.base.message_timestamp.cmp(&b.descriptor.base.message_timestamp),
             }
         });
 
@@ -346,29 +338,16 @@ mod tests {
         // execute query
         let query = Query::Records(RecordsQuery {
             filters: vec![
-                RecordsFilter::new().add_author(ALICE_DID).data_size(Range::new().gt(0).le(10)).record_id(write.record_id),
-                // RecordsFilter::new().add_author(ALICE_DID),
-                // RecordsFilter::new().record_id(write.record_id),
+                RecordsFilter::new()
+                    .add_author(ALICE_DID)
+                    .data_size(Range::new().gt(0).le(10))
+                    .record_id(write.record_id),
             ],
             ..Default::default()
         });
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
 
         println!("{:?}", entries);
-    }
-
-    #[test]
-    fn string_compare() {
-        let a = "109";
-        let b = "108";
-
-        let a_str = format!("{a:0>8}");
-        let b_str = format!("{b:0>8}");
-
-        println!("{a_str}");
-        println!("{b_str}");
-
-        println!("{}", a_str < b_str);
     }
 
     struct BlockStoreImpl {

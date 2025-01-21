@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use async_recursion::async_recursion;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::authorization::Authorization;
 use crate::data::cid;
@@ -214,7 +213,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     // FIXME: need to copy ALL initial write fields and indexes to delete message
     // save the delete message using same indexes as the initial write
     let mut initial = Entry::from(&write);
-    initial.indexes.insert("recordId".to_string(), Value::String(write.record_id.clone()));
+    initial.indexes.insert("recordId".to_string(), write.record_id.clone());
 
     let mut entry = Entry::from(delete);
     entry.indexes.extend(initial.indexes);
@@ -321,7 +320,7 @@ async fn delete_earlier(
                 && write.is_initial()?
             {
                 let mut record = Entry::from(write);
-                record.indexes.insert("archived".to_string(), Value::Bool(true));
+                record.indexes.insert("archived".to_string(), true.to_string());
                 MessageStore::put(provider, owner, &record).await?;
             } else {
                 let cid = entry.cid()?;

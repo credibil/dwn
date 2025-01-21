@@ -20,7 +20,6 @@ use dwn_test::key_store::{
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
-use serde_json::Value;
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.
@@ -222,7 +221,7 @@ async fn deleted_write() {
         .expect("should create delete");
 
     let mut initial = Entry::from(&write);
-    initial.indexes.insert("recordId".to_string(), Value::String(write.record_id.clone()));
+    initial.indexes.insert("recordId".to_string(), write.record_id.clone());
     let mut entry = Entry::from(&delete);
     entry.indexes.extend(initial.indexes);
 

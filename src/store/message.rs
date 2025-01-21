@@ -53,6 +53,7 @@ impl<T: BlockStore> MessageStore for Store<'_, T> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::str::FromStr;
 
     use blockstore::{Blockstore as _, InMemoryBlockstore};
@@ -60,7 +61,6 @@ mod tests {
     // use ipld_core::ipld;
     // use ipld_core::ipld::Ipld;
     use rand::RngCore;
-    use serde_json::json;
 
     use super::*;
     use crate::clients::records::{Data, WriteBuilder};
@@ -85,13 +85,9 @@ mod tests {
             .await
             .unwrap();
 
-        let indexes = json!({
-            "key": "value",
-        });
-
         let entry = Entry {
             message: EntryType::Write(write),
-            indexes: indexes.as_object().unwrap().clone(),
+            indexes: HashMap::from([("key".to_string(), "value".to_string())]),
         };
 
         store.put("owner", &entry).await.unwrap();

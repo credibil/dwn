@@ -2,11 +2,11 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::authorization::Authorization;
@@ -122,7 +122,7 @@ impl From<Configure> for Entry {
     fn from(configure: Configure) -> Self {
         Self {
             message: EntryType::Configure(configure),
-            indexes: Map::new(),
+            indexes: HashMap::new(),
         }
     }
 }
@@ -131,7 +131,7 @@ impl From<&Configure> for Entry {
     fn from(configure: &Configure) -> Self {
         Self {
             message: EntryType::Configure(configure.clone()),
-            indexes: Map::new(),
+            indexes: HashMap::new(),
         }
     }
 }
