@@ -142,23 +142,24 @@ impl<S: BlockStore> Indexes<'_, S> {
                             }
                             _ => &item.fields["message_timestamp"],
                         };
+
                         results.insert(format!("{sort_val}{}", item.message_cid), entry);
                     }
                 }
             }
         }
 
-        let mut entries = results.values().cloned().collect::<Vec<Entry>>();
-
-        // reverse built-in sort if descending
-        if let Some(
+        // reverse built-in BTreeMap sort
+        let mut entries = if let Some(
             Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending,
         ) = query.sort
         {
-            entries.reverse();
-        }
+            results.values().rev().cloned().collect::<Vec<Entry>>()
+        } else {
+            results.values().cloned().collect::<Vec<Entry>>()
+        };
 
-        // paging
+        // pagination
         if let Some(pagination) = &query.pagination {
             let limit = pagination.limit.unwrap_or(entries.len());
             let start = pagination.cursor.as_ref().map_or(0, |cursor| {
@@ -167,7 +168,12 @@ impl<S: BlockStore> Indexes<'_, S> {
                     .position(|e| e.cid().unwrap_or_default() == cursor.message_cid)
                     .unwrap_or(0)
             });
-            entries = entries[start..start + limit].to_vec();
+
+            let mut end = start + limit;
+            if end > entries.len() {
+                end = entries.len();
+            }
+            entries = entries[start..end].to_vec();
         }
 
         Ok(entries)
@@ -366,6 +372,14 @@ mod tests {
 
         println!("{:?}", entries);
     }
+
+    // #[test]
+    // fn test_range() {
+    //     let mut entries = vec!["a", "b", "c", "d", "e"];
+
+    //     assert_eq!(entries[0..10], entries);
+    //     // assert_eq!(range[0].len(), 2);
+    // }
 
     struct BlockStoreImpl {
         blockstore: InMemoryBlockstore<64>,
