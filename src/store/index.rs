@@ -12,7 +12,7 @@ use std::ops::Bound::{self, Excluded, Included, Unbounded};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, FilterVal, Query, RecordsQuery, Sort, block};
+use crate::store::{Entry, FilterVal, Query, RecordsQuery, block};
 use crate::{Lower, Result, Upper, unexpected};
 
 const NULL: u8 = 0x00;
@@ -33,13 +33,12 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
             fields: fields.clone(),
             message_cid: message_cid.clone(),
         };
-
         index.insert(&value, item);
         indexes.update(index).await?;
     }
 
     // TODO: add reverse lookup for deletes: {"message_cid": fields[]}
-    // index.insert(message_cid, &indexes);
+    // index.insert(message_cid, fields);
 
     Ok(())
 }
@@ -51,12 +50,12 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
         return Err(unexpected!("unsupported query type"));
     };
 
-    let concise = true;
+    let mut concise = true;
     for filter in &rq.filters {
-        // if !filter.is_concise() {
-        //  concise = false;
-        //  break;
-        // }
+        if !filter.is_concise() {
+            concise = false;
+            break;
+        }
     }
 
     // choose strategy for query
@@ -105,11 +104,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         let mut matches = HashSet::new();
         let mut results = BTreeMap::new();
 
-        let sort_field = match query.sort {
-            Some(Sort::CreatedAsc | Sort::CreatedDesc) => "date_created",
-            Some(Sort::PublishedAsc | Sort::PublishedDesc) => "date_published",
-            _ => "message_timestamp",
-        };
+        let sort_field = query.sort.to_string();
 
         for filter in &query.filters {
             // choose the best index to use for the filter
@@ -118,41 +113,37 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let index = self.get(&field).await?;
 
-            // 1. narrow full index to one or more subsets of candidate matches
-            // 2. iterate over subsets comparing each entry against the filter
-            for range in index.matching_ranges(&filter_val) {
-                for (value, item) in range {
-                    // short circuit when previously matched
-                    if matches.contains(&item.message_cid) {
-                        continue;
-                    }
+            // 1. use the index to find candidate matches
+            // 2. compare each entry against the current filter
+            for item in index.matches(&filter_val) {
+                // short circuit when previously matched
+                if matches.contains(&item.message_cid) {
+                    continue;
+                }
 
-                    // use full entry to  match against other filter properties
-                    let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
-                        return Err(unexpected!("entry not found"));
-                    };
-                    let entry = block::decode(&bytes)?;
-                    if filter.is_match(&entry) {
-                        matches.insert(item.message_cid.clone());
+                // use full entry to  match against other filter properties
+                let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
+                    return Err(unexpected!("entry not found"));
+                };
+                let entry = block::decode(&bytes)?;
+                if filter.is_match(&entry) {
+                    matches.insert(item.message_cid.clone());
 
-                        // sort results as we collect using `message_cid` as a tie-breaker
-                        let sort_key = format!("{}{}", &item.fields[sort_field], item.message_cid);
-                        results.insert(sort_key, entry);
-                    }
+                    // sort results as we collect using `message_cid` as a tie-breaker
+                    let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
+                    results.insert(sort_key, entry);
                 }
             }
         }
 
-        let mut entries =
-            if let Some(Sort::CreatedDesc | Sort::PublishedDesc | Sort::TimestampDesc) = query.sort
-            {
-                // reverse built-in BTreeMap sort order
-                results.values().rev().cloned().collect::<Vec<Entry>>()
-            } else {
-                results.values().cloned().collect::<Vec<Entry>>()
-            };
+        // collect results in sorted order
+        let mut entries = if query.sort.is_ascending() {
+            results.values().cloned().collect::<Vec<Entry>>()
+        } else {
+            results.values().rev().cloned().collect::<Vec<Entry>>()
+        };
 
-        // pagination
+        // paginate results
         if let Some(pagination) = &query.pagination {
             let limit = pagination.limit.unwrap_or(entries.len());
             let start = pagination.cursor.as_ref().map_or(0, |cursor| {
@@ -162,7 +153,7 @@ impl<S: BlockStore> Indexes<'_, S> {
                     .unwrap_or(0)
             });
 
-            let mut end = start + limit;
+            let mut end = start + limit + 1;
             if end > entries.len() {
                 end = entries.len();
             }
@@ -182,28 +173,29 @@ impl<S: BlockStore> Indexes<'_, S> {
         // the location in the index to begin querying from
         let start_key =
             cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
-
-        // get index for sort field
-        let sort_field = match query.sort {
-            Some(Sort::CreatedAsc | Sort::CreatedDesc) => "date_created",
-            Some(Sort::PublishedAsc | Sort::PublishedDesc) => "date_published",
-            _ => "message_timestamp",
-        };
-        let index = self.get(sort_field).await?;
+        let index = self.get(&query.sort.to_string()).await?;
 
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(start_key) {
-            // use full entry to  match against other filter properties
             let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
                 return Err(unexpected!("entry not found"));
             };
             let entry = block::decode(&bytes)?;
-            // if filter.is_match(&entry) {
 
-            // sort results as we collect using `message_cid` as a tie-breaker
-            let sort_key = format!("{}{}", &item.fields[sort_field], item.message_cid);
-            entries.push(entry);
-            // }
+            // match entry against any filter
+            for filter in &query.filters {
+                if filter.is_match(&entry) {
+                    entries.push(entry);
+                    break;
+                }
+            }
+
+            // stop when page limit + 1 is reached
+            if let Some(lim) = limit {
+                if entries.len() == lim + 1 {
+                    break;
+                }
+            }
         }
 
         Ok(entries)
@@ -230,33 +222,33 @@ impl Index {
         }
     }
 
-    fn insert(&mut self, value: &str, entry: IndexItem) {
-        let key = format!("{value}{NULL}{}", entry.message_cid);
-        self.items.insert(key, entry);
+    fn insert(&mut self, value: &str, item: IndexItem) {
+        let key = format!("{value}{NULL}{}", item.message_cid);
+        self.items.insert(key, item);
     }
 
     fn lower_bound(&self, lower: Bound<String>) -> Range<String, IndexItem> {
         self.items.range((lower, Unbounded))
     }
 
-    fn matching_ranges(&self, filter_val: &FilterVal) -> Vec<Range<String, IndexItem>> {
+    fn matches(&self, filter_val: &FilterVal) -> Vec<&IndexItem> {
         let index = &self.items;
 
         match filter_val {
             FilterVal::Equal(equal) => {
-                vec![index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))))]
+                let range =
+                    index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
+                range.map(|(_, item)| item).collect()
             }
-            // FilterVal::StartsWith(start) => {
-            //     vec![index.range((Included(start.clone()), Excluded(format!("{start}{MAX}"))))]
-            // }
             FilterVal::OneOf(one_of) => {
-                let mut ranges = vec![];
+                let mut items = vec![];
+
                 for equal in one_of {
                     let range =
                         index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
-                    ranges.push(range);
+                    items.extend(range.map(|(_, item)| item));
                 }
-                ranges
+                items
             }
             FilterVal::Range(range) => {
                 let lower = range.lower.as_ref().map_or(Unbounded, |lower| match lower {
@@ -267,7 +259,8 @@ impl Index {
                     Upper::Inclusive(val) => Included(format!("{val}{MAX}")),
                     Upper::Exclusive(val) => Excluded(val.clone()),
                 });
-                vec![index.range((lower, upper))]
+                let range = index.range((lower, upper));
+                range.map(|(_, item)| item).collect()
             }
         }
     }
@@ -344,7 +337,7 @@ mod tests {
     use super::*;
     use crate::clients::records::{Data, WriteBuilder};
     use crate::data::DataStream;
-    use crate::store::{Range, RecordsFilter, RecordsQuery};
+    use crate::store::{RecordsFilter, RecordsQuery};
     // use crate::data::MAX_ENCODED_SIZE;
     // use crate::store::block;
 
@@ -379,8 +372,8 @@ mod tests {
             filters: vec![
                 RecordsFilter::new()
                     // .add_author(ALICE_DID)
-                    .data_size(Range::new().gt(8)),
-                // .record_id(write.record_id),
+                    // .data_size(Range::new().gt(8)),
+                    .record_id(write.record_id),
             ],
             ..Default::default()
         });

@@ -242,20 +242,24 @@ impl Write {
         let mut indexes = HashMap::new();
         let descriptor = &self.descriptor;
 
+        // FIXME: add these fields back when cut over to new indexes
+         indexes.insert("record_id".to_string(), self.record_id.clone());
+        // if let Some(context_id) = &self.context_id {
+        //     indexes.insert("contextId".to_string(), context_id.clone());
+        // }
+
         // TODO: remove this after cut over to new indexes
         indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
-        indexes.insert("message_cid".to_string(), self.cid().unwrap_or_default());
         indexes.insert(
-            "message_timestamp".to_string(),
+            "messageTimestamp".to_string(),
             descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
         );
-        indexes.insert("record_id".to_string(), self.record_id.clone());
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-        indexes.insert("data_format".to_string(), descriptor.data_format.clone());
-        indexes.insert("data_cid".to_string(), descriptor.data_cid.clone());
-        indexes.insert("data_size".to_string(), format!("{:0>10}", descriptor.data_size));
+        indexes.insert("dataFormat".to_string(), descriptor.data_format.clone());
+        indexes.insert("dataCid".to_string(), descriptor.data_cid.clone());
+        indexes.insert("dataSize".to_string(), format!("{:0>10}", descriptor.data_size));
         indexes.insert(
-            "date_created".to_string(),
+            "dateCreated".to_string(),
             descriptor.date_created.to_rfc3339_opts(SecondsFormat::Micros, true),
         );
 
@@ -270,23 +274,20 @@ impl Write {
             indexes.insert("protocol".to_string(), protocol.clone());
         }
         if let Some(protocol_path) = &descriptor.protocol_path {
-            indexes.insert("protocol_path".to_string(), protocol_path.clone());
+            indexes.insert("protocolPath".to_string(), protocol_path.clone());
         }
         if let Some(schema) = &descriptor.schema {
             indexes.insert("schema".to_string(), schema.clone());
         }
         if let Some(parent_id) = &descriptor.parent_id {
-            indexes.insert("parent_id".to_string(), parent_id.clone());
-        }
-        if let Some(context_id) = &self.context_id {
-            indexes.insert("context_id".to_string(), context_id.clone());
+            indexes.insert("parentId".to_string(), parent_id.clone());
         }
         if let Some(published) = descriptor.published {
             indexes.insert("published".to_string(), published.to_string());
         }
         if let Some(date_published) = &descriptor.date_published {
             indexes.insert(
-                "date_published".to_string(),
+                "datePublished".to_string(),
                 date_published.to_rfc3339_opts(SecondsFormat::Micros, true),
             );
         }

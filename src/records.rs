@@ -108,9 +108,6 @@ pub enum FilterVal {
 
     /// Filter on a date range.
     Range(Range<String>),
-    //
-    // /// Filter on entries starting with specified value.
-    // StartsWith(String),
 }
 
 impl RecordsFilter {
@@ -128,6 +125,29 @@ impl RecordsFilter {
         Ok(filter)
     }
 
+    pub(crate) fn is_concise(&self) -> bool {
+        // if self.record_id.is_some() {
+        //     return true;
+        // }
+
+        // if there is a cursor we never use in memory paging
+        // if (queryOptions.cursor !== undefined) {
+        //   return false;
+        // }
+
+        // conditions that will not have cursor
+        if self.record_id.is_some()
+            || self.protocol_path.is_some()
+            || self.context_id.is_some()
+            || self.parent_id.is_some()
+            || self.schema.is_some()
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     /// Create an optimized filter to use with single-field indexes. This
     /// method chooses the best filter property, in order of priority, to use
     /// when querying.
@@ -140,7 +160,7 @@ impl RecordsFilter {
             return Some(("attester".to_string(), FilterVal::Equal(attester.clone())));
         }
         if let Some(parent_id) = &self.parent_id {
-            return Some(("parent_id".to_string(), FilterVal::Equal(parent_id.clone())));
+            return Some(("parentId".to_string(), FilterVal::Equal(parent_id.clone())));
         }
         if let Some(recipient) = &self.recipient {
             let recipients = match recipient {
@@ -150,10 +170,10 @@ impl RecordsFilter {
             return Some(("recipient".to_string(), FilterVal::OneOf(recipients)));
         }
         if let Some(context_id) = &self.context_id {
-            return Some(("context_id".to_string(), FilterVal::Equal(context_id.clone())));
+            return Some(("contextId".to_string(), FilterVal::Equal(context_id.clone())));
         }
         if let Some(protocol_path) = &self.protocol_path {
-            return Some(("protocol_path".to_string(), FilterVal::Equal(protocol_path.clone())));
+            return Some(("protocolPath".to_string(), FilterVal::Equal(protocol_path.clone())));
         }
         if let Some(schema) = &self.schema {
             return Some(("schema".to_string(), FilterVal::Equal(schema.clone())));
@@ -162,7 +182,7 @@ impl RecordsFilter {
             return Some(("protocol".to_string(), FilterVal::Equal(protocol.clone())));
         }
         if let Some(data_cid) = &self.data_cid {
-            return Some(("data_cid".to_string(), FilterVal::Equal(data_cid.clone())));
+            return Some(("dataCid".to_string(), FilterVal::Equal(data_cid.clone())));
         }
         if let Some(data_size) = &self.data_size {
             let lower = data_size.lower.as_ref().map(|lower| match lower {
@@ -173,7 +193,7 @@ impl RecordsFilter {
                 Upper::Inclusive(val) => Upper::Inclusive(format!("{val:0>10}")),
                 Upper::Exclusive(val) => Upper::Exclusive(format!("{val:0>10}")),
             });
-            return Some(("data_size".to_string(), FilterVal::Range(Range { lower, upper })));
+            return Some(("dataSize".to_string(), FilterVal::Range(Range { lower, upper })));
         }
 
         // TODO: move DateRange -> Range<String> conversion to a separate method
@@ -187,7 +207,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::Inclusive(upper));
             }
-            return Some(("date_published".to_string(), FilterVal::Range(range)));
+            return Some(("datePublished".to_string(), FilterVal::Range(range)));
         }
         if let Some(date_created) = &self.date_created {
             let mut range = Range::default();
@@ -199,7 +219,7 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::Inclusive(upper));
             }
-            return Some(("date_created".to_string(), FilterVal::Range(range)));
+            return Some(("dateCreated".to_string(), FilterVal::Range(range)));
         }
         if let Some(date_updated) = &self.date_updated {
             let mut range = Range::default();
@@ -211,11 +231,11 @@ impl RecordsFilter {
                 let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
                 range.upper = Some(Upper::Inclusive(upper));
             }
-            return Some(("date_updated".to_string(), FilterVal::Range(range)));
+            return Some(("dateUpdated".to_string(), FilterVal::Range(range)));
         }
 
         if let Some(data_format) = &self.data_format {
-            return Some(("data_format".to_string(), FilterVal::Equal(data_format.clone())));
+            return Some(("dataFormat".to_string(), FilterVal::Equal(data_format.clone())));
         }
         if let Some(published) = self.published {
             return Some(("published".to_string(), FilterVal::Equal(published.to_string())));
@@ -264,29 +284,39 @@ impl RecordsFilter {
 #[serde(rename_all = "camelCase")]
 pub enum Sort {
     /// Sort `date_created` from oldest to newest.
-    #[serde(rename="createdAscending")]
+    #[serde(rename = "createdAscending")]
     CreatedAsc,
 
     /// Sort `date_created` newest to oldest.
-    #[serde(rename="createdDescending")]
+    #[serde(rename = "createdDescending")]
     CreatedDesc,
 
     /// Sort `date_published` from oldest to newest.
-    #[serde(rename="publishedAscending")]
+    #[serde(rename = "publishedAscending")]
     PublishedAsc,
 
     /// Sort `date_published` from newest to oldest.
-    #[serde(rename="publishedDescending")]
+    #[serde(rename = "publishedDescending")]
     PublishedDesc,
 
     /// Sort `message_timestamp` from oldest to newest.
-    #[serde(rename="timestampAscending")]
+    #[serde(rename = "timestampAscending")]
     #[default]
     TimestampAsc,
 
     /// Sort `message_timestamp` from newest to oldest.
-    #[serde(rename="timestampDescending")]
+    #[serde(rename = "timestampDescending")]
     TimestampDesc,
+}
+
+impl Sort {
+    /// Short-circuit testing for ascending/descending sort.
+    pub fn is_ascending(&self) -> bool {
+        match self {
+            Self::CreatedAsc | Self::PublishedAsc | Self::TimestampAsc => true,
+            _ => false,
+        }
+    }
 }
 
 impl Display for Sort {

@@ -58,10 +58,6 @@ pub trait MessageStore: Send + Sync {
             let Some(pagination) = &query.pagination else {
                 return Ok((entries, None));
             };
-            // sorted on?
-            let Some(sort_field) = &query.sort else {
-                return Ok((entries, None));
-            };
             // additional results?
             let mut limit = pagination.limit.unwrap_or(entries.len());
             if entries.len() <= limit {
@@ -98,7 +94,7 @@ pub trait MessageStore: Send + Sync {
                 curr_page,
                 Some(Cursor {
                     message_cid: next_entry.cid()?,
-                    value: sort_field.to_string(),
+                    value: "".to_string(),
                 }),
             ))
         }

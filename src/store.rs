@@ -198,7 +198,7 @@ pub struct RecordsQuery {
     pub include_archived: bool,
 
     /// Sort options.
-    pub sort: Option<Sort>,
+    pub sort: Sort,
 
     /// Pagination options.
     pub pagination: Option<Pagination>,
@@ -209,7 +209,7 @@ impl Default for RecordsQuery {
         Self {
             method: Some(Method::Write),
             include_archived: false,
-            sort: Some(Sort::default()),
+            sort: Sort::default(),
             filters: vec![],
             pagination: None,
         }
@@ -243,7 +243,7 @@ impl RecordsQuery {
     #[must_use]
     #[allow(dead_code)]
     pub(crate) const fn sort(mut self, sort: Sort) -> Self {
-        self.sort = Some(sort);
+        self.sort = sort;
         self
     }
 }
@@ -252,7 +252,7 @@ impl From<records::Query> for RecordsQuery {
     fn from(query: records::Query) -> Self {
         Self {
             filters: vec![query.descriptor.filter],
-            sort: query.descriptor.date_sort,
+            sort: query.descriptor.date_sort.unwrap_or_default(),
             pagination: query.descriptor.pagination,
             ..Self::default()
         }

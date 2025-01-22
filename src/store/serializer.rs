@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 
 use crate::store::{
-    Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
+    Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery,
     TagFilter, Upper,
 };
 use crate::{DateRange, Interface, Method, OneOrMany};
@@ -212,22 +212,16 @@ impl Serialize for RecordsQuery {
 
         outer_and.close();
 
-        // sorting - sort field + `message_cid` as a tiebreaker
-        if let Some(sort) = &self.sort {
-            match sort {
-                Sort::CreatedAsc | Sort::PublishedAsc | Sort::TimestampAsc => {
-                    serializer.order(&[
-                        SortField::Asc(&format!("descriptor.{sort}")),
-                        SortField::Asc("messageCid"),
-                    ]);
-                }
-                Sort::CreatedDesc | Sort::PublishedDesc | Sort::TimestampDesc => {
-                    serializer.order(&[
-                        SortField::Desc(&format!("descriptor.{sort}")),
-                        SortField::Desc("messageCid"),
-                    ]);
-                }
-            }
+        if self.sort.is_ascending() {
+            serializer.order(&[
+                SortField::Asc(&format!("descriptor.{}", self.sort)),
+                SortField::Asc("messageCid"),
+            ]);
+        } else {
+            serializer.order(&[
+                SortField::Desc(&format!("descriptor.{}", self.sort)),
+                SortField::Desc("messageCid"),
+            ]);
         }
 
         // LATER: implement pagination here if spec changes to `limit` and `offset`
