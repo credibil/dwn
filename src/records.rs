@@ -124,17 +124,8 @@ impl RecordsFilter {
         Ok(filter)
     }
 
+    /// Check if the filter will return a concise set of results.
     pub(crate) const fn is_concise(&self) -> bool {
-        // if self.record_id.is_some() {
-        //     return true;
-        // }
-
-        // if there is a cursor we never use in memory paging
-        // if (queryOptions.cursor !== undefined) {
-        //   return false;
-        // }
-
-        // conditions that will not have cursor
         if self.record_id.is_some()
             || self.protocol_path.is_some()
             || self.context_id.is_some()
