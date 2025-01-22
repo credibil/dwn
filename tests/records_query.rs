@@ -28,14 +28,14 @@ async fn invalid_sort() {
         .await
         .expect("should create query");
 
-    query.descriptor.date_sort = Some(Sort::PublishedAscending);
+    query.descriptor.date_sort = Some(Sort::PublishedAsc);
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query.clone(), &provider).await
     else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "cannot sort by `date_published` when querying for unpublished records");
 
-    query.descriptor.date_sort = Some(Sort::PublishedDescending);
+    query.descriptor.date_sort = Some(Sort::PublishedDesc);
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
         panic!("should be BadRequest");
     };
@@ -1204,7 +1204,7 @@ async fn date_created_range() {
 
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_created(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1225,7 +1225,7 @@ async fn date_created_range() {
 
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_created(DateRange::new().lt(last_2023.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1249,7 +1249,7 @@ async fn date_created_range() {
             RecordsFilter::new()
                 .date_created(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
         )
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1270,7 +1270,7 @@ async fn date_created_range() {
             RecordsFilter::new()
                 .date_created(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
         )
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1345,7 +1345,7 @@ async fn published_unpublished() {
 
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_created(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1364,7 +1364,7 @@ async fn published_unpublished() {
     // owner-requested date range
     let owner_range = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1392,7 +1392,7 @@ async fn published_unpublished() {
     // anonymous request date range
     let anon_range = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .build()
         .expect("should create query");
     let reply =
@@ -1407,7 +1407,7 @@ async fn published_unpublished() {
     // anonymous `published` filter
     let anon_published = QueryBuilder::new()
         .filter(RecordsFilter::new().published(true))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .build()
         .expect("should create query");
     let reply =
@@ -1556,7 +1556,7 @@ async fn date_published() {
     let last_2022 = DateTime::parse_from_rfc3339("2022-12-31T00:00:00-00:00").unwrap();
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1576,7 +1576,7 @@ async fn date_published() {
     let last_2023 = DateTime::parse_from_rfc3339("2023-12-31T00:00:00-00:00").unwrap();
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().lt(last_2023.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1599,7 +1599,7 @@ async fn date_published() {
             RecordsFilter::new()
                 .date_published(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
         )
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1620,7 +1620,7 @@ async fn date_published() {
             RecordsFilter::new()
                 .date_published(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
         )
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1638,7 +1638,7 @@ async fn date_published() {
     // --------------------------------------------------
     let anon_range = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .build()
         .expect("should create query");
     let reply =
@@ -1655,7 +1655,7 @@ async fn date_published() {
     // --------------------------------------------------
     let anon_range = QueryBuilder::new()
         .filter(RecordsFilter::new().date_published(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&bob_signer)
         .build()
         .await
@@ -1772,7 +1772,7 @@ async fn date_updated() {
 
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_updated(DateRange::new().gt(last_2022.into())))
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1789,7 +1789,7 @@ async fn date_updated() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().date_updated(DateRange::new().lt(last_2023.into())))
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1811,7 +1811,7 @@ async fn date_updated() {
             RecordsFilter::new()
                 .date_updated(DateRange::new().gt(last_2023.into()).lt(last_2024.into())),
         )
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -1832,7 +1832,7 @@ async fn date_updated() {
             RecordsFilter::new()
                 .date_updated(DateRange::new().gt(first_2023.into()).lt(first_2024.into())),
         )
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2041,7 +2041,7 @@ async fn exclude_unpublished() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2115,7 +2115,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2134,7 +2134,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .pagination(Pagination::new().limit(1))
         .sign(&alice_signer)
         .build()
@@ -2153,7 +2153,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
         .sign(&alice_signer)
         .build()
@@ -2172,7 +2172,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedDescending)
+        .date_sort(Sort::CreatedDesc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2191,7 +2191,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedDescending)
+        .date_sort(Sort::CreatedDesc)
         .pagination(Pagination::new().limit(1))
         .sign(&alice_signer)
         .build()
@@ -2210,7 +2210,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedDescending)
+        .date_sort(Sort::CreatedDesc)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
         .sign(&alice_signer)
         .build()
@@ -2229,7 +2229,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2248,7 +2248,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .pagination(Pagination::new().limit(1))
         .sign(&alice_signer)
         .build()
@@ -2267,7 +2267,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::PublishedAscending)
+        .date_sort(Sort::PublishedAsc)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
         .sign(&alice_signer)
         .build()
@@ -2286,7 +2286,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::PublishedDescending)
+        .date_sort(Sort::PublishedDesc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2305,7 +2305,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::PublishedDescending)
+        .date_sort(Sort::PublishedDesc)
         .pagination(Pagination::new().limit(1))
         .sign(&alice_signer)
         .build()
@@ -2324,7 +2324,7 @@ async fn date_sort() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::PublishedDescending)
+        .date_sort(Sort::PublishedDesc)
         .pagination(Pagination::new().cursor(query_reply.cursor.unwrap()).limit(2))
         .sign(&alice_signer)
         .build()
@@ -2403,7 +2403,7 @@ async fn sort_identical() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2422,7 +2422,7 @@ async fn sort_identical() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().schema("schema"))
-        .date_sort(Sort::CreatedDescending)
+        .date_sort(Sort::CreatedDesc)
         .sign(&alice_signer)
         .build()
         .await
@@ -2477,7 +2477,7 @@ async fn paginate_ascending() {
     loop {
         let query = QueryBuilder::new()
             .filter(RecordsFilter::new().schema("schema"))
-            .date_sort(Sort::CreatedAscending)
+            .date_sort(Sort::CreatedAsc)
             .pagination(Pagination {
                 limit: Some(5),
                 cursor,
@@ -2546,7 +2546,7 @@ async fn paginate_descending() {
     loop {
         let query = QueryBuilder::new()
             .filter(RecordsFilter::new().schema("schema"))
-            .date_sort(Sort::CreatedDescending)
+            .date_sort(Sort::CreatedDesc)
             .pagination(Pagination {
                 limit: Some(5),
                 cursor,
@@ -3553,7 +3553,7 @@ async fn paginate_non_owner() {
     // page 1
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .pagination(Pagination::new().limit(10))
         .sign(&alice_signer)
         .build()
@@ -3570,7 +3570,7 @@ async fn paginate_non_owner() {
     // page 2
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .pagination(Pagination::new().limit(10).cursor(query_reply.cursor.unwrap()))
         .sign(&alice_signer)
         .build()
@@ -3587,7 +3587,7 @@ async fn paginate_non_owner() {
     // page 3
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .pagination(Pagination::new().limit(5).cursor(query_reply.cursor.unwrap()))
         .sign(&alice_signer)
         .build()
@@ -3614,7 +3614,7 @@ async fn paginate_non_owner() {
     // page 1
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .pagination(Pagination::new().limit(10))
         .sign(&bob_signer)
         .build()
@@ -3631,7 +3631,7 @@ async fn paginate_non_owner() {
     // page 2
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol("http://allow-any.xyz").protocol_path("post"))
-        .date_sort(Sort::CreatedAscending)
+        .date_sort(Sort::CreatedAsc)
         .pagination(Pagination::new().limit(10).cursor(query_reply.cursor.unwrap()))
         .sign(&bob_signer)
         .build()

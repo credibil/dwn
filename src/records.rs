@@ -132,7 +132,7 @@ impl RecordsFilter {
     /// method chooses the best filter property, in order of priority, to use
     /// when querying.
     #[allow(clippy::too_many_lines)]
-    pub(crate) fn optimize(&self) -> Option<(String, FilterVal)> {
+    pub(crate) fn to_concise(&self) -> Option<(String, FilterVal)> {
         if let Some(record_id) = &self.record_id {
             return Some(("record_id".to_string(), FilterVal::Equal(record_id.clone())));
         }
@@ -264,31 +264,37 @@ impl RecordsFilter {
 #[serde(rename_all = "camelCase")]
 pub enum Sort {
     /// Sort `date_created` from oldest to newest.
-    CreatedAscending,
+    #[serde(rename="createdAscending")]
+    CreatedAsc,
 
     /// Sort `date_created` newest to oldest.
-    CreatedDescending,
+    #[serde(rename="createdDescending")]
+    CreatedDesc,
 
     /// Sort `date_published` from oldest to newest.
-    PublishedAscending,
+    #[serde(rename="publishedAscending")]
+    PublishedAsc,
 
     /// Sort `date_published` from newest to oldest.
-    PublishedDescending,
+    #[serde(rename="publishedDescending")]
+    PublishedDesc,
 
     /// Sort `message_timestamp` from oldest to newest.
+    #[serde(rename="timestampAscending")]
     #[default]
-    TimestampAscending,
+    TimestampAsc,
 
     /// Sort `message_timestamp` from newest to oldest.
-    TimestampDescending,
+    #[serde(rename="timestampDescending")]
+    TimestampDesc,
 }
 
 impl Display for Sort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CreatedAscending | Self::CreatedDescending => write!(f, "dateCreated"),
-            Self::PublishedAscending | Self::PublishedDescending => write!(f, "datePublished"),
-            Self::TimestampAscending | Self::TimestampDescending => write!(f, "messageTimestamp"),
+            Self::CreatedAsc | Self::CreatedDesc => write!(f, "dateCreated"),
+            Self::PublishedAsc | Self::PublishedDesc => write!(f, "datePublished"),
+            Self::TimestampAsc | Self::TimestampDesc => write!(f, "messageTimestamp"),
         }
     }
 }

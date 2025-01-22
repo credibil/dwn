@@ -215,13 +215,13 @@ impl Serialize for RecordsQuery {
         // sorting - sort field + `message_cid` as a tiebreaker
         if let Some(sort) = &self.sort {
             match sort {
-                Sort::CreatedAscending | Sort::PublishedAscending | Sort::TimestampAscending => {
+                Sort::CreatedAsc | Sort::PublishedAsc | Sort::TimestampAsc => {
                     serializer.order(&[
                         SortField::Asc(&format!("descriptor.{sort}")),
                         SortField::Asc("messageCid"),
                     ]);
                 }
-                Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending => {
+                Sort::CreatedDesc | Sort::PublishedDesc | Sort::TimestampDesc => {
                     serializer.order(&[
                         SortField::Desc(&format!("descriptor.{sort}")),
                         SortField::Desc("messageCid"),

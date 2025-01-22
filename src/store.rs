@@ -307,10 +307,6 @@ pub struct Pagination {
     /// Cursor created form the previous page of results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
-    // /// The offset from the start of the result set from which to start when
-    // /// determining the page of results to return.
-    // #[serde(skip)]
-    // pub offset: Option<usize>,
 }
 
 impl Pagination {
@@ -358,8 +354,7 @@ pub struct Cursor {
     /// Message CID from the last entry in the previous page of results.
     pub message_cid: String,
 
-    /// The value from the sort field of the last entry in the previous
-    /// page of results.
-    #[serde(rename = "value")]
-    pub sort_value: String,
+    /// The value (from sort field) of the last entry in the previous page of
+    /// results.
+    pub value: String,
 }

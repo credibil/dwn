@@ -240,13 +240,11 @@ impl Write {
     #[must_use]
     pub fn indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
-
         let descriptor = &self.descriptor;
 
         // TODO: remove this after cut over to new indexes
         indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
         indexes.insert("message_cid".to_string(), self.cid().unwrap_or_default());
-
         indexes.insert(
             "message_timestamp".to_string(),
             descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),

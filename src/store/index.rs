@@ -7,12 +7,12 @@
 
 use std::collections::btree_map::Range;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::ops::Bound::{Excluded, Included, Unbounded};
+use std::ops::Bound::{self, Excluded, Included, Unbounded};
 
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, FilterVal, Query, RecordsFilter, RecordsQuery, Sort, block};
+use crate::store::{Entry, FilterVal, Query, RecordsQuery, Sort, block};
 use crate::{Lower, Result, Upper, unexpected};
 
 const NULL: u8 = 0x00;
@@ -60,11 +60,8 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
     }
 
     // choose strategy for query
-    let entries = if concise {
-        indexes.query_concise(rq).await?
-    } else {
-        indexes.query_full(&rq.filters).await?
-    };
+    let entries =
+        if concise { indexes.query_concise(rq).await? } else { indexes.query_full(rq).await? };
 
     Ok(entries)
 }
@@ -109,21 +106,21 @@ impl<S: BlockStore> Indexes<'_, S> {
         let mut results = BTreeMap::new();
 
         let sort_field = match query.sort {
-            Some(Sort::CreatedAscending | Sort::CreatedDescending) => "date_created",
-            Some(Sort::PublishedAscending | Sort::PublishedDescending) => "date_published",
+            Some(Sort::CreatedAsc | Sort::CreatedDesc) => "date_created",
+            Some(Sort::PublishedAsc | Sort::PublishedDesc) => "date_published",
             _ => "message_timestamp",
         };
 
         for filter in &query.filters {
             // choose the best index to use for the filter
-            let Some((index, filter_val)) = filter.optimize() else {
+            let Some((field, filter_val)) = filter.to_concise() else {
                 continue;
             };
-            let index = self.get(&index).await?;
+            let index = self.get(&field).await?;
 
             // 1. narrow full index to one or more subsets of candidate matches
             // 2. iterate over subsets comparing each entry against the filter
-            for range in index.matches(&filter_val) {
+            for range in index.matching_ranges(&filter_val) {
                 for (value, item) in range {
                     // short circuit when previously matched
                     if matches.contains(&item.message_cid) {
@@ -146,15 +143,14 @@ impl<S: BlockStore> Indexes<'_, S> {
             }
         }
 
-        let mut entries = if let Some(
-            Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending,
-        ) = query.sort
-        {
-            // reverse built-in BTreeMap sort order
-            results.values().rev().cloned().collect::<Vec<Entry>>()
-        } else {
-            results.values().cloned().collect::<Vec<Entry>>()
-        };
+        let mut entries =
+            if let Some(Sort::CreatedDesc | Sort::PublishedDesc | Sort::TimestampDesc) = query.sort
+            {
+                // reverse built-in BTreeMap sort order
+                results.values().rev().cloned().collect::<Vec<Entry>>()
+            } else {
+                results.values().cloned().collect::<Vec<Entry>>()
+            };
 
         // pagination
         if let Some(pagination) = &query.pagination {
@@ -178,20 +174,36 @@ impl<S: BlockStore> Indexes<'_, S> {
 
     // This query strategy is used when the filter will return a larger set of
     // results.
-    async fn query_full(&self, filters: &[RecordsFilter]) -> Result<Vec<Entry>> {
+    async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<Entry>> {
         let mut entries = Vec::new();
+        let (limit, cursor) =
+            query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
 
-        for filter in filters {
-            if let Some(published) = &filter.published {
-                let index = self.get("data_format").await?;
-                for (value, item) in index.items {
-                    if value == "application/json" {
-                        let bytes = self.store.get(self.owner, &item.message_cid).await?.unwrap();
-                        let entry = block::decode(&bytes)?;
-                        entries.push(entry);
-                    }
-                }
-            }
+        // the location in the index to begin querying from
+        let start_key =
+            cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
+
+        // get index for sort field
+        let sort_field = match query.sort {
+            Some(Sort::CreatedAsc | Sort::CreatedDesc) => "date_created",
+            Some(Sort::PublishedAsc | Sort::PublishedDesc) => "date_published",
+            _ => "message_timestamp",
+        };
+        let index = self.get(sort_field).await?;
+
+        // starting from `start_key`, select matching index items until limit
+        for (value, item) in index.lower_bound(start_key) {
+            // use full entry to  match against other filter properties
+            let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
+                return Err(unexpected!("entry not found"));
+            };
+            let entry = block::decode(&bytes)?;
+            // if filter.is_match(&entry) {
+
+            // sort results as we collect using `message_cid` as a tie-breaker
+            let sort_key = format!("{}{}", &item.fields[sort_field], item.message_cid);
+            entries.push(entry);
+            // }
         }
 
         Ok(entries)
@@ -223,7 +235,11 @@ impl Index {
         self.items.insert(key, entry);
     }
 
-    fn matches<'a>(&'a self, filter_val: &FilterVal) -> Vec<Range<'a, String, IndexItem>> {
+    fn lower_bound(&self, lower: Bound<String>) -> Range<String, IndexItem> {
+        self.items.range((lower, Unbounded))
+    }
+
+    fn matching_ranges(&self, filter_val: &FilterVal) -> Vec<Range<String, IndexItem>> {
         let index = &self.items;
 
         match filter_val {
