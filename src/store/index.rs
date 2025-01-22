@@ -12,11 +12,10 @@ use std::ops::Bound::{self, Excluded, Included, Unbounded};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, FilterVal, Query, RecordsQuery, block};
-use crate::{Lower, Result, Upper, unexpected};
+use crate::store::{Entry, Query, RecordsQuery, block};
+use crate::{Result, unexpected};
 
 const NULL: u8 = 0x00;
-// const MIN: u8 = 0x20;
 const MAX: u8 = 0x7E;
 
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
@@ -108,14 +107,14 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         for filter in &query.filters {
             // choose the best index to use for the filter
-            let Some((field, filter_val)) = filter.to_concise() else {
+            let Some((field, value)) = filter.as_concise() else {
                 continue;
             };
             let index = self.get(&field).await?;
 
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
-            for item in index.matches(&filter_val) {
+            for item in index.matches(value) {
                 // short circuit when previously matched
                 if matches.contains(&item.message_cid) {
                     continue;
@@ -231,38 +230,45 @@ impl Index {
         self.items.range((lower, Unbounded))
     }
 
-    fn matches(&self, filter_val: &FilterVal) -> Vec<&IndexItem> {
+    fn matches(&self, value: String) -> Vec<&IndexItem> {
         let index = &self.items;
 
-        match filter_val {
-            FilterVal::Equal(equal) => {
-                let range =
-                    index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
-                range.map(|(_, item)| item).collect()
-            }
-            FilterVal::OneOf(one_of) => {
-                let mut items = vec![];
+        // let FilterVal::Equal(equal) = filter_val else {
+        //     return vec![];
+        // };
 
-                for equal in one_of {
-                    let range =
-                        index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
-                    items.extend(range.map(|(_, item)| item));
-                }
-                items
-            }
-            FilterVal::Range(range) => {
-                let lower = range.lower.as_ref().map_or(Unbounded, |lower| match lower {
-                    Lower::Inclusive(val) => Included(val.clone()),
-                    Lower::Exclusive(val) => Excluded(format!("{val}{MAX}")),
-                });
-                let upper = range.upper.as_ref().map_or(Unbounded, |upper| match upper {
-                    Upper::Inclusive(val) => Included(format!("{val}{MAX}")),
-                    Upper::Exclusive(val) => Excluded(val.clone()),
-                });
-                let range = index.range((lower, upper));
-                range.map(|(_, item)| item).collect()
-            }
-        }
+        let upper = format!("{value}{MAX}");
+        index.range((Included(value), Excluded(upper))).map(|(_, item)| item).collect()
+
+        // match filter_val {
+        //     FilterVal::Equal(equal) => {
+        //         let range =
+        //             index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
+        //         range.map(|(_, item)| item).collect()
+        //     }
+        //     FilterVal::OneOf(one_of) => {
+        //         let mut items = vec![];
+
+        //         for equal in one_of {
+        //             let range =
+        //                 index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
+        //             items.extend(range.map(|(_, item)| item));
+        //         }
+        //         items
+        //     }
+        //     FilterVal::Range(range) => {
+        //         let lower = range.lower.as_ref().map_or(Unbounded, |lower| match lower {
+        //             Lower::Inclusive(val) => Included(val.clone()),
+        //             Lower::Exclusive(val) => Excluded(format!("{val}{MAX}")),
+        //         });
+        //         let upper = range.upper.as_ref().map_or(Unbounded, |upper| match upper {
+        //             Upper::Inclusive(val) => Included(format!("{val}{MAX}")),
+        //             Upper::Exclusive(val) => Excluded(val.clone()),
+        //         });
+        //         let range = index.range((lower, upper));
+        //         range.map(|(_, item)| item).collect()
+        //     }
+        // }
     }
 }
 

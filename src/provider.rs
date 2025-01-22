@@ -94,7 +94,7 @@ pub trait MessageStore: Send + Sync {
                 curr_page,
                 Some(Cursor {
                     message_cid: next_entry.cid()?,
-                    value: "".to_string(),
+                    value: String::new(),
                 }),
             ))
         }
