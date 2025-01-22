@@ -293,14 +293,12 @@ impl Write {
             );
         }
 
-        // TODO: index tags
-        // if let Some(tags) = &self.descriptor.tags {
-        //     let mut tag_map = Map::new();
-        //     for (k, v) in tags {
-        //         tag_map.insert(format!("tag.{k}"), v.clone());
-        //     }
-        //     indexes.insert("tags".to_string(), Value::Object(tag_map));
-        // }
+        // flatten tags for indexing
+        if let Some(tags) = &self.descriptor.tags {
+            for (k, v) in tags {
+                indexes.insert(format!("tag.{k}"), v.as_str().unwrap_or_default().to_string());
+            }
+        }
 
         indexes
     }
@@ -769,6 +767,7 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
+    // TODO: does `tags` need to use Value?
     /// Tags associated with the record
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Map<String, Value>>,

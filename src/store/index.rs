@@ -108,12 +108,18 @@ impl<S: BlockStore> Indexes<'_, S> {
         let mut matches = HashSet::new();
         let mut results = BTreeMap::new();
 
+        let sort_field = match query.sort {
+            Some(Sort::CreatedAscending | Sort::CreatedDescending) => "date_created",
+            Some(Sort::PublishedAscending | Sort::PublishedDescending) => "date_published",
+            _ => "message_timestamp",
+        };
+
         for filter in &query.filters {
-            // determine the best index to use for the filter
+            // choose the best index to use for the filter
             let Some((index, filter_val)) = filter.optimize() else {
                 continue;
             };
-            let index = self.get(index).await?;
+            let index = self.get(&index).await?;
 
             // 1. narrow full index to one or more subsets of candidate matches
             // 2. iterate over subsets comparing each entry against the filter
@@ -132,28 +138,19 @@ impl<S: BlockStore> Indexes<'_, S> {
                     if filter.is_match(&entry) {
                         matches.insert(item.message_cid.clone());
 
-                        // sort results (ascending) as we collect — `message_cid` is tie-breaker
-                        let sort_val = match query.sort {
-                            Some(Sort::CreatedAscending | Sort::CreatedDescending) => {
-                                &item.fields["date_created"]
-                            }
-                            Some(Sort::PublishedAscending | Sort::PublishedDescending) => {
-                                &item.fields["date_published"]
-                            }
-                            _ => &item.fields["message_timestamp"],
-                        };
-
-                        results.insert(format!("{sort_val}{}", item.message_cid), entry);
+                        // sort results as we collect using `message_cid` as a tie-breaker
+                        let sort_key = format!("{}{}", &item.fields[sort_field], item.message_cid);
+                        results.insert(sort_key, entry);
                     }
                 }
             }
         }
 
-        // reverse built-in BTreeMap sort
         let mut entries = if let Some(
             Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending,
         ) = query.sort
         {
+            // reverse built-in BTreeMap sort order
             results.values().rev().cloned().collect::<Vec<Entry>>()
         } else {
             results.values().cloned().collect::<Vec<Entry>>()
@@ -233,6 +230,9 @@ impl Index {
             FilterVal::Equal(equal) => {
                 vec![index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))))]
             }
+            // FilterVal::StartsWith(start) => {
+            //     vec![index.range((Included(start.clone()), Excluded(format!("{start}{MAX}"))))]
+            // }
             FilterVal::OneOf(one_of) => {
                 let mut ranges = vec![];
                 for equal in one_of {
