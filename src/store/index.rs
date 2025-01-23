@@ -19,6 +19,9 @@ const NULL: u8 = 0x00;
 const MAX: u8 = 0x7E;
 
 /// Insert an entry's queryable fields into indexes.
+///
+/// # Errors
+/// LATER: Add errors
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
 
@@ -43,6 +46,9 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 }
 
 /// Query an index for matching entries.
+///
+/// # Errors
+/// LATER: Add errors
 pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<Entry>> {
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
@@ -70,6 +76,9 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
 }
 
 /// Delete entry specified by `message_cid` from indexes.
+///
+/// # Errors
+/// LATER: Add errors
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
     // FIXME: delete indexes
     Ok(())
@@ -79,6 +88,9 @@ pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> 
 struct Cid(String);
 
 /// Indexes store.
+///
+/// # Errors
+/// LATER: Add errors
 pub struct Indexes<'a, S: BlockStore> {
     owner: &'a str,
     store: &'a S,
@@ -86,6 +98,9 @@ pub struct Indexes<'a, S: BlockStore> {
 
 impl<S: BlockStore> Indexes<'_, S> {
     /// Get an index.
+    ///
+    /// # Errors
+    /// LATER: Add errors
     pub async fn get(&self, field: &str) -> Result<Index> {
         let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, field)))?;
 
@@ -97,6 +112,9 @@ impl<S: BlockStore> Indexes<'_, S> {
     }
 
     /// Update an index.
+    ///
+    /// # Errors
+    /// LATER: Add errors
     pub async fn update(&self, index: Index) -> Result<()> {
         let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
@@ -118,18 +136,15 @@ impl<S: BlockStore> Indexes<'_, S> {
         let sort_field = query.sort.to_string();
 
         for filter in &query.filters {
-            println!("filter: {:?}\n", filter);
-
             // choose the best index to use for the filter
             let Some((field, value)) = filter.as_concise() else {
                 continue;
             };
             let index = self.get(&field).await?;
 
-            println!("value: {:?}", value);
-
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
+
             for item in index.matches(value) {
                 // short circuit when previously matched
                 if matches.contains(&item.message_cid) {
@@ -141,8 +156,6 @@ impl<S: BlockStore> Indexes<'_, S> {
                     return Err(unexpected!("entry not found"));
                 };
                 let entry: Entry = block::decode(&bytes)?;
-
-                println!("entry cid: {:?}", entry.cid()?);
 
                 if filter.is_match(&entry) {
                     matches.insert(item.message_cid.clone());
@@ -200,12 +213,8 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let entry = block::decode(&bytes)?;
 
-            // println!("entry: {:?}\n", entry);
-
             // match entry against any filter
             for filter in &query.filters {
-                // println!("filter: {:?}\n", filter);
-
                 if filter.is_match(&entry) {
                     entries.push(entry);
                     break;
@@ -408,8 +417,6 @@ mod tests {
             ..Default::default()
         });
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
-
-        println!("{:?}", entries);
     }
 
     #[tokio::test]
@@ -439,8 +446,6 @@ mod tests {
             ..Default::default()
         });
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
-
-        println!("{:?}", entries);
     }
 
     // #[test]

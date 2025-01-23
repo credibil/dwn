@@ -135,7 +135,7 @@ impl RecordsFilter {
             }
         }
         if let Some(published) = &self.published {
-            if Some(published) != descriptor.published.as_ref() {
+            if *published != descriptor.published.unwrap_or_default() {
                 return false;
             }
         }

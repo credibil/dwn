@@ -18,6 +18,9 @@ const RAW: u64 = 0x55;
 const DAG_CBOR: u64 = 0x71;
 
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
+///
+/// # Errors
+/// LATER: Add errors
 pub fn encode<T>(payload: &T) -> Result<Vec<u8>>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -33,6 +36,9 @@ where
 }
 
 /// Decodes a block.
+///
+/// # Errors
+/// LATER: Add errors
 pub fn decode<T>(data: &[u8]) -> Result<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -41,6 +47,9 @@ where
 }
 
 /// Computes the CID of the provided payload.
+///
+/// # Errors
+/// LATER: Add errors
 pub fn compute_cid<T>(payload: &T) -> Result<String>
 where
     T: Serialize,
@@ -60,7 +69,7 @@ pub struct Block {
 
 impl Block {
     /// Creates a new block.
-    pub const fn new(cid: String, data: Vec<u8>) -> Self {
+    #[must_use]pub const fn new(cid: String, data: Vec<u8>) -> Self {
         Self {
             cid,
             data,
@@ -69,16 +78,19 @@ impl Block {
     }
 
     /// Returns the cid.
-    pub fn cid(&self) -> &str {
+    #[must_use]pub fn cid(&self) -> &str {
         self.cid.as_str()
     }
 
     /// Returns the payload.
-    pub fn data(&self) -> &[u8] {
+    #[must_use]pub fn data(&self) -> &[u8] {
         self.data.as_slice()
     }
 
     /// Decodes a block.
+    /// 
+    /// # Errors
+    /// LATER: Add errors
     pub fn decode<T>(&self) -> Result<T>
     where
         T: Serialize + for<'a> Deserialize<'a>,

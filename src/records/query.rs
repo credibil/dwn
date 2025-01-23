@@ -42,8 +42,10 @@ pub async fn handle(
     };
 
     // fetch records matching query criteria
-    let (records, cursor) =
-        MessageStore::paginated_query(provider, owner, &store_query.into()).await?;
+    // let (records, cursor) =
+    //     MessageStore::paginated_query(provider, owner, &store_query.into()).await?;
+    let records = MessageStore::query(provider, owner, &store_query.into()).await?;
+    let cursor = None;
 
     // short-circuit when no records found
     if records.is_empty() {
