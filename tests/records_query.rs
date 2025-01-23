@@ -3029,7 +3029,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates 2 records each for Bob and Carol: 2 public, 2 private.
+    // Alice creates 2 records each for Bob and Carol: 1 public, 1 private.
     // --------------------------------------------------
     let alice_bob_private = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
@@ -3110,7 +3110,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Carol creates 2 records each for Alice and Bob: 2 public, 2 private.
+    // Carol creates 2 records each for Alice and Bob: 1 public, 1 private.
     // --------------------------------------------------
     let carol_alice_private = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
@@ -3191,7 +3191,7 @@ async fn author_query() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob creates 2 records each for Alice and Carol: 2 public, 2 private.
+    // Bob creates 2 records each for Alice and Carol: 1 public, 1 private.
     // --------------------------------------------------
     let bob_alice_private = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))

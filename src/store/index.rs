@@ -18,6 +18,7 @@ use crate::{Result, unexpected};
 const NULL: u8 = 0x00;
 const MAX: u8 = 0x7E;
 
+/// Insert an entry's queryable fields into indexes.
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
 
@@ -41,6 +42,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
     Ok(())
 }
 
+/// Query an index for matching entries.
 pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<Entry>> {
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
@@ -67,9 +69,16 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
     Err(unexpected!("unsupported query type"))
 }
 
+/// Delete entry specified by `message_cid` from indexes.
+pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
+    // FIXME: delete indexes
+    Ok(())
+}
+
 #[derive(Serialize)]
 struct Cid(String);
 
+/// Indexes store.
 pub struct Indexes<'a, S: BlockStore> {
     owner: &'a str,
     store: &'a S,
@@ -109,11 +118,15 @@ impl<S: BlockStore> Indexes<'_, S> {
         let sort_field = query.sort.to_string();
 
         for filter in &query.filters {
+            println!("filter: {:?}\n", filter);
+
             // choose the best index to use for the filter
             let Some((field, value)) = filter.as_concise() else {
                 continue;
             };
             let index = self.get(&field).await?;
+
+            println!("value: {:?}", value);
 
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
@@ -127,7 +140,10 @@ impl<S: BlockStore> Indexes<'_, S> {
                 let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
                     return Err(unexpected!("entry not found"));
                 };
-                let entry = block::decode(&bytes)?;
+                let entry: Entry = block::decode(&bytes)?;
+
+                println!("entry cid: {:?}", entry.cid()?);
+
                 if filter.is_match(&entry) {
                     matches.insert(item.message_cid.clone());
 
@@ -184,8 +200,12 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let entry = block::decode(&bytes)?;
 
+            // println!("entry: {:?}\n", entry);
+
             // match entry against any filter
             for filter in &query.filters {
+                // println!("filter: {:?}\n", filter);
+
                 if filter.is_match(&entry) {
                     entries.push(entry);
                     break;
@@ -238,6 +258,7 @@ impl<S: BlockStore> Indexes<'_, S> {
     }
 }
 
+/// `Index` wraps a physical index, providing helper methods.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Index {
     field: String,
@@ -269,43 +290,8 @@ impl Index {
 
     fn matches(&self, value: String) -> Vec<&IndexItem> {
         let index = &self.items;
-
-        // let FilterVal::Equal(equal) = filter_val else {
-        //     return vec![];
-        // };
-
         let upper = format!("{value}{MAX}");
         index.range((Included(value), Excluded(upper))).map(|(_, item)| item).collect()
-
-        // match filter_val {
-        //     FilterVal::Equal(equal) => {
-        //         let range =
-        //             index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
-        //         range.map(|(_, item)| item).collect()
-        //     }
-        //     FilterVal::OneOf(one_of) => {
-        //         let mut items = vec![];
-
-        //         for equal in one_of {
-        //             let range =
-        //                 index.range((Included(equal.clone()), Excluded(format!("{equal}{MAX}"))));
-        //             items.extend(range.map(|(_, item)| item));
-        //         }
-        //         items
-        //     }
-        //     FilterVal::Range(range) => {
-        //         let lower = range.lower.as_ref().map_or(Unbounded, |lower| match lower {
-        //             Lower::Inclusive(val) => Included(val.clone()),
-        //             Lower::Exclusive(val) => Excluded(format!("{val}{MAX}")),
-        //         });
-        //         let upper = range.upper.as_ref().map_or(Unbounded, |upper| match upper {
-        //             Upper::Inclusive(val) => Included(format!("{val}{MAX}")),
-        //             Upper::Exclusive(val) => Excluded(val.clone()),
-        //         });
-        //         let range = index.range((lower, upper));
-        //         range.map(|(_, item)| item).collect()
-        //     }
-        // }
     }
 }
 

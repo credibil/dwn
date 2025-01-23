@@ -40,6 +40,7 @@ where
     DagCborCodec::decode_from_slice(data).map_err(Into::into)
 }
 
+/// Computes the CID of the provided payload.
 pub fn compute_cid<T>(payload: &T) -> Result<String>
 where
     T: Serialize,
@@ -50,6 +51,7 @@ where
     Ok(Cid::new_v1(DAG_CBOR, hash).to_string())
 }
 
+/// Block represents a unit of data uniquely identified by a content identifier
 pub struct Block {
     data: Vec<u8>,
     cid: String,
@@ -57,6 +59,7 @@ pub struct Block {
 }
 
 impl Block {
+    /// Creates a new block.
     pub const fn new(cid: String, data: Vec<u8>) -> Self {
         Self {
             cid,

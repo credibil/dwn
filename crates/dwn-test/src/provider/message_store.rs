@@ -1,41 +1,34 @@
 use anyhow::Result;
-use dwn_node::provider::{Entry, MessageStore, Query};
-use dwn_node::store::serializer::Serialize;
-use vercre_serialize::surrealdb;
+use dwn_node::provider::{BlockStore, Entry, MessageStore, Query};
+use dwn_node::store::{block, index};
 
 use super::ProviderImpl;
-use crate::provider::NAMESPACE;
-pub(crate) const TABLE: &str = "message";
 
 impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
-        self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        // let json = serde_json::to_string(entry)?;
-        // println!("{json}");
-        let _: Option<Entry> = self.db.update((TABLE, entry.cid()?)).content(entry).await?;
-        Ok(())
+        // store entry block
+        let message_cid = entry.cid().unwrap();
+        let block = block::encode(entry).unwrap();
+        BlockStore::put(self, owner, &message_cid, &block).await.unwrap();
+
+        // update indexes
+        Ok(index::insert(owner, &entry, self).await?)
     }
 
     async fn query(&self, owner: &str, query: &Query) -> Result<Vec<Entry>> {
-        self.db.use_ns(NAMESPACE).use_db(owner).await?;
-
-        let mut serializer = surrealdb::Sql::new();
-        query.serialize(&mut serializer).unwrap();
-        let sql = serializer.output();
-        // println!("\n{sql}\n");
-        let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
-        response.take(0).map_err(|e| e.into())
+        Ok(index::query(owner, query, self).await?)
     }
 
     async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Entry>> {
-        self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        Ok(self.db.select((TABLE, message_cid)).await?)
+        let Some(bytes) = BlockStore::get(self, owner, message_cid).await? else {
+            return Ok(None);
+        };
+        Ok(Some(block::decode(&bytes)?))
     }
 
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
-        self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<Entry> = self.db.delete((TABLE, message_cid)).await?;
-        Ok(())
+        index::delete(owner, message_cid, self).await?;
+        Ok(BlockStore::delete(self, owner, message_cid).await?)
     }
 
     // TODO: Implement purge

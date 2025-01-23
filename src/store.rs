@@ -1,7 +1,7 @@
 //! # Store
 
-mod block;
-mod index;
+pub mod block;
+pub mod index;
 mod message;
 pub mod serializer;
 
@@ -34,8 +34,8 @@ pub struct Entry {
 
     /// Indexes derived from the associated message object, flattened for
     /// ease of querying.
-    #[serde(flatten)]
-    #[serde(skip_deserializing)]
+    // #[serde(flatten)]
+    // #[serde(skip_deserializing)]
     pub indexes: HashMap<String, String>,
 }
 
