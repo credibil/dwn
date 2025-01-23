@@ -12,7 +12,7 @@ use std::ops::Bound::{self, Excluded, Included, Unbounded};
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
-use crate::store::{Entry, Query, RecordsQuery, block};
+use crate::store::{Entry, ProtocolsQuery, Query, RecordsQuery, block};
 use crate::{Result, unexpected};
 
 const NULL: u8 = 0x00;
@@ -20,19 +20,18 @@ const MAX: u8 = 0x7E;
 
 pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     let message_cid = entry.cid()?;
-    let write = entry.as_write().unwrap();
-    let fields = write.indexes();
 
+    let fields = &entry.indexes;
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
-    for (field, value) in write.indexes() {
-        let mut index = indexes.get(&field).await?;
+    for (field, value) in &entry.indexes {
+        let mut index = indexes.get(field).await?;
 
         let item = IndexItem {
             fields: fields.clone(),
             message_cid: message_cid.clone(),
         };
-        index.insert(&value, item);
+        index.insert(value, item);
         indexes.update(index).await?;
     }
 
@@ -45,23 +44,27 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<Entry>> {
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
-    let Query::Records(rq) = query else {
-        return Err(unexpected!("unsupported query type"));
+    if let Query::Records(rq) = query {
+        let mut concise = true;
+        for filter in &rq.filters {
+            if !filter.is_concise() {
+                concise = false;
+                break;
+            }
+        }
+
+        // choose strategy for query
+        if concise {
+            return indexes.query_concise(rq).await;
+        }
+        return indexes.query_full(rq).await;
     };
 
-    let mut concise = true;
-    for filter in &rq.filters {
-        if !filter.is_concise() {
-            concise = false;
-            break;
-        }
+    if let Query::Protocols(pq) = query {
+        return indexes.query_protocols(pq).await;
     }
 
-    // choose strategy for query
-    let entries =
-        if concise { indexes.query_concise(rq).await? } else { indexes.query_full(rq).await? };
-
-    Ok(entries)
+    Err(unexpected!("unsupported query type"))
 }
 
 #[derive(Serialize)]
@@ -198,6 +201,40 @@ impl<S: BlockStore> Indexes<'_, S> {
         }
 
         Ok(entries)
+    }
+
+    async fn query_protocols(&self, query: &ProtocolsQuery) -> Result<Vec<Entry>> {
+        let mut results = BTreeMap::new();
+
+        let index = self.get("protocol").await?;
+        for item in index.items.values() {
+            let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
+                return Err(unexpected!("entry not found"));
+            };
+            let entry: Entry = block::decode(&bytes)?;
+
+            let Some(configure) = entry.as_configure() else {
+                continue;
+            };
+
+            // check for filter match
+            if let Some(protocol) = &query.protocol {
+                if configure.descriptor.definition.protocol != *protocol {
+                    continue;
+                }
+            }
+            if let Some(published) = &query.published {
+                if configure.descriptor.definition.published != *published {
+                    continue;
+                }
+            }
+
+            // sort results as we collect using `message_cid` as a tie-breaker
+            let sort_key = format!("{}{}", &item.fields["messageTimestamp"], item.message_cid);
+            results.insert(sort_key, entry);
+        }
+
+        Ok(results.values().cloned().collect())
     }
 }
 

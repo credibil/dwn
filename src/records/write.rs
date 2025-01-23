@@ -242,8 +242,11 @@ impl Write {
         let mut indexes = HashMap::new();
         let descriptor = &self.descriptor;
 
+        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
+        indexes.insert("method".to_string(), descriptor.base.method.to_string());
+
         // FIXME: add these fields back when cut over to new indexes
-         indexes.insert("record_id".to_string(), self.record_id.clone());
+        indexes.insert("record_id".to_string(), self.record_id.clone());
         // if let Some(context_id) = &self.context_id {
         //     indexes.insert("contextId".to_string(), context_id.clone());
         // }

@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use chrono::SecondsFormat;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -118,24 +119,6 @@ pub struct ConfigureReply {
     message: Configure,
 }
 
-impl From<Configure> for Entry {
-    fn from(configure: Configure) -> Self {
-        Self {
-            message: EntryType::Configure(configure),
-            indexes: HashMap::new(),
-        }
-    }
-}
-
-impl From<&Configure> for Entry {
-    fn from(configure: &Configure) -> Self {
-        Self {
-            message: EntryType::Configure(configure.clone()),
-            indexes: HashMap::new(),
-        }
-    }
-}
-
 impl TryFrom<Entry> for Configure {
     type Error = crate::Error;
 
@@ -148,6 +131,27 @@ impl TryFrom<Entry> for Configure {
 }
 
 impl Configure {
+    /// Build flattened indexes for the write message.
+    #[must_use]
+    pub fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = HashMap::new();
+        let descriptor = &self.descriptor;
+
+        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
+        indexes.insert("method".to_string(), descriptor.base.method.to_string());
+
+        // TODO: remove this after cut over to new indexes
+        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert(
+            "messageTimestamp".to_string(),
+            descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
+        );
+        indexes.insert("protocol".to_string(), descriptor.definition.protocol.clone());
+        indexes.insert("published".to_string(), descriptor.definition.published.to_string());
+
+        indexes
+    }
+
     /// Check message has sufficient privileges.
     ///
     /// # Errors

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 // pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
 use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
+use crate::protocols::Configure;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{FilterVal, RecordsFilter, Sort, TagFilter};
@@ -109,16 +110,19 @@ impl From<&Write> for Entry {
 
 impl From<&Delete> for Entry {
     fn from(delete: &Delete) -> Self {
-        let mut entry = Self {
+        Self {
             message: EntryType::Delete(delete.clone()),
-            indexes: HashMap::new(),
-        };
+            indexes: delete.indexes(),
+        }
+    }
+}
 
-        // FIXME: build full indexes for each record
-        // flatten record_id so it queries correctly
-        entry.indexes.insert("recordId".to_string(), delete.descriptor.record_id.clone());
-        entry.indexes.insert("archived".to_string(), false.to_string());
-        entry
+impl From<&Configure> for Entry {
+    fn from(configure: &Configure) -> Self {
+        Self {
+            message: EntryType::Configure(configure.clone()),
+            indexes: configure.indexes(),
+        }
     }
 }
 

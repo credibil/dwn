@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
+use chrono::SecondsFormat;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -137,6 +138,29 @@ impl Task for Delete {
 }
 
 impl Delete {
+    /// Build flattened indexes for the write message.
+    #[must_use]
+    pub fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = HashMap::new();
+        let descriptor = &self.descriptor;
+
+        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
+        indexes.insert("method".to_string(), descriptor.base.method.to_string());
+
+        indexes.insert("record_id".to_string(), descriptor.record_id.clone());
+        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert(
+            "messageTimestamp".to_string(),
+            descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
+        );
+        indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
+
+        indexes.insert("recordId".to_string(), descriptor.record_id.clone());
+        indexes.insert("archived".to_string(), false.to_string());
+
+        indexes
+    }
+
     /// Authorize the delete message.
     async fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
