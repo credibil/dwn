@@ -378,6 +378,7 @@ mod tests {
     use rand::RngCore;
 
     use super::*;
+    use crate::clients::protocols::{ConfigureBuilder, Definition};
     use crate::clients::records::{Data, WriteBuilder};
     use crate::data::DataStream;
     use crate::store::{RecordsFilter, RecordsQuery};
@@ -385,7 +386,7 @@ mod tests {
     // use crate::store::block;
 
     #[tokio::test]
-    async fn test_index() {
+    async fn query_records() {
         let block_store = BlockStoreImpl::new();
         let alice_signer = key_store::signer(ALICE_DID);
 
@@ -418,6 +419,37 @@ mod tests {
                     // .data_size(Range::new().gt(8)),
                     .record_id(write.record_id),
             ],
+            ..Default::default()
+        });
+        let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
+
+        println!("{:?}", entries);
+    }
+
+    #[tokio::test]
+    async fn query_protocols() {
+        let block_store = BlockStoreImpl::new();
+        let alice_signer = key_store::signer(ALICE_DID);
+
+        let configure = ConfigureBuilder::new()
+            .definition(Definition::new("http://minimal.xyz"))
+            .build(&alice_signer)
+            .await
+            .expect("should build");
+
+        let entry = Entry::from(&configure);
+
+        // add message
+        let message_cid = entry.cid().unwrap();
+        let block = block::encode(&entry).unwrap();
+        block_store.put(ALICE_DID, &message_cid, &block).await.unwrap();
+
+        // update indexes
+        super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
+
+        // execute query
+        let query = Query::Protocols(ProtocolsQuery {
+            protocol: Some("http://minimal.xyz".to_string()),
             ..Default::default()
         });
         let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
