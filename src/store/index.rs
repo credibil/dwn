@@ -35,12 +35,6 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
     // if this is an update, remove the previous message indexes
     delete(owner, &message_cid, store).await?;
 
-    // println!(
-    //     "adding: archived {:?}, datePublished {:?}\n",
-    //     entry.indexes.get("archived"),
-    //     entry.indexes.get("datePublished")
-    // );
-
     for (field, value) in &entry.indexes {
         let mut index = indexes.get(field).await?;
         index.insert(value, IndexItem {
@@ -157,8 +151,6 @@ impl<S: BlockStore> Indexes<'_, S> {
     // This strategy is employed when the filter contains one of `record_id`,
     // `context_id`, `protocol_path`, `parent_id`, or `schema`.
     async fn query_concise(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
-        // println!("query_concise");
-
         let mut matches = HashSet::new();
         let mut results = BTreeMap::new();
 
@@ -184,14 +176,12 @@ impl<S: BlockStore> Indexes<'_, S> {
                     continue;
                 }
 
-                if item.is_match(&filter)? {
+                if item.is_match(filter)? {
                     matches.insert(item.message_cid.clone());
 
                     // sort results as we collect using `message_cid` as a tie-breaker
                     let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
                     results.insert(sort_key, item.clone());
-                    // } else {
-                    //     println!("no match: {:?}", item);
                 }
             }
         }
@@ -223,8 +213,6 @@ impl<S: BlockStore> Indexes<'_, S> {
     // This query strategy is used when the filter will return a larger set of
     // results.
     async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
-        // println!("query_full");
-
         let mut items = Vec::new();
         let (limit, cursor) =
             query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
@@ -243,12 +231,9 @@ impl<S: BlockStore> Indexes<'_, S> {
 
             // match entry against any filter
             for filter in &query.filters {
-                if item.is_match(&filter)? {
-                    // println!("match: {entry:?}\n");
+                if item.is_match(filter)? {
                     items.push(item.clone());
                     break;
-                    // }else {
-                    //     println!("no match: {item:?}\n");
                 }
             }
 
@@ -350,6 +335,10 @@ impl Index {
 
 impl IndexItem {
     /// Check if the index item matches the filter.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    #[allow(clippy::too_many_lines)]
     pub fn is_match(&self, filter: &RecordsFilter) -> Result<bool> {
         let empty = &String::new();
         let fields = &self.fields;
@@ -384,7 +373,8 @@ impl IndexItem {
             }
         }
         if let Some(published) = &filter.published {
-            if &published.to_string() != fields.get("published").unwrap_or(&String::from("false")) {
+            let default = String::from("false");
+            if &published.to_string() != fields.get("published").unwrap_or(&default) {
                 return Ok(false);
             }
         }

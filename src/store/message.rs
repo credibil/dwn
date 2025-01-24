@@ -99,7 +99,6 @@ mod tests {
 
         let write = WriteBuilder::new().sign(&alice_signer).build().await.unwrap();
         let block = block::encode(&write).unwrap();
-        // println!("{:?}", block.cid());
     }
 
     struct BlockStoreImpl {
