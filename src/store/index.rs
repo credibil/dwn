@@ -169,12 +169,14 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let index = self.get(&field).await?;
 
-            // let m = index.matches(value);
-            // println!("matches: {:?}", m.len());
-
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
             for item in index.matches(value) {
+                let archived = item.fields.get("archived");
+                if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
+                    continue;
+                }
+
                 // short circuit when previously matched
                 if matches.contains(&item.message_cid) {
                     continue;
@@ -236,10 +238,13 @@ impl<S: BlockStore> Indexes<'_, S> {
             cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
         let index = self.get(&query.sort.to_string()).await?;
 
-        println!("{start_key:?}");
-
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(start_key) {
+            let archived = item.fields.get("archived");
+            if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
+                continue;
+            }
+
             let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
                 return Err(unexpected!("entry not found"));
             };
@@ -247,15 +252,12 @@ impl<S: BlockStore> Indexes<'_, S> {
 
             // match entry against any filter
             for filter in &query.filters {
-                let archived = entry.indexes.get("archived");
-                if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
-                    continue;
-                }
-
                 if filter.is_match(&entry) {
                     // println!("match: {entry:?}\n");
                     items.push(item.clone());
                     break;
+                    // }else {
+                    //     println!("no match: {item:?}\n");
                 }
             }
 
@@ -351,7 +353,7 @@ impl Index {
     fn matches(&self, value: String) -> Vec<&IndexItem> {
         let index = &self.items;
         let upper = format!("{value}{MAX}");
-        index.range((Included(value), Excluded(upper))).map(|(_, item)| item).collect()
+        index.range((Excluded(value), Excluded(upper))).map(|(_, item)| item).collect()
     }
 }
 

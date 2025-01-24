@@ -4,7 +4,6 @@ use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use chrono::{DateTime, Utc};
 use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -195,16 +194,8 @@ impl RecordsFilter {
                 return false;
             }
         }
-
-        // `date_updated` is found in indexes
         if let Some(date_updated) = &self.date_updated {
-            let Some(updated) = indexes.get("dateUpdated") else {
-                return false;
-            };
-            let Some(date) = updated.parse::<DateTime<Utc>>().ok() else {
-                return false;
-            };
-            if !date_updated.contains(&date) {
+            if !date_updated.contains(&descriptor.base.message_timestamp) {
                 return false;
             }
         }

@@ -41,7 +41,7 @@ pub async fn handle(
         }
     };
 
-    //  println!("\n\n\nstart query");
+    println!("\n\n\nstart query");
     // let filters = serde_json::to_string_pretty(&store_query.filters).unwrap();
     // println!("filters: {}", filters);
 
@@ -51,7 +51,7 @@ pub async fn handle(
     // let records = MessageStore::query(provider, owner, &store_query.into()).await?;
     // let cursor = None;
 
-    //  println!("end query\n\n\n");
+    println!("end query\n\n\n");
 
     // short-circuit when no records found
     if records.is_empty() {
