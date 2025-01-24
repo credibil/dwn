@@ -42,23 +42,19 @@ impl MessageStore for ProviderImpl {
         };
 
         // return cursor when paging is used
-        let cursor = if limit.is_some() && limit.unwrap_or_default() < results.len() {
-            results.pop();
-
-            // set cursor to the last item remaining after the spliced result.
-            if results.len() == 0 {
-                return Ok((vec![], None));
-            }
-
+        let limit = limit.unwrap_or_default();
+        let cursor = if limit > 0 && limit < results.len() {
             let Query::Records(query) = query else {
                 return Err(anyhow!("invalid query"));
             };
             let sort_field = query.sort.to_string();
 
-            let last_item = &results[results.len() - 1];
-            Some(Cursor {
-                message_cid: last_item.message_cid.clone(),
-                value: last_item.fields[&sort_field].clone(),
+            // set cursor to the last item remaining after the spliced result.
+            results.pop().map_or(None, |item| {
+                Some(Cursor {
+                    message_cid: item.message_cid.clone(),
+                    value: item.fields[&sort_field].clone(),
+                })
             })
         } else {
             None

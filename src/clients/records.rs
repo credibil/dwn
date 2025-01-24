@@ -1,4 +1,4 @@
-//! # Records Query
+//! # Records
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
@@ -229,8 +229,6 @@ impl QueryBuilder<Filtered, Unsigned> {
     /// # Errors
     /// LATER: Add errors
     pub fn build(self) -> Result<Query> {
-        // validate_sort(self.date_sort.as_ref(), &self.filter.0)?;
-
         Ok(Query {
             descriptor: QueryDescriptor {
                 base: Descriptor {

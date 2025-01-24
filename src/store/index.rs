@@ -236,6 +236,8 @@ impl<S: BlockStore> Indexes<'_, S> {
             cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
         let index = self.get(&query.sort.to_string()).await?;
 
+        println!("{start_key:?}");
+
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(start_key) {
             let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
