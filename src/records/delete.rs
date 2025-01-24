@@ -148,15 +148,14 @@ impl Delete {
         indexes.insert("method".to_string(), descriptor.base.method.to_string());
 
         indexes.insert("record_id".to_string(), descriptor.record_id.clone());
+        indexes.insert("recordId".to_string(), descriptor.record_id.clone());
         indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
         indexes.insert(
             "messageTimestamp".to_string(),
             descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
         );
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-
-        indexes.insert("recordId".to_string(), descriptor.record_id.clone());
-        indexes.insert("archived".to_string(), false.to_string());
+        // indexes.insert("archived".to_string(), false.to_string());
 
         indexes
     }
@@ -240,7 +239,10 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     initial.indexes.insert("recordId".to_string(), write.record_id.clone());
 
     let mut entry = Entry::from(delete);
+    let indexes = entry.indexes.clone();
+
     entry.indexes.extend(initial.indexes);
+    entry.indexes.extend(indexes);
 
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;

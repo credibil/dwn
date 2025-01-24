@@ -220,11 +220,10 @@ async fn deleted_write() {
         .await
         .expect("should create delete");
 
-    let mut initial = Entry::from(&write);
-    initial.indexes.insert("recordId".to_string(), write.record_id.clone());
+    let initial = Entry::from(&write);
+
     let mut entry = Entry::from(&delete);
     entry.indexes.extend(initial.indexes);
-
     MessageStore::put(&provider, ALICE_DID, &entry).await.expect("should save");
 
     // --------------------------------------------------

@@ -9,8 +9,10 @@ use std::collections::btree_map::Range;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Bound::{self, Excluded, Included, Unbounded};
 
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
+use super::RecordsFilter;
 use crate::provider::BlockStore;
 use crate::store::{Entry, ProtocolsQuery, Query, RecordsQuery, block};
 use crate::{Result, unexpected};
@@ -172,30 +174,24 @@ impl<S: BlockStore> Indexes<'_, S> {
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
             for item in index.matches(value) {
-                let archived = item.fields.get("archived");
-                if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
-                    continue;
-                }
-
                 // short circuit when previously matched
                 if matches.contains(&item.message_cid) {
                     continue;
                 }
 
-                // use full entry to  match against other filter properties
-                let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
-                    return Err(unexpected!("entry not found"));
-                };
-                let entry = block::decode(&bytes)?;
+                let archived = item.fields.get("archived");
+                if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
+                    continue;
+                }
 
-                if filter.is_match(&entry) {
+                if item.is_match(&filter)? {
                     matches.insert(item.message_cid.clone());
 
                     // sort results as we collect using `message_cid` as a tie-breaker
                     let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
                     results.insert(sort_key, item.clone());
                     // } else {
-                    //     println!("no match: {:?}", entry);
+                    //     println!("no match: {:?}", item);
                 }
             }
         }
@@ -245,14 +241,9 @@ impl<S: BlockStore> Indexes<'_, S> {
                 continue;
             }
 
-            let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
-                return Err(unexpected!("entry not found"));
-            };
-            let entry: Entry = block::decode(&bytes)?;
-
             // match entry against any filter
             for filter in &query.filters {
-                if filter.is_match(&entry) {
+                if item.is_match(&filter)? {
                     // println!("match: {entry:?}\n");
                     items.push(item.clone());
                     break;
@@ -354,6 +345,122 @@ impl Index {
         let index = &self.items;
         let upper = format!("{value}{MAX}");
         index.range((Excluded(value), Excluded(upper))).map(|(_, item)| item).collect()
+    }
+}
+
+impl IndexItem {
+    /// Check if the index item matches the filter.
+    pub fn is_match(&self, filter: &RecordsFilter) -> Result<bool> {
+        let empty = &String::new();
+        let fields = &self.fields;
+
+        if fields.get("interface") != Some(&String::from("Records")) {
+            return Ok(false);
+        }
+
+        if let Some(author) = &filter.author {
+            if !author.to_vec().contains(fields.get("author").unwrap_or(empty)) {
+                return Ok(false);
+            }
+        }
+        if let Some(attester) = filter.attester.clone() {
+            if Some(&attester) != fields.get("attester") {
+                return Ok(false);
+            }
+        }
+        if let Some(recipient) = &filter.recipient {
+            if !recipient.to_vec().contains(fields.get("recipient").unwrap_or(empty)) {
+                return Ok(false);
+            }
+        }
+        if let Some(protocol) = &filter.protocol {
+            if Some(protocol) != fields.get("protocol") {
+                return Ok(false);
+            }
+        }
+        if let Some(protocol_path) = &filter.protocol_path {
+            if Some(protocol_path) != fields.get("protocolPath") {
+                return Ok(false);
+            }
+        }
+        if let Some(published) = &filter.published {
+            if &published.to_string() != fields.get("published").unwrap_or(&String::from("false")) {
+                return Ok(false);
+            }
+        }
+        if let Some(context_id) = &filter.context_id {
+            if !fields.get("contextId").unwrap_or(empty).starts_with(context_id) {
+                return Ok(false);
+            }
+        }
+        if let Some(schema) = &filter.schema {
+            if Some(schema) != fields.get("schema") {
+                return Ok(false);
+            }
+        }
+        if let Some(record_id) = &filter.record_id {
+            if Some(record_id) != fields.get("record_id") {
+                return Ok(false);
+            }
+        }
+        if let Some(parent_id) = &filter.parent_id {
+            if Some(parent_id) != fields.get("parentId") {
+                return Ok(false);
+            }
+        }
+        if let Some(tags) = &filter.tags {
+            for (property, filter) in tags {
+                let value = fields.get(&format!("tag.{property}")).unwrap_or(empty);
+                // if !filter.is_match(value) {
+                //     return Ok(false);
+                // }
+            }
+        }
+        if let Some(data_format) = &filter.data_format {
+            if Some(data_format) != fields.get("dataFormat") {
+                return Ok(false);
+            }
+        }
+        if let Some(data_size) = &filter.data_size {
+            let size_str = fields.get("dataSize").unwrap_or(empty);
+            let size: usize =
+                size_str.parse::<usize>().map_err(|e| unexpected!("issue parsing size: {e}"))?;
+
+            if !data_size.contains(&size) {
+                return Ok(false);
+            }
+        }
+        if let Some(data_cid) = &filter.data_cid {
+            if Some(data_cid) != fields.get("dataCid") {
+                return Ok(false);
+            }
+        }
+        if let Some(date_created) = &filter.date_created {
+            let date_str = fields.get("dateCreated").unwrap_or(empty);
+            let created = DateTime::parse_from_rfc3339(date_str)
+                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+            if !date_created.contains(&created.into()) {
+                return Ok(false);
+            }
+        }
+        if let Some(date_published) = &filter.date_published {
+            let date_str = fields.get("datePublished").unwrap_or(empty);
+            let published = DateTime::parse_from_rfc3339(date_str)
+                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+            if !date_published.contains(&published.into()) {
+                return Ok(false);
+            }
+        }
+        if let Some(date_updated) = &filter.date_updated {
+            let date_str = fields.get("messageTimestamp").unwrap_or(empty);
+            let timestamp = DateTime::parse_from_rfc3339(date_str)
+                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+            if !date_updated.contains(&timestamp.into()) {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 }
 

@@ -41,17 +41,9 @@ pub async fn handle(
         }
     };
 
-    println!("\n\n\nstart query");
-    // let filters = serde_json::to_string_pretty(&store_query.filters).unwrap();
-    // println!("filters: {}", filters);
-
     // fetch records matching query criteria
     let (records, cursor) =
         MessageStore::paginated_query(provider, owner, &store_query.into()).await?;
-    // let records = MessageStore::query(provider, owner, &store_query.into()).await?;
-    // let cursor = None;
-
-    println!("end query\n\n\n");
 
     // short-circuit when no records found
     if records.is_empty() {
@@ -66,6 +58,7 @@ pub async fn handle(
 
     // build reply
     let mut entries = vec![];
+
     for record in records {
         let write: Write = record.try_into()?;
 

@@ -37,6 +37,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         let Some(delete) = entries[0].as_delete() else {
             return Err(unexpected!("expected `RecordsDelete` message"));
         };
+
         let Ok(initial_write) =
             write::initial_write(owner, &delete.descriptor.record_id, provider).await
         else {

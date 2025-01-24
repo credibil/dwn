@@ -8,11 +8,10 @@ impl MessageStore for ProviderImpl {
     async fn put(&self, owner: &str, entry: &Entry) -> Result<()> {
         // store entry block
         let message_cid = entry.cid()?;
-
-        // println!("putting message cid: {}", message_cid);
-
         BlockStore::delete(self, owner, &message_cid).await?;
         BlockStore::put(self, owner, &message_cid, &block::encode(entry)?).await?;
+
+        // index entry
         Ok(index::insert(owner, &entry, self).await?)
     }
 
