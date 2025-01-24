@@ -35,8 +35,6 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
     // remove the previous index entries for message
     delete(owner, &message_cid, store).await?;
 
-    // println!("putting:{:?}\n", entry.indexes);
-
     for (field, value) in &entry.indexes {
         let mut index = indexes.get(field).await?;
         index.insert(value, IndexItem {
