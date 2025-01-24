@@ -1442,7 +1442,6 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create write");
-
     let reply =
         endpoint::handle(ALICE_DID, unwrite_2022.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);

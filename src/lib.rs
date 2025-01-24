@@ -277,7 +277,7 @@ impl DateRange {
             }
         }
         if let Some(upper) = &self.upper {
-            if value > upper {
+            if value >= upper {
                 return false;
             }
         }

@@ -15,8 +15,10 @@ use crate::provider::BlockStore;
 use crate::store::{Entry, ProtocolsQuery, Query, RecordsQuery, block};
 use crate::{Result, unexpected};
 
-const NULL: u8 = 0x00;
-const MAX: u8 = 0x7E;
+// const NULL: u8 = 0x00;
+// const MAX: u8 = 0x7E;
+const NULL: char = '\u{100000}';
+const MAX: char = '\u{10ffff}';
 
 /// Insert an entry's queryable fields into indexes.
 ///
@@ -28,19 +30,31 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
     let fields = &entry.indexes;
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
+    // if this is an update, remove the previous message indexes
+    delete(owner, &message_cid, store).await?;
+
+    // println!(
+    //     "adding: archived {:?}, datePublished {:?}\n",
+    //     entry.indexes.get("archived"),
+    //     entry.indexes.get("datePublished")
+    // );
+
     for (field, value) in &entry.indexes {
         let mut index = indexes.get(field).await?;
-
-        let item = IndexItem {
+        index.insert(value, IndexItem {
             fields: fields.clone(),
             message_cid: message_cid.clone(),
-        };
-        index.insert(value, item);
-        indexes.update(index).await?;
+        });
+        indexes.put(index).await?;
     }
 
-    // TODO: add reverse lookup for deletes: {"message_cid": fields[]}
-    // index.insert(message_cid, fields);
+    // add reverse lookup to use when message is updated or deleted
+    let mut index = indexes.get("message_cid").await?;
+    index.items.insert(message_cid.clone(), IndexItem {
+        fields: fields.clone(),
+        message_cid,
+    });
+    indexes.put(index).await?;
 
     Ok(())
 }
@@ -49,7 +63,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 ///
 /// # Errors
 /// LATER: Add errors
-pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<Entry>> {
+pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<IndexItem>> {
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
     if let Query::Records(rq) = query {
@@ -80,7 +94,18 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
 /// # Errors
 /// LATER: Add errors
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
-    // FIXME: delete indexes
+    let indexes = IndexesBuilder::new().owner(owner).store(store).build();
+
+    // if this is an update, remove the previous message indexes
+    let messages = indexes.get("message_cid").await?;
+    if let Some(item) = messages.items.get(message_cid) {
+        for (field, value) in &item.fields {
+            let mut index = indexes.get(field).await?;
+            let x = index.remove(value, message_cid);
+            indexes.put(index).await?;
+        }
+    }
+
     Ok(())
 }
 
@@ -115,7 +140,7 @@ impl<S: BlockStore> Indexes<'_, S> {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub async fn update(&self, index: Index) -> Result<()> {
+    pub async fn put(&self, index: Index) -> Result<()> {
         let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
         // update the index block
@@ -129,7 +154,9 @@ impl<S: BlockStore> Indexes<'_, S> {
     //
     // This strategy is employed when the filter contains one of `record_id`,
     // `context_id`, `protocol_path`, `parent_id`, or `schema`.
-    async fn query_concise(&self, query: &RecordsQuery) -> Result<Vec<Entry>> {
+    async fn query_concise(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
+        // println!("query_concise");
+
         let mut matches = HashSet::new();
         let mut results = BTreeMap::new();
 
@@ -142,9 +169,11 @@ impl<S: BlockStore> Indexes<'_, S> {
             };
             let index = self.get(&field).await?;
 
+            // let m = index.matches(value);
+            // println!("matches: {:?}", m.len());
+
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
-
             for item in index.matches(value) {
                 // short circuit when previously matched
                 if matches.contains(&item.message_cid) {
@@ -155,49 +184,50 @@ impl<S: BlockStore> Indexes<'_, S> {
                 let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
                     return Err(unexpected!("entry not found"));
                 };
-                let entry: Entry = block::decode(&bytes)?;
+                let entry = block::decode(&bytes)?;
 
                 if filter.is_match(&entry) {
                     matches.insert(item.message_cid.clone());
 
                     // sort results as we collect using `message_cid` as a tie-breaker
                     let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
-                    results.insert(sort_key, entry);
+                    results.insert(sort_key, item.clone());
+                    // } else {
+                    //     println!("no match: {:?}", entry);
                 }
             }
         }
 
         // collect results in sorted order
-        let mut entries = if query.sort.is_ascending() {
-            results.values().cloned().collect::<Vec<Entry>>()
+        let mut items = if query.sort.is_ascending() {
+            results.values().cloned().collect::<Vec<IndexItem>>()
         } else {
-            results.values().rev().cloned().collect::<Vec<Entry>>()
+            results.values().rev().cloned().collect::<Vec<IndexItem>>()
         };
 
         // paginate results
         if let Some(pagination) = &query.pagination {
-            let limit = pagination.limit.unwrap_or(entries.len());
+            let limit = pagination.limit.unwrap_or(items.len());
             let start = pagination.cursor.as_ref().map_or(0, |cursor| {
-                entries
-                    .iter()
-                    .position(|e| e.cid().unwrap_or_default() == cursor.message_cid)
-                    .unwrap_or(0)
+                items.iter().position(|item| item.message_cid == cursor.message_cid).unwrap_or(0)
             });
 
             let mut end = start + limit + 1;
-            if end > entries.len() {
-                end = entries.len();
+            if end > items.len() {
+                end = items.len();
             }
-            entries = entries[start..end].to_vec();
+            items = items[start..end].to_vec();
         }
 
-        Ok(entries)
+        Ok(items)
     }
 
     // This query strategy is used when the filter will return a larger set of
     // results.
-    async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<Entry>> {
-        let mut entries = Vec::new();
+    async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
+        // println!("query_full");
+
+        let mut items = Vec::new();
         let (limit, cursor) =
             query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
 
@@ -211,28 +241,34 @@ impl<S: BlockStore> Indexes<'_, S> {
             let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
                 return Err(unexpected!("entry not found"));
             };
-            let entry = block::decode(&bytes)?;
+            let entry: Entry = block::decode(&bytes)?;
 
             // match entry against any filter
             for filter in &query.filters {
+                let archived = entry.indexes.get("archived");
+                if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
+                    continue;
+                }
+
                 if filter.is_match(&entry) {
-                    entries.push(entry);
+                    // println!("match: {entry:?}\n");
+                    items.push(item.clone());
                     break;
                 }
             }
 
             // stop when page limit + 1 is reached
             if let Some(lim) = limit {
-                if entries.len() == lim + 1 {
+                if items.len() == lim + 1 {
                     break;
                 }
             }
         }
 
-        Ok(entries)
+        Ok(items)
     }
 
-    async fn query_protocols(&self, query: &ProtocolsQuery) -> Result<Vec<Entry>> {
+    async fn query_protocols(&self, query: &ProtocolsQuery) -> Result<Vec<IndexItem>> {
         let mut results = BTreeMap::new();
 
         let index = self.get("protocol").await?;
@@ -260,7 +296,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
             // sort results as we collect using `message_cid` as a tie-breaker
             let sort_key = format!("{}{}", &item.fields["messageTimestamp"], item.message_cid);
-            results.insert(sort_key, entry);
+            results.insert(sort_key, item.clone());
         }
 
         Ok(results.values().cloned().collect())
@@ -274,10 +310,14 @@ pub struct Index {
     items: BTreeMap<String, IndexItem>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct IndexItem {
-    message_cid: String,
-    fields: HashMap<String, String>,
+/// Represents an index entry.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IndexItem {
+    /// The CID pointing to the indexed message.
+    pub message_cid: String,
+
+    /// The fields indexed for the message.
+    pub fields: HashMap<String, String>,
 }
 
 impl Index {
@@ -293,9 +333,18 @@ impl Index {
         self.items.insert(key, item);
     }
 
+    fn remove(&mut self, value: &str, message_cid: &str) -> Option<IndexItem> {
+        let key = format!("{value}{NULL}{message_cid}");
+        self.items.remove(&key)
+    }
+
     fn lower_bound(&self, lower: Bound<String>) -> Range<String, IndexItem> {
         self.items.range((lower, Unbounded))
     }
+
+    // fn range(&self, lower: Bound<String>, upper: Bound<String>) -> Range<String, IndexItem> {
+    //     self.items.range((lower, upper))
+    // }
 
     fn matches(&self, value: String) -> Vec<&IndexItem> {
         let index = &self.items;
@@ -416,7 +465,7 @@ mod tests {
             ],
             ..Default::default()
         });
-        let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
+        let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
     }
 
     #[tokio::test]
@@ -445,7 +494,7 @@ mod tests {
             protocol: Some("http://minimal.xyz".to_string()),
             ..Default::default()
         });
-        let entries = super::query(ALICE_DID, &query, &block_store).await.unwrap();
+        let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
     }
 
     // #[test]

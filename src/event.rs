@@ -140,7 +140,7 @@ impl RecordsFilter {
             }
         }
         if let Some(context_id) = &self.context_id {
-            if Some(context_id) != write.context_id.as_ref() {
+            if !write.context_id.as_ref().unwrap_or(&String::new()).starts_with(context_id) {
                 return false;
             }
         }

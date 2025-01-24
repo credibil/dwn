@@ -69,7 +69,8 @@ pub struct Block {
 
 impl Block {
     /// Creates a new block.
-    #[must_use]pub const fn new(cid: String, data: Vec<u8>) -> Self {
+    #[must_use]
+    pub const fn new(cid: String, data: Vec<u8>) -> Self {
         Self {
             cid,
             data,
@@ -78,17 +79,19 @@ impl Block {
     }
 
     /// Returns the cid.
-    #[must_use]pub fn cid(&self) -> &str {
+    #[must_use]
+    pub fn cid(&self) -> &str {
         self.cid.as_str()
     }
 
     /// Returns the payload.
-    #[must_use]pub fn data(&self) -> &[u8] {
+    #[must_use]
+    pub fn data(&self) -> &[u8] {
         self.data.as_slice()
     }
 
     /// Decodes a block.
-    /// 
+    ///
     /// # Errors
     /// LATER: Add errors
     pub fn decode<T>(&self) -> Result<T>

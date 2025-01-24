@@ -180,17 +180,21 @@ impl Message for Write {
     type Reply = WriteReply;
 
     fn cid(&self) -> Result<String> {
-        // exclude `record_id` and `context_id` from CID calculation
-        #[derive(Serialize)]
-        struct Cid {
-            #[serde(flatten)]
-            descriptor: WriteDescriptor,
-            authorization: Authorization,
-        }
-        cid::from_value(&Cid {
-            descriptor: self.descriptor.clone(),
-            authorization: self.authorization.clone(),
-        })
+        // // exclude `record_id` and `context_id` from CID calculation
+        // #[derive(Serialize)]
+        // struct Cid {
+        //     #[serde(flatten)]
+        //     descriptor: WriteDescriptor,
+        //     authorization: Authorization,
+        // }
+        // cid::from_value(&Cid {
+        //     descriptor: self.descriptor.clone(),
+        //     authorization: self.authorization.clone(),
+        // })
+
+        let mut write = self.clone();
+        write.encoded_data = None;
+        cid::from_value(&write)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -247,9 +251,9 @@ impl Write {
 
         // FIXME: add these fields back when cut over to new indexes
         indexes.insert("record_id".to_string(), self.record_id.clone());
-        // if let Some(context_id) = &self.context_id {
-        //     indexes.insert("contextId".to_string(), context_id.clone());
-        // }
+        if let Some(context_id) = &self.context_id {
+            indexes.insert("contextId".to_string(), context_id.clone());
+        }
 
         // TODO: remove this after cut over to new indexes
         indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
