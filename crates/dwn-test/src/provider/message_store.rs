@@ -11,6 +11,8 @@ impl MessageStore for ProviderImpl {
         BlockStore::delete(self, owner, &message_cid).await?;
         BlockStore::put(self, owner, &message_cid, &block::encode(entry)?).await?;
 
+        println!("putting block {message_cid}");
+
         // index entry
         Ok(index::insert(owner, &entry, self).await?)
     }
@@ -72,12 +74,14 @@ impl MessageStore for ProviderImpl {
 
     async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Entry>> {
         let Some(bytes) = BlockStore::get(self, owner, message_cid).await? else {
+            println!("missing block {message_cid}");
             return Ok(None);
         };
         Ok(Some(block::decode(&bytes)?))
     }
 
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
+        println!("deleting block {message_cid}");
         index::delete(owner, message_cid, self).await?;
         Ok(BlockStore::delete(self, owner, message_cid).await?)
     }

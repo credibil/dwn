@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::RecordsFilter;
 use crate::provider::BlockStore;
 use crate::store::{Entry, ProtocolsQuery, Query, RecordsQuery, block};
-use crate::{Result, unexpected};
+use crate::{Interface, Result, unexpected};
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;
@@ -32,13 +32,15 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
     let fields = &entry.indexes;
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
-    // if this is an update, remove the previous message indexes
+    // remove the previous index entries for message
     delete(owner, &message_cid, store).await?;
+
+    // println!("putting:{:?}\n", entry.indexes);
 
     for (field, value) in &entry.indexes {
         let mut index = indexes.get(field).await?;
         index.insert(value, IndexItem {
-            fields: fields.clone(),
+            fields: entry.indexes.clone(),
             message_cid: message_cid.clone(),
         });
         indexes.put(index).await?;
@@ -47,7 +49,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
     // add reverse lookup to use when message is updated or deleted
     let mut index = indexes.get("message_cid").await?;
     index.items.insert(message_cid.clone(), IndexItem {
-        fields: fields.clone(),
+        fields: entry.indexes.clone(),
         message_cid,
     });
     indexes.put(index).await?;
@@ -63,19 +65,13 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
     if let Query::Records(rq) = query {
-        let mut concise = true;
+        // choose query strategy
         for filter in &rq.filters {
             if !filter.is_concise() {
-                concise = false;
-                break;
+                return indexes.query_full(rq).await;
             }
         }
-
-        // choose strategy for query
-        if concise {
-            return indexes.query_concise(rq).await;
-        }
-        return indexes.query_full(rq).await;
+        return indexes.query_concise(rq).await;
     };
 
     if let Query::Protocols(pq) = query {
@@ -170,10 +166,17 @@ impl<S: BlockStore> Indexes<'_, S> {
                 if matches.contains(&item.message_cid) {
                     continue;
                 }
-
                 let archived = item.fields.get("archived");
                 if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
                     continue;
+                }
+                if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
+                    continue;
+                }
+                if let Some(method) = &query.method {
+                    if item.fields.get("method") != Some(&method.to_string()) {
+                        continue;
+                    }
                 }
 
                 if item.is_match(filter)? {
@@ -228,6 +231,14 @@ impl<S: BlockStore> Indexes<'_, S> {
             if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
                 continue;
             }
+            if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
+                continue;
+            }
+            if let Some(method) = &query.method {
+                if item.fields.get("method") != Some(&method.to_string()) {
+                    continue;
+                }
+            }
 
             // match entry against any filter
             for filter in &query.filters {
@@ -253,23 +264,17 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         let index = self.get("protocol").await?;
         for item in index.items.values() {
-            let Some(bytes) = self.store.get(self.owner, &item.message_cid).await? else {
-                return Err(unexpected!("entry not found"));
-            };
-            let entry: Entry = block::decode(&bytes)?;
-
-            let Some(configure) = entry.as_configure() else {
+            if item.fields.get("interface") != Some(&Interface::Protocols.to_string()) {
                 continue;
-            };
-
-            // check for filter match
+            }
             if let Some(protocol) = &query.protocol {
-                if configure.descriptor.definition.protocol != *protocol {
+                if item.fields.get("protocol") != Some(protocol) {
                     continue;
                 }
             }
             if let Some(published) = &query.published {
-                if configure.descriptor.definition.published != *published {
+                let default = String::from("false");
+                if &published.to_string() != item.fields.get("published").unwrap_or(&default) {
                     continue;
                 }
             }
@@ -342,10 +347,6 @@ impl IndexItem {
     pub fn is_match(&self, filter: &RecordsFilter) -> Result<bool> {
         let empty = &String::new();
         let fields = &self.fields;
-
-        if fields.get("interface") != Some(&String::from("Records")) {
-            return Ok(false);
-        }
 
         if let Some(author) = &filter.author {
             if !author.to_vec().contains(fields.get("author").unwrap_or(empty)) {

@@ -555,12 +555,10 @@ impl Write {
         let Some(grant_id) = &self.descriptor.parent_id else {
             return Err(unexpected!("missing `parent_id`"));
         };
-        let message_timestamp = self.descriptor.base.message_timestamp;
-
-        let lt = DateRange::new().lt(message_timestamp);
+        let timestamp = self.descriptor.base.message_timestamp;
+        let lt = DateRange::new().lt(timestamp);
         let query = RecordsQuery::new()
             .add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
-
         let records = MessageStore::query(provider, owner, &query.into()).await?;
 
         // delete matching messages
