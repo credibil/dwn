@@ -785,12 +785,9 @@ dependencies = [
  "dwn-node",
  "ed25519-dalek",
  "futures",
- "http",
  "insta",
- "rand",
  "serde_json",
  "sha2 0.10.8",
- "tokio",
  "vercre-infosec",
  "x25519-dalek",
 ]
