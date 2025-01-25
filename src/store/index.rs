@@ -467,10 +467,6 @@ impl IndexItem {
             }
         }
         if let Some(published) = &filter.published {
-            // let default = String::from("false");
-            // if &published.to_string() != fields.get("published").unwrap_or(&default) {
-            //     return Ok(false);
-            // }
             if Some(&published.to_string()) != fields.get("published") {
                 return Ok(false);
             }

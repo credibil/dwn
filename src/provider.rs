@@ -58,14 +58,13 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
         async move {
             let mut results = index::query(owner, query, self).await?;
 
-            let (limit, _) = if let Query::Records(query) = query {
-                query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()))
+            // return cursor when paging is used
+            let limit = if let Query::Records(query) = query {
+                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default()
             } else {
-                (None, None)
+                0
             };
 
-            // return cursor when paging is used
-            let limit = limit.unwrap_or_default();
             let cursor = if limit > 0 && limit < results.len() {
                 let Query::Records(query) = query else {
                     return Err(anyhow!("invalid query"));
@@ -248,18 +247,15 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
         async move {
-            // FIXME: sort and paginate
-
             let mut results = index::query(owner, query, self).await?;
 
-            let (limit, _) = if let Query::Records(query) = query {
-                query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()))
+            // return cursor when paging is used
+            let limit = if let Query::Records(query) = query {
+                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default()
             } else {
-                (None, None)
+                0
             };
 
-            // return cursor when paging is used
-            let limit = limit.unwrap_or_default();
             let cursor = if limit > 0 && limit < results.len() {
                 let Query::Records(query) = query else {
                     return Err(anyhow!("invalid query"));
