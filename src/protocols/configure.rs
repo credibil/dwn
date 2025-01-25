@@ -2,21 +2,22 @@
 //!
 //! Decentralized Web Node messaging framework.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
+use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
-use crate::protocols::query;
+use crate::protocols::{Size, query};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, EntryType};
-use crate::{Descriptor, Error, Range, Result, forbidden, permissions, unexpected, utils};
+use crate::{Descriptor, Error, Result, forbidden, permissions, unexpected, utils};
 
 /// Process query message.
 ///
@@ -118,24 +119,6 @@ pub struct ConfigureReply {
     message: Configure,
 }
 
-impl From<Configure> for Entry {
-    fn from(configure: Configure) -> Self {
-        Self {
-            message: EntryType::Configure(configure),
-            indexes: Map::new(),
-        }
-    }
-}
-
-impl From<&Configure> for Entry {
-    fn from(configure: &Configure) -> Self {
-        Self {
-            message: EntryType::Configure(configure.clone()),
-            indexes: Map::new(),
-        }
-    }
-}
-
 impl TryFrom<Entry> for Configure {
     type Error = crate::Error;
 
@@ -148,6 +131,27 @@ impl TryFrom<Entry> for Configure {
 }
 
 impl Configure {
+    /// Build flattened indexes for the write message.
+    #[must_use]
+    pub fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = HashMap::new();
+        let descriptor = &self.descriptor;
+
+        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
+        indexes.insert("method".to_string(), descriptor.base.method.to_string());
+
+        // TODO: remove this after cut over to new indexes
+        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert(
+            "messageTimestamp".to_string(),
+            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
+        );
+        indexes.insert("protocol".to_string(), descriptor.definition.protocol.clone());
+        indexes.insert("published".to_string(), descriptor.definition.published.to_string());
+
+        indexes
+    }
+
     /// Check message has sufficient privileges.
     ///
     /// # Errors
@@ -344,7 +348,7 @@ pub struct RuleSet {
     /// If $size is set, the record size in bytes must be within the limits.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$size")]
-    pub size: Option<Range<usize>>,
+    pub size: Option<Size>,
 
     /// Tags for this protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]

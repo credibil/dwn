@@ -5,9 +5,9 @@
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
+use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::authorization::Authorization;
 use crate::data::cid;
@@ -138,6 +138,28 @@ impl Task for Delete {
 }
 
 impl Delete {
+    /// Build flattened indexes for the write message.
+    #[must_use]
+    pub fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = HashMap::new();
+        let descriptor = &self.descriptor;
+
+        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
+        indexes.insert("method".to_string(), descriptor.base.method.to_string());
+
+        indexes.insert("record_id".to_string(), descriptor.record_id.clone());
+        indexes.insert("recordId".to_string(), descriptor.record_id.clone());
+        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert(
+            "messageTimestamp".to_string(),
+            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
+        );
+        indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
+        // indexes.insert("archived".to_string(), false.to_string());
+
+        indexes
+    }
+
     /// Authorize the delete message.
     async fn authorize(&self, owner: &str, write: &Write, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
@@ -214,10 +236,13 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     // FIXME: need to copy ALL initial write fields and indexes to delete message
     // save the delete message using same indexes as the initial write
     let mut initial = Entry::from(&write);
-    initial.indexes.insert("recordId".to_string(), Value::String(write.record_id.clone()));
+    initial.indexes.insert("recordId".to_string(), write.record_id.clone());
 
     let mut entry = Entry::from(delete);
+    let indexes = entry.indexes.clone();
+
     entry.indexes.extend(initial.indexes);
+    entry.indexes.extend(indexes);
 
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
@@ -321,7 +346,7 @@ async fn delete_earlier(
                 && write.is_initial()?
             {
                 let mut record = Entry::from(write);
-                record.indexes.insert("archived".to_string(), Value::Bool(true));
+                record.indexes.insert("archived".to_string(), true.to_string());
                 MessageStore::put(provider, owner, &record).await?;
             } else {
                 let cid = entry.cid()?;

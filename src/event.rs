@@ -4,7 +4,6 @@ use std::fmt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use chrono::{DateTime, Utc};
 use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -95,9 +94,13 @@ impl SubscribeFilter {
     }
 }
 
+// TODO: move this close to RecordsFilter
 impl RecordsFilter {
+    /// Determine whether the specified `Entry` matches the filter.
     #[allow(clippy::too_many_lines)]
-    fn is_match(&self, event: &Entry) -> bool {
+    #[allow(clippy::cognitive_complexity)]
+    #[must_use]
+    pub fn is_match(&self, event: &Entry) -> bool {
         let EventType::Write(write) = &event.message else {
             return false;
         };
@@ -110,7 +113,7 @@ impl RecordsFilter {
             }
         }
         if let Some(attester) = self.attester.clone() {
-            if Some(&Value::String(attester)) != indexes.get("attester") {
+            if Some(&attester) != indexes.get("attester") {
                 return false;
             }
         }
@@ -131,12 +134,12 @@ impl RecordsFilter {
             }
         }
         if let Some(published) = &self.published {
-            if Some(published) != descriptor.published.as_ref() {
+            if *published != descriptor.published.unwrap_or_default() {
                 return false;
             }
         }
         if let Some(context_id) = &self.context_id {
-            if Some(context_id) != write.context_id.as_ref() {
+            if !write.context_id.as_ref().unwrap_or(&String::new()).starts_with(context_id) {
                 return false;
             }
         }
@@ -191,19 +194,8 @@ impl RecordsFilter {
                 return false;
             }
         }
-
-        // `date_updated` is found in indexes
         if let Some(date_updated) = &self.date_updated {
-            let Some(updated) = indexes.get("dateUpdated") else {
-                return false;
-            };
-            let Some(updated) = updated.as_str() else {
-                return false;
-            };
-            let Some(date) = updated.parse::<DateTime<Utc>>().ok() else {
-                return false;
-            };
-            if !date_updated.contains(&date) {
+            if !date_updated.contains(&descriptor.base.message_timestamp) {
                 return false;
             }
         }

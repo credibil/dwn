@@ -12,11 +12,11 @@ use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{Conditions, Publication, RecordsScope, Scope};
-use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
+use dwn_node::protocols::{Definition, ProtocolType, RuleSet, Size};
 use dwn_node::provider::EventLog;
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
 use dwn_node::store::MessagesQuery;
-use dwn_node::{Error, Interface, Message, Method, Range, clients, data, endpoint};
+use dwn_node::{Error, Interface, Message, Method, clients, data, endpoint};
 use dwn_test::key_store::{
     self, ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID,
     CAROL_DID, CAROL_DID as FAKE_DID,
@@ -4416,7 +4416,7 @@ async fn protocol_size_range() {
         .published(true)
         .add_type("blob", ProtocolType::default())
         .add_rule("blob", RuleSet {
-            size: Some(Range {
+            size: Some(Size {
                 min: Some(1),
                 max: Some(1000),
             }),
@@ -4512,7 +4512,7 @@ async fn protocol_min_size() {
         .published(true)
         .add_type("blob", ProtocolType::default())
         .add_rule("blob", RuleSet {
-            size: Some(Range {
+            size: Some(Size {
                 min: Some(1000),
                 max: None,
             }),
@@ -4587,7 +4587,7 @@ async fn protocol_max_size() {
         .published(true)
         .add_type("blob", ProtocolType::default())
         .add_rule("blob", RuleSet {
-            size: Some(Range {
+            size: Some(Size {
                 min: None,
                 max: Some(1000),
             }),

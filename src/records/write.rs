@@ -2,11 +2,11 @@
 //!
 //! `Write` is a message type used to create a new record in the web node.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::format::SecondsFormat;
+use chrono::format::SecondsFormat::Micros;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -22,8 +22,8 @@ use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{DataStream, DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
-use crate::{Descriptor, Error, Method, Result, data, forbidden, unexpected};
+use crate::store::{Entry, EntryType, GrantedQuery, RecordsFilter, RecordsQuery};
+use crate::{Descriptor, Error, Method, Result, authorization, data, forbidden, unexpected};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -94,7 +94,7 @@ pub async fn handle(
     // set `archive` flag is set when the intial write has no data
     // N.B. this is used to prevent malicious access to another record's data
     let mut entry = Entry::from(&write);
-    entry.indexes.insert("archived".to_string(), Value::Bool(code == StatusCode::NO_CONTENT));
+    entry.indexes.insert("archived".to_string(), (code == StatusCode::NO_CONTENT).to_string());
 
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
@@ -104,7 +104,7 @@ pub async fn handle(
     // when this is an update, archive the initial write (and delete its data?)
     if let Some(mut initial_entry) = initial_entry {
         let initial_write = Write::try_from(&initial_entry)?;
-        initial_entry.indexes.insert("archived".to_string(), Value::Bool(true));
+        initial_entry.indexes.insert("archived".to_string(), true.to_string());
 
         MessageStore::put(provider, owner, &initial_entry).await?;
         EventLog::append(provider, owner, &initial_entry).await?;
@@ -124,8 +124,8 @@ pub async fn handle(
         EventLog::delete(provider, owner, &cid).await?;
     }
 
-    // when message is a grant revocation, delete all grant-authorized
-    // messages with timestamp after revocation
+    // when message is a grant revocation, delete grant-authorized messages
+    // created after revocation
     if write.descriptor.protocol == Some(PROTOCOL_URI.to_string())
         && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string())
     {
@@ -180,17 +180,21 @@ impl Message for Write {
     type Reply = WriteReply;
 
     fn cid(&self) -> Result<String> {
-        // exclude `record_id` and `context_id` from CID calculation
-        #[derive(Serialize)]
-        struct Cid {
-            #[serde(flatten)]
-            descriptor: WriteDescriptor,
-            authorization: Authorization,
-        }
-        cid::from_value(&Cid {
-            descriptor: self.descriptor.clone(),
-            authorization: self.authorization.clone(),
-        })
+        // // exclude `record_id` and `context_id` from CID calculation
+        // #[derive(Serialize)]
+        // struct Cid {
+        //     #[serde(flatten)]
+        //     descriptor: WriteDescriptor,
+        //     authorization: Authorization,
+        // }
+        // cid::from_value(&Cid {
+        //     descriptor: self.descriptor.clone(),
+        //     authorization: self.authorization.clone(),
+        // })
+
+        let mut write = self.clone();
+        write.encoded_data = None;
+        cid::from_value(&write)
     }
 
     fn descriptor(&self) -> &Descriptor {
@@ -236,6 +240,83 @@ impl TryFrom<&Entry> for Write {
 }
 
 impl Write {
+    /// Build flattened indexes for the write message.
+    #[must_use]
+    pub fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = HashMap::new();
+        let descriptor = &self.descriptor;
+
+        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
+        indexes.insert("method".to_string(), descriptor.base.method.to_string());
+
+        // FIXME: add these fields back when cut over to new indexes
+        indexes.insert("record_id".to_string(), self.record_id.clone());
+        if let Some(context_id) = &self.context_id {
+            indexes.insert("contextId".to_string(), context_id.clone());
+        }
+        // TODO: remove this after cut over to new indexes
+        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert(
+            "messageTimestamp".to_string(),
+            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
+        );
+
+        // set to "false" when None
+        let published = descriptor.published.unwrap_or_default();
+        indexes.insert("published".to_string(), published.to_string());
+
+        indexes.insert("dataFormat".to_string(), descriptor.data_format.clone());
+        indexes.insert("dataCid".to_string(), descriptor.data_cid.clone());
+        indexes.insert("dataSize".to_string(), format!("{:0>10}", descriptor.data_size));
+        indexes.insert(
+            "dateCreated".to_string(),
+            descriptor.date_created.to_rfc3339_opts(Micros, true),
+        );
+        if let Some(recipient) = &descriptor.recipient {
+            indexes.insert("recipient".to_string(), recipient.clone());
+        }
+        if let Some(protocol) = &descriptor.protocol {
+            indexes.insert("protocol".to_string(), protocol.clone());
+        }
+        if let Some(protocol_path) = &descriptor.protocol_path {
+            indexes.insert("protocolPath".to_string(), protocol_path.clone());
+        }
+        if let Some(schema) = &descriptor.schema {
+            indexes.insert("schema".to_string(), schema.clone());
+        }
+        if let Some(parent_id) = &descriptor.parent_id {
+            indexes.insert("parentId".to_string(), parent_id.clone());
+        }
+        if let Some(date_published) = &descriptor.date_published {
+            indexes
+                .insert("datePublished".to_string(), date_published.to_rfc3339_opts(Micros, true));
+        }
+
+        // special values
+        indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
+
+        if let Ok(jws) = &self.authorization.payload() {
+            if let Some(grant_id) = &jws.permission_grant_id {
+                indexes.insert("permissionGrantId".to_string(), grant_id.clone());
+            }
+        }
+
+        if let Some(attestation) = &self.attestation {
+            let attester = authorization::signer_did(attestation).unwrap_or_default();
+            indexes.insert("attester".to_string(), attester);
+        }
+
+        // TODO: convert all tags to String (not Value)
+        // flatten tags for indexing
+        if let Some(tags) = &self.descriptor.tags {
+            for (k, v) in tags {
+                indexes.insert(format!("tag.{k}"), v.as_str().unwrap_or_default().to_string());
+            }
+        }
+
+        indexes
+    }
+
     /// Add a data stream to the write message.
     pub fn with_stream(&mut self, data_stream: DataStream) {
         self.data_stream = Some(data_stream);
@@ -386,8 +467,8 @@ impl Write {
             || self_desc.recipient != other_desc.recipient
             || self_desc.schema != other_desc.schema
             || self_desc.parent_id != other_desc.parent_id
-            || self_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
-                != other_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
+            || self_desc.date_created.to_rfc3339_opts(Micros, true)
+                != other_desc.date_created.to_rfc3339_opts(Micros, true)
         {
             return Err(unexpected!("immutable properties do not match"));
         }
@@ -476,21 +557,30 @@ impl Write {
         Ok(())
     }
 
-    // Revoke grants if records::Write is a permission revocation.
+    // Delete any grant-authorized messages created after grant revocation.
     async fn revoke_grants(&self, owner: &str, provider: &impl Provider) -> Result<()> {
-        // get grant from revocation message `parent_id`
+        // verify revocation message matches grant being revoked
         let Some(grant_id) = &self.descriptor.parent_id else {
             return Err(unexpected!("missing `parent_id`"));
         };
-        let message_timestamp = self.descriptor.base.message_timestamp;
+        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
 
-        let lt = DateRange::new().lt(message_timestamp);
-        let query = RecordsQuery::new()
-            .add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
+        // verify protocols match
+        if let Some(tags) = &self.descriptor.tags {
+            let tag_protocol = tags.get("protocol").unwrap_or(&Value::Null);
+            if tag_protocol.as_str() != grant.data.scope.protocol() {
+                return Err(unexpected!("revocation protocol does not match grant protocol"));
+            }
+        }
 
+        // find grant-authorized messages with created after revocation
+        let query = GrantedQuery {
+            permission_grant_id: grant_id.clone(),
+            date_created: DateRange::new().gt(self.descriptor.base.message_timestamp),
+        };
         let records = MessageStore::query(provider, owner, &query.into()).await?;
 
-        // delete matching messages
+        // delete the records
         for record in records {
             let message_cid = record.cid()?;
             MessageStore::delete(provider, owner, &message_cid).await?;
@@ -700,6 +790,7 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
+    // TODO: does `tags` need to use Value?
     /// Tags associated with the record
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Map<String, Value>>,

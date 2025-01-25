@@ -1,20 +1,24 @@
 //! # Store
 
+pub mod block;
+pub mod index;
+mod message;
 pub mod serializer;
 
+use std::collections::HashMap;
 use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
-// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
-use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
+use crate::protocols::Configure;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
-pub use crate::records::{RecordsFilter, Sort, TagFilter};
-use crate::{Descriptor, Method, Result, authorization, messages, protocols};
-pub use crate::{Lower, RangeFilter, Upper};
+pub use crate::records::{FilterVal, RecordsFilter, Sort, TagFilter};
+// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
+use crate::{DateRange, endpoint::Message};
+use crate::{Descriptor, Method, Result, messages, protocols};
+pub use crate::{Lower, Range, Upper};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -30,9 +34,9 @@ pub struct Entry {
 
     /// Indexes derived from the associated message object, flattened for
     /// ease of querying.
-    #[serde(flatten)]
-    #[serde(skip_deserializing)]
-    pub indexes: Map<String, Value>,
+    // #[serde(flatten)]
+    // #[serde(skip_deserializing)]
+    pub indexes: HashMap<String, String>,
 }
 
 impl Entry {
@@ -97,59 +101,28 @@ impl Deref for Entry {
 // LATER: perhaps should be TryFrom?
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
-        let mut record = Self {
+        Self {
             message: EntryType::Write(write.clone()),
-            indexes: Map::new(),
-        };
-
-        // FIXME: build full indexes for each record
-        record.indexes.insert(
-            "author".to_string(),
-            Value::String(write.authorization.author().unwrap_or_default()),
-        );
-        record
-            .indexes
-            .insert("messageCid".to_string(), Value::String(write.cid().unwrap_or_default()));
-
-        if let Some(attestation) = &write.attestation {
-            let attester = authorization::signer_did(attestation).unwrap_or_default();
-            record.indexes.insert("attester".to_string(), Value::String(attester));
+            indexes: write.indexes(),
         }
-
-        // --------------------------------------------------------------------
-        // LATER: `dateUpdated` should not be needed as we use `message_timestamp`
-        // let date_updated =
-        //     write.descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true);
-        // record.indexes.insert("dateUpdated".to_string(), Value::String(date_updated));
-        // --------------------------------------------------------------------
-
-        if let Some(tags) = &write.descriptor.tags {
-            let mut tag_map = Map::new();
-            for (k, v) in tags {
-                tag_map.insert(format!("tag.{k}"), v.clone());
-            }
-            record.indexes.insert("tags".to_string(), Value::Object(tag_map));
-        }
-
-        record
     }
 }
 
 impl From<&Delete> for Entry {
     fn from(delete: &Delete) -> Self {
-        let mut record = Self {
+        Self {
             message: EntryType::Delete(delete.clone()),
-            indexes: Map::new(),
-        };
+            indexes: delete.indexes(),
+        }
+    }
+}
 
-        // FIXME: build full indexes for each record
-        // flatten record_id so it queries correctly
-        record
-            .indexes
-            .insert("recordId".to_string(), Value::String(delete.descriptor.record_id.clone()));
-        record.indexes.insert("archived".to_string(), Value::Bool(false));
-
-        record
+impl From<&Configure> for Entry {
+    fn from(configure: &Configure) -> Self {
+        Self {
+            message: EntryType::Configure(configure.clone()),
+            indexes: configure.indexes(),
+        }
     }
 }
 
@@ -184,6 +157,9 @@ pub enum Query {
 
     /// Messages query.
     Messages(MessagesQuery),
+
+    /// Granted query.
+    Granted(GrantedQuery),
 }
 
 /// `ProtocolsQuery` use a builder to simplify the process of creating
@@ -229,7 +205,7 @@ pub struct RecordsQuery {
     pub include_archived: bool,
 
     /// Sort options.
-    pub sort: Option<Sort>,
+    pub sort: Sort,
 
     /// Pagination options.
     pub pagination: Option<Pagination>,
@@ -240,7 +216,7 @@ impl Default for RecordsQuery {
         Self {
             method: Some(Method::Write),
             include_archived: false,
-            sort: Some(Sort::default()),
+            sort: Sort::default(),
             filters: vec![],
             pagination: None,
         }
@@ -274,7 +250,7 @@ impl RecordsQuery {
     #[must_use]
     #[allow(dead_code)]
     pub(crate) const fn sort(mut self, sort: Sort) -> Self {
-        self.sort = Some(sort);
+        self.sort = sort;
         self
     }
 }
@@ -283,7 +259,7 @@ impl From<records::Query> for RecordsQuery {
     fn from(query: records::Query) -> Self {
         Self {
             filters: vec![query.descriptor.filter],
-            sort: query.descriptor.date_sort,
+            sort: query.descriptor.date_sort.unwrap_or_default(),
             pagination: query.descriptor.pagination,
             ..Self::default()
         }
@@ -327,6 +303,22 @@ impl From<MessagesQuery> for Query {
     }
 }
 
+/// `GrantedQuery` is used to find grant-authorized `RecordsWrite` messages.
+#[derive(Clone, Debug)]
+pub struct GrantedQuery {
+    /// Select messages authorized by this grant ID.
+    pub permission_grant_id: String,
+
+    /// Select messages created within this date range.
+    pub date_created: DateRange,
+}
+
+impl From<GrantedQuery> for Query {
+    fn from(query: GrantedQuery) -> Self {
+        Self::Granted(query)
+    }
+}
+
 /// Pagination cursor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -338,10 +330,6 @@ pub struct Pagination {
     /// Cursor created form the previous page of results.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
-    // /// The offset from the start of the result set from which to start when
-    // /// determining the page of results to return.
-    // #[serde(skip)]
-    // pub offset: Option<usize>,
 }
 
 impl Pagination {
@@ -368,13 +356,6 @@ impl Pagination {
         self.cursor = Some(cursor);
         self
     }
-
-    // /// Set the offset.
-    // #[must_use]
-    // pub const fn offset(mut self, offset: usize) -> Self {
-    //     self.offset = Some(offset);
-    //     self
-    // }
 }
 
 /// Pagination cursor containing data from the last entry returned in the
@@ -389,8 +370,7 @@ pub struct Cursor {
     /// Message CID from the last entry in the previous page of results.
     pub message_cid: String,
 
-    /// The value from the sort field of the last entry in the previous
-    /// page of results.
-    #[serde(rename = "value")]
-    pub sort_value: String,
+    /// The value (from sort field) of the last entry in the previous page of
+    /// results.
+    pub value: String,
 }

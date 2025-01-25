@@ -6,12 +6,11 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 
-use crate::records::DateRange;
 use crate::store::{
-    Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery, Sort,
+    Lower, MessagesFilter, MessagesQuery, ProtocolsQuery, Query, RecordsFilter, RecordsQuery,
     TagFilter, Upper,
 };
-use crate::{Interface, Method, Quota};
+use crate::{DateRange, Interface, Method, OneOrMany};
 
 /// Serializer is used by DWN to generate queries native to the database(s)
 /// selected when implementing a DWN node.
@@ -107,6 +106,7 @@ impl Serialize for Query {
             Self::Messages(query) => query.serialize(serializer),
             Self::Protocols(query) => query.serialize(serializer),
             Self::Records(query) => query.serialize(serializer),
+            Self::Granted(_) => unimplemented!(),
         }
     }
 }
@@ -176,28 +176,8 @@ impl Serialize for MessagesFilter {
             protocol_or.close();
         }
 
-        if let Some(ts_range) = &self.message_timestamp {
-            let field = "descriptor.messageTimestamp";
-            let range_and = outer_and.and_clause();
-            match ts_range.lower {
-                Some(Lower::GreaterThan(lower)) => {
-                    range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
-                }
-                Some(Lower::GreaterThanOrEqual(lower)) => {
-                    range_and.condition(field, Op::Ge, Value::Str(&lower.to_string()));
-                }
-                None => {}
-            }
-            match ts_range.upper {
-                Some(Upper::LessThan(upper)) => {
-                    range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
-                }
-                Some(Upper::LessThanOrEqual(upper)) => {
-                    range_and.condition(field, Op::Le, Value::Str(&upper.to_string()));
-                }
-                None => {}
-            }
-            range_and.close();
+        if let Some(date_range) = &self.message_timestamp {
+            serialize_date_range("descriptor.dateCreated", date_range, outer_and);
         }
 
         outer_and.close();
@@ -233,22 +213,16 @@ impl Serialize for RecordsQuery {
 
         outer_and.close();
 
-        // sorting - sort field + `message_cid` as a tiebreaker
-        if let Some(sort) = &self.sort {
-            match sort {
-                Sort::CreatedAscending | Sort::PublishedAscending | Sort::TimestampAscending => {
-                    serializer.order(&[
-                        SortField::Asc(&format!("descriptor.{sort}")),
-                        SortField::Asc("messageCid"),
-                    ]);
-                }
-                Sort::CreatedDescending | Sort::PublishedDescending | Sort::TimestampDescending => {
-                    serializer.order(&[
-                        SortField::Desc(&format!("descriptor.{sort}")),
-                        SortField::Desc("messageCid"),
-                    ]);
-                }
-            }
+        if self.sort.is_ascending() {
+            serializer.order(&[
+                SortField::Asc(&format!("descriptor.{}", self.sort)),
+                SortField::Asc("messageCid"),
+            ]);
+        } else {
+            serializer.order(&[
+                SortField::Desc(&format!("descriptor.{}", self.sort)),
+                SortField::Desc("messageCid"),
+            ]);
         }
 
         // LATER: implement pagination here if spec changes to `limit` and `offset`
@@ -283,10 +257,10 @@ impl Serialize for RecordsFilter {
         // descriptor fields
         if let Some(recipient) = &self.recipient {
             match recipient {
-                Quota::One(recipient) => {
+                OneOrMany::One(recipient) => {
                     outer_and.condition("descriptor.recipient", Op::Eq, Value::Str(recipient));
                 }
-                Quota::Many(recipients) => {
+                OneOrMany::Many(recipients) => {
                     let many_and = outer_and.or_clause();
                     for recipient in recipients {
                         many_and.condition("descriptor.recipient", Op::Eq, Value::Str(recipient));
@@ -315,19 +289,19 @@ impl Serialize for RecordsFilter {
             let field = "descriptor.dataSize";
             let range_and = outer_and.and_clause();
             match size_range.lower {
-                Some(Lower::GreaterThan(lower)) => {
+                Some(Lower::Exclusive(lower)) => {
                     range_and.condition(field, Op::Gt, Value::Int(lower));
                 }
-                Some(Lower::GreaterThanOrEqual(lower)) => {
+                Some(Lower::Inclusive(lower)) => {
                     range_and.condition(field, Op::Ge, Value::Int(lower));
                 }
                 None => {}
             }
             match size_range.upper {
-                Some(Upper::LessThan(upper)) => {
+                Some(Upper::Exclusive(upper)) => {
                     range_and.condition(field, Op::Lt, Value::Int(upper));
                 }
-                Some(Upper::LessThanOrEqual(upper)) => {
+                Some(Upper::Inclusive(upper)) => {
                     range_and.condition(field, Op::Le, Value::Int(upper));
                 }
                 None => {}
@@ -344,18 +318,16 @@ impl Serialize for RecordsFilter {
             serialize_date_range("descriptor.datePublished", date_range, outer_and);
         }
         if let Some(date_range) = &self.date_updated {
-            // N.B. `dateUpdated` is set in the Write record's auxilary indexes in `store.rs`
-            // serialize_date_range("dateUpdated", date_range, outer_and);
             serialize_date_range("descriptor.messageTimestamp", date_range, outer_and);
         }
 
         // index fields
         if let Some(author) = &self.author {
             match author {
-                Quota::One(author) => {
+                OneOrMany::One(author) => {
                     outer_and.condition("author", Op::Eq, Value::Str(author));
                 }
-                Quota::Many(authors) => {
+                OneOrMany::Many(authors) => {
                     let many_and = outer_and.or_clause();
                     for author in authors {
                         many_and.condition("author", Op::Eq, Value::Str(author));
@@ -380,10 +352,10 @@ impl Serialize for RecordsFilter {
 fn serialize_date_range<S: Serializer>(field: &str, date_range: &DateRange, serializer: &mut S) {
     let range_and = serializer.and_clause();
     if let Some(lower) = date_range.lower {
-        range_and.condition(field, Op::Gt, Value::Str(&lower.to_string()));
+        range_and.condition(field, Op::Ge, Value::Str(&lower.to_string()));
     }
     if let Some(upper) = date_range.upper {
-        range_and.condition(field, Op::Lt, Value::Str(&upper.to_string()));
+        range_and.condition(field, Op::Le, Value::Str(&upper.to_string()));
     }
     range_and.close();
 }
@@ -404,19 +376,19 @@ fn serialize_tags<S: Serializer>(tags: &BTreeMap<String, TagFilter>, serializer:
             TagFilter::Range(range) => {
                 let range_and = tags_and.and_clause();
                 match range.lower {
-                    Some(Lower::GreaterThan(lower)) => {
+                    Some(Lower::Exclusive(lower)) => {
                         range_and.condition(field, Op::Gt, Value::Int(lower));
                     }
-                    Some(Lower::GreaterThanOrEqual(lower)) => {
+                    Some(Lower::Inclusive(lower)) => {
                         range_and.condition(field, Op::Ge, Value::Int(lower));
                     }
                     None => {}
                 }
                 match range.upper {
-                    Some(Upper::LessThan(upper)) => {
+                    Some(Upper::Exclusive(upper)) => {
                         range_and.condition(field, Op::Lt, Value::Int(upper));
                     }
-                    Some(Upper::LessThanOrEqual(upper)) => {
+                    Some(Upper::Inclusive(upper)) => {
                         range_and.condition(field, Op::Le, Value::Int(upper));
                     }
                     None => {}

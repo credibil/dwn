@@ -58,6 +58,7 @@ pub async fn handle(
 
     // build reply
     let mut entries = vec![];
+
     for record in records {
         let write: Write = record.try_into()?;
 
@@ -209,8 +210,8 @@ impl Query {
             return Ok(());
         }
 
-        if self.descriptor.date_sort == Some(Sort::PublishedAscending)
-            || self.descriptor.date_sort == Some(Sort::PublishedDescending)
+        if self.descriptor.date_sort == Some(Sort::PublishedAsc)
+            || self.descriptor.date_sort == Some(Sort::PublishedDesc)
         {
             return Err(unexpected!(
                 "cannot sort by `date_published` when querying for unpublished records"
@@ -229,8 +230,8 @@ impl Query {
         if self.descriptor.filter.date_published.is_some() {
             return true;
         }
-        if self.descriptor.date_sort == Some(Sort::PublishedAscending)
-            || self.descriptor.date_sort == Some(Sort::PublishedDescending)
+        if self.descriptor.date_sort == Some(Sort::PublishedAsc)
+            || self.descriptor.date_sort == Some(Sort::PublishedDesc)
         {
             return true;
         }

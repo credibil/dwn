@@ -13,7 +13,7 @@ use crate::event::{SubscribeFilter, Subscriber};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{EventStream, Provider};
 use crate::records::{RecordsFilter, Write};
-use crate::{Descriptor, Quota, Result, forbidden};
+use crate::{Descriptor, OneOrMany, Result, forbidden};
 
 /// Process `Subscribe` message.
 ///
@@ -37,8 +37,8 @@ pub async fn handle(
     let author = authzn.author()?;
     if author != owner {
         // non-owners can only see records they created or received
-        filter.author = Some(Quota::One(author.clone()));
-        filter.recipient = Some(Quota::One(author));
+        filter.author = Some(OneOrMany::One(author.clone()));
+        filter.recipient = Some(OneOrMany::One(author));
     }
 
     let filter = SubscribeFilter::Records(filter);
@@ -144,7 +144,7 @@ impl Subscribe {
         };
         if authzn.payload()?.protocol_role.is_some() {
             // FIXME: fix this
-            // filter.method = Quota::Many(vec![Method::Write, Method::Delete]);
+            // filter.method = OneOrMany::Many(vec![Method::Write, Method::Delete]);
         }
 
         Ok(())

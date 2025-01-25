@@ -10,7 +10,6 @@ pub(crate) mod write;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,8 +20,7 @@ pub use self::read::{Read, ReadDescriptor};
 pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Write, WriteDescriptor};
 pub use crate::data::DataStream;
-use crate::serde::rfc3339_micros_opt;
-use crate::{Quota, RangeFilter, Result, utils};
+use crate::{DateRange, OneOrMany, Range, Result, utils};
 
 // TODO: add builder for RecordsFilter
 
@@ -30,13 +28,13 @@ use crate::{Quota, RangeFilter, Result, utils};
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordsFilter {
-    /// Whether the record is published.
+    /// Get a single object by its ID.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
+    pub record_id: Option<String>,
 
     /// Records matching the specified author.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub author: Option<Quota<String>>,
+    pub author: Option<OneOrMany<String>>,
 
     /// Records matching the specified creator.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -44,7 +42,15 @@ pub struct RecordsFilter {
 
     /// Records matching the specified recipient(s).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub recipient: Option<Quota<String>>,
+    pub recipient: Option<OneOrMany<String>>,
+
+    /// Records with the specified context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_id: Option<String>,
+
+    /// The CID of the parent object .
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
 
     /// Entry matching the specified protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,45 +64,49 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
-    /// Get a single object by its ID.
+    /// The MIME type of the requested data. For example, `application/json`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub record_id: Option<String>,
-
-    /// The CID of the parent object .
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_id: Option<String>,
-
-    /// Records with the specified context.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
+    pub data_format: Option<String>,
 
     /// Match records with the specified tags.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<BTreeMap<String, TagFilter>>,
 
-    /// The MIME type of the requested data. For example, `application/json`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_format: Option<String>,
-
-    /// Records with a size within the range.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_size: Option<RangeFilter<usize>>,
-
     /// CID of the data.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_cid: Option<String>,
 
-    /// Filter messages created within the specified range.
+    /// Records with a size within the range.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_created: Option<DateRange>,
+    pub data_size: Option<Range<usize>>,
+
+    /// Whether the record is published.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub published: Option<bool>,
 
     /// Filter messages published within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_published: Option<DateRange>,
 
+    /// Filter messages created within the specified range.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_created: Option<DateRange>,
+
     /// Match messages updated within the specified range.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_updated: Option<DateRange>,
+}
+
+/// Filter value.
+pub enum FilterVal {
+    /// Filter on an exact value.
+    Equal(String),
+
+    /// Filter on one or more values.
+    OneOf(Vec<String>),
+
+    /// Filter on a date range.
+    Range(Range<String>),
 }
 
 impl RecordsFilter {
@@ -113,63 +123,149 @@ impl RecordsFilter {
 
         Ok(filter)
     }
-}
 
-/// Range filter.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct DateRange {
-    /// The filter's lower bound.
-    #[serde(rename = "from")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "rfc3339_micros_opt")]
-    pub lower: Option<DateTime<Utc>>,
-
-    /// The filter's upper bound.
-    #[serde(rename = "to")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "rfc3339_micros_opt")]
-    pub upper: Option<DateTime<Utc>>,
-}
-
-impl DateRange {
-    /// Create a new range filter.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            lower: None,
-            upper: None,
-        }
-    }
-
-    /// Specify a 'greater-than' lower bound for the filter.
-    #[must_use]
-    pub const fn gt(mut self, gt: DateTime<Utc>) -> Self {
-        self.lower = Some(gt);
-        self
-    }
-
-    /// Specify a 'less-than' upper bound for the filter.
-    #[must_use]
-    pub const fn lt(mut self, lt: DateTime<Utc>) -> Self {
-        self.upper = Some(lt);
-        self
-    }
-
-    /// Check if the range contains the value.
-    #[must_use]
-    pub fn contains(&self, value: &DateTime<Utc>) -> bool {
-        if let Some(lower) = &self.lower {
-            if value < lower {
-                return false;
-            }
-        }
-        if let Some(upper) = &self.upper {
-            if value > upper {
-                return false;
-            }
+    /// Check if the filter will return a concise set of results.
+    pub(crate) const fn is_concise(&self) -> bool {
+        if self.record_id.is_some()
+            || self.protocol_path.is_some()
+            || self.context_id.is_some()
+            || self.parent_id.is_some()
+            || self.schema.is_some()
+        {
+            return true;
         }
 
-        true
+        false
+    }
+
+    /// Create an optimized filter to use with single-field indexes. This
+    /// method chooses the best filter property, in order of priority, to use
+    /// when querying.
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn as_concise(&self) -> Option<(String, String)> {
+        if let Some(record_id) = &self.record_id {
+            return Some(("record_id".to_string(), record_id.clone()));
+        }
+        // if let Some(attester) = &self.attester {
+        //     return Some(("attester".to_string(), FilterVal::Equal(attester.clone())));
+        // }
+        // if let Some(recipient) = &self.recipient {
+        //     let recipients = match recipient {
+        //         OneOrMany::One(recipient) => vec![recipient.clone()],
+        //         OneOrMany::Many(recipients) => recipients.clone(),
+        //     };
+        //     return Some(("recipient".to_string(), FilterVal::OneOf(recipients)));
+        // }
+        if let Some(protocol_path) = &self.protocol_path {
+            return Some(("protocolPath".to_string(), protocol_path.clone()));
+        }
+        if let Some(context_id) = &self.context_id {
+            return Some(("contextId".to_string(), context_id.clone()));
+        }
+        if let Some(parent_id) = &self.parent_id {
+            return Some(("parentId".to_string(), parent_id.clone()));
+        }
+        if let Some(schema) = &self.schema {
+            return Some(("schema".to_string(), schema.clone()));
+        }
+        // if let Some(protocol) = &self.protocol {
+        //     return Some(("protocol".to_string(), FilterVal::Equal(protocol.clone())));
+        // }
+        // if let Some(data_cid) = &self.data_cid {
+        //     return Some(("dataCid".to_string(), FilterVal::Equal(data_cid.clone())));
+        // }
+        // if let Some(data_size) = &self.data_size {
+        //     let lower = data_size.lower.as_ref().map(|lower| match lower {
+        //         Lower::Inclusive(val) => Lower::Inclusive(format!("{val:0>10}")),
+        //         Lower::Exclusive(val) => Lower::Exclusive(format!("{val:0>10}")),
+        //     });
+        //     let upper = data_size.upper.as_ref().map(|upper| match upper {
+        //         Upper::Inclusive(val) => Upper::Inclusive(format!("{val:0>10}")),
+        //         Upper::Exclusive(val) => Upper::Exclusive(format!("{val:0>10}")),
+        //     });
+        //     return Some(("dataSize".to_string(), FilterVal::Range(Range { lower, upper })));
+        // }
+
+        // // TODO: move DateRange -> Range<String> conversion to a separate method
+        // if let Some(date_published) = &self.date_published {
+        //     let mut range = Range::default();
+        //     if let Some(lower) = &date_published.lower {
+        //         let lower = lower.to_rfc3339_opts(Micros, true);
+        //         range.lower = Some(Lower::Inclusive(lower));
+        //     }
+        //     if let Some(upper) = &date_published.upper {
+        //         let upper = upper.to_rfc3339_opts(Micros, true);
+        //         range.upper = Some(Upper::Inclusive(upper));
+        //     }
+        //     return Some(("datePublished".to_string(), FilterVal::Range(range)));
+        // }
+        // if let Some(date_created) = &self.date_created {
+        //     let mut range = Range::default();
+        //     if let Some(lower) = &date_created.lower {
+        //         let lower = lower.to_rfc3339_opts(Micros, true);
+        //         range.lower = Some(Lower::Inclusive(lower));
+        //     }
+        //     if let Some(upper) = &date_created.upper {
+        //         let upper = upper.to_rfc3339_opts(Micros, true);
+        //         range.upper = Some(Upper::Inclusive(upper));
+        //     }
+        //     return Some(("dateCreated".to_string(), FilterVal::Range(range)));
+        // }
+        // if let Some(date_updated) = &self.date_updated {
+        //     let mut range = Range::default();
+        //     if let Some(lower) = &date_updated.lower {
+        //         let lower = lower.to_rfc3339_opts(Micros, true);
+        //         range.lower = Some(Lower::Inclusive(lower));
+        //     }
+        //     if let Some(upper) = &date_updated.upper {
+        //         let upper = upper.to_rfc3339_opts(Micros, true);
+        //         range.upper = Some(Upper::Inclusive(upper));
+        //     }
+        //     return Some(("dateUpdated".to_string(), FilterVal::Range(range)));
+        // }
+
+        // if let Some(data_format) = &self.data_format {
+        //     return Some(("dataFormat".to_string(), FilterVal::Equal(data_format.clone())));
+        // }
+        // if let Some(published) = self.published {
+        //     return Some(("published".to_string(), FilterVal::Equal(published.to_string())));
+        // }
+        // if let Some(author) = &self.author {
+        //     let authors = match author {
+        //         OneOrMany::One(author) => vec![author.to_string()],
+        //         OneOrMany::Many(authors) => authors.clone(),
+        //     };
+        //     return Some(("author".to_string(), FilterVal::OneOf(authors)));
+        // }
+
+        // // TODO: improve this logic
+        // if let Some(tags) = &self.tags {
+        //     if let Some((key, filter)) = tags.iter().next() {
+        //         let tag_key = format!("tag.{key}");
+
+        //         match filter {
+        //             TagFilter::Equal(value) => {
+        //                 return Some((tag_key, FilterVal::Equal(value.to_string())));
+        //             }
+        //             TagFilter::Range(range) => {
+        //                 let lower = range.lower.as_ref().map(|lower| match lower {
+        //                     Lower::Inclusive(val) => Lower::Inclusive(format!("{val:0>10}")),
+        //                     Lower::Exclusive(val) => Lower::Exclusive(format!("{val:0>10}")),
+        //                 });
+        //                 let upper = range.upper.as_ref().map(|upper| match upper {
+        //                     Upper::Inclusive(val) => Upper::Inclusive(format!("{val:0>10}")),
+        //                     Upper::Exclusive(val) => Upper::Exclusive(format!("{val:0>10}")),
+        //                 });
+        //                 return Some((tag_key, FilterVal::Range(Range { lower, upper })));
+        //             }
+        //             TagFilter::StartsWith(value) => {
+        //                 return Some((tag_key, FilterVal::Equal(value.to_string())));
+        //             }
+        //         }
+        //     }
+        // }
+
+        None
     }
 }
 
@@ -178,31 +274,45 @@ impl DateRange {
 #[serde(rename_all = "camelCase")]
 pub enum Sort {
     /// Sort `date_created` from oldest to newest.
-    CreatedAscending,
+    #[serde(rename = "createdAscending")]
+    CreatedAsc,
 
     /// Sort `date_created` newest to oldest.
-    CreatedDescending,
+    #[serde(rename = "createdDescending")]
+    CreatedDesc,
 
     /// Sort `date_published` from oldest to newest.
-    PublishedAscending,
+    #[serde(rename = "publishedAscending")]
+    PublishedAsc,
 
     /// Sort `date_published` from newest to oldest.
-    PublishedDescending,
+    #[serde(rename = "publishedDescending")]
+    PublishedDesc,
 
     /// Sort `message_timestamp` from oldest to newest.
+    #[serde(rename = "timestampAscending")]
     #[default]
-    TimestampAscending,
+    TimestampAsc,
 
     /// Sort `message_timestamp` from newest to oldest.
-    TimestampDescending,
+    #[serde(rename = "timestampDescending")]
+    TimestampDesc,
+}
+
+impl Sort {
+    /// Short-circuit testing for ascending/descending sort.
+    #[must_use]
+    pub const fn is_ascending(&self) -> bool {
+        matches!(self, Self::CreatedAsc | Self::PublishedAsc | Self::TimestampAsc)
+    }
 }
 
 impl Display for Sort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CreatedAscending | Self::CreatedDescending => write!(f, "dateCreated"),
-            Self::PublishedAscending | Self::PublishedDescending => write!(f, "datePublished"),
-            Self::TimestampAscending | Self::TimestampDescending => write!(f, "messageTimestamp"),
+            Self::CreatedAsc | Self::CreatedDesc => write!(f, "dateCreated"),
+            Self::PublishedAsc | Self::PublishedDesc => write!(f, "datePublished"),
+            Self::TimestampAsc | Self::TimestampDesc => write!(f, "messageTimestamp"),
         }
     }
 }
@@ -215,7 +325,7 @@ pub enum TagFilter {
     StartsWith(String),
 
     /// Filter tags by range.
-    Range(RangeFilter<usize>),
+    Range(Range<usize>),
 
     /// Filter by a specific value.
     Equal(Value),
@@ -239,14 +349,14 @@ impl RecordsFilter {
     #[must_use]
     pub fn add_author(mut self, author: impl Into<String>) -> Self {
         match &mut self.author {
-            Some(Quota::Many(existing)) => {
+            Some(OneOrMany::Many(existing)) => {
                 existing.push(author.into());
             }
-            Some(Quota::One(existing)) => {
-                self.author = Some(Quota::Many(vec![existing.clone(), author.into()]));
+            Some(OneOrMany::One(existing)) => {
+                self.author = Some(OneOrMany::Many(vec![existing.clone(), author.into()]));
             }
             None => {
-                self.author = Some(Quota::One(author.into()));
+                self.author = Some(OneOrMany::One(author.into()));
             }
         }
         self
@@ -263,14 +373,14 @@ impl RecordsFilter {
     #[must_use]
     pub fn add_recipient(mut self, recipient: impl Into<String>) -> Self {
         match &mut self.recipient {
-            Some(Quota::Many(existing)) => {
+            Some(OneOrMany::Many(existing)) => {
                 existing.push(recipient.into());
             }
-            Some(Quota::One(existing)) => {
-                self.recipient = Some(Quota::Many(vec![existing.clone(), recipient.into()]));
+            Some(OneOrMany::One(existing)) => {
+                self.recipient = Some(OneOrMany::Many(vec![existing.clone(), recipient.into()]));
             }
             None => {
-                self.recipient = Some(Quota::One(recipient.into()));
+                self.recipient = Some(OneOrMany::One(recipient.into()));
             }
         }
         self
@@ -347,7 +457,7 @@ impl RecordsFilter {
 
     /// Add a data size to the filter.
     #[must_use]
-    pub const fn data_size(mut self, data_size: RangeFilter<usize>) -> Self {
+    pub const fn data_size(mut self, data_size: Range<usize>) -> Self {
         self.data_size = Some(data_size);
         self
     }
