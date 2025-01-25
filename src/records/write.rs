@@ -6,7 +6,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use chrono::format::SecondsFormat;
+use chrono::format::SecondsFormat::Micros;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{DataStream, DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
+use crate::store::{Entry, EntryType, GrantedQuery, RecordsFilter, RecordsQuery};
 use crate::{Descriptor, Error, Method, Result, authorization, data, forbidden, unexpected};
 
 /// Handle `RecordsWrite` messages.
@@ -124,8 +124,8 @@ pub async fn handle(
         EventLog::delete(provider, owner, &cid).await?;
     }
 
-    // when message is a grant revocation, delete all grant-authorized
-    // messages with timestamp after revocation
+    // when message is a grant revocation, delete grant-authorized messages
+    // created after revocation
     if write.descriptor.protocol == Some(PROTOCOL_URI.to_string())
         && write.descriptor.protocol_path == Some(REVOCATION_PATH.to_string())
     {
@@ -254,26 +254,24 @@ impl Write {
         if let Some(context_id) = &self.context_id {
             indexes.insert("contextId".to_string(), context_id.clone());
         }
-
         // TODO: remove this after cut over to new indexes
         indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
         indexes.insert(
             "messageTimestamp".to_string(),
-            descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
+            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
-        indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
+
+        // set to "false" when None
+        let published = descriptor.published.unwrap_or_default();
+        indexes.insert("published".to_string(), published.to_string());
+
         indexes.insert("dataFormat".to_string(), descriptor.data_format.clone());
         indexes.insert("dataCid".to_string(), descriptor.data_cid.clone());
         indexes.insert("dataSize".to_string(), format!("{:0>10}", descriptor.data_size));
         indexes.insert(
             "dateCreated".to_string(),
-            descriptor.date_created.to_rfc3339_opts(SecondsFormat::Micros, true),
+            descriptor.date_created.to_rfc3339_opts(Micros, true),
         );
-
-        if let Some(attestation) = &self.attestation {
-            let attester = authorization::signer_did(attestation).unwrap_or_default();
-            indexes.insert("attester".to_string(), attester);
-        }
         if let Some(recipient) = &descriptor.recipient {
             indexes.insert("recipient".to_string(), recipient.clone());
         }
@@ -289,16 +287,26 @@ impl Write {
         if let Some(parent_id) = &descriptor.parent_id {
             indexes.insert("parentId".to_string(), parent_id.clone());
         }
-        if let Some(published) = descriptor.published {
-            indexes.insert("published".to_string(), published.to_string());
-        }
         if let Some(date_published) = &descriptor.date_published {
-            indexes.insert(
-                "datePublished".to_string(),
-                date_published.to_rfc3339_opts(SecondsFormat::Micros, true),
-            );
+            indexes
+                .insert("datePublished".to_string(), date_published.to_rfc3339_opts(Micros, true));
         }
 
+        // special values
+        indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
+
+        if let Ok(jws) = &self.authorization.payload() {
+            if let Some(grant_id) = &jws.permission_grant_id {
+                indexes.insert("permissionGrantId".to_string(), grant_id.clone());
+            }
+        }
+
+        if let Some(attestation) = &self.attestation {
+            let attester = authorization::signer_did(attestation).unwrap_or_default();
+            indexes.insert("attester".to_string(), attester);
+        }
+
+        // TODO: convert all tags to String (not Value)
         // flatten tags for indexing
         if let Some(tags) = &self.descriptor.tags {
             for (k, v) in tags {
@@ -459,8 +467,8 @@ impl Write {
             || self_desc.recipient != other_desc.recipient
             || self_desc.schema != other_desc.schema
             || self_desc.parent_id != other_desc.parent_id
-            || self_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
-                != other_desc.date_created.to_rfc3339_opts(SecondsFormat::Micros, true)
+            || self_desc.date_created.to_rfc3339_opts(Micros, true)
+                != other_desc.date_created.to_rfc3339_opts(Micros, true)
         {
             return Err(unexpected!("immutable properties do not match"));
         }
@@ -549,19 +557,30 @@ impl Write {
         Ok(())
     }
 
-    // Revoke grants if records::Write is a permission revocation.
+    // Delete any grant-authorized messages created after grant revocation.
     async fn revoke_grants(&self, owner: &str, provider: &impl Provider) -> Result<()> {
-        // get grant from revocation message `parent_id`
+        // verify revocation message matches grant being revoked
         let Some(grant_id) = &self.descriptor.parent_id else {
             return Err(unexpected!("missing `parent_id`"));
         };
-        let timestamp = self.descriptor.base.message_timestamp;
-        let lt = DateRange::new().lt(timestamp);
-        let query = RecordsQuery::new()
-            .add_filter(RecordsFilter::new().record_id(grant_id).date_created(lt));
+        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+
+        // verify protocols match
+        if let Some(tags) = &self.descriptor.tags {
+            let tag_protocol = tags.get("protocol").unwrap_or(&Value::Null);
+            if tag_protocol.as_str() != grant.data.scope.protocol() {
+                return Err(unexpected!("revocation protocol does not match grant protocol"));
+            }
+        }
+
+        // find grant-authorized messages with created after revocation
+        let query = GrantedQuery {
+            permission_grant_id: grant_id.clone(),
+            date_created: DateRange::new().gt(self.descriptor.base.message_timestamp),
+        };
         let records = MessageStore::query(provider, owner, &query.into()).await?;
 
-        // delete matching messages
+        // delete the records
         for record in records {
             let message_cid = record.cid()?;
             MessageStore::delete(provider, owner, &message_cid).await?;

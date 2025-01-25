@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::SecondsFormat;
+use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -144,7 +144,7 @@ impl Configure {
         indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
         indexes.insert(
             "messageTimestamp".to_string(),
-            descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
+            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
         indexes.insert("protocol".to_string(), descriptor.definition.protocol.clone());
         indexes.insert("published".to_string(), descriptor.definition.published.to_string());

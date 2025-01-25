@@ -190,11 +190,11 @@ impl RecordsFilter {
         // if let Some(date_published) = &self.date_published {
         //     let mut range = Range::default();
         //     if let Some(lower) = &date_published.lower {
-        //         let lower = lower.to_rfc3339_opts(SecondsFormat::Micros, true);
+        //         let lower = lower.to_rfc3339_opts(Micros, true);
         //         range.lower = Some(Lower::Inclusive(lower));
         //     }
         //     if let Some(upper) = &date_published.upper {
-        //         let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
+        //         let upper = upper.to_rfc3339_opts(Micros, true);
         //         range.upper = Some(Upper::Inclusive(upper));
         //     }
         //     return Some(("datePublished".to_string(), FilterVal::Range(range)));
@@ -202,11 +202,11 @@ impl RecordsFilter {
         // if let Some(date_created) = &self.date_created {
         //     let mut range = Range::default();
         //     if let Some(lower) = &date_created.lower {
-        //         let lower = lower.to_rfc3339_opts(SecondsFormat::Micros, true);
+        //         let lower = lower.to_rfc3339_opts(Micros, true);
         //         range.lower = Some(Lower::Inclusive(lower));
         //     }
         //     if let Some(upper) = &date_created.upper {
-        //         let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
+        //         let upper = upper.to_rfc3339_opts(Micros, true);
         //         range.upper = Some(Upper::Inclusive(upper));
         //     }
         //     return Some(("dateCreated".to_string(), FilterVal::Range(range)));
@@ -214,11 +214,11 @@ impl RecordsFilter {
         // if let Some(date_updated) = &self.date_updated {
         //     let mut range = Range::default();
         //     if let Some(lower) = &date_updated.lower {
-        //         let lower = lower.to_rfc3339_opts(SecondsFormat::Micros, true);
+        //         let lower = lower.to_rfc3339_opts(Micros, true);
         //         range.lower = Some(Lower::Inclusive(lower));
         //     }
         //     if let Some(upper) = &date_updated.upper {
-        //         let upper = upper.to_rfc3339_opts(SecondsFormat::Micros, true);
+        //         let upper = upper.to_rfc3339_opts(Micros, true);
         //         range.upper = Some(Upper::Inclusive(upper));
         //     }
         //     return Some(("dateUpdated".to_string(), FilterVal::Range(range)));

@@ -288,7 +288,8 @@ impl DateRange {
 
 // Custom serialization functions.
 mod serde {
-    use chrono::{DateTime, SecondsFormat, Utc};
+    use chrono::SecondsFormat::Micros;
+    use chrono::{DateTime, Utc};
     use serde::Serializer;
 
     /// Force serializing to an RFC 3339 string with microsecond precision.
@@ -296,7 +297,7 @@ mod serde {
     where
         S: Serializer,
     {
-        let s = date.to_rfc3339_opts(SecondsFormat::Micros, true);
+        let s = date.to_rfc3339_opts(Micros, true);
         serializer.serialize_str(&s)
     }
 

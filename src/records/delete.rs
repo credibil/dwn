@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
-use chrono::SecondsFormat;
+use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -152,7 +152,7 @@ impl Delete {
         indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
         indexes.insert(
             "messageTimestamp".to_string(),
-            descriptor.base.message_timestamp.to_rfc3339_opts(SecondsFormat::Micros, true),
+            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
         // indexes.insert("archived".to_string(), false.to_string());

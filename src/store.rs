@@ -10,13 +10,13 @@ use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
-// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
-use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 use crate::protocols::Configure;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{FilterVal, RecordsFilter, Sort, TagFilter};
+// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
+use crate::{DateRange, endpoint::Message};
 use crate::{Descriptor, Method, Result, messages, protocols};
 pub use crate::{Lower, Range, Upper};
 
@@ -157,6 +157,9 @@ pub enum Query {
 
     /// Messages query.
     Messages(MessagesQuery),
+
+    /// Granted query.
+    Granted(GrantedQuery),
 }
 
 /// `ProtocolsQuery` use a builder to simplify the process of creating
@@ -300,6 +303,22 @@ impl From<MessagesQuery> for Query {
     }
 }
 
+/// `GrantedQuery` is used to find grant-authorized `RecordsWrite` messages.
+#[derive(Clone, Debug)]
+pub struct GrantedQuery {
+    /// Select messages authorized by this grant ID.
+    pub permission_grant_id: String,
+
+    /// Select messages created within this date range.
+    pub date_created: DateRange,
+}
+
+impl From<GrantedQuery> for Query {
+    fn from(query: GrantedQuery) -> Self {
+        Self::Granted(query)
+    }
+}
+
 /// Pagination cursor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -337,13 +356,6 @@ impl Pagination {
         self.cursor = Some(cursor);
         self
     }
-
-    // /// Set the offset.
-    // #[must_use]
-    // pub const fn offset(mut self, offset: usize) -> Self {
-    //     self.offset = Some(offset);
-    //     self
-    // }
 }
 
 /// Pagination cursor containing data from the last entry returned in the

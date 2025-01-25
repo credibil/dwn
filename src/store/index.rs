@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use super::RecordsFilter;
 use crate::provider::BlockStore;
-use crate::store::{Entry, ProtocolsQuery, Query, RecordsQuery, block};
-use crate::{Interface, Result, unexpected};
+use crate::store::{Entry, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, block};
+use crate::{Interface, Method, Result, unexpected};
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;
@@ -62,21 +62,20 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<IndexItem>> {
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
-    if let Query::Records(rq) = query {
-        // choose query strategy
-        for filter in &rq.filters {
-            if !filter.is_concise() {
-                return indexes.query_full(rq).await;
+    match query {
+        Query::Records(rq) => {
+            // choose query strategy
+            for filter in &rq.filters {
+                if !filter.is_concise() {
+                    return indexes.query_full(rq).await;
+                }
             }
+            indexes.query_concise(rq).await
         }
-        return indexes.query_concise(rq).await;
-    };
-
-    if let Query::Protocols(pq) = query {
-        return indexes.query_protocols(pq).await;
+        Query::Protocols(pq) => indexes.query_protocols(pq).await,
+        Query::Granted(gq) => indexes.query_granted(gq).await,
+        Query::Messages(_) => Err(unexpected!("unsupported query type")),
     }
-
-    Err(unexpected!("unsupported query type"))
 }
 
 /// Delete entry specified by `message_cid` from indexes.
@@ -257,6 +256,38 @@ impl<S: BlockStore> Indexes<'_, S> {
         Ok(items)
     }
 
+    async fn query_granted(&self, query: &GrantedQuery) -> Result<Vec<IndexItem>> {
+        let mut results = Vec::new();
+
+        let index = self.get("protocol").await?;
+        for item in index.items.values() {
+            if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
+                continue;
+            }
+            if item.fields.get("method") != Some(&Method::Write.to_string()) {
+                continue;
+            }
+
+            if Some(&query.permission_grant_id) != item.fields.get("permissionGrantId") {
+                continue;
+            }
+
+            let default = String::new();
+            let date_str = item.fields.get("dateCreated").unwrap_or(&default);
+            let created = DateTime::parse_from_rfc3339(date_str)
+                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+            if !query.date_created.contains(&created.into()) {
+                continue;
+            }
+
+            // sort results as we collect using `message_cid` as a tie-breaker
+            let sort_key = format!("{}{}", &item.fields["messageTimestamp"], item.message_cid);
+            results.push(item.clone());
+        }
+
+        Ok(results)
+    }
+
     async fn query_protocols(&self, query: &ProtocolsQuery) -> Result<Vec<IndexItem>> {
         let mut results = BTreeMap::new();
 
@@ -325,10 +356,6 @@ impl Index {
         self.items.range((lower, Unbounded))
     }
 
-    // fn range(&self, lower: Bound<String>, upper: Bound<String>) -> Range<String, IndexItem> {
-    //     self.items.range((lower, upper))
-    // }
-
     fn matches(&self, value: String) -> Vec<&IndexItem> {
         let index = &self.items;
         let upper = format!("{value}{MAX}");
@@ -372,8 +399,11 @@ impl IndexItem {
             }
         }
         if let Some(published) = &filter.published {
-            let default = String::from("false");
-            if &published.to_string() != fields.get("published").unwrap_or(&default) {
+            // let default = String::from("false");
+            // if &published.to_string() != fields.get("published").unwrap_or(&default) {
+            //     return Ok(false);
+            // }
+            if Some(&published.to_string()) != fields.get("published") {
                 return Ok(false);
             }
         }
@@ -400,6 +430,9 @@ impl IndexItem {
         if let Some(tags) = &filter.tags {
             for (property, filter) in tags {
                 let value = fields.get(&format!("tag.{property}")).unwrap_or(empty);
+                // FIXME
+                // FIXME: compare against tags filter
+                // FIXME
                 // if !filter.is_match(value) {
                 //     return Ok(false);
                 // }

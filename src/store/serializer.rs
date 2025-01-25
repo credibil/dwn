@@ -106,6 +106,7 @@ impl Serialize for Query {
             Self::Messages(query) => query.serialize(serializer),
             Self::Protocols(query) => query.serialize(serializer),
             Self::Records(query) => query.serialize(serializer),
+            Self::Granted(_) => unimplemented!(),
         }
     }
 }
