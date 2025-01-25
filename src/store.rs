@@ -3,7 +3,6 @@
 pub mod block;
 pub mod index;
 mod message;
-pub mod serializer;
 
 use std::collections::HashMap;
 use std::ops::Deref;

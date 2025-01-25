@@ -1,22 +1,12 @@
-use std::collections::BTreeMap;
-
 use anyhow::{Result, anyhow};
 use dwn_node::event::Event;
 use dwn_node::provider::{BlockStore, EventLog};
 use dwn_node::store::{Cursor, Query, block, index};
-use serde_json::Value;
 
 use super::ProviderImpl;
-use crate::provider::NAMESPACE;
-
-const TABLE: &str = "event_log";
 
 impl EventLog for ProviderImpl {
     async fn append(&self, owner: &str, event: &Event) -> Result<()> {
-        // self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        // let _: Option<BTreeMap<String, Value>> =
-        //     self.db.update((TABLE, event.cid()?)).content(event).await?;
-
         // store entry block
         let message_cid = event.cid()?;
         BlockStore::delete(self, owner, &message_cid).await?;
@@ -36,16 +26,6 @@ impl EventLog for ProviderImpl {
     }
 
     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Option<Cursor>)> {
-        // self.db.use_ns(NAMESPACE).use_db(owner).await?;
-
-        // let mut serializer = surrealdb::Sql::new();
-        // query.serialize(&mut serializer).unwrap();
-        // let sql = serializer.output();
-
-        // let mut response = self.db.query(sql).bind(("table", TABLE)).await?;
-        // let events: Vec<Event> = response.take(0)?;
-        // Ok((events, Cursor::default()))
-
         // FIXME: sort and paginate
 
         let mut results = index::query(owner, query, self).await?;
@@ -87,9 +67,8 @@ impl EventLog for ProviderImpl {
     }
 
     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
-        self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<BTreeMap<String, Value>> = self.db.delete((TABLE, message_cid)).await?;
-        Ok(())
+        index::delete(owner, message_cid, self).await?;
+        Ok(BlockStore::delete(self, owner, message_cid).await?)
     }
 
     async fn purge(&self) -> Result<()> {

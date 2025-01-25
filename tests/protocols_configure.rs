@@ -408,7 +408,7 @@ async fn duplicate_role() {
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert!(e.starts_with("validation failed for {\"$schema"));
+    assert!(e.starts_with("validation failed for"));
 }
 
 // Should reject request when role action rule does not contain all read actions

@@ -32,6 +32,7 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures.workspace = true
 hkdf = "0.12.4"
 http.workspace = true
+ipld-core = "0.4.1"
 jsonschema = { version = "0.28.3", default-features = false, features = ["resolve-file"] }
 libipld = "0.16.0"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
@@ -47,12 +48,8 @@ vercre-did.workspace = true
 vercre-infosec.workspace = true
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 
-ipld-core = "0.4.1"
-multihash = "0.19.3"
-
 [dev-dependencies]
 blockstore = "0.7.1"
-cid.workspace = true
 dwn-test.workspace = true
 insta.workspace = true
 

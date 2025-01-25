@@ -2,14 +2,12 @@ use anyhow::Result;
 use dwn_node::provider::{ResumableTask, TaskStore};
 
 use super::ProviderImpl;
-use crate::provider::NAMESPACE;
-
-pub(crate) const TABLE: &str = "task";
 
 impl TaskStore for ProviderImpl {
     async fn register(&self, owner: &str, task: &ResumableTask, timeout_secs: u64) -> Result<()> {
-        self.db.use_ns(NAMESPACE).use_db(owner).await?;
-        let _: Option<ResumableTask> = self.db.create((TABLE, &task.task_id)).content(task).await?;
+        // self.db.use_ns(NAMESPACE).use_db(owner).await?;
+        // let _: Option<ResumableTask> = self.db.create((TABLE, &task.task_id)).content(task).await?;
+        
         Ok(())
     }
 
