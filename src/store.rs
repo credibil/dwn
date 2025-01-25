@@ -13,7 +13,7 @@ pub use crate::messages::MessagesFilter;
 use crate::protocols::Configure;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
-pub use crate::records::{FilterVal, RecordsFilter, Sort, TagFilter};
+pub use crate::records::{RecordsFilter, Sort, TagFilter};
 use crate::{DateRange, Descriptor, Method, Result, messages, protocols};
 pub use crate::{Lower, Range, Upper};
 

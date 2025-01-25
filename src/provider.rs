@@ -17,7 +17,7 @@ pub trait Provider:
 {
 }
 
-/// The `BlockStore` trait is used by implementers to provide data storage
+/// `BlockStore` is used by implementers to provide data storage
 /// capability.
 pub trait BlockStore: Send + Sync {
     /// Store a data block in the underlying block store.
@@ -93,7 +93,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
         }
     }
 
-    /// Fetches a single message by CID from the underlying store, returning
+    /// Fetch a single message by CID from the underlying store, returning
     /// `None` if no message was found.
     fn get(
         &self, owner: &str, message_cid: &str,
@@ -122,7 +122,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
 
 /// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
-pub trait DataStore: Send + Sync {
+pub trait DataStore: BlockStore + Sized + Send + Sync {
     // /// Open a connection to the underlying store.
     // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 

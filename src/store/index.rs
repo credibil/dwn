@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::RecordsFilter;
 use crate::provider::BlockStore;
 use crate::store::{
-    Entry, GrantedQuery, MessagesQuery, ProtocolsQuery, Query, RecordsQuery, block,
+    Entry, GrantedQuery, MessagesQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter, block,
 };
 use crate::{Interface, Method, Result, unexpected};
 
@@ -496,14 +496,28 @@ impl IndexItem {
             }
         }
         if let Some(tags) = &filter.tags {
-            for (property, filter) in tags {
-                let value = fields.get(&format!("tag.{property}")).unwrap_or(empty);
-                // FIXME
-                // FIXME: compare against tags filter
-                // FIXME
-                // if !filter.is_match(value) {
-                //     return Ok(false);
-                // }
+            for (property, tag_filter) in tags {
+                let tag_value = fields.get(&format!("tag.{property}")).unwrap_or(empty);
+                match tag_filter {
+                    TagFilter::StartsWith(value) => {
+                        if !tag_value.starts_with(value) {
+                            return Ok(false);
+                        }
+                    }
+                    TagFilter::Range(range) => {
+                        let tag_int = tag_value
+                            .parse::<usize>()
+                            .map_err(|e| unexpected!("issue parsing tag: {e}"))?;
+                        if !range.contains(&tag_int) {
+                            return Ok(false);
+                        }
+                    }
+                    TagFilter::Equal(value) => {
+                        if Some(tag_value.as_str()) != value.as_str() {
+                            return Ok(false);
+                        }
+                    }
+                }
             }
         }
         if let Some(data_format) = &filter.data_format {
