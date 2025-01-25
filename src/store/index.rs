@@ -76,7 +76,7 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
         }
         Query::Protocols(pq) => indexes.query_protocols(pq).await,
         Query::Granted(gq) => indexes.query_granted(gq).await,
-        Query::Messages(mq) => indexes.query_messages(mq).await,
+        Query::Messages(mq) => indexes.query_events(mq).await,
     }
 }
 
@@ -320,20 +320,17 @@ impl<S: BlockStore> Indexes<'_, S> {
 
     // This query strategy is used when the filter will return a larger set of
     // results.
-    async fn query_messages(&self, query: &EventsQuery) -> Result<Vec<IndexItem>> {
+    async fn query_events(&self, query: &EventsQuery) -> Result<Vec<IndexItem>> {
         let mut items = Vec::new();
-        // let (limit, cursor) =
-        //     query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
+        let (limit, cursor) =
+            query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
 
         // the location in the index to begin querying from
-        // let start_key =
-        //     cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
-        // let index = self.get(&query.sort.to_string()).await?;
-
-        // starting from `start_key`, select matching index items until limit
-
+        let start_key =
+            cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
         let index = self.get("messageTimestamp").await?;
 
+        // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(Unbounded) {
             if query.filters.is_empty() {
                 items.push(item.clone());
@@ -341,8 +338,6 @@ impl<S: BlockStore> Indexes<'_, S> {
             }
 
             for filter in &query.filters {
-                // let start_key=Included(format!("{}{NULL}", filter.interface));
-
                 if let Some(interface) = &filter.interface {
                     if item.fields.get("interface") != Some(&interface.to_string()) {
                         continue;
@@ -373,12 +368,12 @@ impl<S: BlockStore> Indexes<'_, S> {
                 items.push(item.clone());
             }
 
-            // // stop when page limit + 1 is reached
-            // if let Some(lim) = limit {
-            //     if items.len() == lim + 1 {
-            //         break;
-            //     }
-            // }
+            // stop when page limit + 1 is reached
+            if let Some(lim) = limit {
+                if items.len() == lim + 1 {
+                    break;
+                }
+            }
         }
 
         Ok(items)
