@@ -24,7 +24,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let mut query = RecordsQuery::from(read.clone());
     query.method = None;
 
-    let entries = MessageStore::query(provider, owner, &query.into()).await?;
+    let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching record".to_string()));
     }
@@ -95,12 +95,12 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         let query = RecordsQuery::new()
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
             .include_archived(true);
-        let records = MessageStore::query(provider, owner, &query.into()).await?;
-        if records.is_empty() {
+        let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+        if entries.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
 
-        let Some(mut initial_write) = records[0].as_write().cloned() else {
+        let Some(mut initial_write) = entries[0].as_write().cloned() else {
             return Err(unexpected!("expected `RecordsWrite` message"));
         };
 

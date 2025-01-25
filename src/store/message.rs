@@ -4,7 +4,7 @@
 use anyhow::Result;
 
 use crate::provider::{BlockStore, Entry, MessageStore, Query};
-use crate::store::{block, index};
+use crate::store::{Cursor, block, index};
 
 struct Store<'a, T: BlockStore> {
     block_store: &'a T,
@@ -29,7 +29,7 @@ impl<T: BlockStore> MessageStore for Store<'_, T> {
         Ok(())
     }
 
-    async fn query(&self, owner: &str, query: &Query) -> Result<Vec<Entry>> {
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Option<Cursor>)> {
         // query index for matching entries
 
         // fetch entries from block store by CID

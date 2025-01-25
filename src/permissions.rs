@@ -18,7 +18,7 @@ pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
     let query = RecordsQuery::new().add_filter(RecordsFilter::new().record_id(grant_id));
-    let entries = store.query(owner, &query.into()).await?;
+    let (entries, _) = store.query(owner, &query.into()).await?;
 
     let Some(entry) = entries.first() else {
         return Err(forbidden!("no grant found"));

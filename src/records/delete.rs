@@ -30,11 +30,11 @@ pub async fn handle(
     let query = RecordsQuery::new()
         .method(None)
         .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id));
-    let records = MessageStore::query(provider, owner, &query.into()).await?;
-    if records.is_empty() {
+    let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    if entries.is_empty() {
         return Err(Error::NotFound("no matching record found".to_string()));
     }
-    let latest = &records[0];
+    let latest = &entries[0];
 
     // check the latest existing message has not already been deleted
     if latest.descriptor().method == Method::Delete {
@@ -206,15 +206,15 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         .include_archived(true)
         .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id));
 
-    let records = MessageStore::query(provider, owner, &query.into()).await?;
-    if records.is_empty() {
+    let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    if entries.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
-    if records.len() > 2 {
+    if entries.len() > 2 {
         return Err(unexpected!("multiple messages exist"));
     }
 
-    let latest = &records[0];
+    let latest = &entries[0];
 
     // TODO: merge this code with `RecordsWrite`
     // if the incoming message is not the latest, return Conflict
@@ -224,7 +224,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
 
-    let Some(earliest) = records.first() else {
+    let Some(earliest) = entries.first() else {
         return Err(unexpected!("no records found"));
     };
 
@@ -254,7 +254,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     }
 
     // delete all messages except initial write and most recent
-    delete_earlier(owner, &Entry::from(delete), &records, provider).await?;
+    delete_earlier(owner, &Entry::from(delete), &entries, provider).await?;
 
     Ok(())
 }
@@ -264,7 +264,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
     // fetch child records
     let query = RecordsQuery::new().add_filter(RecordsFilter::new().parent_id(record_id));
-    let children = MessageStore::query(provider, owner, &query.into()).await?;
+    let (children, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if children.is_empty() {
         return Ok(());
     }

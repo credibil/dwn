@@ -2,7 +2,7 @@
 
 use std::io::Read;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
 
@@ -41,64 +41,10 @@ pub trait MessageStore: Send + Sync {
     fn put(&self, owner: &str, record: &Entry) -> impl Future<Output = Result<()>> + Send;
 
     /// Queries the underlying store for matches to the provided query.
-    fn query(&self, owner: &str, query: &Query) -> impl Future<Output = Result<Vec<Entry>>> + Send;
-
-    /// Queries the underlying store returning the current page of results.
-    fn paginated_query(
+    // fn query(&self, owner: &str, query: &Query) -> impl Future<Output = Result<Vec<Entry>>> + Send;
+    fn query(
         &self, owner: &str, query: &Query,
-    ) -> impl Future<Output = Result<(Vec<Entry>, Option<Cursor>)>> + Send {
-        async move {
-            let entries = self.query(owner, query).await?;
-
-            // no pagination
-            let Query::Records(query) = query else {
-                return Ok((entries, None));
-            };
-            // no pagination
-            let Some(pagination) = &query.pagination else {
-                return Ok((entries, None));
-            };
-            // additional results?
-            let mut limit = pagination.limit.unwrap_or(entries.len());
-            if entries.len() <= limit {
-                return Ok((entries, None));
-            }
-
-            // page offset
-            let offset = if let Some(cursor) = &pagination.cursor {
-                // find starting point
-                let Some(index) =
-                    entries.iter().position(|e| e.cid().ok().as_ref() == Some(&cursor.message_cid))
-                else {
-                    return Err(anyhow!("cursor `message_cid` is invalid"));
-                };
-                index
-            } else {
-                0
-            };
-
-            // don't blow upper bound
-            if offset + limit > entries.len() {
-                limit = entries.len() - offset;
-            }
-
-            // capture page
-            let curr_page = entries.as_slice()[offset..offset + limit].to_vec();
-
-            // starting point for the next page (using `message_cid`)
-            let Some(next_entry) = entries.get(offset + limit) else {
-                return Ok((curr_page, None));
-            };
-
-            Ok((
-                curr_page,
-                Some(Cursor {
-                    message_cid: next_entry.cid()?,
-                    value: String::new(),
-                }),
-            ))
-        }
-    }
+    ) -> impl Future<Output = Result<(Vec<Entry>, Option<Cursor>)>> + Send;
 
     /// Fetches a single message by CID from the underlying store, returning
     /// `None` if no message was found.

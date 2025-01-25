@@ -986,7 +986,7 @@ async fn index_additional() {
         include_archived: true,
         ..store::RecordsQuery::default()
     };
-    let entries = MessageStore::query(&provider, ALICE_DID, &query.clone().into())
+    let (entries, _) = MessageStore::query(&provider, ALICE_DID, &query.clone().into())
         .await
         .expect("should query");
     assert_eq!(entries.len(), 1);

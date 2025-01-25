@@ -15,23 +15,7 @@ impl MessageStore for ProviderImpl {
         Ok(index::insert(owner, &entry, self).await?)
     }
 
-    async fn query(&self, owner: &str, query: &Query) -> Result<Vec<Entry>> {
-        let results = index::query(owner, query, self).await?;
-
-        let mut entries = Vec::new();
-        for item in results {
-            let Some(bytes) = BlockStore::get(self, owner, &item.message_cid).await? else {
-                return Err(anyhow!("missing block for message cid"));
-            };
-            entries.push(block::decode(&bytes)?)
-        }
-
-        Ok(entries)
-    }
-
-    async fn paginated_query(
-        &self, owner: &str, query: &Query,
-    ) -> Result<(Vec<Entry>, Option<Cursor>)> {
+    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Entry>, Option<Cursor>)> {
         let mut results = index::query(owner, query, self).await?;
 
         let (limit, cursor) = if let Query::Records(query) = query {

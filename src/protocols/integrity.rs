@@ -131,11 +131,11 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
     // fetch the parent record
     let query = RecordsQuery::new()
         .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol));
-    let records = store.query(owner, &query.into()).await?;
-    if records.is_empty() {
+    let (entries, _) = store.query(owner, &query.into()).await?;
+    if entries.is_empty() {
         return Err(forbidden!("unable to find parent record"));
     }
-    let Some(record) = &records.first() else {
+    let Some(record) = &entries.first() else {
         return Err(forbidden!("expected to find parent message"));
     };
     let Some(parent) = record.as_write() else {
@@ -197,7 +197,7 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
     };
 
     let query = RecordsQuery::new().add_filter(filter);
-    let entries = store.query(owner, &query.into()).await?;
+    let (entries, _) = store.query(owner, &query.into()).await?;
     for entry in entries {
         let Some(w) = entry.as_write() else {
             return Err(unexpected!("expected `RecordsWrite` message"));

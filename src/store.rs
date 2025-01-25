@@ -32,10 +32,8 @@ pub struct Entry {
     #[serde(flatten)]
     pub message: EntryType,
 
-    /// Indexes derived from the associated message object, flattened for
-    /// ease of querying.
-    // #[serde(flatten)]
-    // #[serde(skip_deserializing)]
+    /// Indexable fields derived from the associated message object.
+    // #[serde(skip)]
     pub indexes: HashMap<String, String>,
 }
 

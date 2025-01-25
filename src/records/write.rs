@@ -578,11 +578,11 @@ impl Write {
             permission_grant_id: grant_id.clone(),
             date_created: DateRange::new().gt(self.descriptor.base.message_timestamp),
         };
-        let records = MessageStore::query(provider, owner, &query.into()).await?;
+        let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
 
         // delete the records
-        for record in records {
-            let message_cid = record.cid()?;
+        for entry in entries {
+            let message_cid = entry.cid()?;
             MessageStore::delete(provider, owner, &message_cid).await?;
             EventLog::delete(provider, owner, &message_cid).await?;
         }
@@ -830,7 +830,8 @@ async fn existing_entries(
         .add_filter(RecordsFilter::new().record_id(record_id))
         .include_archived(true)
         .method(None); // both Write and Delete messages
-    store.query(owner, &query.into()).await.map_err(Into::into)
+    let (entries, _) = store.query(owner, &query.into()).await?;
+    Ok(entries)
 }
 
 // Fetches the initial_write record associated for `record_id`.
