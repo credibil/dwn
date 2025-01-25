@@ -1,5 +1,5 @@
 ---
-source: crates/dwn-test/src/scenarios/owner_signature.rs
+source: crates/test-node/src/scenarios/owner_signature.rs
 assertion_line: 57
 expression: reply
 snapshot_kind: text

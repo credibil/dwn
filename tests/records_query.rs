@@ -8,11 +8,11 @@ use dwn_node::protocols::Definition;
 use dwn_node::records::{RecordsFilter, Sort};
 use dwn_node::store::Pagination;
 use dwn_node::{DateRange, Error, Message, Range, authorization, endpoint};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use rand::RngCore;
+use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::provider::ProviderImpl;
 
 // Should return a status of BadRequest (400) when querying for unpublished records
 // with sort date set to `Sort::Publishedxxx`.

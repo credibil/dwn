@@ -12,9 +12,9 @@ use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::Definition;
 use dwn_node::{Error, Interface, Message, Method, endpoint};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID, BOB_DID};
+use test_node::provider::ProviderImpl;
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]

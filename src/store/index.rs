@@ -619,8 +619,8 @@ mod tests {
 
     use anyhow::Result;
     use blockstore::{Blockstore as _, InMemoryBlockstore};
-    use dwn_test::key_store::{self, ALICE_DID};
     use rand::RngCore;
+    use test_node::key_store::{self, ALICE_DID};
 
     use super::*;
     use crate::clients::protocols::{ConfigureBuilder, Definition};

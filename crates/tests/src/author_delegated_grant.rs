@@ -11,9 +11,8 @@ use dwn_node::protocols::Definition;
 use dwn_node::{Method, endpoint};
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
-
-use crate::key_store::{self, ALICE_DID, BOB_DID};
-use crate::provider::ProviderImpl;
+use test_node::key_store::{self, ALICE_DID, BOB_DID};
+use test_node::provider::ProviderImpl;
 
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]
@@ -40,7 +39,7 @@ async fn configure_any() {
     // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
     // --------------------------------------------------
-    let email = include_bytes!("../../protocols/email.json");
+    let email = include_bytes!("../../../tests/protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()

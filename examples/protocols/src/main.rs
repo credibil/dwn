@@ -2,9 +2,9 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_node::endpoint;
 use dwn_node::protocols::Query;
 use dwn_node::provider::Signer;
-use dwn_test::key_store::{self, ALICE_DID};
-use dwn_test::provider::ProviderImpl;
 use serde_json::json;
+use test_node::key_store::{self, ALICE_DID};
+use test_node::provider::ProviderImpl;
 
 #[tokio::main]
 async fn main() {

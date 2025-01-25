@@ -14,9 +14,9 @@ use dwn_node::provider::{EventLog, MessageStore};
 use dwn_node::records::{DeleteDescriptor, RecordsFilter};
 use dwn_node::store::MessagesQuery;
 use dwn_node::{Error, Interface, Method, endpoint, store};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::provider::ProviderImpl;
 
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]

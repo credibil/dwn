@@ -11,9 +11,9 @@ use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
 use dwn_node::provider::EventLog;
 use dwn_node::{Error, Message, Method, endpoint, store};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::provider::ProviderImpl;
 use tokio::time;
 
 // Should allow a protocol definition with no schema or `data_format`.

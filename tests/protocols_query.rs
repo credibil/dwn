@@ -14,9 +14,9 @@ use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType};
 use dwn_node::store::ProtocolsFilter;
 use dwn_node::{Error, Method, endpoint};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::provider::ProviderImpl;
 use tokio::time;
 use vercre_infosec::jose::jws::{Jws, Protected, Signature};
 

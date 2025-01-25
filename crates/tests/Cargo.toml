@@ -1,16 +1,17 @@
 [package]
-name = "records"
+name = "tests"
 edition.workspace = true
 publish = false
+rust-version.workspace = true
 
-# [lib]
-# crate-type = ["cdylib", "rlib"]
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-base64ct.workspace = true
 dwn-node.workspace = true
+http.workspace = true
+insta.workspace = true
+rand.workspace = true
 serde_json.workspace = true
 test-node.workspace = true
 tokio.workspace = true
-
-[dev-dependencies]

@@ -14,12 +14,12 @@ use dwn_node::provider::{BlockStore, MessageStore};
 use dwn_node::records::{EncryptOptions, Recipient, RecordsFilter, decrypt};
 use dwn_node::store::Entry;
 use dwn_node::{Error, Method, endpoint};
-use dwn_test::key_store::{
-    self, ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID,
-};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
+use test_node::key_store::{
+    self, ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID,
+};
+use test_node::provider::ProviderImpl;
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
 // Should allow an owner to read their own records.

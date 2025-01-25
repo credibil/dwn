@@ -17,13 +17,13 @@ use dwn_node::provider::EventLog;
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
 use dwn_node::store::MessagesQuery;
 use dwn_node::{Error, Interface, Message, Method, clients, data, endpoint};
-use dwn_test::key_store::{
+use http::StatusCode;
+use rand::RngCore;
+use test_node::key_store::{
     self, ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID,
     CAROL_DID, CAROL_DID as FAKE_DID,
 };
-use dwn_test::provider::ProviderImpl;
-use http::StatusCode;
-use rand::RngCore;
+use test_node::provider::ProviderImpl;
 use vercre_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors

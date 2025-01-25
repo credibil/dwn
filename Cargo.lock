@@ -750,7 +750,6 @@ dependencies = [
  "ciborium",
  "cid 0.11.1",
  "derive_more",
- "dwn-test",
  "ed25519-dalek",
  "futures",
  "hkdf",
@@ -765,29 +764,11 @@ dependencies = [
  "serde_ipld_dagcbor",
  "serde_json",
  "sha2 0.10.8",
+ "test-node",
  "thiserror 2.0.11",
  "tokio",
  "uuid",
  "vercre-did",
- "vercre-infosec",
- "x25519-dalek",
-]
-
-[[package]]
-name = "dwn-test"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-nats",
- "base64ct",
- "blockstore",
- "cid 0.11.1",
- "dwn-node",
- "ed25519-dalek",
- "futures",
- "insta",
- "serde_json",
- "sha2 0.10.8",
  "vercre-infosec",
  "x25519-dalek",
 ]
@@ -2138,8 +2119,8 @@ version = "0.0.0"
 dependencies = [
  "base64ct",
  "dwn-node",
- "dwn-test",
  "serde_json",
+ "test-node",
  "tokio",
 ]
 
@@ -2672,6 +2653,38 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
+]
+
+[[package]]
+name = "test-node"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "base64ct",
+ "blockstore",
+ "cid 0.11.1",
+ "dwn-node",
+ "ed25519-dalek",
+ "futures",
+ "insta",
+ "serde_json",
+ "sha2 0.10.8",
+ "vercre-infosec",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "tests"
+version = "0.0.0"
+dependencies = [
+ "dwn-node",
+ "http",
+ "insta",
+ "rand",
+ "serde_json",
+ "test-node",
+ "tokio",
 ]
 
 [[package]]

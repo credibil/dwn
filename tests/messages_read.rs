@@ -14,10 +14,10 @@ use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
 use dwn_node::provider::MessageStore;
 use dwn_node::{Error, Interface, Message, Method, endpoint, store};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID, INVALID_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
 use rand::RngCore;
+use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID, INVALID_DID};
+use test_node::provider::ProviderImpl;
 
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]
