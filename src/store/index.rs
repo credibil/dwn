@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::RecordsFilter;
 use crate::provider::BlockStore;
 use crate::store::{
-    Entry, GrantedQuery, MessagesQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter, block,
+    Entry, EventsQuery, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter, block,
 };
 use crate::{Interface, Method, Result, unexpected};
 
@@ -320,7 +320,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
     // This query strategy is used when the filter will return a larger set of
     // results.
-    async fn query_messages(&self, query: &MessagesQuery) -> Result<Vec<IndexItem>> {
+    async fn query_messages(&self, query: &EventsQuery) -> Result<Vec<IndexItem>> {
         let mut items = Vec::new();
         // let (limit, cursor) =
         //     query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));

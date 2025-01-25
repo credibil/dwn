@@ -9,8 +9,9 @@ use dwn_node::clients::grants::{GrantBuilder, RevocationBuilder};
 use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
-use dwn_node::provider::EventLog;
-use dwn_node::{Error, Message, Method, endpoint, store};
+use dwn_node::provider::MessageStore;
+use dwn_node::store::{self, ProtocolsQuery};
+use dwn_node::{Error, Message, Method, endpoint};
 use http::StatusCode;
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use test_node::provider::ProviderImpl;
@@ -682,12 +683,12 @@ async fn configure_event() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check log
-    let query = store::ProtocolsQuery {
+    let query = ProtocolsQuery {
         protocol: Some("https://minimal.xyz".to_string()),
         published: None,
     };
     let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+        MessageStore::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -728,7 +729,7 @@ async fn delete_older_events() {
         published: None,
     };
     let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+        MessageStore::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cid().unwrap(), newest_cid);
 }

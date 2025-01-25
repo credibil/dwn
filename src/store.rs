@@ -151,7 +151,7 @@ pub enum Query {
     Protocols(ProtocolsQuery),
 
     /// Messages query.
-    Messages(MessagesQuery),
+    Messages(EventsQuery),
 
     /// Granted query.
     Granted(GrantedQuery),
@@ -276,30 +276,28 @@ impl From<RecordsQuery> for Query {
     }
 }
 
-/// `MessagesQuery` use a builder to simplify the process of creating
+/// `EventsQuery` use a builder to simplify the process of creating
 /// `EventStore` queries.
 #[derive(Clone, Debug, Default)]
-pub struct MessagesQuery {
+pub struct EventsQuery {
     /// Message filters.
     pub filters: Vec<MessagesFilter>,
-    //
-    // /// Sort options.
-    // pub sort: Sort,
 
-    // /// Pagination options.
-    // pub pagination: Option<Pagination>,
+    /// Pagination options.
+    pub pagination: Option<Pagination>,
 }
 
-impl From<messages::Query> for MessagesQuery {
+impl From<messages::Query> for EventsQuery {
     fn from(query: messages::Query) -> Self {
         Self {
             filters: query.descriptor.filters,
+            pagination: None,
         }
     }
 }
 
-impl From<MessagesQuery> for Query {
-    fn from(query: MessagesQuery) -> Self {
+impl From<EventsQuery> for Query {
+    fn from(query: EventsQuery) -> Self {
         Self::Messages(query)
     }
 }

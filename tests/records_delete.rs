@@ -12,7 +12,7 @@ use dwn_node::messages::MessagesFilter;
 use dwn_node::protocols::Definition;
 use dwn_node::provider::{EventLog, MessageStore};
 use dwn_node::records::{DeleteDescriptor, RecordsFilter};
-use dwn_node::store::MessagesQuery;
+use dwn_node::store::EventsQuery;
 use dwn_node::{Error, Interface, Method, endpoint, store};
 use http::StatusCode;
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
@@ -996,7 +996,7 @@ async fn index_additional() {
 
     // check log
     let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+        MessageStore::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -1041,7 +1041,7 @@ async fn log_delete() {
         .build(&alice_signer)
         .await
         .expect("should create query");
-    let query = MessagesQuery::from(query);
+    let query = EventsQuery::from(query);
 
     let (entries, _) =
         EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
@@ -1100,7 +1100,7 @@ async fn delete_updates() {
         .build(&alice_signer)
         .await
         .expect("should create query");
-    let query = MessagesQuery::from(query);
+    let query = EventsQuery::from(query);
 
     let (entries, _) =
         EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");

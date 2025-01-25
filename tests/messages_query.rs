@@ -184,7 +184,7 @@ async fn match_grant_scope() {
     let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `MessagesQuery` for Bob.
+    // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -323,7 +323,7 @@ async fn mismatched_grant_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob attempts to use the `MessagesSubscribe` grant on a `MessagesQuery` message.
+    // Bob attempts to use the `MessagesSubscribe` grant on a `EventsQuery` message.
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
@@ -375,7 +375,7 @@ async fn match_protocol_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `MessagesQuery` for Bob.
+    // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -449,7 +449,7 @@ async fn mismatched_protocol_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `MessagesQuery` for Bob.
+    // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)

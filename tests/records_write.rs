@@ -15,7 +15,7 @@ use dwn_node::permissions::{Conditions, Publication, RecordsScope, Scope};
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet, Size};
 use dwn_node::provider::EventLog;
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
-use dwn_node::store::MessagesQuery;
+use dwn_node::store::EventsQuery;
 use dwn_node::{Error, Interface, Message, Method, clients, data, endpoint};
 use http::StatusCode;
 use rand::RngCore;
@@ -1208,7 +1208,7 @@ async fn log_initial_write() {
         .await
         .expect("should create query");
 
-    let query = MessagesQuery::from(query);
+    let query = EventsQuery::from(query);
     let (events, _) =
         EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should fetch");
     assert_eq!(events.len(), 1);
@@ -1263,7 +1263,7 @@ async fn retain_two_writes() {
         .await
         .expect("should create query");
 
-    let query = MessagesQuery::from(query);
+    let query = EventsQuery::from(query);
     let (events, _) =
         EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should fetch");
     assert_eq!(events.len(), 2);

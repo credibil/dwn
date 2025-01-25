@@ -7,7 +7,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider};
-use crate::store::{self, Cursor};
+use crate::store::{self, Cursor,ProtocolsQuery};
 use crate::{Descriptor, Result, permissions, utils};
 
 // Access level for query.
@@ -30,9 +30,9 @@ pub async fn handle(
     }
 
     // build actual query
-    let mut store_query = store::ProtocolsQuery::from(query.clone());
+    let mut store_query = ProtocolsQuery::from(query.clone());
 
-    // unauthorized queries can query for published protocols
+    // unauthorized queries can only query for published protocols
     if query.authorize(owner, provider).await? == Access::Published {
         store_query.published = Some(true);
     };
