@@ -32,7 +32,7 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures.workspace = true
 hkdf = "0.12.4"
 http.workspace = true
-jsonschema = { version = "0.28.2", default-features = false, features = ["resolve-file"] }
+jsonschema = { version = "0.28.3", default-features = false, features = ["resolve-file"] }
 libipld = "0.16.0"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 rand.workspace = true
