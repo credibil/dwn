@@ -2,21 +2,19 @@
 
 pub mod block;
 pub mod index;
-mod message;
 
 use std::collections::HashMap;
 use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
+use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 use crate::protocols::Configure;
 pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{FilterVal, RecordsFilter, Sort, TagFilter};
-// pub use self::serializer::{Clause, Dir, Op, Serialize, Serializer, Value};
-use crate::{DateRange, endpoint::Message};
-use crate::{Descriptor, Method, Result, messages, protocols};
+use crate::{DateRange, Descriptor, Method, Result, messages, protocols};
 pub use crate::{Lower, Range, Upper};
 
 /// Entry wraps each message with a unifying type used for all stored messages

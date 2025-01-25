@@ -6,26 +6,21 @@
 //! Implementation of the `Provider` trait for testing and examples.
 
 pub mod block_store;
-pub mod event_log;
+
 mod event_stream;
 pub mod key_store;
-pub mod message_store;
-pub mod task_store;
 
 use anyhow::{Result, anyhow};
 use blockstore::InMemoryBlockstore;
-use dwn_node::provider::{DidResolver, Document, Provider};
+use dwn_node::provider::{DidResolver, Document, EventLog, MessageStore, Provider, TaskStore};
 
 use self::key_store::ALICE_DID;
-
 
 #[derive(Clone)]
 pub struct ProviderImpl {
     blockstore: InMemoryBlockstore<64>,
     pub nats_client: async_nats::Client,
 }
-
-impl Provider for ProviderImpl {}
 
 impl ProviderImpl {
     pub async fn new() -> Result<Self> {
@@ -35,6 +30,11 @@ impl ProviderImpl {
         })
     }
 }
+
+impl Provider for ProviderImpl {}
+impl MessageStore for ProviderImpl {}
+impl EventLog for ProviderImpl {}
+impl TaskStore for ProviderImpl {}
 
 impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {
