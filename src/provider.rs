@@ -149,7 +149,7 @@ pub trait EventLog: Send + Sync {
     /// The cursor is a `message_cid`.
     fn events(
         &self, owner: &str, cursor: Option<Cursor>,
-    ) -> impl Future<Output = Result<(Vec<Event>, Cursor)>> + Send;
+    ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send;
 
     /// Retrieves a filtered set of events that occurred after a the cursor
     /// provided, accepts multiple filters. If no cursor is provided, all
@@ -159,7 +159,7 @@ pub trait EventLog: Send + Sync {
     /// Returns an array of `message_cid`s that represent the events.
     fn query(
         &self, owner: &str, query: &Query,
-    ) -> impl Future<Output = Result<(Vec<Event>, Cursor)>> + Send;
+    ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send;
 
     /// Deletes event for the specified `message_cid`.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send;

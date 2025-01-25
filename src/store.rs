@@ -285,6 +285,12 @@ impl From<RecordsQuery> for Query {
 pub struct MessagesQuery {
     /// Message filters.
     pub filters: Vec<MessagesFilter>,
+    //
+    // /// Sort options.
+    // pub sort: Sort,
+
+    // /// Pagination options.
+    // pub pagination: Option<Pagination>,
 }
 
 impl From<messages::Query> for MessagesQuery {

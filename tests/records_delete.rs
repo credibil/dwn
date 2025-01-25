@@ -3,14 +3,17 @@
 use std::io::Read;
 
 use chrono::Days;
+use dwn_node::clients::messages;
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
+use dwn_node::messages::MessagesFilter;
 use dwn_node::protocols::Definition;
 use dwn_node::provider::{EventLog, MessageStore};
 use dwn_node::records::{DeleteDescriptor, RecordsFilter};
-use dwn_node::{Error, Method, endpoint, store};
+use dwn_node::store::MessagesQuery;
+use dwn_node::{Error, Interface, Method, endpoint, store};
 use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
@@ -1033,12 +1036,13 @@ async fn log_delete() {
     // --------------------------------------------------
     // Check EventLog.
     // --------------------------------------------------
-    // Write record
-    let query = store::RecordsQuery {
-        include_archived: true,
-        method: None,
-        ..store::RecordsQuery::default()
-    };
+    let query = messages::QueryBuilder::new()
+        .add_filter(MessagesFilter::new().interface(Interface::Records))
+        .build(&alice_signer)
+        .await
+        .expect("should create query");
+    let query = MessagesQuery::from(query);
+
     let (entries, _) =
         EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
     assert_eq!(entries.len(), 2);
@@ -1091,12 +1095,13 @@ async fn delete_updates() {
     // --------------------------------------------------
     // Check EventLog. There should only be 2 events: the initial write and the delete.
     // --------------------------------------------------
-    // Write record
-    let query = store::RecordsQuery {
-        include_archived: true,
-        method: None,
-        ..store::RecordsQuery::default()
-    };
+    let query = messages::QueryBuilder::new()
+        .add_filter(MessagesFilter::new().interface(Interface::Records))
+        .build(&alice_signer)
+        .await
+        .expect("should create query");
+    let query = MessagesQuery::from(query);
+
     let (entries, _) =
         EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
     assert_eq!(entries.len(), 2);

@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use super::RecordsFilter;
 use crate::provider::BlockStore;
-use crate::store::{Entry, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, block};
+use crate::store::{
+    Entry, GrantedQuery, MessagesQuery, ProtocolsQuery, Query, RecordsQuery, block,
+};
 use crate::{Interface, Method, Result, unexpected};
 
 // const NULL: u8 = 0x00;
@@ -74,7 +76,7 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
         }
         Query::Protocols(pq) => indexes.query_protocols(pq).await,
         Query::Granted(gq) => indexes.query_granted(gq).await,
-        Query::Messages(_) => Err(unexpected!("unsupported query type")),
+        Query::Messages(mq) => indexes.query_messages(mq).await,
     }
 }
 
@@ -314,6 +316,72 @@ impl<S: BlockStore> Indexes<'_, S> {
         }
 
         Ok(results.values().cloned().collect())
+    }
+
+    // This query strategy is used when the filter will return a larger set of
+    // results.
+    async fn query_messages(&self, query: &MessagesQuery) -> Result<Vec<IndexItem>> {
+        let mut items = Vec::new();
+        // let (limit, cursor) =
+        //     query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
+
+        // the location in the index to begin querying from
+        // let start_key =
+        //     cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
+        // let index = self.get(&query.sort.to_string()).await?;
+
+        // starting from `start_key`, select matching index items until limit
+
+        let index = self.get("messageTimestamp").await?;
+
+        for (value, item) in index.lower_bound(Unbounded) {
+            if query.filters.is_empty() {
+                items.push(item.clone());
+                continue;
+            }
+
+            for filter in &query.filters {
+                // let start_key=Included(format!("{}{NULL}", filter.interface));
+
+                if let Some(interface) = &filter.interface {
+                    if item.fields.get("interface") != Some(&interface.to_string()) {
+                        continue;
+                    }
+                }
+                if let Some(method) = &filter.method {
+                    if item.fields.get("method") != Some(&method.to_string()) {
+                        continue;
+                    }
+                }
+                if let Some(protocol) = &filter.protocol {
+                    let p = Some(protocol);
+                    if item.fields.get("protocol") != p && item.fields.get("tag.protocol") != p {
+                        continue;
+                    }
+                }
+                if let Some(message_timestamp) = &filter.message_timestamp {
+                    let default = String::new();
+                    let date_str = item.fields.get("messageTimestamp").unwrap_or(&default);
+                    let timestamp = DateTime::parse_from_rfc3339(date_str)
+                        .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+
+                    if !message_timestamp.contains(&timestamp.into()) {
+                        continue;
+                    }
+                }
+
+                items.push(item.clone());
+            }
+
+            // // stop when page limit + 1 is reached
+            // if let Some(lim) = limit {
+            //     if items.len() == lim + 1 {
+            //         break;
+            //     }
+            // }
+        }
+
+        Ok(items)
     }
 }
 

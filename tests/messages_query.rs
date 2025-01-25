@@ -369,7 +369,6 @@ async fn match_protocol_scope() {
         .build(&alice_signer)
         .await
         .expect("should build");
-
     let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
         .await
         .expect("should configure protocol");
@@ -387,7 +386,6 @@ async fn match_protocol_scope() {
         .build(&alice_signer)
         .await
         .expect("should create grant");
-
     let reply =
         endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -395,9 +393,8 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
-    let filter = MessagesFilter::new().protocol("http://protocol1".to_string());
     let query = QueryBuilder::new()
-        .add_filter(filter)
+        .add_filter(MessagesFilter::new().protocol("http://protocol1".to_string()))
         .permission_grant_id(&bob_grant.record_id)
         .build(&bob_signer)
         .await
