@@ -144,7 +144,7 @@ impl Default for EntryType {
 
 /// `Query` wraps supported queries.
 #[derive(Clone, Debug)]
-pub enum Query {
+pub enum Query<'a> {
     /// Records query.
     Records(RecordsQuery),
 
@@ -152,7 +152,7 @@ pub enum Query {
     Protocols(ProtocolsQuery),
 
     /// Messages query.
-    Messages(EventsQuery),
+    Messages(EventsQuery<'a>),
 
     /// Granted query.
     Granted(GrantedQuery),
@@ -169,7 +169,7 @@ pub struct ProtocolsQuery {
     pub published: Option<bool>,
 }
 
-impl From<ProtocolsQuery> for Query {
+impl From<ProtocolsQuery> for Query<'_> {
     fn from(query: ProtocolsQuery) -> Self {
         Self::Protocols(query)
     }
@@ -271,7 +271,7 @@ impl From<records::Read> for RecordsQuery {
     }
 }
 
-impl From<RecordsQuery> for Query {
+impl From<RecordsQuery> for Query<'_> {
     fn from(query: RecordsQuery) -> Self {
         Self::Records(query)
     }
@@ -279,13 +279,13 @@ impl From<RecordsQuery> for Query {
 
 /// A set of field/value matchers that must be 'AND-ed' together for a
 /// successful match.
-pub type MatchSet = Vec<Matcher>;
+pub type MatchSet<'a> = Vec<Matcher<'a>>;
 
-/// A field/value matcher.
+/// A field/value matcher for use in finding matching indexed values.
 #[derive(Clone, Debug)]
-pub struct Matcher {
+pub struct Matcher<'a> {
     /// The name of the field this matcher applies to.
-    pub field: String,
+    pub field: &'a str,
 
     /// The value and strategy to use for a successful match.
     pub value: MatchOn,
@@ -304,7 +304,7 @@ pub enum MatchOn {
     DateRange(DateRange),
 }
 
-impl Matcher {
+impl Matcher<'_> {
     /// Check if the field value matches the filter value.
     ///
     /// # Errors
@@ -330,15 +330,15 @@ impl Matcher {
 /// `EventsQuery` use a builder to simplify the process of creating
 /// `EventStore` queries.
 #[derive(Clone, Debug, Default)]
-pub struct EventsQuery {
+pub struct EventsQuery<'a> {
     /// Message filters.
-    pub match_sets: Vec<MatchSet>,
+    pub match_sets: Vec<MatchSet<'a>>,
 
     /// Pagination options.
     pub pagination: Option<Pagination>,
 }
 
-impl From<messages::Query> for EventsQuery {
+impl From<messages::Query> for EventsQuery<'_> {
     fn from(query: messages::Query) -> Self {
         let mut match_sets = vec![];
 
@@ -347,29 +347,29 @@ impl From<messages::Query> for EventsQuery {
 
             if let Some(interface) = &filter.interface {
                 match_set.push(Matcher {
-                    field: "interface".to_string(),
+                    field: "interface",
                     value: MatchOn::Equal(interface.to_string()),
                 });
             }
             if let Some(method) = &filter.method {
                 match_set.push(Matcher {
-                    field: "method".to_string(),
+                    field: "method",
                     value: MatchOn::Equal(method.to_string()),
                 });
             }
             if let Some(protocol) = &filter.protocol {
                 match_set.push(Matcher {
-                    field: "protocol".to_string(),
+                    field: "protocol",
                     value: MatchOn::Equal(protocol.to_string()),
                 });
                 match_set.push(Matcher {
-                    field: "tag.protocol".to_string(),
+                    field: "tag.protocol",
                     value: MatchOn::Equal(protocol.to_string()),
                 });
             }
             if let Some(message_timestamp) = &filter.message_timestamp {
                 match_set.push(Matcher {
-                    field: "messageTimestamp".to_string(),
+                    field: "messageTimestamp",
                     value: MatchOn::DateRange(message_timestamp.clone()),
                 });
             }
@@ -384,8 +384,8 @@ impl From<messages::Query> for EventsQuery {
     }
 }
 
-impl From<EventsQuery> for Query {
-    fn from(query: EventsQuery) -> Self {
+impl<'a> From<EventsQuery<'a>> for Query<'a> {
+    fn from(query: EventsQuery<'a>) -> Self {
         Self::Messages(query)
     }
 }
@@ -400,7 +400,7 @@ pub struct GrantedQuery {
     pub date_created: DateRange,
 }
 
-impl From<GrantedQuery> for Query {
+impl From<GrantedQuery> for Query<'_> {
     fn from(query: GrantedQuery) -> Self {
         Self::Granted(query)
     }
