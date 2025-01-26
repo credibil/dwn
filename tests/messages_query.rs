@@ -400,6 +400,8 @@ async fn match_protocol_scope() {
         .await
         .expect("should create write");
 
+ 
+
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 

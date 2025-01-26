@@ -248,6 +248,7 @@ impl Write {
 
         indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), descriptor.base.method.to_string());
+        indexes.insert("archived".to_string(), false.to_string());
 
         // FIXME: add these fields back when cut over to new indexes
         indexes.insert("record_id".to_string(), self.record_id.clone());

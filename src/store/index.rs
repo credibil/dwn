@@ -15,7 +15,8 @@ use serde::{Deserialize, Serialize};
 use super::RecordsFilter;
 use crate::provider::BlockStore;
 use crate::store::{
-    Entry, EventsQuery, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter, block,
+    Entry, EventsQuery, FilterValue, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter,
+    block,
 };
 use crate::{Interface, Method, Result, unexpected};
 
@@ -226,8 +227,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(start_key) {
-            let archived = item.fields.get("archived");
-            if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
+            if item.fields.get("archived") == Some(&"true".to_string()) && !query.include_archived {
                 continue;
             }
             if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
@@ -322,6 +322,8 @@ impl<S: BlockStore> Indexes<'_, S> {
     // results.
     async fn query_events(&self, query: &EventsQuery) -> Result<Vec<IndexItem>> {
         let mut items = Vec::new();
+        let mut matches = HashSet::new();
+
         let (limit, cursor) =
             query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
 
@@ -332,40 +334,48 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(Unbounded) {
+            if matches.contains(&item.message_cid) {
+                continue;
+            }
+
             if query.filters.is_empty() {
+                matches.insert(item.message_cid.clone());
                 items.push(item.clone());
                 continue;
             }
 
             for filter in &query.filters {
-                if let Some(interface) = &filter.interface {
-                    if item.fields.get("interface") != Some(&interface.to_string()) {
-                        continue;
-                    }
-                }
-                if let Some(method) = &filter.method {
-                    if item.fields.get("method") != Some(&method.to_string()) {
-                        continue;
-                    }
-                }
-                if let Some(protocol) = &filter.protocol {
-                    let p = Some(protocol);
-                    if item.fields.get("protocol") != p && item.fields.get("tag.protocol") != p {
-                        continue;
-                    }
-                }
-                if let Some(message_timestamp) = &filter.message_timestamp {
-                    let default = String::new();
-                    let date_str = item.fields.get("messageTimestamp").unwrap_or(&default);
-                    let timestamp = DateTime::parse_from_rfc3339(date_str)
-                        .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+                for field_filter in filter {
+                    match &field_filter.value {
+                        FilterValue::Equal(value) => {
+                            if item.fields.get(&field_filter.field) != Some(value) {
+                                continue;
+                            }
+                        }
+                        FilterValue::Range(range) => {
+                            let val = item.fields.get(&field_filter.field).unwrap();
+                            let val_int = val
+                                .parse::<usize>()
+                                .map_err(|e| unexpected!("issue parsing val: {e}"))?;
+                            if !range.contains(&val_int) {
+                                continue;
+                            }
+                        }
+                        FilterValue::DateRange(val) => {
+                            let default = String::new();
+                            let date_str = item.fields.get(&field_filter.field).unwrap_or(&default);
+                            let date_val = DateTime::parse_from_rfc3339(date_str)
+                                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
 
-                    if !message_timestamp.contains(&timestamp.into()) {
-                        continue;
+                            if !val.contains(&date_val.into()) {
+                                continue;
+                            }
+                        }
                     }
-                }
 
-                items.push(item.clone());
+                    matches.insert(item.message_cid.clone());
+                    items.push(item.clone());
+                }
             }
 
             // stop when page limit + 1 is reached

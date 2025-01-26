@@ -276,12 +276,39 @@ impl From<RecordsQuery> for Query {
     }
 }
 
+/// Filter value.
+#[derive(Clone, Debug)]
+pub enum FilterValue {
+    /// Equal filter.
+    Equal(String),
+    /// Range filter.
+    Range(Range<usize>),
+    /// Date range filter.
+    DateRange(DateRange),
+}
+
+// impl Default for FilterValue {
+//     fn default() -> Self {
+//         Self::Equals(String::default())
+//     }
+// }
+
+/// Field filter.
+#[derive(Clone, Debug)]
+pub struct FieldFilter {
+    /// Field name.
+    pub field: String,
+
+    /// Field value.
+    pub value: FilterValue,
+}
+
 /// `EventsQuery` use a builder to simplify the process of creating
 /// `EventStore` queries.
 #[derive(Clone, Debug, Default)]
 pub struct EventsQuery {
     /// Message filters.
-    pub filters: Vec<MessagesFilter>,
+    pub filters: Vec<Vec<FieldFilter>>,
 
     /// Pagination options.
     pub pagination: Option<Pagination>,
@@ -289,8 +316,45 @@ pub struct EventsQuery {
 
 impl From<messages::Query> for EventsQuery {
     fn from(query: messages::Query) -> Self {
+        let mut filters = vec![];
+
+        for filter in &query.descriptor.filters {
+            let mut field_filters = vec![];
+
+            if let Some(interface) = &filter.interface {
+                field_filters.push(FieldFilter {
+                    field: "interface".to_string(),
+                    value: FilterValue::Equal(interface.to_string()),
+                });
+            }
+            if let Some(method) = &filter.method {
+                field_filters.push(FieldFilter {
+                    field: "method".to_string(),
+                    value: FilterValue::Equal(method.to_string()),
+                });
+            }
+            if let Some(protocol) = &filter.protocol {
+                field_filters.push(FieldFilter {
+                    field: "protocol".to_string(),
+                    value: FilterValue::Equal(protocol.to_string()),
+                });
+                field_filters.push(FieldFilter {
+                    field: "tag.protocol".to_string(),
+                    value: FilterValue::Equal(protocol.to_string()),
+                });
+            }
+            if let Some(message_timestamp) = &filter.message_timestamp {
+                field_filters.push(FieldFilter {
+                    field: "messageTimestamp".to_string(),
+                    value: FilterValue::DateRange(message_timestamp.clone()),
+                });
+            }
+
+            filters.push(field_filters);
+        }
+
         Self {
-            filters: query.descriptor.filters,
+            filters,
             pagination: None,
         }
     }
