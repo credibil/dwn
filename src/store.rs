@@ -6,6 +6,7 @@ pub mod index;
 use std::collections::HashMap;
 use std::ops::Deref;
 
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
 use crate::endpoint::Message;
@@ -15,7 +16,7 @@ pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, Sort, TagFilter};
 use crate::{DateRange, Descriptor, Method, Result, messages, protocols};
-pub use crate::{Lower, Range, Upper};
+pub use crate::{Lower, Range, Upper, unexpected};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -276,31 +277,54 @@ impl From<RecordsQuery> for Query {
     }
 }
 
+/// A set of field/value matchers that must be 'AND-ed' together for a
+/// successful match.
+pub type MatchSet = Vec<Matcher>;
+
+/// A field/value matcher.
+#[derive(Clone, Debug)]
+pub struct Matcher {
+    /// The name of the field this matcher applies to.
+    pub field: String,
+
+    /// The value and strategy to use for a successful match.
+    pub value: MatchOn,
+}
+
 /// Filter value.
 #[derive(Clone, Debug)]
-pub enum FilterValue {
-    /// Equal filter.
+pub enum MatchOn {
+    /// Match must be equal.
     Equal(String),
-    /// Range filter.
+
+    /// Match must be in the specified range.
     Range(Range<usize>),
-    /// Date range filter.
+
+    /// Match must be in the specified date range.
     DateRange(DateRange),
 }
 
-// impl Default for FilterValue {
-//     fn default() -> Self {
-//         Self::Equals(String::default())
-//     }
-// }
-
-/// Field filter.
-#[derive(Clone, Debug)]
-pub struct FieldFilter {
-    /// Field name.
-    pub field: String,
-
-    /// Field value.
-    pub value: FilterValue,
+impl Matcher {
+    /// Check if the field value matches the filter value.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn is_match(&self, value: &str) -> Result<bool> {
+        let matched = match &self.value {
+            MatchOn::Equal(filter_val) => value == filter_val,
+            MatchOn::Range(range) => {
+                let int_val: usize =
+                    value.parse().map_err(|e| unexpected!("issue parsing usize: {e}"))?;
+                range.contains(&int_val)
+            }
+            MatchOn::DateRange(range) => {
+                let date_val = DateTime::parse_from_rfc3339(value)
+                    .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+                range.contains(&date_val.into())
+            }
+        };
+        Ok(matched)
+    }
 }
 
 /// `EventsQuery` use a builder to simplify the process of creating
@@ -308,7 +332,7 @@ pub struct FieldFilter {
 #[derive(Clone, Debug, Default)]
 pub struct EventsQuery {
     /// Message filters.
-    pub filters: Vec<Vec<FieldFilter>>,
+    pub match_sets: Vec<MatchSet>,
 
     /// Pagination options.
     pub pagination: Option<Pagination>,
@@ -316,45 +340,45 @@ pub struct EventsQuery {
 
 impl From<messages::Query> for EventsQuery {
     fn from(query: messages::Query) -> Self {
-        let mut filters = vec![];
+        let mut match_sets = vec![];
 
         for filter in &query.descriptor.filters {
-            let mut field_filters = vec![];
+            let mut match_set = vec![];
 
             if let Some(interface) = &filter.interface {
-                field_filters.push(FieldFilter {
+                match_set.push(Matcher {
                     field: "interface".to_string(),
-                    value: FilterValue::Equal(interface.to_string()),
+                    value: MatchOn::Equal(interface.to_string()),
                 });
             }
             if let Some(method) = &filter.method {
-                field_filters.push(FieldFilter {
+                match_set.push(Matcher {
                     field: "method".to_string(),
-                    value: FilterValue::Equal(method.to_string()),
+                    value: MatchOn::Equal(method.to_string()),
                 });
             }
             if let Some(protocol) = &filter.protocol {
-                field_filters.push(FieldFilter {
+                match_set.push(Matcher {
                     field: "protocol".to_string(),
-                    value: FilterValue::Equal(protocol.to_string()),
+                    value: MatchOn::Equal(protocol.to_string()),
                 });
-                field_filters.push(FieldFilter {
+                match_set.push(Matcher {
                     field: "tag.protocol".to_string(),
-                    value: FilterValue::Equal(protocol.to_string()),
+                    value: MatchOn::Equal(protocol.to_string()),
                 });
             }
             if let Some(message_timestamp) = &filter.message_timestamp {
-                field_filters.push(FieldFilter {
+                match_set.push(Matcher {
                     field: "messageTimestamp".to_string(),
-                    value: FilterValue::DateRange(message_timestamp.clone()),
+                    value: MatchOn::DateRange(message_timestamp.clone()),
                 });
             }
 
-            filters.push(field_filters);
+            match_sets.push(match_set);
         }
 
         Self {
-            filters,
+            match_sets,
             pagination: None,
         }
     }

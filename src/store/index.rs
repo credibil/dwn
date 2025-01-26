@@ -15,8 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::RecordsFilter;
 use crate::provider::BlockStore;
 use crate::store::{
-    Entry, EventsQuery, FilterValue, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter,
-    block,
+    Entry, EventsQuery, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter, block,
 };
 use crate::{Interface, Method, Result, unexpected};
 
@@ -338,41 +337,20 @@ impl<S: BlockStore> Indexes<'_, S> {
                 continue;
             }
 
-            if query.filters.is_empty() {
+            if query.match_sets.is_empty() {
                 matches.insert(item.message_cid.clone());
                 items.push(item.clone());
                 continue;
             }
 
-            for filter in &query.filters {
-                for field_filter in filter {
-                    match &field_filter.value {
-                        FilterValue::Equal(value) => {
-                            if item.fields.get(&field_filter.field) != Some(value) {
-                                continue;
-                            }
-                        }
-                        FilterValue::Range(range) => {
-                            let val = item.fields.get(&field_filter.field).unwrap();
-                            let val_int = val
-                                .parse::<usize>()
-                                .map_err(|e| unexpected!("issue parsing val: {e}"))?;
-                            if !range.contains(&val_int) {
-                                continue;
-                            }
-                        }
-                        FilterValue::DateRange(val) => {
-                            let default = String::new();
-                            let date_str = item.fields.get(&field_filter.field).unwrap_or(&default);
-                            let date_val = DateTime::parse_from_rfc3339(date_str)
-                                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-
-                            if !val.contains(&date_val.into()) {
-                                continue;
-                            }
-                        }
+            for match_set in &query.match_sets {
+                for matcher in match_set {
+                    let Some(field_val) = item.fields.get(&matcher.field) else {
+                        continue;
+                    };
+                    if !matcher.is_match(field_val)? {
+                        continue;
                     }
-
                     matches.insert(item.message_cid.clone());
                     items.push(item.clone());
                 }
