@@ -9,7 +9,7 @@ use crate::protocols::REVOCATION_PATH;
 use crate::provider::MessageStore;
 use crate::records::{DelegatedGrant, Delete, Query, Read, Subscribe, Write};
 use crate::serde::rfc3339_micros;
-use crate::store::{RecordsFilter, RecordsQuery};
+use crate::store::{RecordsFilter, RecordsQueryBuilder};
 use crate::{Descriptor, Result, forbidden, unexpected};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -273,8 +273,9 @@ impl Grant {
         }
 
         // check if grant has been revoked — using latest revocation message
-        let query = RecordsQuery::new()
-            .add_filter(RecordsFilter::new().parent_id(&self.id).protocol_path(REVOCATION_PATH));
+        let query = RecordsQueryBuilder::new()
+            .add_filter(RecordsFilter::new().parent_id(&self.id).protocol_path(REVOCATION_PATH))
+            .build();
 
         let (entries, _) = store.query(grantor, &query.into()).await?;
         if let Some(oldest) = entries.first().cloned() {

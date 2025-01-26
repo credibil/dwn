@@ -12,7 +12,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
 use crate::provider::{MessageStore, Provider};
 use crate::records::{DataStream, Delete, RecordsFilter, Write, write};
-use crate::store::RecordsQuery;
+use crate::store::{RecordsQuery, RecordsQueryBuilder};
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
@@ -92,9 +92,10 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let initial_write = if write.is_initial()? {
         None
     } else {
-        let query = RecordsQuery::new()
+        let query = RecordsQueryBuilder::new()
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
-            .include_archived(true);
+            .include_archived(true)
+            .build();
         let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
         if entries.is_empty() {
             return Err(unexpected!("initial write not found"));

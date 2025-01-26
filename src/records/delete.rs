@@ -15,7 +15,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::Protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::Write;
-use crate::store::{Entry, EntryType, RecordsFilter, RecordsQuery};
+use crate::store::{Entry, EntryType, RecordsFilter, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
@@ -27,9 +27,10 @@ pub async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
-    let query = RecordsQuery::new()
+    let query = RecordsQueryBuilder::new()
         .method(None)
-        .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id));
+        .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id))
+        .build();
     let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching record found".to_string()));
@@ -201,10 +202,11 @@ pub struct DeleteDescriptor {
 
 async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::new()
+    let query = RecordsQueryBuilder::new()
         .method(None)
         .include_archived(true)
-        .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id));
+        .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id))
+        .build();
 
     let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {
@@ -263,7 +265,8 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 #[async_recursion]
 async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
     // fetch child records
-    let query = RecordsQuery::new().add_filter(RecordsFilter::new().parent_id(record_id));
+    let query =
+        RecordsQueryBuilder::new().add_filter(RecordsFilter::new().parent_id(record_id)).build();
     let (children, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if children.is_empty() {
         return Ok(());

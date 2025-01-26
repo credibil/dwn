@@ -22,7 +22,7 @@ use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{DataStream, DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{Entry, EntryType, GrantedQuery, RecordsFilter, RecordsQuery};
+use crate::store::{Entry, EntryType, GrantedQuery, RecordsFilter, RecordsQueryBuilder};
 use crate::{Descriptor, Error, Method, Result, authorization, data, forbidden, unexpected};
 
 /// Handle `RecordsWrite` messages.
@@ -827,10 +827,11 @@ pub struct WriteDescriptor {
 async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Vec<Entry>> {
-    let query = RecordsQuery::new()
+    let query = RecordsQueryBuilder::new()
         .add_filter(RecordsFilter::new().record_id(record_id))
         .include_archived(true)
-        .method(None); // both Write and Delete messages
+        .method(None)
+        .build(); // both Write and Delete messages
     let (entries, _) = store.query(owner, &query.into()).await?;
     Ok(entries)
 }

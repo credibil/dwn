@@ -925,7 +925,7 @@ async fn data_cid() {
 
 // Should be able to query for a record by data_size (half-open range).
 #[tokio::test]
-async fn dat_size_part_range() {
+async fn data_size_part_range() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 

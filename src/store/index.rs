@@ -214,8 +214,53 @@ impl<S: BlockStore> Indexes<'_, S> {
 
     // This query strategy is used when the filter will return a larger set of
     // results.
+    // async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
+    //     let mut items = Vec::new();
+    //     let (limit, cursor) =
+    //         query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
+
+    //     // the location in the index to begin querying from
+    //     let start_key =
+    //         cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
+    //     let index = self.get(&query.sort.to_string()).await?;
+
+    //     // starting from `start_key`, select matching index items until limit
+    //     for (value, item) in index.lower_bound(start_key) {
+    //         if item.fields.get("archived") == Some(&"true".to_string()) && !query.include_archived {
+    //             continue;
+    //         }
+    //         if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
+    //             continue;
+    //         }
+    //         if let Some(method) = &query.method {
+    //             if item.fields.get("method") != Some(&method.to_string()) {
+    //                 continue;
+    //             }
+    //         }
+
+    //         // match entry against any filter
+    //         for filter in &query.filters {
+    //             if item.is_match(filter)? {
+    //                 items.push(item.clone());
+    //                 break;
+    //             }
+    //         }
+
+    //         // stop when page limit + 1 is reached
+    //         if let Some(lim) = limit {
+    //             if items.len() == lim + 1 {
+    //                 break;
+    //             }
+    //         }
+    //     }
+
+    //     Ok(items)
+    // }
+
     async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
         let mut items = Vec::new();
+        let mut matches = HashSet::new();
+
         let (limit, cursor) =
             query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
 
@@ -225,32 +270,37 @@ impl<S: BlockStore> Indexes<'_, S> {
         let index = self.get(&query.sort.to_string()).await?;
 
         // starting from `start_key`, select matching index items until limit
-        for (value, item) in index.lower_bound(start_key) {
-            if item.fields.get("archived") == Some(&"true".to_string()) && !query.include_archived {
-                continue;
-            }
-            if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
-                continue;
-            }
-            if let Some(method) = &query.method {
-                if item.fields.get("method") != Some(&method.to_string()) {
-                    continue;
-                }
-            }
-
-            // match entry against any filter
-            for filter in &query.filters {
-                if item.is_match(filter)? {
-                    items.push(item.clone());
-                    break;
-                }
-            }
-
+        for (value, item) in index.lower_bound(Unbounded) {
             // stop when page limit + 1 is reached
             if let Some(lim) = limit {
                 if items.len() == lim + 1 {
                     break;
                 }
+            }
+
+            if matches.contains(&item.message_cid) {
+                continue;
+            }
+
+            if query.match_sets.is_empty() {
+                matches.insert(item.message_cid.clone());
+                items.push(item.clone());
+                continue;
+            }
+
+            // match sets are 'OR-ed' together
+            'next_set: for match_set in &query.match_sets {
+                // a set of matchers are 'AND-ed' together
+                for matcher in match_set {
+                    let Some(index_value) = item.fields.get(matcher.field) else {
+                        continue 'next_set;
+                    };
+                    if !matcher.is_match(index_value)? {
+                        continue 'next_set;
+                    }
+                }
+                matches.insert(item.message_cid.clone());
+                items.push(item.clone());
             }
         }
 
@@ -329,7 +379,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         // the location in the index to begin querying from
         let start_key =
             cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
-        let index = self.get("messageTimestamp").await?;
+        let index = self.get(&query.sort.to_string()).await?;
 
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(Unbounded) {

@@ -11,7 +11,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider};
 use crate::records::{RecordsFilter, Write};
-use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
+use crate::store::{Cursor, Pagination, RecordsQuery, RecordsQueryBuilder, Sort};
 use crate::{Descriptor, Result, forbidden, unauthorized, unexpected, utils};
 
 /// Process `Query` message.
@@ -71,9 +71,10 @@ pub async fn handle(
         }
 
         // get the initial write for the returned `RecordsWrite`
-        let query = RecordsQuery::new()
+        let query = RecordsQueryBuilder::new()
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
-            .include_archived(true);
+            .include_archived(true)
+            .build();
         let (results, _) = MessageStore::query(provider, owner, &query.into()).await?;
         let mut initial_write: Write = (&results[0]).try_into()?;
         initial_write.encoded_data = None;
@@ -243,14 +244,19 @@ impl Query {
     // when requestor (message author) is not web node owner,
     // recreate filters to include query author as record author or recipient
     fn into_non_owner(self) -> Result<RecordsQuery> {
-        let mut store_query = RecordsQuery::from(self.clone());
+        // let mut store_query = RecordsQueryBuilder::from(self.clone());
+        let mut store_query = RecordsQueryBuilder::new();
+        if let Some(date_sort) = self.descriptor.date_sort {
+            store_query = store_query.sort(date_sort);
+        }
+        if let Some(pagination) = self.descriptor.pagination {
+            store_query = store_query.pagination(pagination);
+        }
 
         let Some(authzn) = &self.authorization else {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
-
-        store_query.filters = vec![];
 
         // New filter: copy query filter  and set `published` to true
         if self.descriptor.filter.published.is_none() {
@@ -275,7 +281,7 @@ impl Query {
             store_query = store_query.add_filter(filter.published(false));
         }
 
-        Ok(store_query)
+        Ok(store_query.build())
     }
 }
 
