@@ -61,9 +61,7 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 ///
 /// # Errors
 /// LATER: Add errors
-pub async fn query(
-    owner: &str, query: &Query<'_>, store: &impl BlockStore,
-) -> Result<Vec<IndexItem>> {
+pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<IndexItem>> {
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
     match query {
@@ -321,7 +319,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
     // This query strategy is used when the filter will return a larger set of
     // results.
-    async fn query_events(&self, query: &EventsQuery<'_>) -> Result<Vec<IndexItem>> {
+    async fn query_events(&self, query: &EventsQuery) -> Result<Vec<IndexItem>> {
         let mut items = Vec::new();
         let mut matches = HashSet::new();
 
@@ -347,10 +345,10 @@ impl<S: BlockStore> Indexes<'_, S> {
 
             for match_set in &query.match_sets {
                 for matcher in match_set {
-                    let Some(field_val) = item.fields.get(matcher.field) else {
+                    let Some(value) = item.fields.get(matcher.field) else {
                         continue;
                     };
-                    if !matcher.is_match(field_val)? {
+                    if !matcher.is_match(value)? {
                         continue;
                     }
                     matches.insert(item.message_cid.clone());

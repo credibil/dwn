@@ -144,7 +144,7 @@ impl Default for EntryType {
 
 /// `Query` wraps supported queries.
 #[derive(Clone, Debug)]
-pub enum Query<'a> {
+pub enum Query {
     /// Records query.
     Records(RecordsQuery),
 
@@ -152,7 +152,7 @@ pub enum Query<'a> {
     Protocols(ProtocolsQuery),
 
     /// Messages query.
-    Messages(EventsQuery<'a>),
+    Messages(EventsQuery),
 
     /// Granted query.
     Granted(GrantedQuery),
@@ -169,7 +169,7 @@ pub struct ProtocolsQuery {
     pub published: Option<bool>,
 }
 
-impl From<ProtocolsQuery> for Query<'_> {
+impl From<ProtocolsQuery> for Query {
     fn from(query: ProtocolsQuery) -> Self {
         Self::Protocols(query)
     }
@@ -271,7 +271,7 @@ impl From<records::Read> for RecordsQuery {
     }
 }
 
-impl From<RecordsQuery> for Query<'_> {
+impl From<RecordsQuery> for Query {
     fn from(query: RecordsQuery) -> Self {
         Self::Records(query)
     }
@@ -279,13 +279,13 @@ impl From<RecordsQuery> for Query<'_> {
 
 /// A set of field/value matchers that must be 'AND-ed' together for a
 /// successful match.
-pub type MatchSet<'a> = Vec<Matcher<'a>>;
+pub type MatchSet = Vec<Matcher>;
 
 /// A field/value matcher for use in finding matching indexed values.
 #[derive(Clone, Debug)]
-pub struct Matcher<'a> {
+pub struct Matcher {
     /// The name of the field this matcher applies to.
-    pub field: &'a str,
+    pub field: &'static str,
 
     /// The value and strategy to use for a successful match.
     pub value: MatchOn,
@@ -304,7 +304,7 @@ pub enum MatchOn {
     DateRange(DateRange),
 }
 
-impl Matcher<'_> {
+impl Matcher {
     /// Check if the field value matches the filter value.
     ///
     /// # Errors
@@ -330,15 +330,15 @@ impl Matcher<'_> {
 /// `EventsQuery` use a builder to simplify the process of creating
 /// `EventStore` queries.
 #[derive(Clone, Debug, Default)]
-pub struct EventsQuery<'a> {
-    /// Message filters.
-    pub match_sets: Vec<MatchSet<'a>>,
+pub struct EventsQuery {
+    /// One or more sets of events to match.
+    pub match_sets: Vec<MatchSet>,
 
     /// Pagination options.
     pub pagination: Option<Pagination>,
 }
 
-impl From<messages::Query> for EventsQuery<'_> {
+impl From<messages::Query> for EventsQuery {
     fn from(query: messages::Query) -> Self {
         let mut match_sets = vec![];
 
@@ -384,8 +384,8 @@ impl From<messages::Query> for EventsQuery<'_> {
     }
 }
 
-impl<'a> From<EventsQuery<'a>> for Query<'a> {
-    fn from(query: EventsQuery<'a>) -> Self {
+impl From<EventsQuery> for Query {
+    fn from(query: EventsQuery) -> Self {
         Self::Messages(query)
     }
 }
@@ -400,7 +400,7 @@ pub struct GrantedQuery {
     pub date_created: DateRange,
 }
 
-impl From<GrantedQuery> for Query<'_> {
+impl From<GrantedQuery> for Query {
     fn from(query: GrantedQuery) -> Self {
         Self::Granted(query)
     }
