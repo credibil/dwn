@@ -9,13 +9,11 @@ use std::collections::btree_map::Range;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Bound::{self, Excluded, Included, Unbounded};
 
-use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
-use super::RecordsFilter;
+use crate::Result;
 use crate::provider::BlockStore;
-use crate::store::{Entry, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, block};
-use crate::{Interface, Method, Result, unexpected};
+use crate::store::{Entry, Query, block};
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;
@@ -62,20 +60,10 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<IndexItem>> {
     let indexes = IndexesBuilder::new().owner(owner).store(store).build();
 
-    match query {
-        Query::Records(rq) => {
-            // choose query strategy
-            for filter in &rq.filters {
-                if !filter.is_concise() {
-                    return indexes.query_full(rq).await;
-                }
-            }
-            indexes.query_concise(rq).await
-        }
-        Query::Protocols(pq) => indexes.query_protocols(pq).await,
-        Query::Granted(gq) => indexes.query_granted(gq).await,
-        Query::Messages(_) => Err(unexpected!("unsupported query type")),
+    if query.is_concise() {
+        return indexes.query_concise(query).await;
     }
+    indexes.query_full(query).await
 }
 
 /// Delete entry specified by `message_cid` from indexes.
@@ -143,46 +131,44 @@ impl<S: BlockStore> Indexes<'_, S> {
     //
     // This strategy is employed when the filter contains one of `record_id`,
     // `context_id`, `protocol_path`, `parent_id`, or `schema`.
-    async fn query_concise(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
+    async fn query_concise(&self, query: &Query) -> Result<Vec<IndexItem>> {
         let mut matches = HashSet::new();
         let mut results = BTreeMap::new();
 
         let sort_field = query.sort.to_string();
 
-        for filter in &query.filters {
+        // match sets are 'OR-ed' together
+        for match_set in &query.match_sets {
             // choose the best index to use for the filter
-            let Some((field, value)) = filter.as_concise() else {
+            let Some((field, value)) = &match_set.index else {
                 continue;
             };
-            let index = self.get(&field).await?;
+
+            let index = self.get(field).await?;
 
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
-            for item in index.matches(value) {
+            'next_item: for item in index.matches(value.clone()) {
                 // short circuit when previously matched
                 if matches.contains(&item.message_cid) {
                     continue;
                 }
-                let archived = item.fields.get("archived");
-                if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
-                    continue;
-                }
-                if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
-                    continue;
-                }
-                if let Some(method) = &query.method {
-                    if item.fields.get("method") != Some(&method.to_string()) {
-                        continue;
+
+                // a set of matchers are 'AND-ed' together
+                for matcher in &match_set.inner {
+                    let Some(index_value) = item.fields.get(&matcher.field) else {
+                        continue 'next_item;
+                    };
+                    if !matcher.is_match(index_value)? {
+                        continue 'next_item;
                     }
                 }
 
-                if item.is_match(filter)? {
-                    matches.insert(item.message_cid.clone());
+                matches.insert(item.message_cid.clone());
 
-                    // sort results as we collect using `message_cid` as a tie-breaker
-                    let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
-                    results.insert(sort_key, item.clone());
-                }
+                // sort results as we collect using `message_cid` as a tie-breaker
+                let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
+                results.insert(sort_key, item.clone());
             }
         }
 
@@ -212,8 +198,10 @@ impl<S: BlockStore> Indexes<'_, S> {
 
     // This query strategy is used when the filter will return a larger set of
     // results.
-    async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
+    async fn query_full(&self, query: &Query) -> Result<Vec<IndexItem>> {
         let mut items = Vec::new();
+        let mut matches = HashSet::new();
+
         let (limit, cursor) =
             query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
 
@@ -224,96 +212,40 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(start_key) {
-            let archived = item.fields.get("archived");
-            if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
-                continue;
-            }
-            if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
-                continue;
-            }
-            if let Some(method) = &query.method {
-                if item.fields.get("method") != Some(&method.to_string()) {
-                    continue;
-                }
-            }
-
-            // match entry against any filter
-            for filter in &query.filters {
-                if item.is_match(filter)? {
-                    items.push(item.clone());
-                    break;
-                }
-            }
-
             // stop when page limit + 1 is reached
             if let Some(lim) = limit {
                 if items.len() == lim + 1 {
                     break;
                 }
             }
+
+            if matches.contains(&item.message_cid) {
+                continue;
+            }
+
+            if query.match_sets.is_empty() {
+                matches.insert(item.message_cid.clone());
+                items.push(item.clone());
+                continue;
+            }
+
+            // match sets are 'OR-ed' together
+            'next_set: for match_set in &query.match_sets {
+                // a set of matchers are 'AND-ed' together
+                for matcher in &match_set.inner {
+                    let Some(index_value) = item.fields.get(&matcher.field) else {
+                        continue 'next_set;
+                    };
+                    if !matcher.is_match(index_value)? {
+                        continue 'next_set;
+                    }
+                }
+                matches.insert(item.message_cid.clone());
+                items.push(item.clone());
+            }
         }
 
         Ok(items)
-    }
-
-    async fn query_granted(&self, query: &GrantedQuery) -> Result<Vec<IndexItem>> {
-        let mut results = Vec::new();
-
-        let index = self.get("protocol").await?;
-        for item in index.items.values() {
-            if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
-                continue;
-            }
-            if item.fields.get("method") != Some(&Method::Write.to_string()) {
-                continue;
-            }
-
-            if Some(&query.permission_grant_id) != item.fields.get("permissionGrantId") {
-                continue;
-            }
-
-            let default = String::new();
-            let date_str = item.fields.get("dateCreated").unwrap_or(&default);
-            let created = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !query.date_created.contains(&created.into()) {
-                continue;
-            }
-
-            // sort results as we collect using `message_cid` as a tie-breaker
-            let sort_key = format!("{}{}", &item.fields["messageTimestamp"], item.message_cid);
-            results.push(item.clone());
-        }
-
-        Ok(results)
-    }
-
-    async fn query_protocols(&self, query: &ProtocolsQuery) -> Result<Vec<IndexItem>> {
-        let mut results = BTreeMap::new();
-
-        let index = self.get("protocol").await?;
-        for item in index.items.values() {
-            if item.fields.get("interface") != Some(&Interface::Protocols.to_string()) {
-                continue;
-            }
-            if let Some(protocol) = &query.protocol {
-                if item.fields.get("protocol") != Some(protocol) {
-                    continue;
-                }
-            }
-            if let Some(published) = &query.published {
-                let default = String::from("false");
-                if &published.to_string() != item.fields.get("published").unwrap_or(&default) {
-                    continue;
-                }
-            }
-
-            // sort results as we collect using `message_cid` as a tie-breaker
-            let sort_key = format!("{}{}", &item.fields["messageTimestamp"], item.message_cid);
-            results.insert(sort_key, item.clone());
-        }
-
-        Ok(results.values().cloned().collect())
     }
 }
 
@@ -360,129 +292,6 @@ impl Index {
         let index = &self.items;
         let upper = format!("{value}{MAX}");
         index.range((Excluded(value), Excluded(upper))).map(|(_, item)| item).collect()
-    }
-}
-
-impl IndexItem {
-    /// Check if the index item matches the filter.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    #[allow(clippy::too_many_lines)]
-    pub fn is_match(&self, filter: &RecordsFilter) -> Result<bool> {
-        let empty = &String::new();
-        let fields = &self.fields;
-
-        if let Some(author) = &filter.author {
-            if !author.to_vec().contains(fields.get("author").unwrap_or(empty)) {
-                return Ok(false);
-            }
-        }
-        if let Some(attester) = filter.attester.clone() {
-            if Some(&attester) != fields.get("attester") {
-                return Ok(false);
-            }
-        }
-        if let Some(recipient) = &filter.recipient {
-            if !recipient.to_vec().contains(fields.get("recipient").unwrap_or(empty)) {
-                return Ok(false);
-            }
-        }
-        if let Some(protocol) = &filter.protocol {
-            if Some(protocol) != fields.get("protocol") {
-                return Ok(false);
-            }
-        }
-        if let Some(protocol_path) = &filter.protocol_path {
-            if Some(protocol_path) != fields.get("protocolPath") {
-                return Ok(false);
-            }
-        }
-        if let Some(published) = &filter.published {
-            // let default = String::from("false");
-            // if &published.to_string() != fields.get("published").unwrap_or(&default) {
-            //     return Ok(false);
-            // }
-            if Some(&published.to_string()) != fields.get("published") {
-                return Ok(false);
-            }
-        }
-        if let Some(context_id) = &filter.context_id {
-            if !fields.get("contextId").unwrap_or(empty).starts_with(context_id) {
-                return Ok(false);
-            }
-        }
-        if let Some(schema) = &filter.schema {
-            if Some(schema) != fields.get("schema") {
-                return Ok(false);
-            }
-        }
-        if let Some(record_id) = &filter.record_id {
-            if Some(record_id) != fields.get("record_id") {
-                return Ok(false);
-            }
-        }
-        if let Some(parent_id) = &filter.parent_id {
-            if Some(parent_id) != fields.get("parentId") {
-                return Ok(false);
-            }
-        }
-        if let Some(tags) = &filter.tags {
-            for (property, filter) in tags {
-                let value = fields.get(&format!("tag.{property}")).unwrap_or(empty);
-                // FIXME
-                // FIXME: compare against tags filter
-                // FIXME
-                // if !filter.is_match(value) {
-                //     return Ok(false);
-                // }
-            }
-        }
-        if let Some(data_format) = &filter.data_format {
-            if Some(data_format) != fields.get("dataFormat") {
-                return Ok(false);
-            }
-        }
-        if let Some(data_size) = &filter.data_size {
-            let size_str = fields.get("dataSize").unwrap_or(empty);
-            let size: usize =
-                size_str.parse::<usize>().map_err(|e| unexpected!("issue parsing size: {e}"))?;
-
-            if !data_size.contains(&size) {
-                return Ok(false);
-            }
-        }
-        if let Some(data_cid) = &filter.data_cid {
-            if Some(data_cid) != fields.get("dataCid") {
-                return Ok(false);
-            }
-        }
-        if let Some(date_created) = &filter.date_created {
-            let date_str = fields.get("dateCreated").unwrap_or(empty);
-            let created = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !date_created.contains(&created.into()) {
-                return Ok(false);
-            }
-        }
-        if let Some(date_published) = &filter.date_published {
-            let date_str = fields.get("datePublished").unwrap_or(empty);
-            let published = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !date_published.contains(&published.into()) {
-                return Ok(false);
-            }
-        }
-        if let Some(date_updated) = &filter.date_updated {
-            let date_str = fields.get("messageTimestamp").unwrap_or(empty);
-            let timestamp = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !date_updated.contains(&timestamp.into()) {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
     }
 }
 
@@ -551,16 +360,14 @@ mod tests {
 
     use anyhow::Result;
     use blockstore::{Blockstore as _, InMemoryBlockstore};
-    use dwn_test::key_store::{self, ALICE_DID};
     use rand::RngCore;
+    use test_node::key_store::{self, ALICE_DID};
 
     use super::*;
     use crate::clients::protocols::{ConfigureBuilder, Definition};
     use crate::clients::records::{Data, WriteBuilder};
     use crate::data::DataStream;
-    use crate::store::{RecordsFilter, RecordsQuery};
-    // use crate::data::MAX_ENCODED_SIZE;
-    // use crate::store::block;
+    use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 
     #[tokio::test]
     async fn query_records() {
@@ -589,15 +396,15 @@ mod tests {
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
 
         // execute query
-        let query = Query::Records(RecordsQuery {
-            filters: vec![
+        let query = RecordsQueryBuilder::new()
+            .add_filter(
                 RecordsFilter::new()
                     // .add_author(ALICE_DID)
                     // .data_size(Range::new().gt(8)),
                     .record_id(write.record_id),
-            ],
-            ..Default::default()
-        });
+            )
+            .build();
+
         let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
     }
 
@@ -623,10 +430,7 @@ mod tests {
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
 
         // execute query
-        let query = Query::Protocols(ProtocolsQuery {
-            protocol: Some("http://minimal.xyz".to_string()),
-            ..Default::default()
-        });
+        let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();
         let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
     }
 

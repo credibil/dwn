@@ -10,7 +10,7 @@ use crate::protocols::{
 };
 use crate::provider::MessageStore;
 use crate::records::Write;
-use crate::store::{RecordsFilter, RecordsQuery};
+use crate::store::{RecordsFilter, RecordsQueryBuilder};
 use crate::{Result, forbidden, schema, unexpected, utils};
 
 /// Verify the integrity of `RecordsWrite` messages using a protocol.
@@ -129,13 +129,14 @@ async fn check_protocol_path(owner: &str, write: &Write, store: &impl MessageSto
     };
 
     // fetch the parent record
-    let query = RecordsQuery::new()
-        .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol));
-    let records = store.query(owner, &query.into()).await?;
-    if records.is_empty() {
+    let query = RecordsQueryBuilder::new()
+        .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol))
+        .build();
+    let (entries, _) = store.query(owner, &query).await?;
+    if entries.is_empty() {
         return Err(forbidden!("unable to find parent record"));
     }
-    let Some(record) = &records.first() else {
+    let Some(record) = &entries.first() else {
         return Err(forbidden!("expected to find parent message"));
     };
     let Some(parent) = record.as_write() else {
@@ -196,8 +197,8 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
         filter = filter.context_id(parent_context);
     };
 
-    let query = RecordsQuery::new().add_filter(filter);
-    let entries = store.query(owner, &query.into()).await?;
+    let query = RecordsQueryBuilder::new().add_filter(filter).build();
+    let (entries, _) = store.query(owner, &query).await?;
     for entry in entries {
         let Some(w) = entry.as_write() else {
             return Err(unexpected!("expected `RecordsWrite` message"));

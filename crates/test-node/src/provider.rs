@@ -6,43 +6,34 @@
 //! Implementation of the `Provider` trait for testing and examples.
 
 pub mod block_store;
-pub mod event_log;
 mod event_stream;
 pub mod key_store;
-pub mod message_store;
-pub mod task_store;
 
 use anyhow::{Result, anyhow};
 use blockstore::InMemoryBlockstore;
-use dwn_node::provider::{DidResolver, Document, Provider};
-use surrealdb::Surreal;
-use surrealdb::engine::local::{Db, Mem};
+use dwn_node::provider::{DidResolver, Document, EventLog, MessageStore, Provider, TaskStore};
 
 use self::key_store::ALICE_DID;
 
-const NAMESPACE: &str = "integration-test";
-
 #[derive(Clone)]
 pub struct ProviderImpl {
-    db: Surreal<Db>,
     blockstore: InMemoryBlockstore<64>,
     pub nats_client: async_nats::Client,
 }
 
-impl Provider for ProviderImpl {}
-
 impl ProviderImpl {
     pub async fn new() -> Result<Self> {
-        let db = Surreal::new::<Mem>(()).await?;
-        db.use_ns(NAMESPACE).use_db(ALICE_DID).await?;
-
         Ok(Self {
-            db,
             blockstore: InMemoryBlockstore::<64>::new(),
             nats_client: async_nats::connect("demo.nats.io").await?,
         })
     }
 }
+
+impl Provider for ProviderImpl {}
+impl MessageStore for ProviderImpl {}
+impl EventLog for ProviderImpl {}
+impl TaskStore for ProviderImpl {}
 
 impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {

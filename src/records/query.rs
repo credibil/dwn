@@ -11,7 +11,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider};
 use crate::records::{RecordsFilter, Write};
-use crate::store::{Cursor, Pagination, RecordsQuery, Sort};
+use crate::store::{self, Cursor, Pagination, RecordsQueryBuilder, Sort};
 use crate::{Descriptor, Result, forbidden, unauthorized, unexpected, utils};
 
 /// Process `Query` message.
@@ -27,7 +27,7 @@ pub async fn handle(
         // correct filter when querying soley for published records
         let mut query = query;
         query.descriptor.filter.published = Some(true);
-        RecordsQuery::from(query)
+        store::Query::from(query)
     } else {
         query.authorize(owner, provider).await?;
         let Some(authzn) = &query.authorization else {
@@ -35,15 +35,14 @@ pub async fn handle(
         };
 
         if authzn.author()? == owner {
-            RecordsQuery::from(query)
+            store::Query::from(query)
         } else {
             query.into_non_owner()?
         }
     };
 
     // fetch records matching query criteria
-    let (records, cursor) =
-        MessageStore::paginated_query(provider, owner, &store_query.into()).await?;
+    let (records, cursor) = MessageStore::query(provider, owner, &store_query).await?;
 
     // short-circuit when no records found
     if records.is_empty() {
@@ -72,11 +71,12 @@ pub async fn handle(
         }
 
         // get the initial write for the returned `RecordsWrite`
-        let query = RecordsQuery::new()
+        let query = RecordsQueryBuilder::new()
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
-            .include_archived(true);
-        let records = MessageStore::query(provider, owner, &query.into()).await?;
-        let mut initial_write: Write = (&records[0]).try_into()?;
+            .include_archived(true)
+            .build();
+        let (results, _) = MessageStore::query(provider, owner, &query).await?;
+        let mut initial_write: Write = (&results[0]).try_into()?;
         initial_write.encoded_data = None;
 
         entries.push(QueryReplyEntry {
@@ -243,15 +243,20 @@ impl Query {
 
     // when requestor (message author) is not web node owner,
     // recreate filters to include query author as record author or recipient
-    fn into_non_owner(self) -> Result<RecordsQuery> {
-        let mut store_query = RecordsQuery::from(self.clone());
+    fn into_non_owner(self) -> Result<store::Query> {
+        // let mut store_query = RecordsQueryBuilder::from(self.clone());
+        let mut store_query = RecordsQueryBuilder::new();
+        if let Some(date_sort) = self.descriptor.date_sort {
+            store_query = store_query.sort(date_sort);
+        }
+        if let Some(pagination) = self.descriptor.pagination {
+            store_query = store_query.pagination(pagination);
+        }
 
         let Some(authzn) = &self.authorization else {
             return Err(forbidden!("missing authorization"));
         };
         let author = authzn.author()?;
-
-        store_query.filters = vec![];
 
         // New filter: copy query filter  and set `published` to true
         if self.descriptor.filter.published.is_none() {
@@ -276,7 +281,7 @@ impl Query {
             store_query = store_query.add_filter(filter.published(false));
         }
 
-        Ok(store_query)
+        Ok(store_query.build())
     }
 }
 

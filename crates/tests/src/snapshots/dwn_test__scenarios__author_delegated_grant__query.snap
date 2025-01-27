@@ -1,5 +1,5 @@
 ---
-source: crates/dwn-test/src/scenarios/author_delegated_grant.rs
+source: crates/test-node/src/scenarios/author_delegated_grant.rs
 assertion_line: 89
 expression: reply
 snapshot_kind: text

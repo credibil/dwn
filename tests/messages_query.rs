@@ -12,9 +12,9 @@ use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::Definition;
 use dwn_node::{Error, Interface, Message, Method, endpoint};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID};
-use dwn_test::provider::ProviderImpl;
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID, BOB_DID};
+use test_node::provider::ProviderImpl;
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
@@ -184,7 +184,7 @@ async fn match_grant_scope() {
     let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `MessagesQuery` for Bob.
+    // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -276,6 +276,7 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
+
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
         .build(&bob_signer)
@@ -323,7 +324,7 @@ async fn mismatched_grant_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob attempts to use the `MessagesSubscribe` grant on a `MessagesQuery` message.
+    // Bob attempts to use the `MessagesSubscribe` grant on a `EventsQuery` message.
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
@@ -369,14 +370,13 @@ async fn match_protocol_scope() {
         .build(&alice_signer)
         .await
         .expect("should build");
-
     let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `MessagesQuery` for Bob.
+    // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)
@@ -387,7 +387,6 @@ async fn match_protocol_scope() {
         .build(&alice_signer)
         .await
         .expect("should create grant");
-
     let reply =
         endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -395,9 +394,8 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
-    let filter = MessagesFilter::new().protocol("http://protocol1".to_string());
     let query = QueryBuilder::new()
-        .add_filter(filter)
+        .add_filter(MessagesFilter::new().protocol("http://protocol1"))
         .permission_grant_id(&bob_grant.record_id)
         .build(&bob_signer)
         .await
@@ -452,7 +450,7 @@ async fn mismatched_protocol_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `MessagesQuery` for Bob.
+    // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(BOB_DID)

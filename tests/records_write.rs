@@ -15,15 +15,14 @@ use dwn_node::permissions::{Conditions, Publication, RecordsScope, Scope};
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet, Size};
 use dwn_node::provider::EventLog;
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
-use dwn_node::store::MessagesQuery;
-use dwn_node::{Error, Interface, Message, Method, clients, data, endpoint};
-use dwn_test::key_store::{
+use dwn_node::{Error, Interface, Message, Method, clients, data, endpoint, store};
+use http::StatusCode;
+use rand::RngCore;
+use test_node::key_store::{
     self, ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID,
     CAROL_DID, CAROL_DID as FAKE_DID,
 };
-use dwn_test::provider::ProviderImpl;
-use http::StatusCode;
-use rand::RngCore;
+use test_node::provider::ProviderImpl;
 use vercre_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 
 // // Should handle pre-processing errors
@@ -1208,9 +1207,8 @@ async fn log_initial_write() {
         .await
         .expect("should create query");
 
-    let query = MessagesQuery::from(query);
-    let (events, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should fetch");
+    let query = store::Query::from(query);
+    let (events, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should fetch");
     assert_eq!(events.len(), 1);
 }
 
@@ -1263,9 +1261,8 @@ async fn retain_two_writes() {
         .await
         .expect("should create query");
 
-    let query = MessagesQuery::from(query);
-    let (events, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should fetch");
+    let query = store::Query::from(query);
+    let (events, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should fetch");
     assert_eq!(events.len(), 2);
 
     assert_eq!(events[0].cid(), initial.cid());

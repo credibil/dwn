@@ -3,17 +3,19 @@
 use std::io::Read;
 
 use chrono::Days;
+use dwn_node::clients::messages;
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
+use dwn_node::messages::MessagesFilter;
 use dwn_node::protocols::Definition;
 use dwn_node::provider::{EventLog, MessageStore};
 use dwn_node::records::{DeleteDescriptor, RecordsFilter};
-use dwn_node::{Error, Method, endpoint, store};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
-use dwn_test::provider::ProviderImpl;
+use dwn_node::{Error, Interface, Method, endpoint, store};
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::provider::ProviderImpl;
 
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]
@@ -197,6 +199,7 @@ async fn delete_data() {
         .expect("should find write");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should be not found");
     assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
+
     // TODO: uncomment when NotFound error supports body with initial_write and delete records
     // let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
     //     panic!("should be NotFound");
@@ -980,20 +983,20 @@ async fn index_additional() {
     // --------------------------------------------------
     // Check MessageStore and EventLog.
     // --------------------------------------------------
-    let query = store::RecordsQuery {
-        method: Some(Method::Delete),
-        filters: vec![RecordsFilter::new().schema("http://test_schema")],
-        include_archived: true,
-        ..store::RecordsQuery::default()
-    };
-    let entries = MessageStore::query(&provider, ALICE_DID, &query.clone().into())
+    let query = store::RecordsQueryBuilder::new()
+        .add_filter(RecordsFilter::new().schema("http://test_schema"))
+        .method(Some(Method::Delete))
+        .include_archived(true)
+        .build();
+
+    let (entries, _) = MessageStore::query(&provider, ALICE_DID, &query.clone().into())
         .await
         .expect("should query");
     assert_eq!(entries.len(), 1);
 
     // check log
     let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+        MessageStore::query(&provider, ALICE_DID, &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -1033,14 +1036,14 @@ async fn log_delete() {
     // --------------------------------------------------
     // Check EventLog.
     // --------------------------------------------------
-    // Write record
-    let query = store::RecordsQuery {
-        include_archived: true,
-        method: None,
-        ..store::RecordsQuery::default()
-    };
-    let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+    let query = messages::QueryBuilder::new()
+        .add_filter(MessagesFilter::new().interface(Interface::Records))
+        .build(&alice_signer)
+        .await
+        .expect("should create query");
+    let query = store::Query::from(query);
+
+    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
     assert_eq!(entries.len(), 2);
 }
 
@@ -1091,13 +1094,13 @@ async fn delete_updates() {
     // --------------------------------------------------
     // Check EventLog. There should only be 2 events: the initial write and the delete.
     // --------------------------------------------------
-    // Write record
-    let query = store::RecordsQuery {
-        include_archived: true,
-        method: None,
-        ..store::RecordsQuery::default()
-    };
-    let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+    let query = messages::QueryBuilder::new()
+        .add_filter(MessagesFilter::new().interface(Interface::Records))
+        .build(&alice_signer)
+        .await
+        .expect("should create query");
+    let query = store::Query::from(query);
+
+    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
     assert_eq!(entries.len(), 2);
 }

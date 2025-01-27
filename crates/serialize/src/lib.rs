@@ -1,3 +1,0 @@
-//! # Serialize
-
-pub mod surrealdb;

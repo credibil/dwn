@@ -10,15 +10,16 @@ use serde::{Deserialize, Serialize};
 pub use self::grant::{Grant, GrantData, RequestData, RevocationData};
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
-use crate::store::{RecordsFilter, RecordsQuery};
+use crate::store::{RecordsFilter, RecordsQueryBuilder};
 use crate::{Interface, Method, Result, forbidden};
 
 /// Fetch the grant specified by `grant_id`.
 pub(crate) async fn fetch_grant(
     owner: &str, grant_id: &str, store: &impl MessageStore,
 ) -> Result<Grant> {
-    let query = RecordsQuery::new().add_filter(RecordsFilter::new().record_id(grant_id));
-    let entries = store.query(owner, &query.into()).await?;
+    let query =
+        RecordsQueryBuilder::new().add_filter(RecordsFilter::new().record_id(grant_id)).build();
+    let (entries, _) = store.query(owner, &query).await?;
 
     let Some(entry) = entries.first() else {
         return Err(forbidden!("no grant found"));

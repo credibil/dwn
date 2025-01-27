@@ -97,18 +97,6 @@ pub struct RecordsFilter {
     pub date_updated: Option<DateRange>,
 }
 
-/// Filter value.
-pub enum FilterVal {
-    /// Filter on an exact value.
-    Equal(String),
-
-    /// Filter on one or more values.
-    OneOf(Vec<String>),
-
-    /// Filter on a date range.
-    Range(Range<String>),
-}
-
 impl RecordsFilter {
     /// Normalizes `RecordsFilter` protocol and schema URLs within a provided.
     pub(crate) fn normalize(&self) -> Result<Self> {
@@ -146,16 +134,6 @@ impl RecordsFilter {
         if let Some(record_id) = &self.record_id {
             return Some(("record_id".to_string(), record_id.clone()));
         }
-        // if let Some(attester) = &self.attester {
-        //     return Some(("attester".to_string(), FilterVal::Equal(attester.clone())));
-        // }
-        // if let Some(recipient) = &self.recipient {
-        //     let recipients = match recipient {
-        //         OneOrMany::One(recipient) => vec![recipient.clone()],
-        //         OneOrMany::Many(recipients) => recipients.clone(),
-        //     };
-        //     return Some(("recipient".to_string(), FilterVal::OneOf(recipients)));
-        // }
         if let Some(protocol_path) = &self.protocol_path {
             return Some(("protocolPath".to_string(), protocol_path.clone()));
         }
@@ -168,102 +146,6 @@ impl RecordsFilter {
         if let Some(schema) = &self.schema {
             return Some(("schema".to_string(), schema.clone()));
         }
-        // if let Some(protocol) = &self.protocol {
-        //     return Some(("protocol".to_string(), FilterVal::Equal(protocol.clone())));
-        // }
-        // if let Some(data_cid) = &self.data_cid {
-        //     return Some(("dataCid".to_string(), FilterVal::Equal(data_cid.clone())));
-        // }
-        // if let Some(data_size) = &self.data_size {
-        //     let lower = data_size.lower.as_ref().map(|lower| match lower {
-        //         Lower::Inclusive(val) => Lower::Inclusive(format!("{val:0>10}")),
-        //         Lower::Exclusive(val) => Lower::Exclusive(format!("{val:0>10}")),
-        //     });
-        //     let upper = data_size.upper.as_ref().map(|upper| match upper {
-        //         Upper::Inclusive(val) => Upper::Inclusive(format!("{val:0>10}")),
-        //         Upper::Exclusive(val) => Upper::Exclusive(format!("{val:0>10}")),
-        //     });
-        //     return Some(("dataSize".to_string(), FilterVal::Range(Range { lower, upper })));
-        // }
-
-        // // TODO: move DateRange -> Range<String> conversion to a separate method
-        // if let Some(date_published) = &self.date_published {
-        //     let mut range = Range::default();
-        //     if let Some(lower) = &date_published.lower {
-        //         let lower = lower.to_rfc3339_opts(Micros, true);
-        //         range.lower = Some(Lower::Inclusive(lower));
-        //     }
-        //     if let Some(upper) = &date_published.upper {
-        //         let upper = upper.to_rfc3339_opts(Micros, true);
-        //         range.upper = Some(Upper::Inclusive(upper));
-        //     }
-        //     return Some(("datePublished".to_string(), FilterVal::Range(range)));
-        // }
-        // if let Some(date_created) = &self.date_created {
-        //     let mut range = Range::default();
-        //     if let Some(lower) = &date_created.lower {
-        //         let lower = lower.to_rfc3339_opts(Micros, true);
-        //         range.lower = Some(Lower::Inclusive(lower));
-        //     }
-        //     if let Some(upper) = &date_created.upper {
-        //         let upper = upper.to_rfc3339_opts(Micros, true);
-        //         range.upper = Some(Upper::Inclusive(upper));
-        //     }
-        //     return Some(("dateCreated".to_string(), FilterVal::Range(range)));
-        // }
-        // if let Some(date_updated) = &self.date_updated {
-        //     let mut range = Range::default();
-        //     if let Some(lower) = &date_updated.lower {
-        //         let lower = lower.to_rfc3339_opts(Micros, true);
-        //         range.lower = Some(Lower::Inclusive(lower));
-        //     }
-        //     if let Some(upper) = &date_updated.upper {
-        //         let upper = upper.to_rfc3339_opts(Micros, true);
-        //         range.upper = Some(Upper::Inclusive(upper));
-        //     }
-        //     return Some(("dateUpdated".to_string(), FilterVal::Range(range)));
-        // }
-
-        // if let Some(data_format) = &self.data_format {
-        //     return Some(("dataFormat".to_string(), FilterVal::Equal(data_format.clone())));
-        // }
-        // if let Some(published) = self.published {
-        //     return Some(("published".to_string(), FilterVal::Equal(published.to_string())));
-        // }
-        // if let Some(author) = &self.author {
-        //     let authors = match author {
-        //         OneOrMany::One(author) => vec![author.to_string()],
-        //         OneOrMany::Many(authors) => authors.clone(),
-        //     };
-        //     return Some(("author".to_string(), FilterVal::OneOf(authors)));
-        // }
-
-        // // TODO: improve this logic
-        // if let Some(tags) = &self.tags {
-        //     if let Some((key, filter)) = tags.iter().next() {
-        //         let tag_key = format!("tag.{key}");
-
-        //         match filter {
-        //             TagFilter::Equal(value) => {
-        //                 return Some((tag_key, FilterVal::Equal(value.to_string())));
-        //             }
-        //             TagFilter::Range(range) => {
-        //                 let lower = range.lower.as_ref().map(|lower| match lower {
-        //                     Lower::Inclusive(val) => Lower::Inclusive(format!("{val:0>10}")),
-        //                     Lower::Exclusive(val) => Lower::Exclusive(format!("{val:0>10}")),
-        //                 });
-        //                 let upper = range.upper.as_ref().map(|upper| match upper {
-        //                     Upper::Inclusive(val) => Upper::Inclusive(format!("{val:0>10}")),
-        //                     Upper::Exclusive(val) => Upper::Exclusive(format!("{val:0>10}")),
-        //                 });
-        //                 return Some((tag_key, FilterVal::Range(Range { lower, upper })));
-        //             }
-        //             TagFilter::StartsWith(value) => {
-        //                 return Some((tag_key, FilterVal::Equal(value.to_string())));
-        //             }
-        //         }
-        //     }
-        // }
 
         None
     }

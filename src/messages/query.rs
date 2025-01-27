@@ -8,7 +8,7 @@ use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{EventLog, Provider};
-use crate::store::{Cursor, MessagesQuery};
+use crate::store::{self, Cursor};
 use crate::{Descriptor, Result, forbidden, permissions};
 
 /// Handle a query message.
@@ -21,8 +21,8 @@ pub async fn handle(
     query.authorize(owner, provider).await?;
 
     // FIXME: use pagination cursor
-    let query = MessagesQuery::from(query);
-    let (events, _) = EventLog::query(provider, owner, &query.into()).await?;
+    let query = store::Query::from(query);
+    let (events, _) = EventLog::query(provider, owner, &query).await?;
 
     let events =
         events.iter().map(|e| e.cid().unwrap_or_else(|_| String::new())).collect::<Vec<String>>();

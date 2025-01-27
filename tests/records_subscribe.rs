@@ -5,10 +5,10 @@ use std::time::Duration;
 use dwn_node::clients::records::{Data, QueryBuilder, SubscribeBuilder, WriteBuilder};
 use dwn_node::records::RecordsFilter;
 use dwn_node::{Message, endpoint};
-use dwn_test::key_store::{self, ALICE_DID};
-use dwn_test::provider::ProviderImpl;
 use futures::StreamExt;
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID};
+use test_node::provider::ProviderImpl;
 use tokio::time;
 
 // The owner should be able to subscribe their own event stream.

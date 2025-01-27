@@ -12,9 +12,8 @@ use dwn_node::records::RecordsFilter;
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{Value, json};
-
-use crate::key_store::{self, ALICE_DID, BOB_DID};
-use crate::provider::ProviderImpl;
+use test_node::key_store::{self, ALICE_DID, BOB_DID};
+use test_node::provider::ProviderImpl;
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]

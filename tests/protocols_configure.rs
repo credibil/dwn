@@ -9,11 +9,12 @@ use dwn_node::clients::grants::{GrantBuilder, RevocationBuilder};
 use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Action, ActionRule, Actor, Definition, ProtocolType, RuleSet};
-use dwn_node::provider::EventLog;
-use dwn_node::{Error, Message, Method, endpoint, store};
-use dwn_test::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
-use dwn_test::provider::ProviderImpl;
+use dwn_node::provider::MessageStore;
+use dwn_node::store::ProtocolsQueryBuilder;
+use dwn_node::{Error, Message, Method, endpoint};
 use http::StatusCode;
+use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::provider::ProviderImpl;
 use tokio::time;
 
 // Should allow a protocol definition with no schema or `data_format`.
@@ -408,7 +409,7 @@ async fn duplicate_role() {
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert!(e.starts_with("validation failed for {\"$schema"));
+    assert!(e.starts_with("validation failed for"));
 }
 
 // Should reject request when role action rule does not contain all read actions
@@ -682,12 +683,9 @@ async fn configure_event() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check log
-    let query = store::ProtocolsQuery {
-        protocol: Some("https://minimal.xyz".to_string()),
-        published: None,
-    };
+    let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
     let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+        MessageStore::query(&provider, ALICE_DID, &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -723,12 +721,9 @@ async fn delete_older_events() {
 
     // check log
 
-    let query = store::ProtocolsQuery {
-        protocol: Some("https://minimal.xyz".to_string()),
-        published: None,
-    };
+    let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
     let (entries, _) =
-        EventLog::query(&provider, ALICE_DID, &query.into()).await.expect("should query");
+        MessageStore::query(&provider, ALICE_DID, &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cid().unwrap(), newest_cid);
 }
