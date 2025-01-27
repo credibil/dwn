@@ -184,7 +184,30 @@ impl From<EventsQuery> for Query {
 
 /// A set of field/value matchers that must be 'AND-ed' together for a
 /// successful match.
-pub type MatchSet = Vec<Matcher>;
+#[derive(Clone, Debug, Default)]
+pub struct MatchSet {
+    /// The set of matchers.
+    pub inner: Vec<Matcher>,
+
+    /// Index to use for the query.
+    pub index: Option<(String, String)>,
+}
+
+// impl Iterator for &MatchSet {
+//     type Item = Matcher;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.set.pop()
+//     }
+// }
+
+// impl Deref for MatchSet {
+//     type Target = Vec<Matcher>;
+
+//     fn deref(&self) -> &Self::Target {
+//         &self.inner
+//     }
+// }
 
 /// A field/value matcher for use in finding matching indexed values.
 #[derive(Clone, Debug)]
@@ -263,19 +286,10 @@ impl From<protocols::Query> for ProtocolsQuery {
 
 /// `RecordsQuery` use a builder to simplify the process of creating
 /// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RecordsQuery {
-    /// Filter records using one or more filters OR'ed together.
-    pub filters: Vec<RecordsFilter>,
-
-    /// Method of to use when querying records. Defaults to `RecordsWrite`, but
-    /// can be set to `RecordsDelete` or None (for both).
-    pub method: Option<Method>,
-
-    /// Include records with the `archive` flag (i.e. include initial write for
-    /// updated records).
-    pub include_archived: bool,
-
+    // /// Filter records using one or more filters OR'ed together.
+    // pub filters: Vec<RecordsFilter>,
     /// One or more sets of events to match.
     pub match_sets: Vec<MatchSet>,
 
@@ -286,251 +300,175 @@ pub struct RecordsQuery {
     pub pagination: Option<Pagination>,
 }
 
-impl Default for RecordsQuery {
-    fn default() -> Self {
-        Self {
-            filters: vec![],
-            method: Some(Method::Write),
-            include_archived: false,
-            match_sets: vec![],
-            sort: Sort::default(),
-            pagination: None,
-        }
-    }
-}
-
-/// Build a `RecordsQuery` using a builder pattern.
-#[derive(Clone, Debug, Default)]
-pub struct RecordsQueryBuilder {
-    filters: Vec<RecordsFilter>,
-    method: Option<Method>,
-    include_archived: bool,
-    sort: Sort,
-    pagination: Option<Pagination>,
-}
-
-impl RecordsQueryBuilder {
+impl RecordsQuery {
+    /// Determine whether the query can be expressed in a concise form.
     #[must_use]
-    pub(crate) fn new() -> Self {
-        Self {
-            method: Some(Method::Write),
-            ..Self::default()
-        }
-    }
-
-    #[must_use]
-    pub(crate) fn add_filter(mut self, filter: RecordsFilter) -> Self {
-        self.filters.push(filter);
-        self
-    }
-
-    #[must_use]
-    pub(crate) const fn method(mut self, method: Option<Method>) -> Self {
-        self.method = method;
-        self
-    }
-
-    #[must_use]
-    pub(crate) const fn include_archived(mut self, include_archived: bool) -> Self {
-        self.include_archived = include_archived;
-        self
-    }
-
-    #[must_use]
-    pub(crate) const fn sort(mut self, sort: Sort) -> Self {
-        self.sort = sort;
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn pagination(mut self, pagination: Pagination) -> Self {
-        self.pagination = Some(pagination);
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn build(self) -> RecordsQuery {
-        let mut match_sets = vec![];
-
-        for filter in &self.filters {
-            let mut match_set = vec![];
-
-            if let Some(method) = &self.method {
-                match_set.push(Matcher {
-                    field: "method",
-                    value: MatchOn::Equal(method.to_string()),
-                });
+    pub fn is_concise(&self) -> bool {
+        for ms in &self.match_sets {
+            if ms.index.is_none() {
+                return false;
             }
-            if !self.include_archived {
-                match_set.push(Matcher {
-                    field: "archived",
-                    value: MatchOn::Equal(false.to_string()),
-                });
-            }
-
-            match_set.extend(MatchSet::from(filter));
-            match_sets.push(match_set);
         }
-
-        RecordsQuery {
-            filters: self.filters,
-            method: self.method,
-            include_archived: self.include_archived,
-            match_sets,
-            sort: self.sort,
-            pagination: self.pagination,
-        }
+        true
     }
 }
 
 impl From<records::Query> for RecordsQuery {
     fn from(query: records::Query) -> Self {
-        let mut match_set = vec![
-            Matcher {
-                field: "method",
-                value: MatchOn::Equal(Method::Write.to_string()),
-            },
-            Matcher {
-                field: "archived",
-                value: MatchOn::Equal(false.to_string()),
-            },
-        ];
-        match_set.extend(MatchSet::from(&query.descriptor.filter));
+        let mut match_set = MatchSet {
+            inner: vec![
+                Matcher {
+                    field: "method",
+                    value: MatchOn::Equal(Method::Write.to_string()),
+                },
+                Matcher {
+                    field: "archived",
+                    value: MatchOn::Equal(false.to_string()),
+                },
+            ],
+            ..MatchSet::default()
+        };
+
+        // add filter to match_set
+        let ms = MatchSet::from(&query.descriptor.filter);
+        match_set.inner.extend(ms.inner);
+        match_set.index = ms.index;
 
         Self {
-            filters: vec![query.descriptor.filter],
             match_sets: vec![match_set],
             sort: query.descriptor.date_sort.unwrap_or_default(),
             pagination: query.descriptor.pagination,
-            ..Self::default()
         }
     }
 }
 
 impl From<records::Read> for RecordsQuery {
     fn from(read: records::Read) -> Self {
-        let mut match_set = vec![
-            Matcher {
+        let mut match_set = MatchSet {
+            inner: vec![Matcher {
                 field: "archived",
                 value: MatchOn::Equal(false.to_string()),
-            },
-        ];
-        match_set.extend(MatchSet::from(&read.descriptor.filter));
+            }],
+            ..MatchSet::default()
+        };
+
+        let ms = MatchSet::from(&read.descriptor.filter);
+        match_set.inner.extend(ms.inner);
+        match_set.index = ms.index;
 
         Self {
-            filters: vec![read.descriptor.filter],
             match_sets: vec![match_set],
             ..Self::default()
         }
-
-        // Self {
-        //     filters: vec![read.descriptor.filter],
-        //     ..Self::default()
-        // }
     }
 }
 
 impl From<&RecordsFilter> for MatchSet {
+    #[allow(clippy::too_many_lines)]
     fn from(filter: &RecordsFilter) -> Self {
-        let mut match_set = MatchSet::default();
+        let mut match_set = Self::default();
 
-        match_set.push(Matcher {
+        if filter.is_concise() {
+            match_set.index = filter.as_concise();
+        }
+
+        match_set.inner.push(Matcher {
             field: "interface",
             value: MatchOn::Equal(Interface::Records.to_string()),
         });
 
         if let Some(record_id) = &filter.record_id {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "record_id",
                 value: MatchOn::Equal(record_id.to_string()),
             });
         }
         if let Some(published) = &filter.published {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "published",
                 value: MatchOn::Equal(published.to_string()),
             });
         }
         if let Some(author) = &filter.author {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "author",
                 value: MatchOn::OneOf(author.to_vec()),
             });
         }
         if let Some(recipient) = &filter.recipient {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "recipient",
                 value: MatchOn::OneOf(recipient.to_vec()),
             });
         }
         if let Some(protocol) = &filter.protocol {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "protocol",
                 value: MatchOn::Equal(protocol.to_string()),
             });
         }
         if let Some(protocol_path) = &filter.protocol_path {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "protocolPath",
                 value: MatchOn::Equal(protocol_path.to_string()),
             });
         }
         if let Some(context_id) = &filter.context_id {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "contextId",
                 value: MatchOn::StartsWith(context_id.to_string()),
             });
         }
         if let Some(schema) = &filter.schema {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "schema",
                 value: MatchOn::Equal(schema.to_string()),
             });
         }
         if let Some(parent_id) = &filter.parent_id {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "parentId",
                 value: MatchOn::Equal(parent_id.to_string()),
             });
         }
         if let Some(data_format) = &filter.data_format {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "dataFormat",
                 value: MatchOn::Equal(data_format.to_string()),
             });
         }
         if let Some(data_size) = &filter.data_size {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "dataSize",
                 value: MatchOn::Range(data_size.clone()),
             });
         }
         if let Some(data_cid) = &filter.data_cid {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "dataCid",
                 value: MatchOn::Equal(data_cid.to_string()),
             });
         }
         if let Some(date_created) = &filter.date_created {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "dateCreated",
                 value: MatchOn::DateRange(date_created.clone()),
             });
         }
         if let Some(date_published) = &filter.date_published {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "datePublished",
                 value: MatchOn::DateRange(date_published.clone()),
             });
         }
         if let Some(date_updated) = &filter.date_updated {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "messageTimestamp",
                 value: MatchOn::DateRange(date_updated.clone()),
             });
         }
         if let Some(attester) = &filter.attester {
-            match_set.push(Matcher {
+            match_set.inner.push(Matcher {
                 field: "attester",
                 value: MatchOn::Equal(attester.to_string()),
             });
@@ -569,6 +507,102 @@ impl From<&RecordsFilter> for MatchSet {
     }
 }
 
+/// Build a `RecordsQuery` using a builder pattern.
+#[derive(Clone, Debug, Default)]
+pub struct RecordsQueryBuilder {
+    filters: Vec<RecordsFilter>,
+    method: Option<Method>,
+    include_archived: bool,
+    sort: Sort,
+    pagination: Option<Pagination>,
+}
+
+impl RecordsQueryBuilder {
+    /// Create a new `RecordsQueryBuilder` instance.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            method: Some(Method::Write),
+            ..Self::default()
+        }
+    }
+
+    /// Add a filter to the query.
+    #[must_use]
+    pub fn add_filter(mut self, filter: RecordsFilter) -> Self {
+        self.filters.push(filter);
+        self
+    }
+
+    /// Set the `Method` of the records to query for.
+    #[must_use]
+    pub const fn method(mut self, method: Option<Method>) -> Self {
+        self.method = method;
+        self
+    }
+
+    /// Include archived records in the query.
+    #[must_use]
+    pub const fn include_archived(mut self, include_archived: bool) -> Self {
+        self.include_archived = include_archived;
+        self
+    }
+
+    /// Set the sort order of the returned records.
+    #[must_use]
+    pub const fn sort(mut self, sort: Sort) -> Self {
+        self.sort = sort;
+        self
+    }
+
+    /// Set the pagination options.
+    #[must_use]
+    pub fn pagination(mut self, pagination: Pagination) -> Self {
+        self.pagination = Some(pagination);
+        self
+    }
+
+    /// Build the `RecordsQuery`.
+    #[must_use]
+    pub fn build(self) -> RecordsQuery {
+        let mut match_sets = vec![];
+        let mut is_concise = true;
+
+        for filter in &self.filters {
+            let mut match_set = MatchSet::default();
+
+            if let Some(method) = &self.method {
+                match_set.inner.push(Matcher {
+                    field: "method",
+                    value: MatchOn::Equal(method.to_string()),
+                });
+            }
+            if !self.include_archived {
+                match_set.inner.push(Matcher {
+                    field: "archived",
+                    value: MatchOn::Equal(false.to_string()),
+                });
+            }
+
+            let ms = MatchSet::from(filter);
+            match_set.inner.extend(ms.inner);
+            match_set.index = ms.index;
+
+            match_sets.push(match_set);
+
+            if is_concise {
+                is_concise = filter.is_concise();
+            }
+        }
+
+        RecordsQuery {
+            match_sets,
+            sort: self.sort,
+            pagination: self.pagination,
+        }
+    }
+}
+
 /// `EventsQuery` for `EventLog` queries.
 #[derive(Clone, Debug, Default)]
 pub struct EventsQuery {
@@ -587,32 +621,32 @@ impl From<messages::Query> for EventsQuery {
         let mut match_sets = vec![];
 
         for filter in &query.descriptor.filters {
-            let mut match_set = vec![];
+            let mut match_set = MatchSet::default();
 
             if let Some(interface) = &filter.interface {
-                match_set.push(Matcher {
+                match_set.inner.push(Matcher {
                     field: "interface",
                     value: MatchOn::Equal(interface.to_string()),
                 });
             }
             if let Some(method) = &filter.method {
-                match_set.push(Matcher {
+                match_set.inner.push(Matcher {
                     field: "method",
                     value: MatchOn::Equal(method.to_string()),
                 });
             }
             if let Some(protocol) = &filter.protocol {
-                match_set.push(Matcher {
+                match_set.inner.push(Matcher {
                     field: "protocol",
                     value: MatchOn::Equal(protocol.to_string()),
                 });
-                match_set.push(Matcher {
+                match_set.inner.push(Matcher {
                     field: "tag.protocol",
                     value: MatchOn::Equal(protocol.to_string()),
                 });
             }
             if let Some(message_timestamp) = &filter.message_timestamp {
-                match_set.push(Matcher {
+                match_set.inner.push(Matcher {
                     field: "messageTimestamp",
                     value: MatchOn::DateRange(message_timestamp.clone()),
                 });
@@ -659,7 +693,7 @@ impl Pagination {
         Self {
             limit: None,
             cursor: None,
-            // offset: None,
+            // offinner: None,
         }
     }
 

@@ -21,8 +21,7 @@ use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 /// LATER: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let mut query = RecordsQuery::from(read.clone());
-    query.method = None;
+    let query = RecordsQuery::from(read.clone());
 
     let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
     if entries.is_empty() {

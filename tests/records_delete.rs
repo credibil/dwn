@@ -200,6 +200,7 @@ async fn delete_data() {
         .expect("should find write");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should be not found");
     assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
+
     // TODO: uncomment when NotFound error supports body with initial_write and delete records
     // let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
     //     panic!("should be NotFound");
@@ -983,12 +984,12 @@ async fn index_additional() {
     // --------------------------------------------------
     // Check MessageStore and EventLog.
     // --------------------------------------------------
-    let query = store::RecordsQuery {
-        method: Some(Method::Delete),
-        filters: vec![RecordsFilter::new().schema("http://test_schema")],
-        include_archived: true,
-        ..store::RecordsQuery::default()
-    };
+    let query = store::RecordsQueryBuilder::new()
+        .add_filter(RecordsFilter::new().schema("http://test_schema"))
+        .method(Some(Method::Delete))
+        .include_archived(true)
+        .build();
+
     let (entries, _) = MessageStore::query(&provider, ALICE_DID, &query.clone().into())
         .await
         .expect("should query");

@@ -63,13 +63,10 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
 
     match query {
         Query::Records(rq) => {
-            // choose query strategy
-            for filter in &rq.filters {
-                if !filter.is_concise() {
-                    return indexes.query_full(rq).await;
-                }
+            if rq.is_concise() {
+                return indexes.query_concise(rq).await;
             }
-            indexes.query_concise(rq).await
+            indexes.query_full(rq).await
         }
         Query::Protocols(pq) => indexes.query_protocols(pq).await,
         Query::Granted(gq) => indexes.query_granted(gq).await,
@@ -148,39 +145,38 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         let sort_field = query.sort.to_string();
 
-        for filter in &query.filters {
+        // match sets are 'OR-ed' together
+        for match_set in &query.match_sets {
             // choose the best index to use for the filter
-            let Some((field, value)) = filter.as_concise() else {
+            let Some((field, value)) = &match_set.index else {
                 continue;
             };
-            let index = self.get(&field).await?;
+
+            let index = self.get(field).await?;
 
             // 1. use the index to find candidate matches
             // 2. compare each entry against the current filter
-            for item in index.matches(value) {
+            'next_item: for item in index.matches(value.clone()) {
                 // short circuit when previously matched
                 if matches.contains(&item.message_cid) {
                     continue;
                 }
 
-                // match sets are 'OR-ed' together
-                'next_set: for match_set in &query.match_sets {
-                    // a set of matchers are 'AND-ed' together
-                    for matcher in match_set {
-                        let Some(index_value) = item.fields.get(matcher.field) else {
-                            continue 'next_set;
-                        };
-                        if !matcher.is_match(index_value)? {
-                            continue 'next_set;
-                        }
+                // a set of matchers are 'AND-ed' together
+                for matcher in &match_set.inner {
+                    let Some(index_value) = item.fields.get(matcher.field) else {
+                        continue 'next_item;
+                    };
+                    if !matcher.is_match(index_value)? {
+                        continue 'next_item;
                     }
-
-                    matches.insert(item.message_cid.clone());
-
-                    // sort results as we collect using `message_cid` as a tie-breaker
-                    let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
-                    results.insert(sort_key, item.clone());
                 }
+
+                matches.insert(item.message_cid.clone());
+
+                // sort results as we collect using `message_cid` as a tie-breaker
+                let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
+                results.insert(sort_key, item.clone());
             }
         }
 
@@ -244,7 +240,7 @@ impl<S: BlockStore> Indexes<'_, S> {
             // match sets are 'OR-ed' together
             'next_set: for match_set in &query.match_sets {
                 // a set of matchers are 'AND-ed' together
-                for matcher in match_set {
+                for matcher in &match_set.inner {
                     let Some(index_value) = item.fields.get(matcher.field) else {
                         continue 'next_set;
                     };
@@ -347,7 +343,7 @@ impl<S: BlockStore> Indexes<'_, S> {
             }
 
             for match_set in &query.match_sets {
-                for matcher in match_set {
+                for matcher in &match_set.inner {
                     let Some(value) = item.fields.get(matcher.field) else {
                         continue;
                     };
@@ -489,9 +485,7 @@ mod tests {
     use crate::clients::protocols::{ConfigureBuilder, Definition};
     use crate::clients::records::{Data, WriteBuilder};
     use crate::data::DataStream;
-    use crate::store::{RecordsFilter, RecordsQuery};
-    // use crate::data::MAX_ENCODED_SIZE;
-    // use crate::store::block;
+    use crate::store::{RecordsFilter, RecordsQueryBuilder};
 
     #[tokio::test]
     async fn query_records() {
@@ -520,15 +514,17 @@ mod tests {
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
 
         // execute query
-        let query = Query::Records(RecordsQuery {
-            filters: vec![
-                RecordsFilter::new()
-                    // .add_author(ALICE_DID)
-                    // .data_size(Range::new().gt(8)),
-                    .record_id(write.record_id),
-            ],
-            ..Default::default()
-        });
+        let query = Query::Records(
+            RecordsQueryBuilder::new()
+                .add_filter(
+                    RecordsFilter::new()
+                        // .add_author(ALICE_DID)
+                        // .data_size(Range::new().gt(8)),
+                        .record_id(write.record_id),
+                )
+                .build(),
+        );
+
         let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
     }
 
