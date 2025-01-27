@@ -213,7 +213,7 @@ pub struct MatchSet {
 #[derive(Clone, Debug)]
 pub struct Matcher {
     /// The name of the field this matcher applies to.
-    pub field: &'static str,
+    pub field: String,
 
     /// The value and strategy to use for a successful match.
     pub value: MatchOn,
@@ -318,11 +318,11 @@ impl From<records::Query> for RecordsQuery {
         let mut match_set = MatchSet {
             inner: vec![
                 Matcher {
-                    field: "method",
+                    field: "method".to_string(),
                     value: MatchOn::Equal(Method::Write.to_string()),
                 },
                 Matcher {
-                    field: "archived",
+                    field: "archived".to_string(),
                     value: MatchOn::Equal(false.to_string()),
                 },
             ],
@@ -346,7 +346,7 @@ impl From<records::Read> for RecordsQuery {
     fn from(read: records::Read) -> Self {
         let mut match_set = MatchSet {
             inner: vec![Matcher {
-                field: "archived",
+                field: "archived".to_string(),
                 value: MatchOn::Equal(false.to_string()),
             }],
             ..MatchSet::default()
@@ -373,135 +373,133 @@ impl From<&RecordsFilter> for MatchSet {
         }
 
         match_set.inner.push(Matcher {
-            field: "interface",
+            field: "interface".to_string(),
             value: MatchOn::Equal(Interface::Records.to_string()),
         });
 
         if let Some(record_id) = &filter.record_id {
             match_set.inner.push(Matcher {
-                field: "record_id",
+                field: "record_id".to_string(),
                 value: MatchOn::Equal(record_id.to_string()),
             });
         }
         if let Some(published) = &filter.published {
             match_set.inner.push(Matcher {
-                field: "published",
+                field: "published".to_string(),
                 value: MatchOn::Equal(published.to_string()),
             });
         }
         if let Some(author) = &filter.author {
             match_set.inner.push(Matcher {
-                field: "author",
+                field: "author".to_string(),
                 value: MatchOn::OneOf(author.to_vec()),
             });
         }
         if let Some(recipient) = &filter.recipient {
             match_set.inner.push(Matcher {
-                field: "recipient",
+                field: "recipient".to_string(),
                 value: MatchOn::OneOf(recipient.to_vec()),
             });
         }
         if let Some(protocol) = &filter.protocol {
             match_set.inner.push(Matcher {
-                field: "protocol",
+                field: "protocol".to_string(),
                 value: MatchOn::Equal(protocol.to_string()),
             });
         }
         if let Some(protocol_path) = &filter.protocol_path {
             match_set.inner.push(Matcher {
-                field: "protocolPath",
+                field: "protocolPath".to_string(),
                 value: MatchOn::Equal(protocol_path.to_string()),
             });
         }
         if let Some(context_id) = &filter.context_id {
             match_set.inner.push(Matcher {
-                field: "contextId",
+                field: "contextId".to_string(),
                 value: MatchOn::StartsWith(context_id.to_string()),
             });
         }
         if let Some(schema) = &filter.schema {
             match_set.inner.push(Matcher {
-                field: "schema",
+                field: "schema".to_string(),
                 value: MatchOn::Equal(schema.to_string()),
             });
         }
         if let Some(parent_id) = &filter.parent_id {
             match_set.inner.push(Matcher {
-                field: "parentId",
+                field: "parentId".to_string(),
                 value: MatchOn::Equal(parent_id.to_string()),
             });
         }
         if let Some(data_format) = &filter.data_format {
             match_set.inner.push(Matcher {
-                field: "dataFormat",
+                field: "dataFormat".to_string(),
                 value: MatchOn::Equal(data_format.to_string()),
             });
         }
         if let Some(data_size) = &filter.data_size {
             match_set.inner.push(Matcher {
-                field: "dataSize",
+                field: "dataSize".to_string(),
                 value: MatchOn::Range(data_size.clone()),
             });
         }
         if let Some(data_cid) = &filter.data_cid {
             match_set.inner.push(Matcher {
-                field: "dataCid",
+                field: "dataCid".to_string(),
                 value: MatchOn::Equal(data_cid.to_string()),
             });
         }
         if let Some(date_created) = &filter.date_created {
             match_set.inner.push(Matcher {
-                field: "dateCreated",
+                field: "dateCreated".to_string(),
                 value: MatchOn::DateRange(date_created.clone()),
             });
         }
         if let Some(date_published) = &filter.date_published {
             match_set.inner.push(Matcher {
-                field: "datePublished",
+                field: "datePublished".to_string(),
                 value: MatchOn::DateRange(date_published.clone()),
             });
         }
         if let Some(date_updated) = &filter.date_updated {
             match_set.inner.push(Matcher {
-                field: "messageTimestamp",
+                field: "messageTimestamp".to_string(),
                 value: MatchOn::DateRange(date_updated.clone()),
             });
         }
         if let Some(attester) = &filter.attester {
             match_set.inner.push(Matcher {
-                field: "attester",
+                field: "attester".to_string(),
                 value: MatchOn::Equal(attester.to_string()),
             });
         }
 
-        // FIXME
-        // FIXME: Add tag filters
-        // FIXME
-        // if let Some(tags) = &filter.tags {
-        // for (property, tag_filter) in tags {
-        // let tag_value = fields.get(&format!("tag.{property}")).unwrap_or(empty);
-        // match tag_filter {
-        //     TagFilter::StartsWith(value) => {
-        //         if !tag_value.starts_with(value) {
-        //             return Ok(false);
-        //         }
-        //     }
-        //     TagFilter::Range(range) => {
-        //         let tag_int = tag_value
-        //             .parse::<usize>()
-        //             .map_err(|e| unexpected!("issue parsing tag: {e}"))?;
-        //         if !range.contains(&tag_int) {
-        //             return Ok(false);
-        //         }
-        //     }
-        //     TagFilter::Equal(value) => {
-        //         if Some(tag_value.as_str()) != value.as_str() {
-        //             return Ok(false);
-        //         }
-        //     }
-        // }
-        // }
-        // }
+        if let Some(tags) = &filter.tags {
+            for (property, tag_filter) in tags {
+                match tag_filter {
+                    TagFilter::Equal(value) => {
+                        if let Some(val_str) = value.as_str() {
+                            match_set.inner.push(Matcher {
+                                field: format!("tag.{property}"),
+                                value: MatchOn::Equal(val_str.to_string()),
+                            });
+                        }
+                    }
+                    TagFilter::StartsWith(value) => {
+                        match_set.inner.push(Matcher {
+                            field: format!("tag.{property}"),
+                            value: MatchOn::Equal(value.to_string()),
+                        });
+                    }
+                    TagFilter::Range(range) => {
+                        match_set.inner.push(Matcher {
+                            field: format!("tag.{property}"),
+                            value: MatchOn::Range(range.clone()),
+                        });
+                    }
+                }
+            }
+        }
 
         match_set
     }
@@ -573,13 +571,13 @@ impl RecordsQueryBuilder {
 
             if let Some(method) = &self.method {
                 match_set.inner.push(Matcher {
-                    field: "method",
+                    field: "method".to_string(),
                     value: MatchOn::Equal(method.to_string()),
                 });
             }
             if !self.include_archived {
                 match_set.inner.push(Matcher {
-                    field: "archived",
+                    field: "archived".to_string(),
                     value: MatchOn::Equal(false.to_string()),
                 });
             }
@@ -625,29 +623,29 @@ impl From<messages::Query> for EventsQuery {
 
             if let Some(interface) = &filter.interface {
                 match_set.inner.push(Matcher {
-                    field: "interface",
+                    field: "interface".to_string(),
                     value: MatchOn::Equal(interface.to_string()),
                 });
             }
             if let Some(method) = &filter.method {
                 match_set.inner.push(Matcher {
-                    field: "method",
+                    field: "method".to_string(),
                     value: MatchOn::Equal(method.to_string()),
                 });
             }
             if let Some(protocol) = &filter.protocol {
                 match_set.inner.push(Matcher {
-                    field: "protocol",
+                    field: "protocol".to_string(),
                     value: MatchOn::Equal(protocol.to_string()),
                 });
                 match_set.inner.push(Matcher {
-                    field: "tag.protocol",
+                    field: "tag.protocol".to_string(),
                     value: MatchOn::Equal(protocol.to_string()),
                 });
             }
             if let Some(message_timestamp) = &filter.message_timestamp {
                 match_set.inner.push(Matcher {
-                    field: "messageTimestamp",
+                    field: "messageTimestamp".to_string(),
                     value: MatchOn::DateRange(message_timestamp.clone()),
                 });
             }

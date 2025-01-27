@@ -164,7 +164,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
                 // a set of matchers are 'AND-ed' together
                 for matcher in &match_set.inner {
-                    let Some(index_value) = item.fields.get(matcher.field) else {
+                    let Some(index_value) = item.fields.get(&matcher.field) else {
                         continue 'next_item;
                     };
                     if !matcher.is_match(index_value)? {
@@ -241,7 +241,7 @@ impl<S: BlockStore> Indexes<'_, S> {
             'next_set: for match_set in &query.match_sets {
                 // a set of matchers are 'AND-ed' together
                 for matcher in &match_set.inner {
-                    let Some(index_value) = item.fields.get(matcher.field) else {
+                    let Some(index_value) = item.fields.get(&matcher.field) else {
                         continue 'next_set;
                     };
                     if !matcher.is_match(index_value)? {
@@ -344,7 +344,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
             for match_set in &query.match_sets {
                 for matcher in &match_set.inner {
-                    let Some(value) = item.fields.get(matcher.field) else {
+                    let Some(value) = item.fields.get(&matcher.field) else {
                         continue;
                     };
                     if !matcher.is_match(value)? {
