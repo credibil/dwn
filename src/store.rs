@@ -204,6 +204,8 @@ impl Matcher {
     pub fn is_match(&self, value: &str) -> Result<bool> {
         let matched = match &self.value {
             MatchOn::Equal(filter_val) => value == filter_val,
+            MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
+            MatchOn::OneOf(values) => values.contains(&value.to_string()),
             MatchOn::Range(range) => {
                 let int_val: usize =
                     value.parse().map_err(|e| unexpected!("issue parsing usize: {e}"))?;
@@ -224,6 +226,12 @@ impl Matcher {
 pub enum MatchOn {
     /// Match must be equal.
     Equal(String),
+
+    /// Match must start with the specified value.
+    StartsWith(String),
+
+    /// Match on one of the items specified.
+    OneOf(Vec<String>),
 
     /// Match must be in the specified range.
     Range(Range<usize>),
@@ -401,10 +409,24 @@ impl From<records::Query> for RecordsQuery {
 
 impl From<records::Read> for RecordsQuery {
     fn from(read: records::Read) -> Self {
+        let mut match_set = vec![
+            Matcher {
+                field: "archived",
+                value: MatchOn::Equal(false.to_string()),
+            },
+        ];
+        match_set.extend(MatchSet::from(&read.descriptor.filter));
+
         Self {
             filters: vec![read.descriptor.filter],
+            match_sets: vec![match_set],
             ..Self::default()
         }
+
+        // Self {
+        //     filters: vec![read.descriptor.filter],
+        //     ..Self::default()
+        // }
     }
 }
 
@@ -430,20 +452,16 @@ impl From<&RecordsFilter> for MatchSet {
             });
         }
         if let Some(author) = &filter.author {
-            for author in author.to_vec() {
-                match_set.push(Matcher {
-                    field: "author",
-                    value: MatchOn::Equal(author.to_string()),
-                });
-            }
+            match_set.push(Matcher {
+                field: "author",
+                value: MatchOn::OneOf(author.to_vec()),
+            });
         }
         if let Some(recipient) = &filter.recipient {
-            for recipient in recipient.to_vec() {
-                match_set.push(Matcher {
-                    field: "recipient",
-                    value: MatchOn::Equal(recipient.to_string()),
-                });
-            }
+            match_set.push(Matcher {
+                field: "recipient",
+                value: MatchOn::OneOf(recipient.to_vec()),
+            });
         }
         if let Some(protocol) = &filter.protocol {
             match_set.push(Matcher {
@@ -460,7 +478,7 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(context_id) = &filter.context_id {
             match_set.push(Matcher {
                 field: "contextId",
-                value: MatchOn::Equal(context_id.to_string()),
+                value: MatchOn::StartsWith(context_id.to_string()),
             });
         }
         if let Some(schema) = &filter.schema {
@@ -517,6 +535,10 @@ impl From<&RecordsFilter> for MatchSet {
                 value: MatchOn::Equal(attester.to_string()),
             });
         }
+
+        // FIXME
+        // FIXME: Add tag filters
+        // FIXME
         // if let Some(tags) = &filter.tags {
         // for (property, tag_filter) in tags {
         // let tag_value = fields.get(&format!("tag.{property}")).unwrap_or(empty);

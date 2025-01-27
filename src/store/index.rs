@@ -12,11 +12,8 @@ use std::ops::Bound::{self, Excluded, Included, Unbounded};
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
-use super::RecordsFilter;
 use crate::provider::BlockStore;
-use crate::store::{
-    Entry, EventsQuery, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, TagFilter, block,
-};
+use crate::store::{Entry, EventsQuery, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, block};
 use crate::{Interface, Method, Result, unexpected};
 
 // const NULL: u8 = 0x00;
@@ -165,20 +162,19 @@ impl<S: BlockStore> Indexes<'_, S> {
                 if matches.contains(&item.message_cid) {
                     continue;
                 }
-                let archived = item.fields.get("archived");
-                if !query.include_archived && archived.unwrap_or(&String::new()) == "true" {
-                    continue;
-                }
-                if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
-                    continue;
-                }
-                if let Some(method) = &query.method {
-                    if item.fields.get("method") != Some(&method.to_string()) {
-                        continue;
-                    }
-                }
 
-                if item.is_match(filter)? {
+                // match sets are 'OR-ed' together
+                'next_set: for match_set in &query.match_sets {
+                    // a set of matchers are 'AND-ed' together
+                    for matcher in match_set {
+                        let Some(index_value) = item.fields.get(matcher.field) else {
+                            continue 'next_set;
+                        };
+                        if !matcher.is_match(index_value)? {
+                            continue 'next_set;
+                        }
+                    }
+
                     matches.insert(item.message_cid.clone());
 
                     // sort results as we collect using `message_cid` as a tie-breaker
@@ -214,49 +210,6 @@ impl<S: BlockStore> Indexes<'_, S> {
 
     // This query strategy is used when the filter will return a larger set of
     // results.
-    // async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
-    //     let mut items = Vec::new();
-    //     let (limit, cursor) =
-    //         query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
-
-    //     // the location in the index to begin querying from
-    //     let start_key =
-    //         cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
-    //     let index = self.get(&query.sort.to_string()).await?;
-
-    //     // starting from `start_key`, select matching index items until limit
-    //     for (value, item) in index.lower_bound(start_key) {
-    //         if item.fields.get("archived") == Some(&"true".to_string()) && !query.include_archived {
-    //             continue;
-    //         }
-    //         if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
-    //             continue;
-    //         }
-    //         if let Some(method) = &query.method {
-    //             if item.fields.get("method") != Some(&method.to_string()) {
-    //                 continue;
-    //             }
-    //         }
-
-    //         // match entry against any filter
-    //         for filter in &query.filters {
-    //             if item.is_match(filter)? {
-    //                 items.push(item.clone());
-    //                 break;
-    //             }
-    //         }
-
-    //         // stop when page limit + 1 is reached
-    //         if let Some(lim) = limit {
-    //             if items.len() == lim + 1 {
-    //                 break;
-    //             }
-    //         }
-    //     }
-
-    //     Ok(items)
-    // }
-
     async fn query_full(&self, query: &RecordsQuery) -> Result<Vec<IndexItem>> {
         let mut items = Vec::new();
         let mut matches = HashSet::new();
@@ -461,139 +414,6 @@ impl Index {
         let index = &self.items;
         let upper = format!("{value}{MAX}");
         index.range((Excluded(value), Excluded(upper))).map(|(_, item)| item).collect()
-    }
-}
-
-impl IndexItem {
-    /// Check if the index item matches the filter.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    #[allow(clippy::too_many_lines)]
-    pub fn is_match(&self, filter: &RecordsFilter) -> Result<bool> {
-        let empty = &String::new();
-        let fields = &self.fields;
-
-        if let Some(author) = &filter.author {
-            if !author.to_vec().contains(fields.get("author").unwrap_or(empty)) {
-                return Ok(false);
-            }
-        }
-        if let Some(attester) = filter.attester.clone() {
-            if Some(&attester) != fields.get("attester") {
-                return Ok(false);
-            }
-        }
-        if let Some(recipient) = &filter.recipient {
-            if !recipient.to_vec().contains(fields.get("recipient").unwrap_or(empty)) {
-                return Ok(false);
-            }
-        }
-        if let Some(protocol) = &filter.protocol {
-            if Some(protocol) != fields.get("protocol") {
-                return Ok(false);
-            }
-        }
-        if let Some(protocol_path) = &filter.protocol_path {
-            if Some(protocol_path) != fields.get("protocolPath") {
-                return Ok(false);
-            }
-        }
-        if let Some(published) = &filter.published {
-            if Some(&published.to_string()) != fields.get("published") {
-                return Ok(false);
-            }
-        }
-        if let Some(context_id) = &filter.context_id {
-            if !fields.get("contextId").unwrap_or(empty).starts_with(context_id) {
-                return Ok(false);
-            }
-        }
-        if let Some(schema) = &filter.schema {
-            if Some(schema) != fields.get("schema") {
-                return Ok(false);
-            }
-        }
-        if let Some(record_id) = &filter.record_id {
-            if Some(record_id) != fields.get("record_id") {
-                return Ok(false);
-            }
-        }
-        if let Some(parent_id) = &filter.parent_id {
-            if Some(parent_id) != fields.get("parentId") {
-                return Ok(false);
-            }
-        }
-        if let Some(tags) = &filter.tags {
-            for (property, tag_filter) in tags {
-                let tag_value = fields.get(&format!("tag.{property}")).unwrap_or(empty);
-                match tag_filter {
-                    TagFilter::StartsWith(value) => {
-                        if !tag_value.starts_with(value) {
-                            return Ok(false);
-                        }
-                    }
-                    TagFilter::Range(range) => {
-                        let tag_int = tag_value
-                            .parse::<usize>()
-                            .map_err(|e| unexpected!("issue parsing tag: {e}"))?;
-                        if !range.contains(&tag_int) {
-                            return Ok(false);
-                        }
-                    }
-                    TagFilter::Equal(value) => {
-                        if Some(tag_value.as_str()) != value.as_str() {
-                            return Ok(false);
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(data_format) = &filter.data_format {
-            if Some(data_format) != fields.get("dataFormat") {
-                return Ok(false);
-            }
-        }
-        if let Some(data_size) = &filter.data_size {
-            let size_str = fields.get("dataSize").unwrap_or(empty);
-            let size: usize =
-                size_str.parse::<usize>().map_err(|e| unexpected!("issue parsing size: {e}"))?;
-
-            if !data_size.contains(&size) {
-                return Ok(false);
-            }
-        }
-        if let Some(data_cid) = &filter.data_cid {
-            if Some(data_cid) != fields.get("dataCid") {
-                return Ok(false);
-            }
-        }
-        if let Some(date_created) = &filter.date_created {
-            let date_str = fields.get("dateCreated").unwrap_or(empty);
-            let created = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !date_created.contains(&created.into()) {
-                return Ok(false);
-            }
-        }
-        if let Some(date_published) = &filter.date_published {
-            let date_str = fields.get("datePublished").unwrap_or(empty);
-            let published = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !date_published.contains(&published.into()) {
-                return Ok(false);
-            }
-        }
-        if let Some(date_updated) = &filter.date_updated {
-            let date_str = fields.get("messageTimestamp").unwrap_or(empty);
-            let timestamp = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !date_updated.contains(&timestamp.into()) {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
     }
 }
 
