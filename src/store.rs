@@ -146,13 +146,13 @@ impl Default for EntryType {
 #[derive(Clone, Debug, Default)]
 pub struct Query {
     /// One or more sets of events to match.
-    pub match_sets: Vec<MatchSet>,
+    pub(crate) match_sets: Vec<MatchSet>,
 
     /// Sort options.
-    pub sort: Sort,
+    pub(crate) sort: Sort,
 
     /// Pagination options.
-    pub pagination: Option<Pagination>,
+    pub(crate) pagination: Option<Pagination>,
 }
 
 /// A set of field/value matchers that must be 'AND-ed' together for a
@@ -174,22 +174,14 @@ pub struct MatchSet {
 //     }
 // }
 
-// impl Deref for MatchSet {
-//     type Target = Vec<Matcher>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.inner
-//     }
-// }
-
 /// A field/value matcher for use in finding matching indexed values.
 #[derive(Clone, Debug)]
 pub struct Matcher {
     /// The name of the field this matcher applies to.
-    pub field: String,
+    pub(crate) field: String,
 
     /// The value and strategy to use for a successful match.
-    pub value: MatchOn,
+    pub(crate) value: MatchOn,
 }
 
 impl Matcher {
@@ -197,7 +189,7 @@ impl Matcher {
     ///
     /// # Errors
     /// LATER: Add errors
-    pub fn is_match(&self, value: &str) -> Result<bool> {
+    pub(crate) fn is_match(&self, value: &str) -> Result<bool> {
         let matched = match &self.value {
             MatchOn::Equal(filter_val) => value == filter_val,
             MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
@@ -239,7 +231,7 @@ pub enum MatchOn {
 impl Query {
     /// Determine whether the query can be expressed in a concise form.
     #[must_use]
-    pub fn is_concise(&self) -> bool {
+    pub(crate) fn is_concise(&self) -> bool {
         if self.match_sets.is_empty() {
             return false;
         }
@@ -259,24 +251,16 @@ impl Query {
 
 impl From<records::Query> for Query {
     fn from(query: records::Query) -> Self {
-        let mut match_set = MatchSet {
-            inner: vec![
-                Matcher {
-                    field: "method".to_string(),
-                    value: MatchOn::Equal(Method::Write.to_string()),
-                },
-                Matcher {
-                    field: "archived".to_string(),
-                    value: MatchOn::Equal(false.to_string()),
-                },
-            ],
-            ..MatchSet::default()
-        };
+        let mut match_set = MatchSet::from(&query.descriptor.filter);
 
-        // add filter to match_set
-        let ms = MatchSet::from(&query.descriptor.filter);
-        match_set.inner.extend(ms.inner);
-        match_set.index = ms.index;
+        match_set.inner.insert(0, Matcher {
+            field: "method".to_string(),
+            value: MatchOn::Equal(Method::Write.to_string()),
+        });
+        match_set.inner.push(Matcher {
+            field: "archived".to_string(),
+            value: MatchOn::Equal(false.to_string()),
+        });
 
         Self {
             match_sets: vec![match_set],
@@ -288,17 +272,12 @@ impl From<records::Query> for Query {
 
 impl From<records::Read> for Query {
     fn from(read: records::Read) -> Self {
-        let mut match_set = MatchSet {
-            inner: vec![Matcher {
-                field: "archived".to_string(),
-                value: MatchOn::Equal(false.to_string()),
-            }],
-            ..MatchSet::default()
-        };
+        let mut match_set = MatchSet::from(&read.descriptor.filter);
 
-        let ms = MatchSet::from(&read.descriptor.filter);
-        match_set.inner.extend(ms.inner);
-        match_set.index = ms.index;
+        match_set.inner.push(Matcher {
+            field: "archived".to_string(),
+            value: MatchOn::Equal(false.to_string()),
+        });
 
         Self {
             match_sets: vec![match_set],
