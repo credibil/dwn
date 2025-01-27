@@ -692,8 +692,10 @@ impl GrantedQueryBuilder {
     /// Build the `RecordsQuery`.
     #[must_use]
     pub fn build(self) -> GrantedQuery {
-        let mut match_set = MatchSet::default();
-        match_set.index = Some(("protocol".to_string(), "".to_string()));
+        let mut match_set = MatchSet {
+            index: Some(("protocol".to_string(), String::new())),
+            ..MatchSet::default()
+        };
 
         match_set.inner.push(Matcher {
             field: "interface".to_string(),
