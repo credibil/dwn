@@ -10,7 +10,7 @@ use crate::authorization::Authorization;
 use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
-use crate::provider::{MessageStore, Provider};
+use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::{DataStream, Delete, RecordsFilter, Write, write};
 use crate::store::{self, RecordsQueryBuilder};
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
@@ -78,11 +78,17 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
         Some(DataStream::from(buffer))
     } else {
-        let data = DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?;
-        if data.is_none() {
-            return Err(Error::NotFound("no data found".to_string()));
-        }
-        data
+        use std::io::Read;
+
+        let Some(mut read) =
+            DataStore::get(provider, owner, "", &write.descriptor.data_cid).await?
+        else {
+            return Err(Error::NotFound("data not found".to_string()));
+        };
+
+        let mut buf = Vec::new();
+        read.read_to_end(&mut buf)?;
+        Some(DataStream::from(buf))
     };
 
     write.encoded_data = None;

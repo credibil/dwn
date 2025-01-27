@@ -12,7 +12,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
-use crate::provider::{MessageStore, Provider};
+use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::{DataStream, write};
 use crate::store::{Entry, EntryType};
 use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
@@ -42,7 +42,17 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
             Some(DataStream::from(bytes))
         } else {
-            DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
+            use std::io::Read;
+
+            let Some(mut read) =
+                DataStore::get(provider, owner, "", &write.descriptor.data_cid).await?
+            else {
+                return Err(Error::NotFound("data not found".to_string()));
+            };
+
+            let mut buf = Vec::new();
+            read.read_to_end(&mut buf)?;
+            Some(DataStream::from(buf))
         }
     } else {
         None

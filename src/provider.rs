@@ -17,7 +17,7 @@ pub use crate::tasks::ResumableTask;
 
 /// Provider trait.
 pub trait Provider:
-    MessageStore + BlockStore + TaskStore + EventLog + EventStream + DidResolver
+    MessageStore + DataStore + TaskStore + EventLog + BlockStore + EventStream + DidResolver
 {
 }
 
@@ -135,7 +135,7 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     /// This may be overridden by implementers to provide custom storage.
     fn put(
         &self, owner: &str, _record_id: &str, data_cid: &str, data: impl Read + Send,
-    ) -> impl Future<Output = anyhow::Result<usize>> + Send {
+    ) -> impl Future<Output = anyhow::Result<(String, usize)>> + Send {
         async move {
             let mut links = vec![];
             let mut byte_count = 0;
@@ -172,7 +172,7 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
             //     return Err(anyhow!("data cid mismatch"));
             // }
 
-            Ok(byte_count)
+            Ok((block.cid().to_string(), byte_count))
         }
     }
 

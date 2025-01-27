@@ -19,7 +19,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
-use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
+use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{DataStream, DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsFilter, RecordsQueryBuilder};
@@ -109,7 +109,8 @@ pub async fn handle(
         MessageStore::put(provider, owner, &initial_entry).await?;
         EventLog::append(provider, owner, &initial_entry).await?;
         if !initial_write.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
-            BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
+            DataStore::delete(provider, owner, "<record_id>", &initial_write.descriptor.data_cid)
+                .await?;
         }
     }
 
@@ -120,7 +121,7 @@ pub async fn handle(
         let write = Write::try_from(entry)?;
         let cid = write.cid()?;
         MessageStore::delete(provider, owner, &cid).await?;
-        BlockStore::delete(provider, owner, &write.descriptor.data_cid).await?;
+        DataStore::delete(provider, owner, "<record_id>", &write.descriptor.data_cid).await?;
         EventLog::delete(provider, owner, &cid).await?;
     }
 
@@ -484,7 +485,7 @@ impl Write {
     }
 
     async fn update_data(
-        &mut self, owner: &str, stream: &mut DataStream, block_store: &impl BlockStore,
+        &mut self, owner: &str, stream: &mut DataStream, store: &impl DataStore,
     ) -> Result<()> {
         // when data is below the threshold, store it within MessageStore
         if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {
@@ -508,8 +509,10 @@ impl Write {
                 integrity::verify_schema(self, &data_bytes)?;
             }
         } else {
-            // store data in BlockStore
-            let (data_cid, data_size) = stream.to_store(owner, block_store).await?;
+            // store data in DataStore
+            let (data_cid, data_size) =
+                DataStore::put(store, owner, "<record_id>", &self.descriptor.data_cid, stream)
+                    .await?;
 
             // verify integrity of stored data
             if self.descriptor.data_cid != data_cid {
@@ -527,7 +530,7 @@ impl Write {
     //  1. verify the new message's data integrity
     //  2. copy stored `encoded_data` to the new  message.
     async fn clone_data(
-        &mut self, owner: &str, existing: &Entry, block_store: &impl BlockStore,
+        &mut self, owner: &str, existing: &Entry, store: &impl DataStore,
     ) -> Result<()> {
         let latest = Self::try_from(existing)?;
 
@@ -542,7 +545,8 @@ impl Write {
 
         // if bigger than encoding threshold, ensure data exists for this record
         if latest.descriptor.data_size > data::MAX_ENCODED_SIZE {
-            let result = block_store.get(owner, &self.descriptor.data_cid).await?;
+            let result =
+                DataStore::get(store, owner, "<record_id", &self.descriptor.data_cid).await?;
             if result.is_none() {
                 return Err(unexpected!("referenced data does not exist"));
             };
