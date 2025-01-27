@@ -661,14 +661,80 @@ impl From<messages::Query> for EventsQuery {
     }
 }
 
-/// `GrantedQuery` is used to find grant-authorized `RecordsWrite` messages.
-#[derive(Clone, Debug)]
-pub struct GrantedQuery {
-    /// Select messages authorized by this grant ID.
-    pub permission_grant_id: String,
+/// Build a `GrantedQuery` using a builder pattern.
+#[derive(Clone, Debug, Default)]
+pub struct GrantedQueryBuilder {
+    permission_grant_id: Option<String>,
+    date_created: Option<DateRange>,
+}
 
-    /// Select messages created within this date range.
-    pub date_created: DateRange,
+impl GrantedQueryBuilder {
+    /// Create a new `RecordsQueryBuilder` instance.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the `Method` of the records to query for.
+    #[must_use]
+    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
+        self.permission_grant_id = Some(permission_grant_id.into());
+        self
+    }
+
+    /// Include archived records in the query.
+    #[must_use]
+    pub const fn date_created(mut self, date_created: DateRange) -> Self {
+        self.date_created = Some(date_created);
+        self
+    }
+
+    /// Build the `RecordsQuery`.
+    #[must_use]
+    pub fn build(self) -> GrantedQuery {
+        let mut match_set = MatchSet::default();
+        match_set.index = Some(("protocol".to_string(), "".to_string()));
+
+        match_set.inner.push(Matcher {
+            field: "interface".to_string(),
+            value: MatchOn::Equal(Interface::Records.to_string()),
+        });
+        match_set.inner.push(Matcher {
+            field: "method".to_string(),
+            value: MatchOn::Equal(Method::Write.to_string()),
+        });
+
+        if let Some(permission_grant_id) = &self.permission_grant_id {
+            match_set.inner.push(Matcher {
+                field: "permissionGrantId".to_string(),
+                value: MatchOn::Equal(permission_grant_id.to_string()),
+            });
+        }
+        if let Some(date_created) = &self.date_created {
+            match_set.inner.push(Matcher {
+                field: "dateCreated".to_string(),
+                value: MatchOn::DateRange(date_created.clone()),
+            });
+        }
+
+        GrantedQuery {
+            match_sets: vec![match_set],
+            ..GrantedQuery::default()
+        }
+    }
+}
+
+/// `GrantedQuery` is used to find grant-authorized `RecordsWrite` messages.
+#[derive(Clone, Debug, Default)]
+pub struct GrantedQuery {
+    /// One or more sets of events to match.
+    pub match_sets: Vec<MatchSet>,
+
+    /// Sort options.
+    pub sort: Sort,
+
+    /// Pagination options.
+    pub pagination: Option<Pagination>,
 }
 
 /// Pagination cursor.

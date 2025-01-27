@@ -9,12 +9,11 @@ use std::collections::btree_map::Range;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Bound::{self, Excluded, Included, Unbounded};
 
-use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
 use crate::provider::BlockStore;
 use crate::store::{Entry, EventsQuery, GrantedQuery, ProtocolsQuery, Query, RecordsQuery, block};
-use crate::{Interface, Method, Result, unexpected};
+use crate::{Interface,Result};
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;
@@ -257,35 +256,53 @@ impl<S: BlockStore> Indexes<'_, S> {
     }
 
     async fn query_granted(&self, query: &GrantedQuery) -> Result<Vec<IndexItem>> {
-        let mut results = Vec::new();
+        let mut items = Vec::new();
+        let mut matches = HashSet::new();
 
-        let index = self.get("protocol").await?;
-        for item in index.items.values() {
-            if item.fields.get("interface") != Some(&Interface::Records.to_string()) {
-                continue;
-            }
-            if item.fields.get("method") != Some(&Method::Write.to_string()) {
-                continue;
-            }
+        let (limit, cursor) =
+            query.pagination.as_ref().map_or((None, None), |p| (p.limit, p.cursor.as_ref()));
 
-            if Some(&query.permission_grant_id) != item.fields.get("permissionGrantId") {
-                continue;
-            }
+        // the location in the index to begin querying from
+        let start_key =
+            cursor.map_or(Unbounded, |c| Included(format!("{}{NULL}{}", c.value, c.message_cid)));
+        let index = self.get(&query.sort.to_string()).await?;
 
-            let default = String::new();
-            let date_str = item.fields.get("dateCreated").unwrap_or(&default);
-            let created = DateTime::parse_from_rfc3339(date_str)
-                .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-            if !query.date_created.contains(&created.into()) {
-                continue;
+        // starting from `start_key`, select matching index items until limit
+        for (value, item) in index.lower_bound(Unbounded) {
+            // stop when page limit + 1 is reached
+            if let Some(lim) = limit {
+                if items.len() == lim + 1 {
+                    break;
+                }
             }
 
-            // sort results as we collect using `message_cid` as a tie-breaker
-            let sort_key = format!("{}{}", &item.fields["messageTimestamp"], item.message_cid);
-            results.push(item.clone());
+            if matches.contains(&item.message_cid) {
+                continue;
+            }
+
+            if query.match_sets.is_empty() {
+                matches.insert(item.message_cid.clone());
+                items.push(item.clone());
+                continue;
+            }
+
+            // match sets are 'OR-ed' together
+            'next_set: for match_set in &query.match_sets {
+                // a set of matchers are 'AND-ed' together
+                for matcher in &match_set.inner {
+                    let Some(index_value) = item.fields.get(&matcher.field) else {
+                        continue 'next_set;
+                    };
+                    if !matcher.is_match(index_value)? {
+                        continue 'next_set;
+                    }
+                }
+                matches.insert(item.message_cid.clone());
+                items.push(item.clone());
+            }
         }
 
-        Ok(results)
+        Ok(items)
     }
 
     async fn query_protocols(&self, query: &ProtocolsQuery) -> Result<Vec<IndexItem>> {

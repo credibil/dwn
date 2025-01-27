@@ -22,7 +22,7 @@ use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{DataStream, DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{Entry, EntryType, GrantedQuery, RecordsFilter, RecordsQueryBuilder};
+use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 use crate::{Descriptor, Error, Method, Result, authorization, data, forbidden, unexpected};
 
 /// Handle `RecordsWrite` messages.
@@ -575,10 +575,11 @@ impl Write {
         }
 
         // find grant-authorized messages with created after revocation
-        let query = GrantedQuery {
-            permission_grant_id: grant_id.clone(),
-            date_created: DateRange::new().gt(self.descriptor.base.message_timestamp),
-        };
+        let query = GrantedQueryBuilder::new()
+            .permission_grant_id(grant_id)
+            .date_created(DateRange::new().gt(self.descriptor.base.message_timestamp))
+            .build();
+
         let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
 
         // delete the records
