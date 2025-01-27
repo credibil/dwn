@@ -31,7 +31,7 @@ pub async fn handle(
         .method(None)
         .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id))
         .build();
-    let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    let (entries, _) = MessageStore::query(provider, owner, &query).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching record found".to_string()));
     }
@@ -208,7 +208,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         .add_filter(RecordsFilter::new().record_id(&delete.descriptor.record_id))
         .build();
 
-    let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    let (entries, _) = MessageStore::query(provider, owner, &query).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching records found".to_string()));
     }
@@ -267,7 +267,7 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
     // fetch child records
     let query =
         RecordsQueryBuilder::new().add_filter(RecordsFilter::new().parent_id(record_id)).build();
-    let (children, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    let (children, _) = MessageStore::query(provider, owner, &query).await?;
     if children.is_empty() {
         return Ok(());
     }

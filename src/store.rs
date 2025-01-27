@@ -142,44 +142,17 @@ impl Default for EntryType {
     }
 }
 
-/// `Query` wraps supported queries.
-#[derive(Clone, Debug)]
-pub enum Query {
-    /// Records query.
-    Records(RecordsQuery),
+/// `EventsQuery` for `EventLog` queries.
+#[derive(Clone, Debug, Default)]
+pub struct Query {
+    /// One or more sets of events to match.
+    pub match_sets: Vec<MatchSet>,
 
-    /// Protocols query.
-    Protocols(ProtocolsQuery),
+    /// Sort options.
+    pub sort: Sort,
 
-    /// Messages query.
-    Messages(EventsQuery),
-
-    /// Granted query.
-    Granted(GrantedQuery),
-}
-
-impl From<ProtocolsQuery> for Query {
-    fn from(query: ProtocolsQuery) -> Self {
-        Self::Protocols(query)
-    }
-}
-
-impl From<RecordsQuery> for Query {
-    fn from(query: RecordsQuery) -> Self {
-        Self::Records(query)
-    }
-}
-
-impl From<GrantedQuery> for Query {
-    fn from(query: GrantedQuery) -> Self {
-        Self::Granted(query)
-    }
-}
-
-impl From<EventsQuery> for Query {
-    fn from(query: EventsQuery) -> Self {
-        Self::Messages(query)
-    }
+    /// Pagination options.
+    pub pagination: Option<Pagination>,
 }
 
 /// A set of field/value matchers that must be 'AND-ed' together for a
@@ -263,57 +236,28 @@ pub enum MatchOn {
     DateRange(DateRange),
 }
 
-/// `ProtocolsQuery` use a builder to simplify the process of creating
-/// `MessageStore` queries.
-#[derive(Clone, Debug, Default)]
-pub struct ProtocolsQuery {
-    /// Filter records by `protocol`.
-    pub protocol: Option<String>,
-
-    /// Filter records by by their `published` status.
-    pub published: Option<bool>,
-}
-
-impl From<protocols::Query> for ProtocolsQuery {
-    fn from(query: protocols::Query) -> Self {
-        let mut pq = Self::default();
-        if let Some(filter) = query.descriptor.filter {
-            pq.protocol = Some(filter.protocol);
-        }
-        pq
-    }
-}
-
-/// `RecordsQuery` use a builder to simplify the process of creating
-/// `RecordWrite` and `RecordsDelete` queries against the `MessageStore`.
-#[derive(Clone, Debug, Default)]
-pub struct RecordsQuery {
-    // /// Filter records using one or more filters OR'ed together.
-    // pub filters: Vec<RecordsFilter>,
-    /// One or more sets of events to match.
-    pub match_sets: Vec<MatchSet>,
-
-    /// Sort options.
-    pub sort: Sort,
-
-    /// Pagination options.
-    pub pagination: Option<Pagination>,
-}
-
-impl RecordsQuery {
+impl Query {
     /// Determine whether the query can be expressed in a concise form.
     #[must_use]
     pub fn is_concise(&self) -> bool {
+        if self.match_sets.is_empty() {
+            return false;
+        }
+
         for ms in &self.match_sets {
-            if ms.index.is_none() {
+            let Some((_, value)) = &ms.index else {
+                return false;
+            };
+            if value.is_empty() {
                 return false;
             }
         }
+
         true
     }
 }
 
-impl From<records::Query> for RecordsQuery {
+impl From<records::Query> for Query {
     fn from(query: records::Query) -> Self {
         let mut match_set = MatchSet {
             inner: vec![
@@ -342,7 +286,7 @@ impl From<records::Query> for RecordsQuery {
     }
 }
 
-impl From<records::Read> for RecordsQuery {
+impl From<records::Read> for Query {
     fn from(read: records::Read) -> Self {
         let mut match_set = MatchSet {
             inner: vec![Matcher {
@@ -359,6 +303,59 @@ impl From<records::Read> for RecordsQuery {
         Self {
             match_sets: vec![match_set],
             ..Self::default()
+        }
+    }
+}
+
+impl From<messages::Query> for Query {
+    fn from(query: messages::Query) -> Self {
+        let mut match_sets = vec![];
+
+        for filter in &query.descriptor.filters {
+            let mut match_set = MatchSet::default();
+
+            if let Some(interface) = &filter.interface {
+                match_set.inner.push(Matcher {
+                    field: "interface".to_string(),
+                    value: MatchOn::Equal(interface.to_string()),
+                });
+            }
+            if let Some(method) = &filter.method {
+                match_set.inner.push(Matcher {
+                    field: "method".to_string(),
+                    value: MatchOn::Equal(method.to_string()),
+                });
+            }
+            if let Some(message_timestamp) = &filter.message_timestamp {
+                match_set.inner.push(Matcher {
+                    field: "messageTimestamp".to_string(),
+                    value: MatchOn::DateRange(message_timestamp.clone()),
+                });
+            }
+
+            // match on `protocol` OR `tag.protocol`
+            if let Some(protocol) = &filter.protocol {
+                // clone and create an OR `MatchSet`
+                let mut ms = match_set.clone();
+                ms.inner.push(Matcher {
+                    field: "tag.protocol".to_string(),
+                    value: MatchOn::Equal(protocol.to_string()),
+                });
+                match_sets.push(ms);
+
+                match_set.inner.push(Matcher {
+                    field: "protocol".to_string(),
+                    value: MatchOn::Equal(protocol.to_string()),
+                });
+            }
+
+            match_sets.push(match_set);
+        }
+
+        Self {
+            match_sets,
+            sort: Sort::TimestampAsc,
+            pagination: None,
         }
     }
 }
@@ -505,6 +502,67 @@ impl From<&RecordsFilter> for MatchSet {
     }
 }
 
+/// Build a protocols `Query` using a builder pattern.
+#[derive(Clone, Debug, Default)]
+pub struct ProtocolsQueryBuilder {
+    protocol: Option<String>,
+    published: Option<bool>,
+}
+
+impl ProtocolsQueryBuilder {
+    /// Create a new `RecordsQueryBuilder` instance.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the `Method` of the records to query for.
+    #[must_use]
+    pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
+        self
+    }
+
+    /// Include archived records in the query.
+    #[must_use]
+    pub const fn published(mut self, published: bool) -> Self {
+        self.published = Some(published);
+        self
+    }
+
+    /// Build the `RecordsQuery`.
+    #[must_use]
+    pub fn build(self) -> Query {
+        let mut match_set = MatchSet {
+            index: Some(("protocol".to_string(), String::new())),
+            ..MatchSet::default()
+        };
+
+        match_set.inner.push(Matcher {
+            field: "interface".to_string(),
+            value: MatchOn::Equal(Interface::Protocols.to_string()),
+        });
+
+        if let Some(protocol) = &self.protocol {
+            match_set.inner.push(Matcher {
+                field: "protocol".to_string(),
+                value: MatchOn::Equal(protocol.to_string()),
+            });
+        }
+        if let Some(published) = &self.published {
+            match_set.inner.push(Matcher {
+                field: "published".to_string(),
+                value: MatchOn::Equal(published.to_string()),
+            });
+        }
+
+        Query {
+            match_sets: vec![match_set],
+            ..Query::default()
+        }
+    }
+}
+
 /// Build a `RecordsQuery` using a builder pattern.
 #[derive(Clone, Debug, Default)]
 pub struct RecordsQueryBuilder {
@@ -560,9 +618,9 @@ impl RecordsQueryBuilder {
         self
     }
 
-    /// Build the `RecordsQuery`.
+    /// Build the `Query`.
     #[must_use]
-    pub fn build(self) -> RecordsQuery {
+    pub fn build(self) -> Query {
         let mut match_sets = vec![];
         let mut is_concise = true;
 
@@ -593,70 +651,10 @@ impl RecordsQueryBuilder {
             }
         }
 
-        RecordsQuery {
+        Query {
             match_sets,
             sort: self.sort,
             pagination: self.pagination,
-        }
-    }
-}
-
-/// `EventsQuery` for `EventLog` queries.
-#[derive(Clone, Debug, Default)]
-pub struct EventsQuery {
-    /// One or more sets of events to match.
-    pub match_sets: Vec<MatchSet>,
-
-    /// Sort options.
-    pub sort: Sort,
-
-    /// Pagination options.
-    pub pagination: Option<Pagination>,
-}
-
-impl From<messages::Query> for EventsQuery {
-    fn from(query: messages::Query) -> Self {
-        let mut match_sets = vec![];
-
-        for filter in &query.descriptor.filters {
-            let mut match_set = MatchSet::default();
-
-            if let Some(interface) = &filter.interface {
-                match_set.inner.push(Matcher {
-                    field: "interface".to_string(),
-                    value: MatchOn::Equal(interface.to_string()),
-                });
-            }
-            if let Some(method) = &filter.method {
-                match_set.inner.push(Matcher {
-                    field: "method".to_string(),
-                    value: MatchOn::Equal(method.to_string()),
-                });
-            }
-            if let Some(protocol) = &filter.protocol {
-                match_set.inner.push(Matcher {
-                    field: "protocol".to_string(),
-                    value: MatchOn::Equal(protocol.to_string()),
-                });
-                match_set.inner.push(Matcher {
-                    field: "tag.protocol".to_string(),
-                    value: MatchOn::Equal(protocol.to_string()),
-                });
-            }
-            if let Some(message_timestamp) = &filter.message_timestamp {
-                match_set.inner.push(Matcher {
-                    field: "messageTimestamp".to_string(),
-                    value: MatchOn::DateRange(message_timestamp.clone()),
-                });
-            }
-
-            match_sets.push(match_set);
-        }
-
-        Self {
-            match_sets,
-            sort: Sort::TimestampAsc,
-            pagination: None,
         }
     }
 }
@@ -691,7 +689,7 @@ impl GrantedQueryBuilder {
 
     /// Build the `RecordsQuery`.
     #[must_use]
-    pub fn build(self) -> GrantedQuery {
+    pub fn build(self) -> Query {
         let mut match_set = MatchSet {
             index: Some(("protocol".to_string(), String::new())),
             ..MatchSet::default()
@@ -719,24 +717,11 @@ impl GrantedQueryBuilder {
             });
         }
 
-        GrantedQuery {
+        Query {
             match_sets: vec![match_set],
-            ..GrantedQuery::default()
+            ..Query::default()
         }
     }
-}
-
-/// `GrantedQuery` is used to find grant-authorized `RecordsWrite` messages.
-#[derive(Clone, Debug, Default)]
-pub struct GrantedQuery {
-    /// One or more sets of events to match.
-    pub match_sets: Vec<MatchSet>,
-
-    /// Sort options.
-    pub sort: Sort,
-
-    /// Pagination options.
-    pub pagination: Option<Pagination>,
 }
 
 /// Pagination cursor.

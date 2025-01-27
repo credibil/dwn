@@ -7,7 +7,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider};
-use crate::store::{self, Cursor,ProtocolsQuery};
+use crate::store::{self, Cursor, ProtocolsQueryBuilder};
 use crate::{Descriptor, Result, permissions, utils};
 
 // Access level for query.
@@ -30,14 +30,17 @@ pub async fn handle(
     }
 
     // build actual query
-    let mut store_query = ProtocolsQuery::from(query.clone());
+    let mut builder = ProtocolsQueryBuilder::new();
+    if let Some(filter) = &query.descriptor.filter {
+        builder = builder.protocol(&filter.protocol);
+    }
 
     // unauthorized queries can only query for published protocols
     if query.authorize(owner, provider).await? == Access::Published {
-        store_query.published = Some(true);
+        builder = builder.published(true);
     };
 
-    let (records, _) = MessageStore::query(provider, owner, &store_query.into()).await?;
+    let (records, _) = MessageStore::query(provider, owner, &builder.build()).await?;
 
     // unpack messages
     let mut entries = vec![];
@@ -108,13 +111,13 @@ pub(super) async fn fetch_config(
     owner: &str, protocol: Option<String>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
     // build query
-    let query = store::ProtocolsQuery {
-        protocol,
-        published: None,
-    };
+    let mut builder = store::ProtocolsQueryBuilder::new();
+    if let Some(protocol) = protocol {
+        builder = builder.protocol(&protocol);
+    }
 
     // execute query
-    let (messages, _) = store.query(owner, &query.into()).await?;
+    let (messages, _) = store.query(owner, &builder.build()).await?;
     if messages.is_empty() {
         return Ok(None);
     }

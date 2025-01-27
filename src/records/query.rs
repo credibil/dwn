@@ -11,7 +11,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider};
 use crate::records::{RecordsFilter, Write};
-use crate::store::{Cursor, Pagination, RecordsQuery, RecordsQueryBuilder, Sort};
+use crate::store::{self, Cursor, Pagination, RecordsQueryBuilder, Sort};
 use crate::{Descriptor, Result, forbidden, unauthorized, unexpected, utils};
 
 /// Process `Query` message.
@@ -27,7 +27,7 @@ pub async fn handle(
         // correct filter when querying soley for published records
         let mut query = query;
         query.descriptor.filter.published = Some(true);
-        RecordsQuery::from(query)
+        store::Query::from(query)
     } else {
         query.authorize(owner, provider).await?;
         let Some(authzn) = &query.authorization else {
@@ -35,14 +35,14 @@ pub async fn handle(
         };
 
         if authzn.author()? == owner {
-            RecordsQuery::from(query)
+            store::Query::from(query)
         } else {
             query.into_non_owner()?
         }
     };
 
     // fetch records matching query criteria
-    let (records, cursor) = MessageStore::query(provider, owner, &store_query.into()).await?;
+    let (records, cursor) = MessageStore::query(provider, owner, &store_query).await?;
 
     // short-circuit when no records found
     if records.is_empty() {
@@ -75,7 +75,7 @@ pub async fn handle(
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
             .include_archived(true)
             .build();
-        let (results, _) = MessageStore::query(provider, owner, &query.into()).await?;
+        let (results, _) = MessageStore::query(provider, owner, &query).await?;
         let mut initial_write: Write = (&results[0]).try_into()?;
         initial_write.encoded_data = None;
 
@@ -243,7 +243,7 @@ impl Query {
 
     // when requestor (message author) is not web node owner,
     // recreate filters to include query author as record author or recipient
-    fn into_non_owner(self) -> Result<RecordsQuery> {
+    fn into_non_owner(self) -> Result<store::Query> {
         // let mut store_query = RecordsQueryBuilder::from(self.clone());
         let mut store_query = RecordsQueryBuilder::new();
         if let Some(date_sort) = self.descriptor.date_sort {

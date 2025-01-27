@@ -580,7 +580,7 @@ impl Write {
             .date_created(DateRange::new().gt(self.descriptor.base.message_timestamp))
             .build();
 
-        let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+        let (entries, _) = MessageStore::query(provider, owner, &query).await?;
 
         // delete the records
         for entry in entries {
@@ -833,7 +833,7 @@ async fn existing_entries(
         .include_archived(true)
         .method(None)
         .build(); // both Write and Delete messages
-    let (entries, _) = store.query(owner, &query.into()).await?;
+    let (entries, _) = store.query(owner, &query).await?;
     Ok(entries)
 }
 

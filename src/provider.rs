@@ -8,7 +8,7 @@ pub use vercre_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
 use crate::store::{Cursor, block, index};
-pub use crate::store::{Entry, EventsQuery, Query};
+pub use crate::store::{Entry, Query};
 pub use crate::tasks::ResumableTask;
 
 /// Provider trait.
@@ -59,16 +59,13 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
             let mut results = index::query(owner, query, self).await?;
 
             // return cursor when paging is used
-            let limit = if let Query::Records(query) = query {
-                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default()
-            } else {
-                0
-            };
+            let limit =
+                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
 
             let cursor = if limit > 0 && limit < results.len() {
-                let Query::Records(query) = query else {
-                    return Err(anyhow!("invalid query"));
-                };
+                // let Query::Records(query) = query else {
+                //     return Err(anyhow!("invalid query"));
+                // };
                 let sort_field = query.sort.to_string();
 
                 // set cursor to the last item remaining after the spliced result.
@@ -244,10 +241,10 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     ///
     /// Returns an array of `message_cid`s that represent the events.
     fn query(
-        &self, owner: &str, query: &EventsQuery,
+        &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
         async move {
-            let mut results = index::query(owner, &query.clone().into(), self).await?;
+            let mut results = index::query(owner, query, self).await?;
 
             // return cursor when paging is used
             let limit =

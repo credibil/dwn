@@ -257,7 +257,7 @@ impl Protocol<'_> {
 
         // check the invoked role record exists
         let query = RecordsQueryBuilder::new().add_filter(filter).build();
-        let (entries, _) = store.query(owner, &query.into()).await?;
+        let (entries, _) = store.query(owner, &query).await?;
         if entries.is_empty() {
             return Err(forbidden!("unable to find record for role"));
         }

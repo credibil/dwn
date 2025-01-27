@@ -276,6 +276,7 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
+
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
         .build(&bob_signer)
@@ -394,13 +395,11 @@ async fn match_protocol_scope() {
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .add_filter(MessagesFilter::new().protocol("http://protocol1".to_string()))
+        .add_filter(MessagesFilter::new().protocol("http://protocol1"))
         .permission_grant_id(&bob_grant.record_id)
         .build(&bob_signer)
         .await
         .expect("should create write");
-
- 
 
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);

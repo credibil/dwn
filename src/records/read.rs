@@ -12,7 +12,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
 use crate::provider::{MessageStore, Provider};
 use crate::records::{DataStream, Delete, RecordsFilter, Write, write};
-use crate::store::{RecordsQuery, RecordsQueryBuilder};
+use crate::store::{self, RecordsQueryBuilder};
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
@@ -21,9 +21,9 @@ use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 /// LATER: Add errors
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
-    let query = RecordsQuery::from(read.clone());
+    let query = store::Query::from(read.clone());
 
-    let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+    let (entries, _) = MessageStore::query(provider, owner, &query).await?;
     if entries.is_empty() {
         return Err(Error::NotFound("no matching record".to_string()));
     }
@@ -95,7 +95,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             .add_filter(RecordsFilter::new().record_id(&write.record_id))
             .include_archived(true)
             .build();
-        let (entries, _) = MessageStore::query(provider, owner, &query.into()).await?;
+        let (entries, _) = MessageStore::query(provider, owner, &query).await?;
         if entries.is_empty() {
             return Err(unexpected!("initial write not found"));
         }
