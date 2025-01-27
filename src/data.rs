@@ -15,8 +15,8 @@ use crate::{Result, unexpected};
 
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: usize = 30000;
-
-const CHUNK_SIZE: usize = 16;
+/// The maximum size of a block.
+pub const CHUNK_SIZE: usize = 16;
 
 /// Compute CID from a data value or stream.
 pub mod cid {
@@ -32,9 +32,13 @@ pub mod cid {
     ///
     /// # Errors
     /// LATER: Add errors
+    ///
+    /// # Panics
+    ///
+    /// When the payload cannot be serialized.
     pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();
-        ciborium::into_writer(payload, &mut buf)?;
+        ciborium::into_writer(payload, &mut buf).expect("should serialize");
         let hash = multihash_codetable::Code::Sha2_256.digest(&buf);
         Ok(Cid::new_v1(RAW, hash).to_string())
     }

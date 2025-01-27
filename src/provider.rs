@@ -1,11 +1,15 @@
 //! # Provider
 
-use std::io::Read;
+use std::io::{self, Read, Write};
+use std::str::FromStr;
 
 use anyhow::{Result, anyhow};
+use cid::Cid;
+use ipld_core::ipld::Ipld;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
 
+use crate::data;
 use crate::event::{Event, Subscriber};
 use crate::store::{Cursor, block, index};
 pub use crate::store::{Entry, Query};
@@ -125,24 +129,105 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     // /// Close the connection to the underlying store.
     // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Store data in the underlying store.
+    /// Store data in an underlying block store.
+    ///
+    /// The default implementation uses the `BlockStore` provider for storage.
+    /// This may be overridden by implementers to provide custom storage.
     fn put(
-        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+        &self, owner: &str, _record_id: &str, data_cid: &str, data: impl Read + Send,
+    ) -> impl Future<Output = anyhow::Result<usize>> + Send {
+        async move {
+            let mut links = vec![];
+            let mut byte_count = 0;
+            let mut data = data;
 
-    /// Fetches a single message by CID from the underlying store, returning
-    /// `None` if no match was found.
+            // read data stream in chunks, storing each chunk as an IPLD block
+            loop {
+                let mut buffer = [0u8; data::CHUNK_SIZE];
+                if let Ok(bytes_read) = data.read(&mut buffer[..]) {
+                    if bytes_read == 0 {
+                        break;
+                    }
+                    // encode buffer to IPLD block
+                    let ipld = Ipld::Bytes(buffer[..bytes_read].to_vec());
+                    let block = block::Block::encode(&ipld)?;
+
+                    // insert into the blockstore
+                    let cid = block.cid();
+                    BlockStore::put(self, owner, cid, block.data()).await?;
+
+                    // save link to block
+                    let cid = Cid::from_str(cid)?;
+                    links.push(Ipld::Link(cid));
+                    byte_count += bytes_read;
+                }
+            }
+
+            // create a root block linking to the data blocks
+            let block = block::Block::encode(&Ipld::List(links))?;
+            BlockStore::put(self, owner, data_cid, block.data()).await?;
+
+            // // confirm that the root block's CID matches the provided data CID
+            // if data_cid != block.cid() {
+            //     return Err(anyhow!("data cid mismatch"));
+            // }
+
+            Ok(byte_count)
+        }
+    }
+
+    /// Fetches a single message by CID from an underlying block store.
     fn get(
-        &self, owner: &str, record_id: &str, data_cid: &str,
-    ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send;
+        &self, owner: &str, _record_id: &str, data_cid: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send {
+        async move {
+            // get root block
+            let Some(bytes) = BlockStore::get(self, owner, data_cid).await? else {
+                return Ok(None);
+            };
+
+            // the root blook contains a list of links to data blocks
+            let Ipld::List(links) = block::decode(&bytes)? else {
+                return Ok(None);
+            };
+
+            // TODO: optimize by streaming the data blocks as fetched
+            // fetch each data block
+            let mut buf = io::Cursor::new(vec![]);
+
+            for link in links {
+                // get data block
+                let Ipld::Link(link_cid) = link else {
+                    return Err(anyhow!("invalid link"));
+                };
+                let Some(bytes) = BlockStore::get(self, owner, &link_cid.to_string()).await? else {
+                    return Ok(None);
+                };
+
+                // get data block's payload
+                let ipld_bytes = block::decode(&bytes)?;
+                let Ipld::Bytes(bytes) = ipld_bytes else {
+                    return Ok(None);
+                };
+
+                buf.write_all(&bytes)?;
+            }
+
+            Ok(Some(buf))
+        }
+    }
 
     /// Delete data associated with the specified id.
     fn delete(
-        &self, owner: &str, record_id: &str, data_cid: &str,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+        &self, owner: &str, _record_id: &str, data_cid: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        async move { BlockStore::delete(self, owner, data_cid).await }
+    }
 
     /// Purge all data from the store.
-    fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send {
+        async move { todo!("implement purge") }
+    }
 }
 
 /// The `TaskStore` trait is used by implementers to provide data storage

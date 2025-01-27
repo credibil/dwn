@@ -139,7 +139,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         // match sets are 'OR-ed' together
         for match_set in &query.match_sets {
-            // choose the best index to use for the filter
+            // choose the best index to use for this MatchSet
             let Some((field, value)) = &match_set.index else {
                 continue;
             };

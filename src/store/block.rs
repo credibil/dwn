@@ -78,6 +78,28 @@ impl Block {
         }
     }
 
+    /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
+    ///
+    /// # Errors
+    /// LATER: Add errors
+    pub fn encode<T>(payload: &T) -> Result<Self>
+    where
+        T: Serialize + for<'a> Deserialize<'a>,
+    {
+        // encode payload
+        let data = DagCborCodec::encode_to_vec(payload)?;
+        if data.len() > MAX_BLOCK_SIZE {
+            return Err(anyhow!("block is too large"));
+        }
+        let cid = compute_cid(payload)?;
+
+        Ok(Self {
+            data,
+            cid,
+            linked: None,
+        })
+    }
+
     /// Returns the cid.
     #[must_use]
     pub fn cid(&self) -> &str {
