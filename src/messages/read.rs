@@ -43,16 +43,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             Some(DataStream::from(bytes))
         } else {
             use std::io::Read;
-
-            let Some(mut read) =
+            if let Some(mut read) =
                 DataStore::get(provider, owner, "", &write.descriptor.data_cid).await?
-            else {
-                return Err(Error::NotFound("data not found".to_string()));
-            };
-
-            let mut buf = Vec::new();
-            read.read_to_end(&mut buf)?;
-            Some(DataStream::from(buf))
+            {
+                let mut buf = Vec::new();
+                read.read_to_end(&mut buf)?;
+                Some(DataStream::from(buf))
+            } else {
+                None
+            }
         }
     } else {
         None

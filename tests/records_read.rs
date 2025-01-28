@@ -1902,7 +1902,7 @@ async fn data_blocks_deleted() {
     let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be NotFound");
     };
-    assert_eq!(e, "no data found");
+    assert_eq!(e, "data not found");
 }
 
 // Should not get data from block store when record has `encoded_data`.

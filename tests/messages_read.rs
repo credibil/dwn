@@ -325,7 +325,6 @@ async fn no_data_after_update() {
         .build()
         .await
         .expect("should update write");
-
     let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
@@ -337,7 +336,6 @@ async fn no_data_after_update() {
         .build(&alice_signer)
         .await
         .expect("should create read");
-
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 

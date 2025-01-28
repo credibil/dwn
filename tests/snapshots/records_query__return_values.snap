@@ -1,14 +1,13 @@
 ---
 source: tests/records_query.rs
-assertion_line: 76
+assertion_line: 85
 expression: "entries[0].write"
-snapshot_kind: text
 ---
 descriptor:
   interface: Records
   method: Write
   messageTimestamp: "[messageTimestamp]"
-  dataCid: bafyreihwjp5gqgyn3l626sacxxu47ujrgyvub4lzzqokz6sudruuj7nwne
+  dataCid: bafyreihtos6a26dgcgdokezvdmj7c7mifmwpif7idvzeenqjcamlnsbsjy
   dataSize: 32
   dataFormat: awesome_data_format
   dateCreated: "[dateCreated]"

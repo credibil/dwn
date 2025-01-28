@@ -213,6 +213,7 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
                 buf.write_all(&bytes)?;
             }
 
+            buf.set_position(0);
             Ok(Some(buf))
         }
     }

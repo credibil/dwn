@@ -2,11 +2,6 @@
 
 use std::io::{self, Read, Write};
 
-use libipld::block::Block;
-use libipld::cbor::DagCborCodec;
-use libipld::cid::multihash::Code;
-use libipld::ipld::Ipld;
-use libipld::store::DefaultParams;
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
@@ -52,8 +47,6 @@ pub mod cid {
     /// # Errors
     /// LATER: Add errors
     pub fn from_reader(reader: impl Read) -> Result<(String, usize)> {
-        // let mut cid = self.clone();
-
         let mut links = vec![];
         let mut byte_count = 0;
         let mut reader = reader;
@@ -103,33 +96,7 @@ impl DataStream {
     /// # Errors
     /// LATER: Add errors
     pub fn compute_cid(&self) -> Result<(String, usize)> {
-        let mut cid = self.clone();
-
-        let mut links = vec![];
-        let mut byte_count = 0;
-
-        loop {
-            let mut buffer = [0u8; CHUNK_SIZE];
-            if let Ok(bytes_read) = cid.read(&mut buffer[..]) {
-                if bytes_read == 0 {
-                    break;
-                }
-
-                let ipld = Ipld::Bytes(buffer[..bytes_read].to_vec());
-                let block = Block::<DefaultParams>::encode(DagCborCodec, Code::Sha2_256, &ipld)?;
-                let cid = block.cid();
-
-                // save block's CID as a link
-                links.push(Ipld::Link(*cid));
-                byte_count += bytes_read;
-            }
-        }
-
-        let block =
-            Block::<DefaultParams>::encode(DagCborCodec, Code::Sha2_256, &Ipld::List(links))?;
-        let cid = &block.cid();
-
-        Ok((cid.to_string(), byte_count))
+        cid::from_reader(self.clone())
     }
 }
 
