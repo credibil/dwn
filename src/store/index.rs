@@ -12,6 +12,7 @@ use std::ops::Bound::{self, Excluded, Included, Unbounded};
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
+use crate::data::cid;
 use crate::provider::BlockStore;
 use crate::store::{Entry, Query, block};
 
@@ -104,7 +105,7 @@ impl<S: BlockStore> Indexes<'_, S> {
     /// # Errors
     /// LATER: Add errors
     pub async fn get(&self, field: &str) -> Result<Index> {
-        let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, field)))?;
+        let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, field)))?;
 
         // get the index block or return empty index
         let Some(data) = self.store.get(self.owner, &index_cid).await? else {
@@ -118,7 +119,7 @@ impl<S: BlockStore> Indexes<'_, S> {
     /// # Errors
     /// LATER: Add errors
     pub async fn put(&self, index: Index) -> Result<()> {
-        let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, index.field)))?;
+        let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
         // update the index block
         self.store.delete(self.owner, &index_cid).await?;
@@ -457,13 +458,13 @@ mod tests {
     impl BlockStore for BlockStoreImpl {
         async fn put(&self, owner: &str, cid: &str, data: &[u8]) -> Result<()> {
             // HACK: convert libipld CID to blockstore CID
-            let block_cid = cid::Cid::from_str(cid)?;
+            let block_cid = ::cid::Cid::from_str(cid)?;
             self.blockstore.put_keyed(&block_cid, data).await.map_err(Into::into)
         }
 
         async fn get(&self, owner: &str, cid: &str) -> Result<Option<Vec<u8>>> {
             // HACK: convert libipld CID to blockstore CID
-            let block_cid = cid::Cid::try_from(cid)?;
+            let block_cid = ::cid::Cid::try_from(cid)?;
             let Some(bytes) = self.blockstore.get(&block_cid).await? else {
                 return Ok(None);
             };
@@ -471,7 +472,7 @@ mod tests {
         }
 
         async fn delete(&self, owner: &str, cid: &str) -> Result<()> {
-            let cid = cid::Cid::from_str(cid)?;
+            let cid = ::cid::Cid::from_str(cid)?;
             self.blockstore.remove(&cid).await?;
             Ok(())
         }
