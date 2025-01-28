@@ -19,11 +19,9 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{DateRange, EncryptionProperty};
+use crate::records::{DateRange, EncryptionProperty, RecordsFilter};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{
-    Entry, EntryType, GrantedQueryBuilder, RecordsFilter, RecordsQueryBuilder, data,
-};
+use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
 use crate::{Descriptor, Error, Method, Result, authorization, forbidden, unexpected};
 

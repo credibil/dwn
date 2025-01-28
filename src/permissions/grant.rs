@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use super::{Conditions, Publication, RecordsScope, Scope};
 use crate::protocols::REVOCATION_PATH;
 use crate::provider::MessageStore;
-use crate::records::{DelegatedGrant, Delete, Query, Read, Subscribe, Write};
+use crate::records::{DelegatedGrant, Delete, Query, Read, RecordsFilter, Subscribe, Write};
 use crate::serde::rfc3339_micros;
-use crate::store::{RecordsFilter, RecordsQueryBuilder};
+use crate::store::RecordsQueryBuilder;
 use crate::{Descriptor, Result, forbidden, unexpected};
 
 /// Used to grant another entity permission to access a web node's data.

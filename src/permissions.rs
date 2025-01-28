@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 pub use self::grant::{Grant, GrantData, RequestData, RevocationData};
 pub(crate) use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
-use crate::store::{RecordsFilter, RecordsQueryBuilder};
+use crate::records::RecordsFilter;
+use crate::store::RecordsQueryBuilder;
 use crate::{Interface, Method, Result, forbidden};
 
 /// Fetch the grant specified by `grant_id`.

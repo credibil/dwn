@@ -10,13 +10,13 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::utils::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::Protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::Write;
-use crate::store::{Entry, EntryType, RecordsFilter, RecordsQueryBuilder};
+use crate::records::{RecordsFilter, Write};
+use crate::store::{Entry, EntryType, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
+use crate::utils::cid;
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
 /// Process `Delete` message.

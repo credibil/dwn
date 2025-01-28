@@ -9,8 +9,8 @@ use crate::protocols::{
     self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet, query,
 };
 use crate::provider::MessageStore;
-use crate::records::Write;
-use crate::store::{RecordsFilter, RecordsQueryBuilder};
+use crate::records::{RecordsFilter, Write};
+use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden, schema, unexpected, utils};
 
 /// Verify the integrity of `RecordsWrite` messages using a protocol.

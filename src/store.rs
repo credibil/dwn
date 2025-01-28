@@ -12,13 +12,12 @@ use serde::{Deserialize, Serialize};
 
 pub use self::data::MAX_ENCODED_SIZE;
 use crate::endpoint::Message;
-pub use crate::messages::MessagesFilter;
 use crate::protocols::Configure;
-pub use crate::protocols::ProtocolsFilter;
-use crate::records::{self, Delete, Write};
-pub use crate::records::{RecordsFilter, Sort, TagFilter};
-use crate::{DateRange, Descriptor, Method, Result, messages, protocols};
-use crate::{Interface, Range, unexpected};
+pub use crate::records::Sort;
+use crate::records::{self, Delete, RecordsFilter, TagFilter, Write};
+use crate::{
+    DateRange, Descriptor, Interface, Method, Range, Result, messages, protocols, unexpected,
+};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
