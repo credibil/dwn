@@ -101,12 +101,12 @@ impl RecordsFilter {
     pub(crate) fn normalize(&self) -> Result<Self> {
         let mut filter = self.clone();
         filter.protocol = if let Some(protocol) = &self.protocol {
-            Some(utils::clean_url(protocol)?)
+            Some(utils::uri::clean(protocol)?)
         } else {
             None
         };
         filter.schema =
-            if let Some(schema) = &self.schema { Some(utils::clean_url(schema)?) } else { None };
+            if let Some(schema) = &self.schema { Some(utils::uri::clean(schema)?) } else { None };
 
         Ok(filter)
     }

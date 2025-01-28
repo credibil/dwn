@@ -12,7 +12,7 @@ use std::ops::Bound::{self, Excluded, Included, Unbounded};
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
-use crate::data::cid;
+use crate::utils::cid;
 use crate::provider::BlockStore;
 use crate::store::{Entry, Query, block};
 

@@ -11,7 +11,7 @@ use ipld_core::codec::Codec; // Links
 use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
-use crate::data::cid;
+use crate::utils::cid;
 
 const MAX_BLOCK_SIZE: usize = 1_048_576; // 1 MiB
 

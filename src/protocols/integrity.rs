@@ -294,7 +294,7 @@ async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> 
 pub async fn protocol_definition(
     owner: &str, protocol_uri: &str, store: &impl MessageStore,
 ) -> Result<Definition> {
-    let protocol_uri = utils::clean_url(protocol_uri)?;
+    let protocol_uri = utils::uri::clean(protocol_uri)?;
 
     // use default definition if first-class protocol
     if protocol_uri == protocols::PROTOCOL_URI {

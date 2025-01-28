@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::MessagesFilter;
 use crate::authorization::Authorization;
-use crate::data::cid;
+use crate::utils::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{EventLog, Provider};
 use crate::store::{self, Cursor};

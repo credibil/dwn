@@ -1,6 +1,7 @@
 //! # Store
 
 pub mod block;
+pub mod data;
 pub mod index;
 
 use std::collections::HashMap;
@@ -9,6 +10,7 @@ use std::ops::Deref;
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
+pub use self::data::MAX_ENCODED_SIZE;
 use crate::endpoint::Message;
 pub use crate::messages::MessagesFilter;
 use crate::protocols::Configure;
@@ -16,7 +18,7 @@ pub use crate::protocols::ProtocolsFilter;
 use crate::records::{self, Delete, Write};
 pub use crate::records::{RecordsFilter, Sort, TagFilter};
 use crate::{DateRange, Descriptor, Method, Result, messages, protocols};
-pub use crate::{Interface, Lower, Range, Upper, unexpected};
+use crate::{Interface, Range, unexpected};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).

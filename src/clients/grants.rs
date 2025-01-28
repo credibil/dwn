@@ -127,7 +127,7 @@ impl GrantBuilder {
         // N.B. adding a protocol tag ensures message queries with a protocol
         // filter will return associated grants
         if let Some(protocol) = scope.protocol() {
-            let protocol = utils::clean_url(protocol)?;
+            let protocol = utils::uri::clean(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
@@ -211,7 +211,7 @@ impl RequestBuilder {
         // N.B. adding a protocol tag ensures message queries with a protocol
         // filter will return this request
         if let Some(protocol) = scope.protocol() {
-            let protocol = utils::clean_url(protocol)?;
+            let protocol = utils::uri::clean(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 
@@ -275,7 +275,7 @@ impl RevocationBuilder {
         // N.B. adding a protocol tag ensures message queries with a protocol
         // filter will return this request
         if let Some(protocol) = grant_data.scope.protocol() {
-            let protocol = utils::clean_url(protocol)?;
+            let protocol = utils::uri::clean(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
         };
 

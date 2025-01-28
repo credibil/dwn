@@ -6,7 +6,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::data::cid;
+use crate::utils::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{MessageStore, Provider};
@@ -196,11 +196,11 @@ impl Query {
 
     fn validate(&self) -> Result<()> {
         if let Some(protocol) = &self.descriptor.filter.protocol {
-            utils::validate_url(protocol)?;
+            utils::uri::validate(protocol)?;
         }
 
         if let Some(schema) = &self.descriptor.filter.schema {
-            utils::validate_url(schema)?;
+            utils::uri::validate(schema)?;
         }
 
         let Some(published) = self.descriptor.filter.published else {

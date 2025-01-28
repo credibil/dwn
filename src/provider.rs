@@ -9,7 +9,7 @@ use ipld_core::ipld::Ipld;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
 
-use crate::data;
+use crate::store::data;
 use crate::event::{Event, Subscriber};
 use crate::store::{Cursor, block, index};
 pub use crate::store::{Entry, Query};

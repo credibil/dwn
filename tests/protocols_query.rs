@@ -9,7 +9,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Days;
 use dwn_node::clients::grants::{GrantBuilder, RevocationBuilder};
 use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
-use dwn_node::data::cid;
+use dwn_node::cid;
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType};
 use dwn_node::store::ProtocolsFilter;

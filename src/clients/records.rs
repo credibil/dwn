@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder};
-use crate::data::cid;
+use crate::utils::cid;
 use crate::hd_key::DerivationScheme;
 use crate::provider::Signer;
 use crate::records::{
@@ -909,7 +909,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
                 write.record_id = record_id;
             }
             if let Some(settings) = self.protocol.clone() {
-                let normalized = utils::clean_url(settings.protocol)?;
+                let normalized = utils::uri::clean(settings.protocol)?;
                 write.descriptor.protocol = Some(normalized);
                 write.descriptor.protocol_path = Some(settings.protocol_path.to_string());
 
@@ -920,7 +920,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
                 }
             }
             if let Some(s) = &self.schema {
-                write.descriptor.schema = Some(utils::clean_url(s)?);
+                write.descriptor.schema = Some(utils::uri::clean(s)?);
             }
 
             write

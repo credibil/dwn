@@ -11,12 +11,12 @@ use serde_json::Value;
 use vercre_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::authorization::Authorization;
-use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use crate::protocols::{Size, query};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, EntryType};
+use crate::utils::cid;
 use crate::{Descriptor, Error, Result, forbidden, permissions, unexpected, utils};
 
 /// Process query message.
@@ -184,12 +184,12 @@ impl Configure {
     /// Validate the message.
     fn validate(&self) -> Result<()> {
         // validate protocol
-        utils::validate_url(&self.descriptor.definition.protocol)?;
+        utils::uri::validate(&self.descriptor.definition.protocol)?;
 
         // validate schemas
         for t in self.descriptor.definition.types.values() {
             if let Some(schema) = &t.schema {
-                utils::validate_url(schema)?;
+                utils::uri::validate(schema)?;
             }
         }
 

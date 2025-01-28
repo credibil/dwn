@@ -5,7 +5,7 @@ use std::io::Cursor;
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{Data, ProtocolBuilder, QueryBuilder, WriteBuilder};
-use dwn_node::data::MAX_ENCODED_SIZE;
+use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::protocols::Definition;
 use dwn_node::records::{RecordsFilter, Sort};
 use dwn_node::store::Pagination;

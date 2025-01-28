@@ -9,7 +9,7 @@ use dwn_node::clients::grants::{GrantBuilder, RequestBuilder, RevocationBuilder}
 use dwn_node::clients::messages::ReadBuilder;
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
-use dwn_node::data::MAX_ENCODED_SIZE;
+use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
 use dwn_node::provider::MessageStore;

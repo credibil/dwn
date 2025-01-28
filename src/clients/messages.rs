@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 
 use crate::authorization::AuthorizationBuilder;
-use crate::data::cid;
+use crate::utils::cid;
 use crate::messages::{
     MessagesFilter, Query, QueryDescriptor, Read, ReadDescriptor, Subscribe, SubscribeDescriptor,
 };

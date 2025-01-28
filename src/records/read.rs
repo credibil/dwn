@@ -9,7 +9,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::data::cid;
+use crate::utils::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
 use crate::provider::{DataStore, MessageStore, Provider};
