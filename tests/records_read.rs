@@ -6,7 +6,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_node::clients::grants::GrantBuilder;
 use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder};
-use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::data::{DataStream, MAX_ENCODED_SIZE, cid};
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::permissions::{RecordsScope, Scope};
 use dwn_node::protocols::Definition;
@@ -1984,7 +1984,11 @@ async fn block_data() {
     let Some(read_stream) = body.entry.data else {
         panic!("should have data");
     };
-    assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
+
+    let read_cid = cid::from_reader(read_stream.clone()).expect("should compute CID");
+    let write_cid = cid::from_reader(write_stream.clone()).expect("should compute CID");
+
+    assert_eq!(read_cid, write_cid);
 }
 
 // Should decrypt flat-space schema-contained records using a derived key.

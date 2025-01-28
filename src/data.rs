@@ -4,8 +4,6 @@ use std::io::{self, Read, Write};
 
 use serde::{Deserialize, Serialize};
 
-use crate::Result;
-
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: usize = 30000;
 /// The maximum size of a block.
@@ -42,7 +40,7 @@ pub mod cid {
         Ok(Cid::new_v1(RAW, hash).to_string())
     }
 
-    /// Compute a CID for the provided data stream.
+    /// Compute a CID for the provided data reader.
     ///
     /// # Errors
     /// LATER: Add errors
@@ -87,16 +85,6 @@ impl DataStream {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
-    }
-}
-
-impl DataStream {
-    /// Compute a CID for the provided data stream.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn compute_cid(&self) -> Result<(String, usize)> {
-        cid::from_reader(self.clone())
     }
 }
 

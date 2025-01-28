@@ -948,7 +948,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
 
         match &self.data {
             Some(Data::Stream(stream)) => {
-                let (data_cid, data_size) = stream.compute_cid()?;
+                let (data_cid, data_size) = cid::from_reader(stream.clone())?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
                 write.data_stream = Some(stream.clone());

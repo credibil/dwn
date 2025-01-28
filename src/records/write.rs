@@ -490,7 +490,7 @@ impl Write {
         // when data is below the threshold, store it within MessageStore
         if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {
             // verify data integrity
-            let (data_cid, data_size) = stream.compute_cid()?;
+            let (data_cid, data_size) = cid::from_reader(stream.clone())?;
             if self.descriptor.data_cid != data_cid {
                 return Err(unexpected!("actual data CID does not match message `data_cid`"));
             }
