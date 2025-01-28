@@ -34,7 +34,6 @@ hkdf = "0.12.4"
 http.workspace = true
 ipld-core = "0.4.1"
 jsonschema = { version = "0.28.3", default-features = false, features = ["resolve-file"] }
-libipld = "0.16.0"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 rand.workspace = true
 serde.workspace = true

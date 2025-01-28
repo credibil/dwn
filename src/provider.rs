@@ -67,9 +67,6 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
                 query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
 
             let cursor = if limit > 0 && limit < results.len() {
-                // let Query::Records(query) = query else {
-                //     return Err(anyhow!("invalid query"));
-                // };
                 let sort_field = query.sort.to_string();
 
                 // set cursor to the last item remaining after the spliced result.
@@ -134,17 +131,17 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     /// The default implementation uses the `BlockStore` provider for storage.
     /// This may be overridden by implementers to provide custom storage.
     fn put(
-        &self, owner: &str, _record_id: &str, data_cid: &str, data: impl Read + Send,
+        &self, owner: &str, _record_id: &str, data_cid: &str, reader: impl Read + Send,
     ) -> impl Future<Output = anyhow::Result<(String, usize)>> + Send {
         async move {
             let mut links = vec![];
             let mut byte_count = 0;
-            let mut data = data;
+            let mut reader = reader;
 
             // read data stream in chunks, storing each chunk as an IPLD block
             loop {
                 let mut buffer = [0u8; data::CHUNK_SIZE];
-                if let Ok(bytes_read) = data.read(&mut buffer[..]) {
+                if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
                     if bytes_read == 0 {
                         break;
                     }
@@ -166,11 +163,6 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
             // create a root block linking to the data blocks
             let block = block::Block::encode(&Ipld::List(links))?;
             BlockStore::put(self, owner, data_cid, block.data()).await?;
-
-            // // confirm that the root block's CID matches the provided data CID
-            // if data_cid != block.cid() {
-            //     return Err(anyhow!("data cid mismatch"));
-            // }
 
             Ok((block.cid().to_string(), byte_count))
         }
