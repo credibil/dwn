@@ -1,5 +1,7 @@
 //! # Records
 
+use std::io::Cursor;
+
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
@@ -10,7 +12,7 @@ use crate::data::cid;
 use crate::hd_key::DerivationScheme;
 use crate::provider::Signer;
 use crate::records::{
-    Attestation, DataStream, DelegatedGrant, Delete, DeleteDescriptor, EncryptionProperty, Query,
+    Attestation, DelegatedGrant, Delete, DeleteDescriptor, EncryptionProperty, Query,
     QueryDescriptor, Read, ReadDescriptor, RecordsFilter, Subscribe, SubscribeDescriptor, Write,
     WriteDescriptor,
 };
@@ -568,8 +570,8 @@ pub struct ProtocolBuilder<'a> {
 
 /// Entry data can be raw bytes or CID.
 pub enum Data {
-    /// Data is a `DataStream`.
-    Stream(DataStream),
+    /// Data is a `Cursor`.
+    Stream(Cursor<Vec<u8>>),
 
     /// Data is use to calculate CID and size of previously stored data — as
     /// for `Data::Cid`. The data is not added to the Write record's
@@ -597,13 +599,13 @@ pub enum Data {
 
 impl Default for Data {
     fn default() -> Self {
-        Self::Stream(DataStream::default())
+        Self::Stream(Cursor::default())
     }
 }
 
 impl From<Vec<u8>> for Data {
     fn from(data: Vec<u8>) -> Self {
-        Self::Stream(DataStream::from(data))
+        Self::Stream(Cursor::new(data))
     }
 }
 

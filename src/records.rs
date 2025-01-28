@@ -19,7 +19,6 @@ pub use self::query::{Query, QueryDescriptor};
 pub use self::read::{Read, ReadDescriptor};
 pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Write, WriteDescriptor};
-pub use crate::data::DataStream;
 use crate::{DateRange, OneOrMany, Range, Result, utils};
 
 // TODO: add builder for RecordsFilter

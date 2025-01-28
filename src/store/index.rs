@@ -356,6 +356,7 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Store<'a, S>> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
     use std::str::FromStr;
 
     use anyhow::Result;
@@ -366,7 +367,6 @@ mod tests {
     use super::*;
     use crate::clients::protocols::{ConfigureBuilder, Definition};
     use crate::clients::records::{Data, WriteBuilder};
-    use crate::data::DataStream;
     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 
     #[tokio::test]
@@ -376,7 +376,7 @@ mod tests {
 
         let mut data = [0u8; 10];
         rand::thread_rng().fill_bytes(&mut data);
-        let stream = DataStream::from(data.to_vec());
+        let stream = Cursor::new(data.to_vec());
 
         let write = WriteBuilder::new()
             .data(Data::Stream(stream.clone()))

@@ -2,6 +2,8 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
+use std::io::Cursor;
+
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -11,7 +13,7 @@ use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::{DataStream, Delete, RecordsFilter, Write, write};
+use crate::records::{Delete, RecordsFilter, Write, write};
 use crate::store::{self, RecordsQueryBuilder};
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
@@ -76,7 +78,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
         let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
-        Some(DataStream::from(buffer))
+        Some(Cursor::new(buffer))
     } else {
         use std::io::Read;
 
@@ -88,7 +90,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
         let mut buf = Vec::new();
         read.read_to_end(&mut buf)?;
-        Some(DataStream::from(buf))
+        Some(Cursor::new(buf))
     };
 
     write.encoded_data = None;
@@ -189,8 +191,8 @@ pub struct ReadReplyEntry {
     pub initial_write: Option<Write>,
 
     /// The data for the record.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<DataStream>,
+    #[serde(skip)]
+    pub data: Option<Cursor<Vec<u8>>>,
 }
 
 impl Read {

@@ -1,11 +1,8 @@
 //! Data record handling.
 
-use std::io::{self, Read, Write};
-
-use serde::{Deserialize, Serialize};
-
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: usize = 30000;
+
 /// The maximum size of a block.
 pub const CHUNK_SIZE: usize = 16;
 
@@ -70,54 +67,5 @@ pub mod cid {
 
         let block = block::Block::encode(&Ipld::List(links))?;
         Ok((block.cid().to_string(), byte_count))
-    }
-}
-
-/// Data stream for serializing/deserializing web node data.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct DataStream {
-    /// The data to be read.
-    pub buffer: Vec<u8>,
-}
-
-impl DataStream {
-    /// Create a new `DataStream`.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl From<Vec<u8>> for DataStream {
-    fn from(data: Vec<u8>) -> Self {
-        Self { buffer: data }
-    }
-}
-
-impl From<&[u8]> for DataStream {
-    fn from(data: &[u8]) -> Self {
-        Self {
-            buffer: data.to_vec(),
-        }
-    }
-}
-
-impl Read for DataStream {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = std::cmp::min(buf.len(), self.buffer.len());
-        buf[..n].copy_from_slice(&self.buffer[..n]);
-        self.buffer = self.buffer[n..].to_vec();
-        Ok(n)
-    }
-}
-
-impl Write for DataStream {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.buffer.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
     }
 }

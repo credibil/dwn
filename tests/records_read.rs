@@ -1,12 +1,12 @@
 //! Records Read
 
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_node::clients::grants::GrantBuilder;
 use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder};
-use dwn_node::data::{DataStream, MAX_ENCODED_SIZE, cid};
+use dwn_node::data::{MAX_ENCODED_SIZE, cid};
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::permissions::{RecordsScope, Scope};
 use dwn_node::protocols::Definition;
@@ -1954,7 +1954,7 @@ async fn block_data() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))

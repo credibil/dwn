@@ -1,5 +1,7 @@
 //! Records Write
 
+use std::io::Cursor;
+
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::authorization::JwsPayload;
@@ -8,7 +10,7 @@ use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
-use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::data::MAX_ENCODED_SIZE;
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{Conditions, Publication, RecordsScope, Scope};
@@ -504,7 +506,7 @@ async fn retain_large_data() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let initial = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
@@ -544,7 +546,7 @@ async fn retain_large_data() {
     let body = reply.body.expect("should have body");
     assert!(body.entry.records_write.is_some());
     let read_stream = body.entry.data.expect("should have data");
-    assert_eq!(read_stream.buffer, data.to_vec());
+    assert_eq!(read_stream.into_inner(), data.to_vec());
 }
 
 // Should inherit data from previous writes when data size less than
@@ -559,7 +561,7 @@ async fn retain_small_data() {
     // --------------------------------------------------
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let initial = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -599,7 +601,7 @@ async fn retain_small_data() {
     let body = reply.body.expect("should have body");
     assert!(body.entry.records_write.is_some());
     let read_stream = body.entry.data.expect("should have data");
-    assert_eq!(read_stream.buffer, data.to_vec());
+    assert_eq!(read_stream.into_inner(), data.to_vec());
 }
 
 // Should fail when data size greater than `encoded_data` threshold and
@@ -614,7 +616,7 @@ async fn large_data_size_larger() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -646,7 +648,7 @@ async fn small_data_size_larger() {
     // --------------------------------------------------
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -678,7 +680,7 @@ async fn large_data_size_smaller() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -710,7 +712,7 @@ async fn small_data_size_smaller() {
     // --------------------------------------------------
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -742,7 +744,7 @@ async fn large_data_cid_larger() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -753,7 +755,7 @@ async fn large_data_cid_larger() {
 
     // alter the data CID
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
@@ -774,7 +776,7 @@ async fn small_data_cid_larger() {
     // --------------------------------------------------
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -786,7 +788,7 @@ async fn small_data_cid_larger() {
     // alter the data CID
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
@@ -807,7 +809,7 @@ async fn large_data_cid_smaller() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -819,7 +821,7 @@ async fn large_data_cid_smaller() {
     // alter the data CID
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
@@ -840,7 +842,7 @@ async fn small_data_cid_smaller() {
     // --------------------------------------------------
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -852,7 +854,7 @@ async fn small_data_cid_smaller() {
     // alter the data CID
     let mut data = [0u8; 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, write, &provider).await else {
@@ -931,7 +933,7 @@ async fn alter_data_cid_larger() {
 
     let body = reply.body.expect("should have body");
     let data = body.entry.data.expect("should have data");
-    assert_eq!(data.buffer, data_2.to_vec());
+    assert_eq!(data.into_inner(), data_2.to_vec());
 }
 
 // Should prevent accessing data by referencing a different`data_cid` in an update.
@@ -1003,7 +1005,7 @@ async fn alter_data_cid_smaller() {
 
     let body = reply.body.expect("should have body");
     let data = body.entry.data.expect("should have data");
-    assert_eq!(data.buffer, data_2.to_vec());
+    assert_eq!(data.into_inner(), data_2.to_vec());
 }
 
 // Should allow updates without specifying `data` or `date_published`.
@@ -4206,7 +4208,7 @@ async fn large_data_cid_protocol() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let alice_write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
@@ -4434,7 +4436,7 @@ async fn protocol_size_range() {
     // --------------------------------------------------
     let mut data = [0u8; 1];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let min_size = WriteBuilder::new()
         .data(Data::Stream(stream))
@@ -4455,7 +4457,7 @@ async fn protocol_size_range() {
     // --------------------------------------------------
     let mut data = [0u8; 1000];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
         .data(Data::Stream(stream))
@@ -4476,7 +4478,7 @@ async fn protocol_size_range() {
     // --------------------------------------------------
     let mut data = [0u8; 1001];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let too_big = WriteBuilder::new()
         .data(Data::Stream(stream))
@@ -4530,7 +4532,7 @@ async fn protocol_min_size() {
     // --------------------------------------------------
     let mut data = [0u8; 999];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let too_small = WriteBuilder::new()
         .data(Data::Stream(stream))
@@ -4553,7 +4555,7 @@ async fn protocol_min_size() {
     // --------------------------------------------------
     let mut data = [0u8; 1000];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
         .data(Data::Stream(stream))
@@ -4605,7 +4607,7 @@ async fn protocol_max_size() {
     // --------------------------------------------------
     let mut data = [0u8; 1001];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let too_big = WriteBuilder::new()
         .data(Data::Stream(stream))
@@ -4628,7 +4630,7 @@ async fn protocol_max_size() {
     // --------------------------------------------------
     let mut data = [0u8; 1000];
     rand::thread_rng().fill_bytes(&mut data);
-    let stream = DataStream::from(data.to_vec());
+    let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
         .data(Data::Stream(stream))

@@ -3,7 +3,7 @@
 //! `Write` is a message type used to create a new record in the web node.
 
 use std::collections::{HashMap, VecDeque};
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat::Micros;
@@ -20,7 +20,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{DataStream, DateRange, EncryptionProperty};
+use crate::records::{DateRange, EncryptionProperty};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 use crate::{Descriptor, Error, Method, Result, authorization, data, forbidden, unexpected};
@@ -174,7 +174,7 @@ pub struct Write {
 
     /// The data stream of the record if the data associated with the record
     #[serde(skip)]
-    pub data_stream: Option<DataStream>,
+    pub data_stream: Option<Cursor<Vec<u8>>>,
 }
 
 impl Message for Write {
@@ -320,7 +320,7 @@ impl Write {
     }
 
     /// Add a data stream to the write message.
-    pub fn with_stream(&mut self, data_stream: DataStream) {
+    pub fn with_stream(&mut self, data_stream: Cursor<Vec<u8>>) {
         self.data_stream = Some(data_stream);
     }
 
@@ -485,7 +485,7 @@ impl Write {
     }
 
     async fn update_data(
-        &mut self, owner: &str, stream: &mut DataStream, store: &impl DataStore,
+        &mut self, owner: &str, stream: &mut Cursor<Vec<u8>>, store: &impl DataStore,
     ) -> Result<()> {
         // when data is below the threshold, store it within MessageStore
         if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {

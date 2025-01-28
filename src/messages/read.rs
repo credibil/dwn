@@ -1,5 +1,6 @@
 //! # Messages Read
 
+use std::io::Cursor;
 use std::str::FromStr;
 
 use ::cid::Cid;
@@ -13,7 +14,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::{DataStream, write};
+use crate::records::write;
 use crate::store::{Entry, EntryType};
 use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
 
@@ -40,7 +41,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
-            Some(DataStream::from(bytes))
+            Some(Cursor::new(bytes))
         } else {
             use std::io::Read;
             if let Some(mut read) =
@@ -48,7 +49,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             {
                 let mut buf = Vec::new();
                 read.read_to_end(&mut buf)?;
-                Some(DataStream::from(buf))
+                Some(Cursor::new(buf))
             } else {
                 None
             }
@@ -195,8 +196,8 @@ pub struct ReadReplyEntry {
     pub message: EntryType,
 
     /// The data associated with the message.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<DataStream>,
+    #[serde(skip)]
+    pub data: Option<Cursor<Vec<u8>>>,
 }
 
 /// Read descriptor.

@@ -1,9 +1,11 @@
 //! Records Query
 
+use std::io::Cursor;
+
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{Data, ProtocolBuilder, QueryBuilder, WriteBuilder};
-use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
+use dwn_node::data::MAX_ENCODED_SIZE;
 use dwn_node::protocols::Definition;
 use dwn_node::records::{RecordsFilter, Sort};
 use dwn_node::store::Pagination;
@@ -52,7 +54,7 @@ async fn response() {
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
-    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let stream = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
@@ -102,7 +104,7 @@ async fn matches() {
     // --------------------------------------------------
     // Alice creates 3 records.
     // --------------------------------------------------
-    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let stream = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
 
     for i in 1..=3 {
         let mut builder = WriteBuilder::new().data(Data::Stream(stream.clone()));
@@ -158,7 +160,7 @@ async fn encoded_data() {
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
-    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let stream = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
@@ -235,7 +237,7 @@ async fn initial_write() {
     // --------------------------------------------------
     // Alice creates 2 records.
     // --------------------------------------------------
-    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let stream = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .sign(&alice_signer)
@@ -279,7 +281,7 @@ async fn attester() {
     // --------------------------------------------------
     // Alice creates 2 records, 1 attested by her and the other by Bob.
     // --------------------------------------------------
-    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let stream = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .attest(&[&alice_signer])
@@ -377,7 +379,7 @@ async fn author() {
     // --------------------------------------------------
     // Alice and Bob write a record each.
     // --------------------------------------------------
-    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let stream = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
     let alice_write = WriteBuilder::new()
         .data(Data::Stream(stream.clone()))
         .protocol(ProtocolBuilder {
@@ -895,7 +897,7 @@ async fn data_cid() {
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
-    let stream = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let stream = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(stream))
