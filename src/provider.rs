@@ -7,9 +7,8 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
-use crate::store::{Cursor, data, event_log, message};
-pub use crate::store::{Entry, Query};
-pub use crate::tasks::ResumableTask;
+use crate::store::{Cursor, Entry, Query, data, event_log, message, task};
+use crate::tasks::ResumableTask;
 
 /// Provider trait.
 pub trait Provider:
@@ -21,17 +20,23 @@ pub trait Provider:
 /// capability.
 pub trait BlockStore: Send + Sync {
     /// Store a data block in the underlying block store.
-    fn put(&self, owner: &str, cid: &str, data: &[u8]) -> impl Future<Output = Result<()>> + Send;
+    fn put(
+        &self, owner: &str, partition: &str, cid: &str, data: &[u8],
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Fetches a single block by CID from the underlying store, returning
     /// `None` if no match was found.
-    fn get(&self, owner: &str, cid: &str) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
+    fn get(
+        &self, owner: &str, partition: &str, cid: &str,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
 
     /// Delete the data block associated with the specified CID.
-    fn delete(&self, owner: &str, cid: &str) -> impl Future<Output = Result<()>> + Send;
+    fn delete(
+        &self, owner: &str, partition: &str, cid: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Purge all blocks from the store.
-    fn purge(&self) -> impl Future<Output = Result<()>> + Send;
+    fn purge(&self, owner: &str, partition: &str) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// The `MessageStore` trait is used by implementers to provide message
@@ -117,9 +122,9 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// If the task has timed out, a client will be able to grab it through the
     /// `grab()` method and resume the task.
     fn register(
-        &self, _owner: &str, _task: &ResumableTask, _timeout_secs: u64,
+        &self, owner: &str, task: &ResumableTask, timeout_secs: u64,
     ) -> impl Future<Output = Result<()>> + Send {
-        async move { Ok(()) }
+        async move { task::register(owner, task, timeout_secs, self).await.map_err(Into::into) }
     }
 
     /// Grabs `count` unhandled tasks from the store.
@@ -131,9 +136,9 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// tis timeout must be updated so that it is considered in-flight/under processing
     /// and cannot be grabbed by another client until it is timed-out.
     fn grab(
-        &self, _owner: &str, _count: u64,
+        &self, owner: &str, count: u64,
     ) -> impl Future<Output = Result<Vec<ResumableTask>>> + Send {
-        async move { todo!() }
+        async move { task::grab(owner, count, self).await.map_err(Into::into) }
     }
 
     /// Reads the task associated with the task ID provided regardless of whether
@@ -142,9 +147,9 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// This is mainly introduced for testing purposes: ie. to check the status of
     /// a task for easy test verification.
     fn read(
-        &self, _owner: &str, _task_id: &str,
+        &self, owner: &str, task_id: &str,
     ) -> impl Future<Output = Result<Option<ResumableTask>>> + Send {
-        async move { todo!() }
+        async move { task::read(owner, task_id, self).await.map_err(Into::into) }
     }
 
     /// Extends the timeout of the task associated with the task ID provided.
@@ -153,14 +158,14 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// been completed. This allows the client that is executing the task to
     /// continue working on it before the task is considered timed out.
     fn extend(
-        &self, _owner: &str, _task_id: &str, _timeout_secs: u64,
+        &self, owner: &str, task_id: &str, timeout_secs: u64,
     ) -> impl Future<Output = Result<()>> + Send {
-        async move { todo!() }
+        async move { task::extend(owner, task_id, timeout_secs, self).await.map_err(Into::into) }
     }
 
     /// Delete data associated with the specified id.
-    fn delete(&self, _owner: &str, _task_id: &str) -> impl Future<Output = Result<()>> + Send {
-        async move { todo!() }
+    fn delete(&self, owner: &str, task_id: &str) -> impl Future<Output = Result<()>> + Send {
+        async move { task::delete(owner, task_id, self).await.map_err(Into::into) }
     }
 
     /// Purge all data from the store.

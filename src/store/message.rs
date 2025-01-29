@@ -4,12 +4,14 @@ use crate::provider::BlockStore;
 use crate::store::{Cursor, Entry, Query, block, index};
 use crate::{Result, unexpected};
 
+const PARTITION: &str = "MESSAGE";
+
 /// Store a message in the underlying store.
 pub async fn put(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
     // store entry block
     let message_cid = entry.cid()?;
-    store.delete(owner, &message_cid).await?;
-    store.put(owner, &message_cid, &block::encode(entry)?).await?;
+    store.delete(owner, PARTITION, &message_cid).await?;
+    store.put(owner, PARTITION, &message_cid, &block::encode(entry)?).await?;
 
     // index entry
     index::insert(owner, entry, store).await
@@ -37,7 +39,7 @@ pub async fn query(
 
     let mut entries = Vec::new();
     for item in results {
-        let Some(bytes) = store.get(owner, &item.message_cid).await? else {
+        let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
             return Err(unexpected!("missing block for message cid"));
         };
         entries.push(block::decode(&bytes)?);
@@ -49,7 +51,7 @@ pub async fn query(
 /// Fetch a single message by CID from the underlying store, returning
 /// `None` if no message was found.
 pub async fn get(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<Option<Entry>> {
-    let Some(bytes) = store.get(owner, message_cid).await? else {
+    let Some(bytes) = store.get(owner, PARTITION, message_cid).await? else {
         return Ok(None);
     };
     Ok(Some(block::decode(&bytes)?))
@@ -58,5 +60,5 @@ pub async fn get(owner: &str, message_cid: &str, store: &impl BlockStore) -> Res
 /// Delete message associated with the specified id.
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
     index::delete(owner, message_cid, store).await?;
-    store.delete(owner, message_cid).await.map_err(Into::into)
+    store.delete(owner, PARTITION, message_cid).await.map_err(Into::into)
 }

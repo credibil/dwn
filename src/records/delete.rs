@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::Protocol;
-use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
+use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{RecordsFilter, Write};
 use crate::store::{Entry, EntryType, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
@@ -312,7 +312,7 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
     let Some(write) = latest.as_write() else {
         return Err(unexpected!("latest record is not a `RecordsWrite`"));
     };
-    BlockStore::delete(provider, owner, &write.descriptor.data_cid).await?;
+    DataStore::delete(provider, owner, &write.record_id, &write.descriptor.data_cid).await?;
 
     // delete message events
     for message in records {
@@ -360,7 +360,7 @@ async fn delete_earlier(
 
 // Deletes the data referenced by the given message if needed.
 async fn delete_data(
-    owner: &str, existing: &Entry, latest: &Entry, store: &impl BlockStore,
+    owner: &str, existing: &Entry, latest: &Entry, store: &impl DataStore,
 ) -> Result<()> {
     let Some(existing_write) = existing.as_write() else {
         return Err(unexpected!("unexpected message type"));
@@ -378,7 +378,7 @@ async fn delete_data(
     //     return Ok(());
     // }
 
-    BlockStore::delete(store, owner, &existing_write.descriptor.data_cid)
+    DataStore::delete(store, owner, &existing_write.record_id, &existing_write.descriptor.data_cid)
         .await
         .map_err(|e| unexpected!("failed to delete data: {e}"))
 }

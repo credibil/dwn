@@ -6,12 +6,14 @@ use crate::provider::BlockStore;
 use crate::store::{Cursor, Entry, Query, Sort, block, index};
 use crate::{Result, unexpected};
 
+const PARTITION: &str = "EVENTLOG";
+
 /// Adds a message event to a owner's event log.
 pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Result<()> {
     // store entry block
     let message_cid = event.cid()?;
-    store.delete(owner, &message_cid).await?;
-    store.put(owner, &message_cid, &block::encode(event)?).await?;
+    store.delete(owner, PARTITION, &message_cid).await?;
+    store.put(owner, PARTITION, &message_cid, &block::encode(event)?).await?;
 
     // add a 'watermark' index entry for sorting and pagination
     let mut event = event.clone();
@@ -21,7 +23,6 @@ pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Resu
     index::insert(owner, &event, store).await
 }
 
-#[allow(clippy::unused_async)]
 pub async fn events(
     owner: &str, cursor: Option<Cursor>, store: &impl BlockStore,
 ) -> Result<(Vec<Entry>, Option<Cursor>)> {
@@ -62,7 +63,7 @@ pub async fn query(
 
     let mut entries = Vec::new();
     for item in results {
-        let Some(bytes) = store.get(owner, &item.message_cid).await? else {
+        let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
             return Err(unexpected!("missing block for message cid"));
         };
         entries.push(block::decode(&bytes)?);
@@ -74,5 +75,5 @@ pub async fn query(
 /// Deletes event for the specified `message_cid`.
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
     index::delete(owner, message_cid, store).await?;
-    store.delete(owner, message_cid).await.map_err(Into::into)
+    store.delete(owner, PARTITION, message_cid).await.map_err(Into::into)
 }

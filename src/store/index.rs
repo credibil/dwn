@@ -20,6 +20,7 @@ use crate::utils::cid;
 // const MAX: u8 = 0x7E;
 const NULL: char = '\u{100000}';
 const MAX: char = '\u{10ffff}';
+const PARTITION: &str = "INDEX";
 
 /// Insert an entry's queryable fields into indexes.
 ///
@@ -108,7 +109,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, field)))?;
 
         // get the index block or return empty index
-        let Some(data) = self.store.get(self.owner, &index_cid).await? else {
+        let Some(data) = self.store.get(self.owner, PARTITION, &index_cid).await? else {
             return Ok(Index::new(field));
         };
         block::decode(&data).map_err(Into::into)
@@ -122,8 +123,11 @@ impl<S: BlockStore> Indexes<'_, S> {
         let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
         // update the index block
-        self.store.delete(self.owner, &index_cid).await?;
-        self.store.put(self.owner, &index_cid, &block::encode(&index)?).await.map_err(Into::into)
+        self.store.delete(self.owner, PARTITION, &index_cid).await?;
+        self.store
+            .put(self.owner, PARTITION, &index_cid, &block::encode(&index)?)
+            .await
+            .map_err(Into::into)
     }
 
     // This query strategy is used when the filter contains a property that
@@ -391,7 +395,7 @@ mod tests {
         // add message
         let message_cid = entry.cid().unwrap();
         let block = block::encode(&entry).unwrap();
-        block_store.put(ALICE_DID, &message_cid, &block).await.unwrap();
+        block_store.put(ALICE_DID, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
@@ -425,7 +429,7 @@ mod tests {
         // add message
         let message_cid = entry.cid().unwrap();
         let block = block::encode(&entry).unwrap();
-        block_store.put(ALICE_DID, &message_cid, &block).await.unwrap();
+        block_store.put(ALICE_DID, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
         super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
@@ -434,14 +438,6 @@ mod tests {
         let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();
         let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
     }
-
-    // #[test]
-    // fn test_range() {
-    //     let mut entries = vec!["a", "b", "c", "d", "e"];
-
-    //     assert_eq!(entries[0..10], entries);
-    //     // assert_eq!(range[0].len(), 2);
-    // }
 
     struct BlockStoreImpl {
         blockstore: InMemoryBlockstore<64>,
@@ -456,13 +452,13 @@ mod tests {
     }
 
     impl BlockStore for BlockStoreImpl {
-        async fn put(&self, owner: &str, cid: &str, data: &[u8]) -> Result<()> {
+        async fn put(&self, owner: &str, partition: &str, cid: &str, data: &[u8]) -> Result<()> {
             // HACK: convert libipld CID to blockstore CID
             let block_cid = ::cid::Cid::from_str(cid)?;
             self.blockstore.put_keyed(&block_cid, data).await.map_err(Into::into)
         }
 
-        async fn get(&self, owner: &str, cid: &str) -> Result<Option<Vec<u8>>> {
+        async fn get(&self, owner: &str, partition: &str, cid: &str) -> Result<Option<Vec<u8>>> {
             // HACK: convert libipld CID to blockstore CID
             let block_cid = ::cid::Cid::try_from(cid)?;
             let Some(bytes) = self.blockstore.get(&block_cid).await? else {
@@ -471,13 +467,13 @@ mod tests {
             Ok(Some(bytes))
         }
 
-        async fn delete(&self, owner: &str, cid: &str) -> Result<()> {
+        async fn delete(&self, owner: &str, partition: &str, cid: &str) -> Result<()> {
             let cid = ::cid::Cid::from_str(cid)?;
             self.blockstore.remove(&cid).await?;
             Ok(())
         }
 
-        async fn purge(&self) -> Result<()> {
+        async fn purge(&self, owner: &str, partition: &str) -> Result<()> {
             unimplemented!()
         }
     }
