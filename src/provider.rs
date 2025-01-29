@@ -141,9 +141,9 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
 
     /// Delete data associated with the specified id.
     fn delete(
-        &self, owner: &str, _record_id: &str, data_cid: &str,
+        &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send {
-        async move { BlockStore::delete(self, owner, data_cid).await }
+        async move { data::delete(owner, record_id, data_cid, self).await.map_err(Into::into) }
     }
 
     /// Purge all data from the store.

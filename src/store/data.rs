@@ -58,9 +58,9 @@ pub(crate) async fn put(
     // the 'partition' as a block helps isolate the data by owner and record_id
     // println!("put: owner: {owner}, record_id: {record_id}, data_cid: {data_cid}");
     let partition = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("owner"), Ipld::String(String::from(owner))),
-        (String::from("record_id"), Ipld::String(String::from(record_id))),
-        (String::from("data_cid"), Ipld::String(String::from(data_cid))),
+        (String::from("owner"), Ipld::String(owner.to_string())),
+        (String::from("record_id"), Ipld::String(record_id.to_string())),
+        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
     ])))?;
     store.put(owner, partition.cid(), partition.data()).await?;
 
@@ -74,9 +74,9 @@ pub(crate) async fn get(
     // get the partition block
     // println!("get: owner: {owner}, record_id: {record_id}, data_cid: {data_cid}");
     let partition = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("owner"), Ipld::String(String::from(owner))),
-        (String::from("record_id"), Ipld::String(String::from(record_id))),
-        (String::from("data_cid"), Ipld::String(String::from(data_cid))),
+        (String::from("owner"), Ipld::String(owner.to_string())),
+        (String::from("record_id"), Ipld::String(record_id.to_string())),
+        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
     ])))?;
 
     // get partition block
@@ -119,4 +119,10 @@ pub(crate) async fn get(
 
     buf.set_position(0);
     Ok(Some(buf))
+}
+
+pub(crate) async fn delete(
+    owner: &str, _record_id: &str, data_cid: &str, store: &impl BlockStore,
+) -> Result<()> {
+    Ok(store.delete(owner, data_cid).await?)
 }
