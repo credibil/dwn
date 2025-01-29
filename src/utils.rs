@@ -61,6 +61,7 @@ pub mod cid {
     /// # Errors
     /// LATER: Add errors
     pub fn from_reader(reader: impl Read) -> Result<(String, usize)> {
+        // use the default storage algorithm to compute CID and size
         block_on(async { data::put("owner", "data_cid", reader, &MockStore).await })
     }
 
