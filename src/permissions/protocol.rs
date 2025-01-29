@@ -9,8 +9,8 @@ use crate::protocols::{
     integrity,
 };
 use crate::provider::MessageStore;
-use crate::records::{Delete, Query, Read, Subscribe, Write, write};
-use crate::store::{RecordsFilter, RecordsQueryBuilder};
+use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, write};
+use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden};
 
 /// Protocol-based authorization.

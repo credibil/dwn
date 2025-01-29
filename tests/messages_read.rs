@@ -3,16 +3,16 @@
 //! This test demonstrates how a web node owner create a message and
 //! subsequently read it.
 
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use dwn_node::clients::grants::{GrantBuilder, RequestBuilder, RevocationBuilder};
 use dwn_node::clients::messages::ReadBuilder;
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
-use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
 use dwn_node::provider::MessageStore;
+use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Interface, Message, Method, endpoint, store};
 use http::StatusCode;
 use rand::RngCore;
@@ -30,7 +30,7 @@ async fn read_message() {
     // Alice writes a record to her web node.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -167,7 +167,7 @@ async fn forbidden() {
     // Bob writes a record.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader.clone()))
@@ -204,7 +204,7 @@ async fn data_lt_threshold() {
     // Alice writes a record to her web node.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -251,7 +251,7 @@ async fn data_gt_threshold() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -273,7 +273,6 @@ async fn data_gt_threshold() {
         .build(&alice_signer)
         .await
         .expect("should create read");
-
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -298,7 +297,7 @@ async fn no_data_after_update() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -317,7 +316,7 @@ async fn no_data_after_update() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::from(write)
         .data(Data::Stream(reader))
@@ -325,7 +324,6 @@ async fn no_data_after_update() {
         .build()
         .await
         .expect("should update write");
-
     let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
@@ -337,7 +335,6 @@ async fn no_data_after_update() {
         .build(&alice_signer)
         .await
         .expect("should create read");
-
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -466,7 +463,7 @@ async fn invalid_interface() {
     // Alice writes a record for Bob to read.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -529,7 +526,7 @@ async fn permissive_grant() {
     // Alice writes a record for Bob to read.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -649,7 +646,7 @@ async fn protocol_grant() {
     // Alice writes a record associated with the protocol.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -686,7 +683,7 @@ async fn protocol_grant() {
     // Carol writes a record associated with the protocol.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -828,7 +825,7 @@ async fn protocol_grant() {
     // CONTROL: Alice writes a record not associated with the protocol
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -883,7 +880,7 @@ async fn invalid_protocol_grant() {
     // Alice writes a record associated with the protocol.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
@@ -978,7 +975,7 @@ async fn delete_with_no_write() {
     // Alice adds a delete record directly into the database.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))

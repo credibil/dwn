@@ -1,19 +1,18 @@
 //! Records Read
 
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_node::clients::grants::GrantBuilder;
 use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder};
-use dwn_node::data::{DataStream, MAX_ENCODED_SIZE};
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::permissions::{RecordsScope, Scope};
 use dwn_node::protocols::Definition;
-use dwn_node::provider::{BlockStore, MessageStore};
+use dwn_node::provider::{DataStore, MessageStore};
 use dwn_node::records::{EncryptOptions, Recipient, RecordsFilter, decrypt};
-use dwn_node::store::Entry;
-use dwn_node::{Error, Method, endpoint};
+use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
+use dwn_node::{Error, Method, cid, endpoint};
 use http::StatusCode;
 use rand::RngCore;
 use test_node::key_store::{
@@ -1885,7 +1884,7 @@ async fn data_blocks_deleted() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // delete record's data
-    BlockStore::delete(&provider, ALICE_DID, &write.descriptor.data_cid)
+    DataStore::delete(&provider, ALICE_DID, &write.record_id, &write.descriptor.data_cid)
         .await
         .expect("should delete block");
 
@@ -1902,7 +1901,7 @@ async fn data_blocks_deleted() {
     let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be NotFound");
     };
-    assert_eq!(e, "no data found");
+    assert_eq!(e, "data not found");
 }
 
 // Should not get data from block store when record has `encoded_data`.
@@ -1925,7 +1924,7 @@ async fn encoded_data() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // deleting BlockStore data has no effect as the record uses encoded data
-    BlockStore::delete(&provider, ALICE_DID, &write.descriptor.data_cid)
+    DataStore::delete(&provider, ALICE_DID, &write.record_id, &write.descriptor.data_cid)
         .await
         .expect("should delete block");
 
@@ -1954,7 +1953,7 @@ async fn block_data() {
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::thread_rng().fill_bytes(&mut data);
-    let write_stream = DataStream::from(data.to_vec());
+    let write_stream = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
         .data(Data::Stream(write_stream.clone()))
@@ -1984,7 +1983,11 @@ async fn block_data() {
     let Some(read_stream) = body.entry.data else {
         panic!("should have data");
     };
-    assert_eq!(read_stream.compute_cid(), write_stream.compute_cid());
+
+    let read_cid = cid::from_reader(read_stream.clone()).expect("should compute CID");
+    let write_cid = cid::from_reader(write_stream.clone()).expect("should compute CID");
+
+    assert_eq!(read_cid, write_cid);
 }
 
 // Should decrypt flat-space schema-contained records using a derived key.

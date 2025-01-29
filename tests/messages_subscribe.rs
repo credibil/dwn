@@ -1,6 +1,7 @@
 //! Messages Subscribe
 
 use core::panic;
+use std::io::Cursor;
 use std::time::Duration;
 
 use dwn_node::authorization::Authorization;
@@ -8,7 +9,6 @@ use dwn_node::clients::grants::GrantBuilder;
 use dwn_node::clients::messages::{QueryBuilder, SubscribeBuilder};
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::data::DataStream;
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::Definition;
@@ -62,7 +62,7 @@ async fn owner_events() {
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
-    let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let reader = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
         .sign(&alice_signer)
@@ -204,7 +204,7 @@ async fn interface_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // 3. write a record to the 'allow-any' protocol
-    let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
+    let reader = Cursor::new(br#"{"message": "test write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
         .protocol(ProtocolBuilder {
@@ -224,7 +224,7 @@ async fn interface_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // 4. write a random record
-    let reader = DataStream::from(br#"{"message": "test write"}"#.to_vec());
+    let reader = Cursor::new(br#"{"message": "test write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
         .sign(&alice_signer)
@@ -412,7 +412,7 @@ async fn protocol_filter() {
     // Alice writes 2 records, the first to `protocol1` and the second to `protocol2`.
     // --------------------------------------------------
     // protocol1
-    let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let reader = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
         .protocol(ProtocolBuilder {
@@ -432,7 +432,7 @@ async fn protocol_filter() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // protocol2
-    let reader = DataStream::from(br#"{"message": "test record write"}"#.to_vec());
+    let reader = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
         .protocol(ProtocolBuilder {

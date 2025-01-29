@@ -6,12 +6,12 @@
 use chrono::{DateTime, Utc};
 
 use crate::authorization::AuthorizationBuilder;
-use crate::data::cid;
 pub use crate::protocols::{
     self, Configure, ConfigureDescriptor, Definition, ProtocolsFilter, Query, QueryDescriptor,
 };
 use crate::provider::Signer;
 use crate::records::DelegatedGrant;
+use crate::utils::cid;
 use crate::{Descriptor, Interface, Method, Result, schema, unexpected, utils};
 
 /// Options to use when creating a permission grant.
@@ -66,10 +66,10 @@ impl ConfigureBuilder {
         let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;
 
         // normalize definition urls
-        definition.protocol = utils::clean_url(&definition.protocol)?;
+        definition.protocol = utils::uri::clean(&definition.protocol)?;
         for t in definition.types.values_mut() {
             if let Some(schema) = &t.schema {
-                t.schema = Some(utils::clean_url(schema)?);
+                t.schema = Some(utils::uri::clean(schema)?);
             }
         }
         protocols::validate_structure(&definition)?;

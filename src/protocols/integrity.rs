@@ -9,8 +9,8 @@ use crate::protocols::{
     self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet, query,
 };
 use crate::provider::MessageStore;
-use crate::records::Write;
-use crate::store::{RecordsFilter, RecordsQueryBuilder};
+use crate::records::{RecordsFilter, Write};
+use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden, schema, unexpected, utils};
 
 /// Verify the integrity of `RecordsWrite` messages using a protocol.
@@ -294,7 +294,7 @@ async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> 
 pub async fn protocol_definition(
     owner: &str, protocol_uri: &str, store: &impl MessageStore,
 ) -> Result<Definition> {
-    let protocol_uri = utils::clean_url(protocol_uri)?;
+    let protocol_uri = utils::uri::clean(protocol_uri)?;
 
     // use default definition if first-class protocol
     if protocol_uri == protocols::PROTOCOL_URI {

@@ -114,18 +114,6 @@ impl From<std::io::Error> for Error {
     }
 }
 
-// impl From<cid::Error> for Error {
-//     fn from(error: cid::Error) -> Self {
-//         Self::InternalServerError(error.to_string())
-//     }
-// }
-
-impl From<libipld::cid::Error> for Error {
-    fn from(error: libipld::cid::Error) -> Self {
-        Self::InternalServerError(format!("libipld: {error}"))
-    }
-}
-
 /// Construct an `Error::BadRequest` error from a string or existing error
 /// value.
 #[macro_export]

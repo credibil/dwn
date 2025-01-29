@@ -1,5 +1,6 @@
 //! # Messages Read
 
+use std::io::Cursor;
 use std::str::FromStr;
 
 use ::cid::Cid;
@@ -8,13 +9,13 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
-use crate::provider::{MessageStore, Provider};
-use crate::records::{DataStream, write};
+use crate::provider::{DataStore, MessageStore, Provider};
+use crate::records::write;
 use crate::store::{Entry, EntryType};
+use crate::utils::cid;
 use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
 
 /// Handle a read message.
@@ -33,16 +34,26 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     // verify the fetched message can be safely returned to the requestor
     read.authorize(owner, &entry, provider).await?;
 
-    let mut message = (*entry).clone();
+    let mut message = entry.message;
 
     // include data with RecordsWrite messages
     let data = if let EntryType::Write(ref mut write) = message {
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
-            Some(DataStream::from(bytes))
+            Some(Cursor::new(bytes))
         } else {
-            DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?
+            use std::io::Read;
+            if let Some(mut read) =
+                DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid)
+                    .await?
+            {
+                let mut buf = Vec::new();
+                read.read_to_end(&mut buf)?;
+                Some(Cursor::new(buf))
+            } else {
+                None
+            }
         }
     } else {
         None
@@ -186,8 +197,8 @@ pub struct ReadReplyEntry {
     pub message: EntryType,
 
     /// The data associated with the message.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<DataStream>,
+    #[serde(skip)]
+    pub data: Option<Cursor<Vec<u8>>>,
 }
 
 /// Read descriptor.

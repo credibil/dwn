@@ -3,7 +3,7 @@
 //! `Write` is a message type used to create a new record in the web node.
 
 use std::collections::{HashMap, VecDeque};
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat::Micros;
@@ -15,15 +15,15 @@ use vercre_infosec::Signer;
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{Authorization, JwsPayload};
-use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
-use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{DataStream, DateRange, EncryptionProperty};
+use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
+use crate::records::{DateRange, EncryptionProperty, RecordsFilter};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsFilter, RecordsQueryBuilder};
-use crate::{Descriptor, Error, Method, Result, authorization, data, forbidden, unexpected};
+use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
+use crate::utils::cid;
+use crate::{Descriptor, Error, Method, Result, authorization, forbidden, unexpected};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -102,14 +102,15 @@ pub async fn handle(
     EventStream::emit(provider, owner, &entry).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
-    if let Some(mut initial_entry) = initial_entry {
-        let initial_write = Write::try_from(&initial_entry)?;
-        initial_entry.indexes.insert("archived".to_string(), true.to_string());
+    if let Some(mut entry) = initial_entry {
+        entry.indexes.insert("archived".to_string(), true.to_string());
+        MessageStore::put(provider, owner, &entry).await?;
+        EventLog::append(provider, owner, &entry).await?;
 
-        MessageStore::put(provider, owner, &initial_entry).await?;
-        EventLog::append(provider, owner, &initial_entry).await?;
-        if !initial_write.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
-            BlockStore::delete(provider, owner, &initial_write.descriptor.data_cid).await?;
+        let initial = Write::try_from(&entry)?;
+        if !initial.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
+            DataStore::delete(provider, owner, &initial.record_id, &initial.descriptor.data_cid)
+                .await?;
         }
     }
 
@@ -120,7 +121,7 @@ pub async fn handle(
         let write = Write::try_from(entry)?;
         let cid = write.cid()?;
         MessageStore::delete(provider, owner, &cid).await?;
-        BlockStore::delete(provider, owner, &write.descriptor.data_cid).await?;
+        DataStore::delete(provider, owner, &write.record_id, &write.descriptor.data_cid).await?;
         EventLog::delete(provider, owner, &cid).await?;
     }
 
@@ -173,25 +174,13 @@ pub struct Write {
 
     /// The data stream of the record if the data associated with the record
     #[serde(skip)]
-    pub data_stream: Option<DataStream>,
+    pub data_stream: Option<Cursor<Vec<u8>>>,
 }
 
 impl Message for Write {
     type Reply = WriteReply;
 
     fn cid(&self) -> Result<String> {
-        // // exclude `record_id` and `context_id` from CID calculation
-        // #[derive(Serialize)]
-        // struct Cid {
-        //     #[serde(flatten)]
-        //     descriptor: WriteDescriptor,
-        //     authorization: Authorization,
-        // }
-        // cid::from_value(&Cid {
-        //     descriptor: self.descriptor.clone(),
-        //     authorization: self.authorization.clone(),
-        // })
-
         let mut write = self.clone();
         write.encoded_data = None;
         cid::from_value(&write)
@@ -213,7 +202,7 @@ impl Message for Write {
 }
 
 /// `Write` reply
-// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct WriteReply;
 
@@ -319,7 +308,7 @@ impl Write {
     }
 
     /// Add a data stream to the write message.
-    pub fn with_stream(&mut self, data_stream: DataStream) {
+    pub fn with_stream(&mut self, data_stream: Cursor<Vec<u8>>) {
         self.data_stream = Some(data_stream);
     }
 
@@ -484,12 +473,12 @@ impl Write {
     }
 
     async fn update_data(
-        &mut self, owner: &str, stream: &mut DataStream, block_store: &impl BlockStore,
+        &mut self, owner: &str, stream: &mut Cursor<Vec<u8>>, store: &impl DataStore,
     ) -> Result<()> {
         // when data is below the threshold, store it within MessageStore
         if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {
             // verify data integrity
-            let (data_cid, data_size) = stream.compute_cid()?;
+            let (data_cid, data_size) = cid::from_reader(stream.clone())?;
             if self.descriptor.data_cid != data_cid {
                 return Err(unexpected!("actual data CID does not match message `data_cid`"));
             }
@@ -508,8 +497,10 @@ impl Write {
                 integrity::verify_schema(self, &data_bytes)?;
             }
         } else {
-            // store data in BlockStore
-            let (data_cid, data_size) = stream.to_store(owner, block_store).await?;
+            // store data in DataStore
+            let (data_cid, data_size) =
+                DataStore::put(store, owner, &self.record_id, &self.descriptor.data_cid, stream)
+                    .await?;
 
             // verify integrity of stored data
             if self.descriptor.data_cid != data_cid {
@@ -527,7 +518,7 @@ impl Write {
     //  1. verify the new message's data integrity
     //  2. copy stored `encoded_data` to the new  message.
     async fn clone_data(
-        &mut self, owner: &str, existing: &Entry, block_store: &impl BlockStore,
+        &mut self, owner: &str, existing: &Entry, store: &impl DataStore,
     ) -> Result<()> {
         let latest = Self::try_from(existing)?;
 
@@ -542,7 +533,8 @@ impl Write {
 
         // if bigger than encoding threshold, ensure data exists for this record
         if latest.descriptor.data_size > data::MAX_ENCODED_SIZE {
-            let result = block_store.get(owner, &self.descriptor.data_cid).await?;
+            let result =
+                DataStore::get(store, owner, &self.record_id, &self.descriptor.data_cid).await?;
             if result.is_none() {
                 return Err(unexpected!("referenced data does not exist"));
             };

@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use super::{Conditions, Publication, RecordsScope, Scope};
 use crate::protocols::REVOCATION_PATH;
 use crate::provider::MessageStore;
-use crate::records::{DelegatedGrant, Delete, Query, Read, Subscribe, Write};
+use crate::records::{DelegatedGrant, Delete, Query, Read, RecordsFilter, Subscribe, Write};
 use crate::serde::rfc3339_micros;
-use crate::store::{RecordsFilter, RecordsQueryBuilder};
+use crate::store::RecordsQueryBuilder;
 use crate::{Descriptor, Result, forbidden, unexpected};
 
 /// Used to grant another entity permission to access a web node's data.
@@ -457,7 +457,7 @@ impl Grant {
 //         // N.B. adding a protocol tag ensures message queries with a protocol
 //         // filter will return associated grants
 //         if let Some(protocol) = scope.protocol() {
-//             let protocol = utils::clean_url(protocol)?;
+//             let protocol = utils::uri::clean(protocol)?;
 //             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
 //         };
 
@@ -541,7 +541,7 @@ impl Grant {
 //         // N.B. adding a protocol tag ensures message queries with a protocol
 //         // filter will return this request
 //         if let Some(protocol) = scope.protocol() {
-//             let protocol = utils::clean_url(protocol)?;
+//             let protocol = utils::uri::clean(protocol)?;
 //             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
 //         };
 
@@ -605,7 +605,7 @@ impl Grant {
 //         // N.B. adding a protocol tag ensures message queries with a protocol
 //         // filter will return this request
 //         if let Some(protocol) = grant_data.scope.protocol() {
-//             let protocol = utils::clean_url(protocol)?;
+//             let protocol = utils::uri::clean(protocol)?;
 //             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
 //         };
 

@@ -7,11 +7,11 @@ use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 
 use crate::authorization::AuthorizationBuilder;
-use crate::data::cid;
 use crate::messages::{
     MessagesFilter, Query, QueryDescriptor, Read, ReadDescriptor, Subscribe, SubscribeDescriptor,
 };
 use crate::provider::Signer;
+use crate::utils::cid;
 use crate::{Descriptor, Interface, Method, schema};
 
 /// Options to use when creating a permission grant.

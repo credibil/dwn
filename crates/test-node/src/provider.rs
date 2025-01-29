@@ -11,7 +11,9 @@ pub mod key_store;
 
 use anyhow::{Result, anyhow};
 use blockstore::InMemoryBlockstore;
-use dwn_node::provider::{DidResolver, Document, EventLog, MessageStore, Provider, TaskStore};
+use dwn_node::provider::{
+    DataStore, DidResolver, Document, EventLog, MessageStore, Provider, TaskStore,
+};
 
 use self::key_store::ALICE_DID;
 
@@ -32,6 +34,7 @@ impl ProviderImpl {
 
 impl Provider for ProviderImpl {}
 impl MessageStore for ProviderImpl {}
+impl DataStore for ProviderImpl {}
 impl EventLog for ProviderImpl {}
 impl TaskStore for ProviderImpl {}
 

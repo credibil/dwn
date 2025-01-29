@@ -3,11 +3,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider};
 use crate::store::{self, Cursor, ProtocolsQueryBuilder};
+use crate::utils::cid;
 use crate::{Descriptor, Result, permissions, utils};
 
 // Access level for query.
@@ -26,7 +26,7 @@ pub async fn handle(
 ) -> Result<Reply<QueryReply>> {
     // validate query
     if let Some(filter) = &query.descriptor.filter {
-        utils::validate_url(&filter.protocol)?;
+        utils::uri::validate(&filter.protocol)?;
     }
 
     // build actual query

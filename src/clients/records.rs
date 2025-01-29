@@ -1,20 +1,22 @@
 //! # Records
 
+use std::io::Cursor;
+
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder};
-use crate::data::cid;
 use crate::hd_key::DerivationScheme;
 use crate::provider::Signer;
 use crate::records::{
-    Attestation, DataStream, DelegatedGrant, Delete, DeleteDescriptor, EncryptionProperty, Query,
+    Attestation, DelegatedGrant, Delete, DeleteDescriptor, EncryptionProperty, Query,
     QueryDescriptor, Read, ReadDescriptor, RecordsFilter, Subscribe, SubscribeDescriptor, Write,
     WriteDescriptor,
 };
 use crate::store::{Pagination, Sort};
+use crate::utils::cid;
 use crate::{Descriptor, Interface, Method, utils};
 
 /// Options to use when creating a permission grant.
@@ -568,8 +570,8 @@ pub struct ProtocolBuilder<'a> {
 
 /// Entry data can be raw bytes or CID.
 pub enum Data {
-    /// Data is a `DataStream`.
-    Stream(DataStream),
+    /// Data is a `Cursor`.
+    Stream(Cursor<Vec<u8>>),
 
     /// Data is use to calculate CID and size of previously stored data — as
     /// for `Data::Cid`. The data is not added to the Write record's
@@ -597,13 +599,13 @@ pub enum Data {
 
 impl Default for Data {
     fn default() -> Self {
-        Self::Stream(DataStream::default())
+        Self::Stream(Cursor::default())
     }
 }
 
 impl From<Vec<u8>> for Data {
     fn from(data: Vec<u8>) -> Self {
-        Self::Stream(DataStream::from(data))
+        Self::Stream(Cursor::new(data))
     }
 }
 
@@ -907,7 +909,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
                 write.record_id = record_id;
             }
             if let Some(settings) = self.protocol.clone() {
-                let normalized = utils::clean_url(settings.protocol)?;
+                let normalized = utils::uri::clean(settings.protocol)?;
                 write.descriptor.protocol = Some(normalized);
                 write.descriptor.protocol_path = Some(settings.protocol_path.to_string());
 
@@ -918,7 +920,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
                 }
             }
             if let Some(s) = &self.schema {
-                write.descriptor.schema = Some(utils::clean_url(s)?);
+                write.descriptor.schema = Some(utils::uri::clean(s)?);
             }
 
             write
@@ -948,7 +950,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
 
         match &self.data {
             Some(Data::Stream(stream)) => {
-                let (data_cid, data_size) = stream.compute_cid()?;
+                let (data_cid, data_size) = cid::from_reader(stream.clone())?;
                 write.descriptor.data_cid = data_cid;
                 write.descriptor.data_size = data_size;
                 write.data_stream = Some(stream.clone());

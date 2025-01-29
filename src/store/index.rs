@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::Result;
 use crate::provider::BlockStore;
 use crate::store::{Entry, Query, block};
+use crate::utils::cid;
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;
@@ -104,7 +105,7 @@ impl<S: BlockStore> Indexes<'_, S> {
     /// # Errors
     /// LATER: Add errors
     pub async fn get(&self, field: &str) -> Result<Index> {
-        let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, field)))?;
+        let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, field)))?;
 
         // get the index block or return empty index
         let Some(data) = self.store.get(self.owner, &index_cid).await? else {
@@ -118,7 +119,7 @@ impl<S: BlockStore> Indexes<'_, S> {
     /// # Errors
     /// LATER: Add errors
     pub async fn put(&self, index: Index) -> Result<()> {
-        let index_cid = block::compute_cid(&Cid(format!("{}-{}", self.owner, index.field)))?;
+        let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
         // update the index block
         self.store.delete(self.owner, &index_cid).await?;
@@ -139,7 +140,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         // match sets are 'OR-ed' together
         for match_set in &query.match_sets {
-            // choose the best index to use for the filter
+            // choose the best index to use for this MatchSet
             let Some((field, value)) = &match_set.index else {
                 continue;
             };
@@ -356,6 +357,7 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Store<'a, S>> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
     use std::str::FromStr;
 
     use anyhow::Result;
@@ -366,7 +368,6 @@ mod tests {
     use super::*;
     use crate::clients::protocols::{ConfigureBuilder, Definition};
     use crate::clients::records::{Data, WriteBuilder};
-    use crate::data::DataStream;
     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 
     #[tokio::test]
@@ -376,7 +377,7 @@ mod tests {
 
         let mut data = [0u8; 10];
         rand::thread_rng().fill_bytes(&mut data);
-        let stream = DataStream::from(data.to_vec());
+        let stream = Cursor::new(data.to_vec());
 
         let write = WriteBuilder::new()
             .data(Data::Stream(stream.clone()))
@@ -457,13 +458,13 @@ mod tests {
     impl BlockStore for BlockStoreImpl {
         async fn put(&self, owner: &str, cid: &str, data: &[u8]) -> Result<()> {
             // HACK: convert libipld CID to blockstore CID
-            let block_cid = cid::Cid::from_str(cid)?;
+            let block_cid = ::cid::Cid::from_str(cid)?;
             self.blockstore.put_keyed(&block_cid, data).await.map_err(Into::into)
         }
 
         async fn get(&self, owner: &str, cid: &str) -> Result<Option<Vec<u8>>> {
             // HACK: convert libipld CID to blockstore CID
-            let block_cid = cid::Cid::try_from(cid)?;
+            let block_cid = ::cid::Cid::try_from(cid)?;
             let Some(bytes) = self.blockstore.get(&block_cid).await? else {
                 return Ok(None);
             };
@@ -471,7 +472,7 @@ mod tests {
         }
 
         async fn delete(&self, owner: &str, cid: &str) -> Result<()> {
-            let cid = cid::Cid::from_str(cid)?;
+            let cid = ::cid::Cid::from_str(cid)?;
             self.blockstore.remove(&cid).await?;
             Ok(())
         }

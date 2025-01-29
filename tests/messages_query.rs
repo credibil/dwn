@@ -3,11 +3,12 @@
 //! This test demonstrates how a web node owner create messages and
 //! subsequently query for them.
 
+use std::io::Cursor;
+
 use dwn_node::clients::grants::GrantBuilder;
 use dwn_node::clients::messages::{QueryBuilder, ReadBuilder};
 use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::data::DataStream;
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::Definition;
@@ -44,7 +45,7 @@ async fn owner_messages() {
     // Alice writes 5 records.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let schema = definition.types["post"].schema.clone().expect("should have schema");
 
@@ -235,7 +236,7 @@ async fn match_grant_scope() {
     // Alice writes a message to the Records `free_for_all` interface.
     // --------------------------------------------------
     let data = br#"{"message": "test record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let schema = definition.types["post"].schema.clone().expect("should have schema");
 
@@ -260,7 +261,7 @@ async fn match_grant_scope() {
     // Alice writes a random message.
     // --------------------------------------------------
     let data = br#"{"message": "random record write"}"#;
-    let reader = DataStream::from(data.to_vec());
+    let reader = Cursor::new(data.to_vec());
 
     let write_rand = WriteBuilder::new()
         .data(Data::Stream(reader))

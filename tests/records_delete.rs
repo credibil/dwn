@@ -944,10 +944,8 @@ async fn invalid_message() {
     assert!(e.starts_with("validation failed for "));
 }
 
-// FIXME: ignore until we are building full indexes for each data type
 // Should index additional properties for the record being deleted.
 #[tokio::test]
-#[ignore]
 async fn index_additional() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);

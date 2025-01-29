@@ -1,22 +1,24 @@
 //! # Store
 
-pub mod block;
-pub mod index;
+pub(crate) mod block;
+pub mod data;
+pub(crate) mod event_log;
+pub(crate) mod index;
+pub(crate) mod message;
 
 use std::collections::HashMap;
-use std::ops::Deref;
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
+pub use self::data::MAX_ENCODED_SIZE;
 use crate::endpoint::Message;
-pub use crate::messages::MessagesFilter;
 use crate::protocols::Configure;
-pub use crate::protocols::ProtocolsFilter;
-use crate::records::{self, Delete, Write};
-pub use crate::records::{RecordsFilter, Sort, TagFilter};
-use crate::{DateRange, Descriptor, Method, Result, messages, protocols};
-pub use crate::{Interface, Lower, Range, Upper, unexpected};
+pub use crate::records::Sort;
+use crate::records::{self, Delete, RecordsFilter, TagFilter, Write};
+use crate::{
+    DateRange, Descriptor, Interface, Method, Range, Result, messages, protocols, unexpected,
+};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -83,14 +85,6 @@ impl Entry {
             EntryType::Configure(configure) => Some(configure),
             _ => None,
         }
-    }
-}
-
-impl Deref for Entry {
-    type Target = EntryType;
-
-    fn deref(&self) -> &Self::Target {
-        &self.message
     }
 }
 
@@ -165,14 +159,6 @@ pub struct MatchSet {
     /// Index to use for the query.
     pub index: Option<(String, String)>,
 }
-
-// impl Iterator for &MatchSet {
-//     type Item = Matcher;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.set.pop()
-//     }
-// }
 
 /// A field/value matcher for use in finding matching indexed values.
 #[derive(Clone, Debug)]

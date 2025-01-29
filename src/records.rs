@@ -19,7 +19,6 @@ pub use self::query::{Query, QueryDescriptor};
 pub use self::read::{Read, ReadDescriptor};
 pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Write, WriteDescriptor};
-pub use crate::data::DataStream;
 use crate::{DateRange, OneOrMany, Range, Result, utils};
 
 // TODO: add builder for RecordsFilter
@@ -102,12 +101,12 @@ impl RecordsFilter {
     pub(crate) fn normalize(&self) -> Result<Self> {
         let mut filter = self.clone();
         filter.protocol = if let Some(protocol) = &self.protocol {
-            Some(utils::clean_url(protocol)?)
+            Some(utils::uri::clean(protocol)?)
         } else {
             None
         };
         filter.schema =
-            if let Some(schema) = &self.schema { Some(utils::clean_url(schema)?) } else { None };
+            if let Some(schema) = &self.schema { Some(utils::uri::clean(schema)?) } else { None };
 
         Ok(filter)
     }

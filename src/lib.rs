@@ -6,7 +6,6 @@
 
 pub mod authorization;
 pub mod clients;
-pub mod data;
 pub mod endpoint;
 mod error;
 pub mod event;
@@ -29,6 +28,7 @@ pub use crate::endpoint::Message;
 pub use crate::error::Error;
 pub use crate::provider::Provider;
 use crate::serde::rfc3339_micros;
+pub use crate::utils::cid;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;

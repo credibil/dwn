@@ -2,17 +2,19 @@
 //!
 //! `Read` is a message type used to read a record in the web node.
 
+use std::io::Cursor;
+
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
-use crate::provider::{MessageStore, Provider};
-use crate::records::{DataStream, Delete, RecordsFilter, Write, write};
+use crate::provider::{DataStore, MessageStore, Provider};
+use crate::records::{Delete, RecordsFilter, Write, write};
 use crate::store::{self, RecordsQueryBuilder};
+use crate::utils::cid;
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
@@ -76,13 +78,19 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
         let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
-        Some(DataStream::from(buffer))
+        Some(Cursor::new(buffer))
     } else {
-        let data = DataStream::from_store(owner, &write.descriptor.data_cid, provider).await?;
-        if data.is_none() {
-            return Err(Error::NotFound("no data found".to_string()));
-        }
-        data
+        use std::io::Read;
+
+        let Some(mut read) =
+            DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
+        else {
+            return Err(Error::NotFound("data not found".to_string()));
+        };
+
+        let mut buf = Vec::new();
+        read.read_to_end(&mut buf)?;
+        Some(Cursor::new(buf))
     };
 
     write.encoded_data = None;
@@ -183,8 +191,8 @@ pub struct ReadReplyEntry {
     pub initial_write: Option<Write>,
 
     /// The data for the record.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<DataStream>,
+    #[serde(skip)]
+    pub data: Option<Cursor<Vec<u8>>>,
 }
 
 impl Read {

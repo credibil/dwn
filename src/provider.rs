@@ -2,18 +2,18 @@
 
 use std::io::Read;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
-use crate::store::{Cursor, block, index};
+use crate::store::{Cursor, data, event_log, message};
 pub use crate::store::{Entry, Query};
 pub use crate::tasks::ResumableTask;
 
 /// Provider trait.
 pub trait Provider:
-    MessageStore + BlockStore + TaskStore + EventLog + EventStream + DidResolver
+    MessageStore + DataStore + TaskStore + EventLog + BlockStore + EventStream + DidResolver
 {
 }
 
@@ -39,15 +39,7 @@ pub trait BlockStore: Send + Sync {
 pub trait MessageStore: BlockStore + Sized + Send + Sync {
     /// Store a message in the underlying store.
     fn put(&self, owner: &str, entry: &Entry) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            // store entry block
-            let message_cid = entry.cid()?;
-            BlockStore::delete(self, owner, &message_cid).await?;
-            BlockStore::put(self, owner, &message_cid, &block::encode(entry)?).await?;
-
-            // index entry
-            Ok(index::insert(owner, entry, self).await?)
-        }
+        async move { message::put(owner, entry, self).await.map_err(Into::into) }
     }
 
     /// Queries the underlying store for matches to the provided query.
@@ -55,38 +47,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Entry>, Option<Cursor>)>> + Send {
-        async move {
-            let mut results = index::query(owner, query, self).await?;
-
-            // return cursor when paging is used
-            let limit =
-                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
-
-            let cursor = if limit > 0 && limit < results.len() {
-                // let Query::Records(query) = query else {
-                //     return Err(anyhow!("invalid query"));
-                // };
-                let sort_field = query.sort.to_string();
-
-                // set cursor to the last item remaining after the spliced result.
-                results.pop().map(|item| Cursor {
-                    message_cid: item.message_cid.clone(),
-                    value: item.fields[&sort_field].clone(),
-                })
-            } else {
-                None
-            };
-
-            let mut entries = Vec::new();
-            for item in results {
-                let Some(bytes) = BlockStore::get(self, owner, &item.message_cid).await? else {
-                    return Err(anyhow!("missing block for message cid"));
-                };
-                entries.push(block::decode(&bytes)?);
-            }
-
-            Ok((entries, cursor))
-        }
+        async move { message::query(owner, query, self).await.map_err(Into::into) }
     }
 
     /// Fetch a single message by CID from the underlying store, returning
@@ -94,20 +55,12 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     fn get(
         &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = Result<Option<Entry>>> + Send {
-        async move {
-            let Some(bytes) = BlockStore::get(self, owner, message_cid).await? else {
-                return Ok(None);
-            };
-            Ok(Some(block::decode(&bytes)?))
-        }
+        async move { message::get(owner, message_cid, self).await.map_err(Into::into) }
     }
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            index::delete(owner, message_cid, self).await?;
-            BlockStore::delete(self, owner, message_cid).await
-        }
+        async move { message::delete(owner, message_cid, self).await.map_err(Into::into) }
     }
 
     /// Purge all records from the store.
@@ -125,24 +78,34 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     // /// Close the connection to the underlying store.
     // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Store data in the underlying store.
+    /// Store data in an underlying block store.
+    ///
+    /// The default implementation uses the `BlockStore` provider for storage.
+    /// This may be overridden by implementers to provide custom storage.
     fn put(
-        &self, owner: &str, record_id: &str, data_cid: &str, data: impl Read,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+        &self, owner: &str, record_id: &str, data_cid: &str, reader: impl Read + Send,
+    ) -> impl Future<Output = anyhow::Result<(String, usize)>> + Send {
+        async move { data::put(owner, record_id, data_cid, reader, self).await.map_err(Into::into) }
+    }
 
-    /// Fetches a single message by CID from the underlying store, returning
-    /// `None` if no match was found.
+    /// Fetches a single message by CID from an underlying block store.
     fn get(
         &self, owner: &str, record_id: &str, data_cid: &str,
-    ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send {
+        async move { data::get(owner, record_id, data_cid, self).await.map_err(Into::into) }
+    }
 
     /// Delete data associated with the specified id.
     fn delete(
         &self, owner: &str, record_id: &str, data_cid: &str,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        async move { data::delete(owner, record_id, data_cid, self).await.map_err(Into::into) }
+    }
 
     /// Purge all data from the store.
-    fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send {
+        async move { todo!("implement purge") }
+    }
 }
 
 /// The `TaskStore` trait is used by implementers to provide data storage
@@ -211,17 +174,7 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
 pub trait EventLog: BlockStore + Sized + Send + Sync {
     /// Adds a message event to a owner's event log.
     fn append(&self, owner: &str, event: &Event) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            // store entry block
-            let message_cid = event.cid()?;
-            BlockStore::delete(self, owner, &message_cid).await?;
-            BlockStore::put(self, owner, &message_cid, &block::encode(event)?).await?;
-
-            // index entry
-            // TODO: add watermark to indexes
-            // const watermark = this.ulidFactory();
-            Ok(index::insert(owner, event, self).await?)
-        }
+        async move { event_log::append(owner, event, self).await.map_err(Into::into) }
     }
 
     /// Retrieves all of a owner's events that occurred after the cursor provided.
@@ -229,9 +182,9 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     ///
     /// The cursor is a `message_cid`.
     fn events(
-        &self, _owner: &str, _cursor: Option<Cursor>,
+        &self, owner: &str, cursor: Option<Cursor>,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async move { todo!() }
+        async move { event_log::events(owner, cursor, self).await.map_err(Into::into) }
     }
 
     /// Retrieves a filtered set of events that occurred after a the cursor
@@ -243,41 +196,12 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async move {
-            let mut results = index::query(owner, query, self).await?;
-
-            // return cursor when paging is used
-            let limit =
-                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
-
-            let cursor = if limit > 0 && limit < results.len() {
-                // set cursor to the last item remaining after the spliced result.
-                results.pop().map(|item| Cursor {
-                    message_cid: item.message_cid.clone(),
-                    value: item.fields["messageTimestamp"].clone(),
-                })
-            } else {
-                None
-            };
-
-            let mut entries = Vec::new();
-            for item in results {
-                let Some(bytes) = BlockStore::get(self, owner, &item.message_cid).await? else {
-                    return Err(anyhow!("missing block for message cid"));
-                };
-                entries.push(block::decode(&bytes)?);
-            }
-
-            Ok((entries, cursor))
-        }
+        async move { event_log::query(owner, query, self).await.map_err(Into::into) }
     }
 
     /// Deletes event for the specified `message_cid`.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            index::delete(owner, message_cid, self).await?;
-            BlockStore::delete(self, owner, message_cid).await
-        }
+        async move { event_log::delete(owner, message_cid, self).await.map_err(Into::into) }
     }
 
     /// Purge all data from the store.

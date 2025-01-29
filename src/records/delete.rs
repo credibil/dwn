@@ -10,14 +10,14 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::data::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::Protocol;
 use crate::provider::{BlockStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::Write;
-use crate::store::{Entry, EntryType, RecordsFilter, RecordsQueryBuilder};
+use crate::records::{RecordsFilter, Write};
+use crate::store::{Entry, EntryType, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
-use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
+use crate::utils::cid;
+use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Process `Delete` message.
 ///
@@ -145,8 +145,8 @@ impl Delete {
         let mut indexes = HashMap::new();
         let descriptor = &self.descriptor;
 
-        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
-        indexes.insert("method".to_string(), descriptor.base.method.to_string());
+        indexes.insert("interface".to_string(), Interface::Records.to_string());
+        indexes.insert("method".to_string(), Method::Delete.to_string());
 
         indexes.insert("record_id".to_string(), descriptor.record_id.clone());
         indexes.insert("recordId".to_string(), descriptor.record_id.clone());
@@ -235,20 +235,16 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(unexpected!("initial write is not earliest message"));
     }
 
-    // FIXME: need to copy ALL initial write fields and indexes to delete message
     // save the delete message using same indexes as the initial write
-    let mut initial = Entry::from(&write);
-    initial.indexes.insert("recordId".to_string(), write.record_id.clone());
+    let mut delete_entry = Entry::from(delete);
 
-    let mut entry = Entry::from(delete);
-    let indexes = entry.indexes.clone();
+    let mut merged_indexes = write.indexes();
+    merged_indexes.extend(delete.indexes());
+    delete_entry.indexes = merged_indexes;
 
-    entry.indexes.extend(initial.indexes);
-    entry.indexes.extend(indexes);
-
-    MessageStore::put(provider, owner, &entry).await?;
-    EventLog::append(provider, owner, &entry).await?;
-    EventStream::emit(provider, owner, &entry).await?;
+    MessageStore::put(provider, owner, &delete_entry).await?;
+    EventLog::append(provider, owner, &delete_entry).await?;
+    EventStream::emit(provider, owner, &delete_entry).await?;
 
     // purge/hard-delete all descendent records
     if delete.descriptor.prune {
