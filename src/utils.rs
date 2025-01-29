@@ -28,16 +28,15 @@ pub mod uri {
 /// Compute CID from a data value or stream.
 pub mod cid {
     use std::io::Read;
-    use std::str::FromStr;
 
     use cid::Cid;
-    use ipld_core::ipld::Ipld;
+    use futures::executor::block_on;
     use multihash_codetable::MultihashDigest;
     use serde::Serialize;
 
-    use crate::store::block;
-    use crate::store::data::CHUNK_SIZE;
-    use crate::{Result, unexpected};
+    use crate::Result;
+    use crate::provider::BlockStore;
+    use crate::store::data;
 
     const RAW: u64 = 0x55;
     // const DAG_CBOR: u64 = 0x71;
@@ -62,31 +61,26 @@ pub mod cid {
     /// # Errors
     /// LATER: Add errors
     pub fn from_reader(reader: impl Read) -> Result<(String, usize)> {
-        let mut links = vec![];
-        let mut byte_count = 0;
-        let mut reader = reader;
+        block_on(async { data::put("owner", "data_cid", reader, &MockStore).await })
+    }
 
-        loop {
-            let mut buffer = [0u8; CHUNK_SIZE];
-            if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
-                if bytes_read == 0 {
-                    break;
-                }
-
-                // encode buffer to IPLD block
-                let ipld = Ipld::Bytes(buffer[..bytes_read].to_vec());
-                let block = block::Block::encode(&ipld)?;
-
-                // save block's CID as a link
-                let cid = Cid::from_str(block.cid())
-                    .map_err(|e| unexpected!("issue parsing CID: {e}"))?;
-                links.push(Ipld::Link(cid));
-                byte_count += bytes_read;
-            }
+    struct MockStore;
+    impl BlockStore for MockStore {
+        async fn put(&self, _: &str, _: &str, _: &[u8]) -> anyhow::Result<()> {
+            Ok(())
         }
 
-        let block = block::Block::encode(&Ipld::List(links))?;
-        Ok((block.cid().to_string(), byte_count))
+        async fn get(&self, _: &str, _: &str) -> anyhow::Result<Option<Vec<u8>>> {
+            unimplemented!("MockStore::get")
+        }
+
+        async fn delete(&self, _: &str, _: &str) -> anyhow::Result<()> {
+            unimplemented!("MockStore::delete")
+        }
+
+        async fn purge(&self) -> anyhow::Result<()> {
+            unimplemented!("MockStore::purge")
+        }
     }
 }
 

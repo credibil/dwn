@@ -1,8 +1,8 @@
 //! # Store
 
-pub mod block;
+pub(crate) mod block;
 pub mod data;
-pub mod index;
+pub(crate) mod index;
 
 use std::collections::HashMap;
 

@@ -14,10 +14,10 @@ use crate::{Result, unexpected};
 pub const MAX_ENCODED_SIZE: usize = 30000;
 
 /// The maximum size of a block.
-pub const CHUNK_SIZE: usize = 16;
+pub(crate) const CHUNK_SIZE: usize = 1024; // 1 KiB
 
 /// Put a data record into the block store.
-pub async fn put(
+pub(crate) async fn put(
     owner: &str, data_cid: &str, reader: impl Read, store: &impl BlockStore,
 ) -> Result<(String, usize)> {
     let mut links = vec![];
@@ -57,7 +57,7 @@ pub async fn put(
 }
 
 /// Get a data record from the block store.
-pub async fn get(
+pub(crate) async fn get(
     owner: &str, data_cid: &str, store: &impl BlockStore,
 ) -> Result<Option<impl Read>> {
     // get root block

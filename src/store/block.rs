@@ -28,8 +28,6 @@ where
     if data.len() > MAX_BLOCK_SIZE {
         return Err(anyhow!("block is too large"));
     }
-    // let links = DagCborCodec::links(&data).unwrap().collect::<Vec<_>>();
-
     Ok(data)
 }
 
@@ -51,12 +49,6 @@ pub struct Block {
 }
 
 impl Block {
-    /// Creates a new block.
-    #[must_use]
-    pub const fn new(cid: String, data: Vec<u8>) -> Self {
-        Self { data, cid }
-    }
-
     /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
     ///
     /// # Errors
@@ -85,16 +77,5 @@ impl Block {
     #[must_use]
     pub fn data(&self) -> &[u8] {
         self.data.as_slice()
-    }
-
-    /// Decodes a block.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn decode<T>(&self) -> Result<T>
-    where
-        T: Serialize + for<'a> Deserialize<'a>,
-    {
-        DagCborCodec::decode_from_slice(&self.data).map_err(Into::into)
     }
 }

@@ -7,7 +7,7 @@ descriptor:
   interface: Records
   method: Write
   messageTimestamp: "[messageTimestamp]"
-  dataCid: bafkreickitwc3abjcgcwxazw76ooz7uxeztowp5tztputltpn5nxjmorrm
+  dataCid: bafkreif6us4vpashqlr7bg2mv6xajey5qepvs26vrkdetsvfg22npkvrhu
   dataSize: 32
   dataFormat: awesome_data_format
   dateCreated: "[dateCreated]"
