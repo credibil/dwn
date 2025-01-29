@@ -47,7 +47,7 @@ pub async fn events(
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
 ) -> Result<(Vec<Entry>, Option<Cursor>)> {
-    let mut results = index::query(owner,PARTITION, query, store).await?;
+    let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used
     let limit = query.pagination.as_ref().map_or(0, |p| p.limit.unwrap_or(0));
@@ -74,6 +74,6 @@ pub async fn query(
 
 /// Deletes event for the specified `message_cid`.
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
-    index::delete(owner, PARTITION,message_cid, store).await?;
+    index::delete(owner, PARTITION, message_cid, store).await?;
     store.delete(owner, PARTITION, message_cid).await.map_err(Into::into)
 }

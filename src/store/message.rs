@@ -14,14 +14,14 @@ pub async fn put(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<
     store.put(owner, PARTITION, &message_cid, &block::encode(entry)?).await?;
 
     // index entry
-    index::insert(owner,PARTITION, entry, store).await
+    index::insert(owner, PARTITION, entry, store).await
 }
 
 /// Queries the underlying store for matches to the provided query.
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
 ) -> Result<(Vec<Entry>, Option<Cursor>)> {
-    let mut results = index::query(owner, PARTITION,query, store).await?;
+    let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used
     let limit = query.pagination.as_ref().map_or(0, |p| p.limit.unwrap_or(0));
@@ -59,6 +59,6 @@ pub async fn get(owner: &str, message_cid: &str, store: &impl BlockStore) -> Res
 
 /// Delete message associated with the specified id.
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
-    index::delete(owner,PARTITION, message_cid, store).await?;
+    index::delete(owner, PARTITION, message_cid, store).await?;
     store.delete(owner, PARTITION, message_cid).await.map_err(Into::into)
 }
