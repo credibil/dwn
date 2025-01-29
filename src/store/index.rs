@@ -20,20 +20,21 @@ use crate::utils::cid;
 // const MAX: u8 = 0x7E;
 const NULL: char = '\u{100000}';
 const MAX: char = '\u{10ffff}';
-const PARTITION: &str = "INDEX";
 
 /// Insert an entry's queryable fields into indexes.
 ///
 /// # Errors
 /// LATER: Add errors
-pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
+pub async fn insert(
+    owner: &str, partition: &str, entry: &Entry, store: &impl BlockStore,
+) -> Result<()> {
     let message_cid = entry.cid()?;
 
     let fields = &entry.indexes;
-    let indexes = IndexesBuilder::new().owner(owner).store(store).build();
+    let indexes = IndexesBuilder::new().owner(owner).partition(partition).store(store).build();
 
     // remove the previous index entries for message
-    delete(owner, &message_cid, store).await?;
+    delete(owner, partition, &message_cid, store).await?;
 
     for (field, value) in &entry.indexes {
         let mut index = indexes.get(field).await?;
@@ -59,8 +60,10 @@ pub async fn insert(owner: &str, entry: &Entry, store: &impl BlockStore) -> Resu
 ///
 /// # Errors
 /// LATER: Add errors
-pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Result<Vec<IndexItem>> {
-    let indexes = IndexesBuilder::new().owner(owner).store(store).build();
+pub async fn query(
+    owner: &str, partition: &str, query: &Query, store: &impl BlockStore,
+) -> Result<Vec<IndexItem>> {
+    let indexes = IndexesBuilder::new().owner(owner).partition(partition).store(store).build();
 
     if query.is_concise() {
         return indexes.query_concise(query).await;
@@ -72,8 +75,10 @@ pub async fn query(owner: &str, query: &Query, store: &impl BlockStore) -> Resul
 ///
 /// # Errors
 /// LATER: Add errors
-pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
-    let indexes = IndexesBuilder::new().owner(owner).store(store).build();
+pub async fn delete(
+    owner: &str, partition: &str, message_cid: &str, store: &impl BlockStore,
+) -> Result<()> {
+    let indexes = IndexesBuilder::new().owner(owner).partition(partition).store(store).build();
 
     // if this is an update, remove the previous message indexes
     let messages = indexes.get("message_cid").await?;
@@ -97,6 +102,7 @@ struct Cid(String);
 /// LATER: Add errors
 pub struct Indexes<'a, S: BlockStore> {
     owner: &'a str,
+    partition: &'a str,
     store: &'a S,
 }
 
@@ -109,7 +115,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, field)))?;
 
         // get the index block or return empty index
-        let Some(data) = self.store.get(self.owner, PARTITION, &index_cid).await? else {
+        let Some(data) = self.store.get(self.owner, self.partition, &index_cid).await? else {
             return Ok(Index::new(field));
         };
         block::decode(&data).map_err(Into::into)
@@ -123,9 +129,9 @@ impl<S: BlockStore> Indexes<'_, S> {
         let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
         // update the index block
-        self.store.delete(self.owner, PARTITION, &index_cid).await?;
+        self.store.delete(self.owner, self.partition, &index_cid).await?;
         self.store
-            .put(self.owner, PARTITION, &index_cid, &block::encode(&index)?)
+            .put(self.owner, self.partition, &index_cid, &block::encode(&index)?)
             .await
             .map_err(Into::into)
     }
@@ -300,60 +306,83 @@ impl Index {
     }
 }
 
-struct IndexesBuilder<O, S> {
+struct IndexesBuilder<O, P, S> {
     owner: O,
+    partition: P,
     indexes: Option<BTreeMap<String, String>>,
     store: S,
 }
 
-/// Store not set on IndexesBuilder.
-#[doc(hidden)]
-struct NoOwner;
 /// Store has been set on IndexesBuilder.
 #[doc(hidden)]
 struct Owner<'a>(&'a str);
-
 /// Store not set on IndexesBuilder.
 #[doc(hidden)]
-struct NoStore;
+struct NoOwner;
+
+/// Partition has been set on IndexesBuilder.
+#[doc(hidden)]
+struct Partition<'a>(&'a str);
+/// Partition not set on IndexesBuilder.
+#[doc(hidden)]
+struct NoPartition;
+
 /// Store has been set on IndexesBuilder.
 #[doc(hidden)]
 struct Store<'a, S: BlockStore>(&'a S);
+/// Store not set on IndexesBuilder.
+#[doc(hidden)]
+struct NoStore;
 
-impl IndexesBuilder<NoOwner, NoStore> {
+impl IndexesBuilder<NoOwner, NoPartition, NoStore> {
     const fn new() -> Self {
         Self {
             owner: NoOwner,
+            partition: NoPartition,
             indexes: None,
             store: NoStore,
         }
     }
 }
 
-impl<S> IndexesBuilder<NoOwner, S> {
-    fn owner(self, owner: &str) -> IndexesBuilder<Owner, S> {
+impl<P, S> IndexesBuilder<NoOwner, P, S> {
+    fn owner(self, owner: &str) -> IndexesBuilder<Owner, P, S> {
         IndexesBuilder {
             owner: Owner(owner),
+            partition: self.partition,
             indexes: None,
             store: self.store,
         }
     }
 }
 
-impl<O> IndexesBuilder<O, NoStore> {
-    fn store<S: BlockStore>(self, store: &S) -> IndexesBuilder<O, Store<'_, S>> {
+impl<O, S> IndexesBuilder<O, NoPartition, S> {
+    fn partition(self, partition: &str) -> IndexesBuilder<O, Partition, S> {
         IndexesBuilder {
             owner: self.owner,
+            partition: Partition(partition),
+            indexes: None,
+            store: self.store,
+        }
+    }
+}
+
+impl<O, P> IndexesBuilder<O, P, NoStore> {
+    fn store<S: BlockStore>(self, store: &S) -> IndexesBuilder<O, P, Store<'_, S>> {
+        IndexesBuilder {
+            owner: self.owner,
+            partition: self.partition,
             indexes: self.indexes,
             store: Store(store),
         }
     }
 }
 
-impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Store<'a, S>> {
+impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
     fn build(self) -> Indexes<'a, S> {
         Indexes {
             owner: self.owner.0,
+            partition: self.partition.0,
             store: self.store.0,
         }
     }
@@ -373,6 +402,8 @@ mod tests {
     use crate::clients::protocols::{ConfigureBuilder, Definition};
     use crate::clients::records::{Data, WriteBuilder};
     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
+
+    const PARTITION: &str = "TEST";
 
     #[tokio::test]
     async fn query_records() {
@@ -398,7 +429,7 @@ mod tests {
         block_store.put(ALICE_DID, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
+        super::insert(ALICE_DID, PARTITION, &entry, &block_store).await.unwrap();
 
         // execute query
         let query = RecordsQueryBuilder::new()
@@ -410,7 +441,7 @@ mod tests {
             )
             .build();
 
-        let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
+        let items = super::query(ALICE_DID, PARTITION, &query, &block_store).await.unwrap();
     }
 
     #[tokio::test]
@@ -432,11 +463,11 @@ mod tests {
         block_store.put(ALICE_DID, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(ALICE_DID, &entry, &block_store).await.unwrap();
+        super::insert(ALICE_DID, PARTITION, &entry, &block_store).await.unwrap();
 
         // execute query
         let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();
-        let items = super::query(ALICE_DID, &query, &block_store).await.unwrap();
+        let items = super::query(ALICE_DID, PARTITION, &query, &block_store).await.unwrap();
     }
 
     struct BlockStoreImpl {
