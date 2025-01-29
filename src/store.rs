@@ -3,6 +3,7 @@
 pub(crate) mod block;
 pub mod data;
 pub(crate) mod index;
+pub(crate) mod message;
 
 use std::collections::HashMap;
 

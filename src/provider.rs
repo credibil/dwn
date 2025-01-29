@@ -7,7 +7,7 @@ pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
-use crate::store::{Cursor, block, data, index};
+use crate::store::{Cursor, block, data, index, message};
 pub use crate::store::{Entry, Query};
 pub use crate::tasks::ResumableTask;
 
@@ -39,15 +39,7 @@ pub trait BlockStore: Send + Sync {
 pub trait MessageStore: BlockStore + Sized + Send + Sync {
     /// Store a message in the underlying store.
     fn put(&self, owner: &str, entry: &Entry) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            // store entry block
-            let message_cid = entry.cid()?;
-            BlockStore::delete(self, owner, &message_cid).await?;
-            BlockStore::put(self, owner, &message_cid, &block::encode(entry)?).await?;
-
-            // index entry
-            Ok(index::insert(owner, entry, self).await?)
-        }
+        async move { message::put(owner, entry, self).await.map_err(Into::into) }
     }
 
     /// Queries the underlying store for matches to the provided query.
@@ -55,35 +47,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Entry>, Option<Cursor>)>> + Send {
-        async move {
-            let mut results = index::query(owner, query, self).await?;
-
-            // return cursor when paging is used
-            let limit =
-                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
-
-            let cursor = if limit > 0 && limit < results.len() {
-                let sort_field = query.sort.to_string();
-
-                // set cursor to the last item remaining after the spliced result.
-                results.pop().map(|item| Cursor {
-                    message_cid: item.message_cid.clone(),
-                    value: item.fields[&sort_field].clone(),
-                })
-            } else {
-                None
-            };
-
-            let mut entries = Vec::new();
-            for item in results {
-                let Some(bytes) = BlockStore::get(self, owner, &item.message_cid).await? else {
-                    return Err(anyhow!("missing block for message cid"));
-                };
-                entries.push(block::decode(&bytes)?);
-            }
-
-            Ok((entries, cursor))
-        }
+        async move { message::query(owner, query, self).await.map_err(Into::into) }
     }
 
     /// Fetch a single message by CID from the underlying store, returning
@@ -91,20 +55,12 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     fn get(
         &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = Result<Option<Entry>>> + Send {
-        async move {
-            let Some(bytes) = BlockStore::get(self, owner, message_cid).await? else {
-                return Ok(None);
-            };
-            Ok(Some(block::decode(&bytes)?))
-        }
+        async move { message::get(owner, message_cid, self).await.map_err(Into::into) }
     }
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            index::delete(owner, message_cid, self).await?;
-            BlockStore::delete(self, owner, message_cid).await
-        }
+        async move { message::delete(owner, message_cid, self).await.map_err(Into::into) }
     }
 
     /// Purge all records from the store.
