@@ -1,36 +1,47 @@
-//! # Message Store
+//! # Event Log
 
+use crate::event::Event;
 use crate::provider::BlockStore;
 use crate::store::{Cursor, Entry, Query, block, index};
 use crate::{Result, unexpected};
 
-/// Store a message in the underlying store.
-pub async fn put(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
+/// Adds a message event to a owner's event log.
+pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Result<()> {
     // store entry block
-    let message_cid = entry.cid()?;
+    let message_cid = event.cid()?;
     store.delete(owner, &message_cid).await?;
-    store.put(owner, &message_cid, &block::encode(entry)?).await?;
+    store.put(owner, &message_cid, &block::encode(event)?).await?;
 
     // index entry
-    index::insert(owner, entry, store).await
+    index::insert(owner, event, store).await
 }
 
-/// Queries the underlying store for matches to the provided query.
+#[allow(clippy::unused_async)]
+pub async fn events(
+    _owner: &str, _cursor: Option<Cursor>, _store: &impl BlockStore,
+) -> Result<(Vec<Entry>, Option<Cursor>)> {
+    todo!()
+}
+
+/// Retrieves a filtered set of events that occurred after a the cursor
+/// provided, accepts multiple filters. If no cursor is provided, all
+/// events for a given owner and filter combo will be returned. The cursor
+/// is a `message_cid`.
+///
+/// Returns an array of `message_cid`s that represent the events.
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
 ) -> Result<(Vec<Entry>, Option<Cursor>)> {
     let mut results = index::query(owner, query, store).await?;
 
     // return cursor when paging is used
-    let limit = query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
+    let limit = query.pagination.as_ref().map_or(0, |p| p.limit.unwrap_or(0));
 
     let cursor = if limit > 0 && limit < results.len() {
-        let sort_field = query.sort.to_string();
-
         // set cursor to the last item remaining after the spliced result.
         results.pop().map(|item| Cursor {
             message_cid: item.message_cid.clone(),
-            value: item.fields[&sort_field].clone(),
+            value: item.fields["messageTimestamp"].clone(),
         })
     } else {
         None
@@ -47,16 +58,7 @@ pub async fn query(
     Ok((entries, cursor))
 }
 
-/// Fetch a single message by CID from the underlying store, returning
-/// `None` if no message was found.
-pub async fn get(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<Option<Entry>> {
-    let Some(bytes) = store.get(owner, message_cid).await? else {
-        return Ok(None);
-    };
-    Ok(Some(block::decode(&bytes)?))
-}
-
-/// Delete message associated with the specified id.
+/// Deletes event for the specified `message_cid`.
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
     index::delete(owner, message_cid, store).await?;
     store.delete(owner, message_cid).await.map_err(Into::into)

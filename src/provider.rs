@@ -2,12 +2,12 @@
 
 use std::io::Read;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 pub use vercre_did::{DidResolver, Document};
 pub use vercre_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
-use crate::store::{Cursor, block, data, index, message};
+use crate::store::{Cursor, data, event_log, message};
 pub use crate::store::{Entry, Query};
 pub use crate::tasks::ResumableTask;
 
@@ -174,17 +174,7 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
 pub trait EventLog: BlockStore + Sized + Send + Sync {
     /// Adds a message event to a owner's event log.
     fn append(&self, owner: &str, event: &Event) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            // store entry block
-            let message_cid = event.cid()?;
-            BlockStore::delete(self, owner, &message_cid).await?;
-            BlockStore::put(self, owner, &message_cid, &block::encode(event)?).await?;
-
-            // index entry
-            // TODO: add watermark to indexes
-            // const watermark = this.ulidFactory();
-            Ok(index::insert(owner, event, self).await?)
-        }
+        async move { event_log::append(owner, event, self).await.map_err(Into::into) }
     }
 
     /// Retrieves all of a owner's events that occurred after the cursor provided.
@@ -192,9 +182,9 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     ///
     /// The cursor is a `message_cid`.
     fn events(
-        &self, _owner: &str, _cursor: Option<Cursor>,
+        &self, owner: &str, cursor: Option<Cursor>,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async move { todo!() }
+        async move { event_log::events(owner, cursor, self).await.map_err(Into::into) }
     }
 
     /// Retrieves a filtered set of events that occurred after a the cursor
@@ -206,41 +196,12 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async move {
-            let mut results = index::query(owner, query, self).await?;
-
-            // return cursor when paging is used
-            let limit =
-                query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
-
-            let cursor = if limit > 0 && limit < results.len() {
-                // set cursor to the last item remaining after the spliced result.
-                results.pop().map(|item| Cursor {
-                    message_cid: item.message_cid.clone(),
-                    value: item.fields["messageTimestamp"].clone(),
-                })
-            } else {
-                None
-            };
-
-            let mut entries = Vec::new();
-            for item in results {
-                let Some(bytes) = BlockStore::get(self, owner, &item.message_cid).await? else {
-                    return Err(anyhow!("missing block for message cid"));
-                };
-                entries.push(block::decode(&bytes)?);
-            }
-
-            Ok((entries, cursor))
-        }
+        async move { event_log::query(owner, query, self).await.map_err(Into::into) }
     }
 
     /// Deletes event for the specified `message_cid`.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async move {
-            index::delete(owner, message_cid, self).await?;
-            BlockStore::delete(self, owner, message_cid).await
-        }
+        async move { event_log::delete(owner, message_cid, self).await.map_err(Into::into) }
     }
 
     /// Purge all data from the store.

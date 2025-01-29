@@ -2,6 +2,7 @@
 
 pub(crate) mod block;
 pub mod data;
+pub(crate) mod event_log;
 pub(crate) mod index;
 pub(crate) mod message;
 
