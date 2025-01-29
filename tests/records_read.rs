@@ -9,7 +9,7 @@ use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuild
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::permissions::{RecordsScope, Scope};
 use dwn_node::protocols::Definition;
-use dwn_node::provider::{BlockStore, MessageStore};
+use dwn_node::provider::{DataStore, MessageStore};
 use dwn_node::records::{EncryptOptions, Recipient, RecordsFilter, decrypt};
 use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
 use dwn_node::{Error, Method, cid, endpoint};
@@ -1884,7 +1884,7 @@ async fn data_blocks_deleted() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // delete record's data
-    BlockStore::delete(&provider, ALICE_DID, &write.descriptor.data_cid)
+    DataStore::delete(&provider, ALICE_DID, &write.record_id, &write.descriptor.data_cid)
         .await
         .expect("should delete block");
 
@@ -1924,7 +1924,7 @@ async fn encoded_data() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // deleting BlockStore data has no effect as the record uses encoded data
-    BlockStore::delete(&provider, ALICE_DID, &write.descriptor.data_cid)
+    DataStore::delete(&provider, ALICE_DID, &write.record_id, &write.descriptor.data_cid)
         .await
         .expect("should delete block");
 

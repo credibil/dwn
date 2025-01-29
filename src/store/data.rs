@@ -50,19 +50,13 @@ pub(crate) async fn put(
         }
     }
 
-    // create a root block linking to the data blocks
-    // this is the block that yields the `data_cid`
+    // the root block links the data blocks — yields the `data_cid`
     let root = Block::encode(&Ipld::List(links))?;
-    store.put(owner, root.cid(), root.data()).await?;
 
-    // the 'partition' as a block helps isolate the data by owner and record_id
-    // println!("put: owner: {owner}, record_id: {record_id}, data_cid: {data_cid}");
-    let partition = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("owner"), Ipld::String(owner.to_string())),
-        (String::from("record_id"), Ipld::String(record_id.to_string())),
-        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
-    ])))?;
-    store.put(owner, partition.cid(), partition.data()).await?;
+    // use a 'partition' CID to ensure the root data block is stored
+    // by the owner, record_id, and data_cid
+    let partition_cid = partition_cid(owner, record_id, data_cid)?;
+    store.put(owner, &partition_cid, root.data()).await?;
 
     Ok((root.cid().to_string(), byte_count))
 }
@@ -71,24 +65,19 @@ pub(crate) async fn put(
 pub(crate) async fn get(
     owner: &str, record_id: &str, data_cid: &str, store: &impl BlockStore,
 ) -> Result<Option<impl Read>> {
-    // get the partition block
-    // println!("get: owner: {owner}, record_id: {record_id}, data_cid: {data_cid}");
-    let partition = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("owner"), Ipld::String(owner.to_string())),
-        (String::from("record_id"), Ipld::String(record_id.to_string())),
-        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
-    ])))?;
+    // get the root block using the partition CID
+    let partition_cid = partition_cid(owner, record_id, data_cid)?;
 
-    // get partition block
-    let Some(_) = store.get(owner, partition.cid()).await? else {
+    // get root block
+    let Some(bytes) = store.get(owner, &partition_cid).await? else {
         return Ok(None);
         //return Err(unexpected!("`owner`, `record_id`, and `data_cid` do not match"));
     };
 
     // get root block
-    let Some(bytes) = store.get(owner, data_cid).await? else {
-        return Ok(None);
-    };
+    // let Some(bytes) = store.get(owner, data_cid).await? else {
+    //     return Ok(None);
+    // };
 
     // the root blook contains a list of links to data blocks
     let Ipld::List(links) = block::decode(&bytes)? else {
@@ -122,7 +111,17 @@ pub(crate) async fn get(
 }
 
 pub(crate) async fn delete(
-    owner: &str, _record_id: &str, data_cid: &str, store: &impl BlockStore,
+    owner: &str, record_id: &str, data_cid: &str, store: &impl BlockStore,
 ) -> Result<()> {
-    Ok(store.delete(owner, data_cid).await?)
+    let partition_cid = partition_cid(owner, record_id, data_cid)?;
+    Ok(store.delete(owner, &partition_cid).await?)
+}
+
+fn partition_cid(owner: &str, record_id: &str, data_cid: &str) -> Result<String> {
+    let partition = Block::encode(&Ipld::Map(BTreeMap::from([
+        (String::from("owner"), Ipld::String(owner.to_string())),
+        (String::from("record_id"), Ipld::String(record_id.to_string())),
+        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
+    ])))?;
+    Ok(partition.cid().to_string())
 }
