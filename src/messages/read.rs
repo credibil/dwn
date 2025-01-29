@@ -34,7 +34,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     // verify the fetched message can be safely returned to the requestor
     read.authorize(owner, &entry, provider).await?;
 
-    let mut message = (*entry).clone();
+    let mut message = entry.message;
 
     // include data with RecordsWrite messages
     let data = if let EntryType::Write(ref mut write) = message {

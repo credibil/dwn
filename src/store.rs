@@ -5,7 +5,6 @@ pub mod data;
 pub mod index;
 
 use std::collections::HashMap;
-use std::ops::Deref;
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
@@ -87,14 +86,6 @@ impl Entry {
     }
 }
 
-impl Deref for Entry {
-    type Target = EntryType;
-
-    fn deref(&self) -> &Self::Target {
-        &self.message
-    }
-}
-
 // LATER: perhaps should be TryFrom?
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
@@ -166,14 +157,6 @@ pub struct MatchSet {
     /// Index to use for the query.
     pub index: Option<(String, String)>,
 }
-
-// impl Iterator for &MatchSet {
-//     type Item = Matcher;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.set.pop()
-//     }
-// }
 
 /// A field/value matcher for use in finding matching indexed values.
 #[derive(Clone, Debug)]
