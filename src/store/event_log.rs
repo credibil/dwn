@@ -1,8 +1,9 @@
 //! # Event Log
 
+use super::Pagination;
 use crate::event::Event;
 use crate::provider::BlockStore;
-use crate::store::{Cursor, Entry, Query, block, index};
+use crate::store::{Cursor, Entry, Query, Sort, block, index};
 use crate::{Result, unexpected};
 
 /// Adds a message event to a owner's event log.
@@ -12,15 +13,28 @@ pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Resu
     store.delete(owner, &message_cid).await?;
     store.put(owner, &message_cid, &block::encode(event)?).await?;
 
-    // index entry
-    index::insert(owner, event, store).await
+    // add a 'watermark' index entry for sorting and pagination
+    let mut event = event.clone();
+    let watermark = ulid::Ulid::new().to_string();
+    event.indexes.insert("watermark".to_string(), watermark);
+
+    index::insert(owner, &event, store).await
 }
 
 #[allow(clippy::unused_async)]
 pub async fn events(
-    _owner: &str, _cursor: Option<Cursor>, _store: &impl BlockStore,
+    owner: &str, cursor: Option<Cursor>, store: &impl BlockStore,
 ) -> Result<(Vec<Entry>, Option<Cursor>)> {
-    todo!()
+    let q = Query {
+        match_sets: vec![],
+        pagination: Some(Pagination {
+            limit: Some(100),
+            cursor,
+        }),
+        sort: Sort::TimestampAsc,
+    };
+
+    query(owner, &q, store).await
 }
 
 /// Retrieves a filtered set of events that occurred after a the cursor
@@ -36,12 +50,11 @@ pub async fn query(
 
     // return cursor when paging is used
     let limit = query.pagination.as_ref().map_or(0, |p| p.limit.unwrap_or(0));
-
     let cursor = if limit > 0 && limit < results.len() {
         // set cursor to the last item remaining after the spliced result.
         results.pop().map(|item| Cursor {
             message_cid: item.message_cid.clone(),
-            value: item.fields["messageTimestamp"].clone(),
+            value: item.fields["watermark"].clone(),
         })
     } else {
         None

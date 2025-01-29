@@ -22,8 +22,7 @@ pub async fn query(
     let mut results = index::query(owner, query, store).await?;
 
     // return cursor when paging is used
-    let limit = query.pagination.as_ref().map(|p| p.limit.unwrap_or_default()).unwrap_or_default();
-
+    let limit = query.pagination.as_ref().map_or(0, |p| p.limit.unwrap_or(0));
     let cursor = if limit > 0 && limit < results.len() {
         let sort_field = query.sort.to_string();
 
