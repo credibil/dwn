@@ -3,11 +3,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::utils::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider};
 use crate::store::{self, Cursor, ProtocolsQueryBuilder};
+use crate::utils::cid;
 use crate::{Descriptor, Result, permissions, utils};
 
 // Access level for query.

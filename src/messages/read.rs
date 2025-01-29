@@ -9,13 +9,13 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::utils::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::write;
 use crate::store::{Entry, EntryType};
+use crate::utils::cid;
 use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
 
 /// Handle a read message.
@@ -45,7 +45,8 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         } else {
             use std::io::Read;
             if let Some(mut read) =
-                DataStore::get(provider, owner, "", &write.descriptor.data_cid).await?
+                DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid)
+                    .await?
             {
                 let mut buf = Vec::new();
                 read.read_to_end(&mut buf)?;

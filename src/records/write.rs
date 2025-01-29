@@ -102,14 +102,14 @@ pub async fn handle(
     EventStream::emit(provider, owner, &entry).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
-    if let Some(mut initial_entry) = initial_entry {
-        let initial_write = Write::try_from(&initial_entry)?;
-        initial_entry.indexes.insert("archived".to_string(), true.to_string());
+    if let Some(mut entry) = initial_entry {
+        entry.indexes.insert("archived".to_string(), true.to_string());
+        MessageStore::put(provider, owner, &entry).await?;
+        EventLog::append(provider, owner, &entry).await?;
 
-        MessageStore::put(provider, owner, &initial_entry).await?;
-        EventLog::append(provider, owner, &initial_entry).await?;
-        if !initial_write.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
-            DataStore::delete(provider, owner, "<record_id>", &initial_write.descriptor.data_cid)
+        let initial = Write::try_from(&entry)?;
+        if !initial.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
+            DataStore::delete(provider, owner, &initial.record_id, &initial.descriptor.data_cid)
                 .await?;
         }
     }
@@ -121,7 +121,7 @@ pub async fn handle(
         let write = Write::try_from(entry)?;
         let cid = write.cid()?;
         MessageStore::delete(provider, owner, &cid).await?;
-        DataStore::delete(provider, owner, "<record_id>", &write.descriptor.data_cid).await?;
+        DataStore::delete(provider, owner, &write.record_id, &write.descriptor.data_cid).await?;
         EventLog::delete(provider, owner, &cid).await?;
     }
 
@@ -181,18 +181,6 @@ impl Message for Write {
     type Reply = WriteReply;
 
     fn cid(&self) -> Result<String> {
-        // // exclude `record_id` and `context_id` from CID calculation
-        // #[derive(Serialize)]
-        // struct Cid {
-        //     #[serde(flatten)]
-        //     descriptor: WriteDescriptor,
-        //     authorization: Authorization,
-        // }
-        // cid::from_value(&Cid {
-        //     descriptor: self.descriptor.clone(),
-        //     authorization: self.authorization.clone(),
-        // })
-
         let mut write = self.clone();
         write.encoded_data = None;
         cid::from_value(&write)
@@ -214,7 +202,7 @@ impl Message for Write {
 }
 
 /// `Write` reply
-// #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct WriteReply;
 
@@ -511,7 +499,7 @@ impl Write {
         } else {
             // store data in DataStore
             let (data_cid, data_size) =
-                DataStore::put(store, owner, "<record_id>", &self.descriptor.data_cid, stream)
+                DataStore::put(store, owner, &self.record_id, &self.descriptor.data_cid, stream)
                     .await?;
 
             // verify integrity of stored data
@@ -546,7 +534,7 @@ impl Write {
         // if bigger than encoding threshold, ensure data exists for this record
         if latest.descriptor.data_size > data::MAX_ENCODED_SIZE {
             let result =
-                DataStore::get(store, owner, "<record_id", &self.descriptor.data_cid).await?;
+                DataStore::get(store, owner, &self.record_id, &self.descriptor.data_cid).await?;
             if result.is_none() {
                 return Err(unexpected!("referenced data does not exist"));
             };

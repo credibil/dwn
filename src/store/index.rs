@@ -12,9 +12,9 @@ use std::ops::Bound::{self, Excluded, Included, Unbounded};
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
-use crate::utils::cid;
 use crate::provider::BlockStore;
 use crate::store::{Entry, Query, block};
+use crate::utils::cid;
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;

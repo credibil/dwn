@@ -127,16 +127,16 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     /// The default implementation uses the `BlockStore` provider for storage.
     /// This may be overridden by implementers to provide custom storage.
     fn put(
-        &self, owner: &str, _record_id: &str, data_cid: &str, reader: impl Read + Send,
+        &self, owner: &str, record_id: &str, data_cid: &str, reader: impl Read + Send,
     ) -> impl Future<Output = anyhow::Result<(String, usize)>> + Send {
-        async move { data::put(owner, data_cid, reader, self).await.map_err(Into::into) }
+        async move { data::put(owner, record_id, data_cid, reader, self).await.map_err(Into::into) }
     }
 
     /// Fetches a single message by CID from an underlying block store.
     fn get(
-        &self, owner: &str, _record_id: &str, data_cid: &str,
+        &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send {
-        async move { data::get(owner, data_cid, self).await.map_err(Into::into) }
+        async move { data::get(owner, record_id, data_cid, self).await.map_err(Into::into) }
     }
 
     /// Delete data associated with the specified id.

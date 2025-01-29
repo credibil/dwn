@@ -9,12 +9,12 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
-use crate::utils::cid;
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Protocol};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::{Delete, RecordsFilter, Write, write};
 use crate::store::{self, RecordsQueryBuilder};
+use crate::utils::cid;
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
 /// Process `Read` message.
@@ -83,7 +83,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         use std::io::Read;
 
         let Some(mut read) =
-            DataStore::get(provider, owner, "", &write.descriptor.data_cid).await?
+            DataStore::get(provider, owner, &write.record_id, &write.descriptor.data_cid).await?
         else {
             return Err(Error::NotFound("data not found".to_string()));
         };

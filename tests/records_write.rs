@@ -10,13 +10,13 @@ use dwn_node::clients::protocols::ConfigureBuilder;
 use dwn_node::clients::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
-use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{Conditions, Publication, RecordsScope, Scope};
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet, Size};
 use dwn_node::provider::EventLog;
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
+use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Interface, Message, Method, clients, endpoint, store};
 use http::StatusCode;
 use rand::RngCore;
@@ -4192,12 +4192,9 @@ async fn small_data_cid_protocol() {
     assert_eq!(e, "referenced data does not exist");
 }
 
-// FIXME: requires refactor of BlockStore -> DataStore
-
 // Should prevent accessing data by referencing a different `data_cid` in
 // protocol-authorized records with large amount of data.
 #[tokio::test]
-#[ignore]
 async fn large_data_cid_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
@@ -5753,7 +5750,8 @@ async fn attestation_descriptor_cid() {
 
     // alter the attestation descriptor_cid
     let payload = Attestation {
-        descriptor_cid: dwn_node::cid::from_value(&"somerandomrecordid").expect("should create CID"),
+        descriptor_cid: dwn_node::cid::from_value(&"somerandomrecordid")
+            .expect("should create CID"),
     };
     let attestation = JwsBuilder::new()
         .payload(payload)

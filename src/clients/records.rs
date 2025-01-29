@@ -8,7 +8,6 @@ use serde_json::{Map, Value};
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder};
-use crate::utils::cid;
 use crate::hd_key::DerivationScheme;
 use crate::provider::Signer;
 use crate::records::{
@@ -17,6 +16,7 @@ use crate::records::{
     WriteDescriptor,
 };
 use crate::store::{Pagination, Sort};
+use crate::utils::cid;
 use crate::{Descriptor, Interface, Method, utils};
 
 /// Options to use when creating a permission grant.
