@@ -6,22 +6,23 @@ use crate::provider::BlockStore;
 use crate::store::{Cursor, Entry, Query, Sort, block, index};
 use crate::{Result, unexpected};
 
+const PARTITION: &str = "EVENTLOG";
+
 /// Adds a message event to a owner's event log.
 pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Result<()> {
     // store entry block
     let message_cid = event.cid()?;
-    store.delete(owner, &message_cid).await?;
-    store.put(owner, &message_cid, &block::encode(event)?).await?;
+    store.delete(owner, PARTITION, &message_cid).await?;
+    store.put(owner, PARTITION, &message_cid, &block::encode(event)?).await?;
 
     // add a 'watermark' index entry for sorting and pagination
     let mut event = event.clone();
     let watermark = ulid::Ulid::new().to_string();
     event.indexes.insert("watermark".to_string(), watermark);
 
-    index::insert(owner, &event, store).await
+    index::insert(owner, PARTITION, &event, store).await
 }
 
-#[allow(clippy::unused_async)]
 pub async fn events(
     owner: &str, cursor: Option<Cursor>, store: &impl BlockStore,
 ) -> Result<(Vec<Entry>, Option<Cursor>)> {
@@ -46,7 +47,7 @@ pub async fn events(
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
 ) -> Result<(Vec<Entry>, Option<Cursor>)> {
-    let mut results = index::query(owner, query, store).await?;
+    let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used
     let limit = query.pagination.as_ref().map_or(0, |p| p.limit.unwrap_or(0));
@@ -62,7 +63,7 @@ pub async fn query(
 
     let mut entries = Vec::new();
     for item in results {
-        let Some(bytes) = store.get(owner, &item.message_cid).await? else {
+        let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
             return Err(unexpected!("missing block for message cid"));
         };
         entries.push(block::decode(&bytes)?);
@@ -73,6 +74,6 @@ pub async fn query(
 
 /// Deletes event for the specified `message_cid`.
 pub async fn delete(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<()> {
-    index::delete(owner, message_cid, store).await?;
-    store.delete(owner, message_cid).await.map_err(Into::into)
+    index::delete(owner, PARTITION, message_cid, store).await?;
+    store.delete(owner, PARTITION, message_cid).await.map_err(Into::into)
 }

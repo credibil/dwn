@@ -15,7 +15,6 @@ use crate::{Descriptor, Result, forbidden, unexpected};
 /// Used to grant another entity permission to access a web node's data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(clippy::module_name_repetitions)]
 pub struct Grant {
     /// The ID of the permission grant — the record ID message.
     pub id: String,

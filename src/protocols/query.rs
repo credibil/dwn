@@ -174,7 +174,6 @@ impl Query {
 /// Query descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(clippy::module_name_repetitions)]
 pub struct QueryDescriptor {
     /// The base descriptor
     #[serde(flatten)]

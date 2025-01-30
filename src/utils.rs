@@ -67,19 +67,19 @@ pub mod cid {
 
     struct MockStore;
     impl BlockStore for MockStore {
-        async fn put(&self, _: &str, _: &str, _: &[u8]) -> anyhow::Result<()> {
+        async fn put(&self, _: &str, _: &str, _: &str, _: &[u8]) -> anyhow::Result<()> {
             Ok(())
         }
 
-        async fn get(&self, _: &str, _: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        async fn get(&self, _: &str, _: &str, _: &str) -> anyhow::Result<Option<Vec<u8>>> {
             unimplemented!("MockStore::get")
         }
 
-        async fn delete(&self, _: &str, _: &str) -> anyhow::Result<()> {
+        async fn delete(&self, _: &str, _: &str, _: &str) -> anyhow::Result<()> {
             unimplemented!("MockStore::delete")
         }
 
-        async fn purge(&self) -> anyhow::Result<()> {
+        async fn purge(&self, _: &str, _: &str) -> anyhow::Result<()> {
             unimplemented!("MockStore::purge")
         }
     }

@@ -15,7 +15,8 @@ use crate::{Result, unexpected};
 pub const MAX_ENCODED_SIZE: usize = 30000;
 
 /// The maximum size of a block.
-pub(crate) const CHUNK_SIZE: usize = 1024; // 1 KiB
+pub(crate) const CHUNK_SIZE: usize = 64;
+const PARTITION: &str = "DATA";
 
 /// Put a data record into the block store.
 pub(crate) async fn put(
@@ -39,7 +40,7 @@ pub(crate) async fn put(
             // insert into the blockstore
             let cid = block.cid();
             store
-                .put(owner, cid, block.data())
+                .put(owner, PARTITION, cid, block.data())
                 .await
                 .map_err(|e| unexpected!("issue storing data: {e}"))?;
 
@@ -55,8 +56,8 @@ pub(crate) async fn put(
 
     // use a 'partition' CID to ensure the root data block is stored
     // by the owner, record_id, and data_cid
-    let partition_cid = partition_cid(owner, record_id, data_cid)?;
-    store.put(owner, &partition_cid, root.data()).await?;
+    let root_cid = root_cid(record_id, data_cid)?;
+    store.put(owner, PARTITION, &root_cid, root.data()).await?;
 
     Ok((root.cid().to_string(), byte_count))
 }
@@ -66,18 +67,10 @@ pub(crate) async fn get(
     owner: &str, record_id: &str, data_cid: &str, store: &impl BlockStore,
 ) -> Result<Option<impl Read>> {
     // get the root block using the partition CID
-    let partition_cid = partition_cid(owner, record_id, data_cid)?;
-
-    // get root block
-    let Some(bytes) = store.get(owner, &partition_cid).await? else {
+    let root_cid = root_cid(record_id, data_cid)?;
+    let Some(bytes) = store.get(owner, PARTITION, &root_cid).await? else {
         return Ok(None);
-        //return Err(unexpected!("`owner`, `record_id`, and `data_cid` do not match"));
     };
-
-    // get root block
-    // let Some(bytes) = store.get(owner, data_cid).await? else {
-    //     return Ok(None);
-    // };
 
     // the root blook contains a list of links to data blocks
     let Ipld::List(links) = block::decode(&bytes)? else {
@@ -93,7 +86,7 @@ pub(crate) async fn get(
         let Ipld::Link(link_cid) = link else {
             return Err(unexpected!("invalid link"));
         };
-        let Some(bytes) = store.get(owner, &link_cid.to_string()).await? else {
+        let Some(bytes) = store.get(owner, PARTITION, &link_cid.to_string()).await? else {
             return Ok(None);
         };
 
@@ -113,15 +106,14 @@ pub(crate) async fn get(
 pub(crate) async fn delete(
     owner: &str, record_id: &str, data_cid: &str, store: &impl BlockStore,
 ) -> Result<()> {
-    let partition_cid = partition_cid(owner, record_id, data_cid)?;
-    Ok(store.delete(owner, &partition_cid).await?)
+    let root_cid = root_cid(record_id, data_cid)?;
+    Ok(store.delete(owner, PARTITION, &root_cid).await?)
 }
 
-fn partition_cid(owner: &str, record_id: &str, data_cid: &str) -> Result<String> {
-    let partition = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("owner"), Ipld::String(owner.to_string())),
+fn root_cid(record_id: &str, data_cid: &str) -> Result<String> {
+    let root = Block::encode(&Ipld::Map(BTreeMap::from([
         (String::from("record_id"), Ipld::String(record_id.to_string())),
         (String::from("data_cid"), Ipld::String(data_cid.to_string())),
     ])))?;
-    Ok(partition.cid().to_string())
+    Ok(root.cid().to_string())
 }

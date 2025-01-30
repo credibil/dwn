@@ -20,9 +20,11 @@ pub type EventType = EntryType;
 
 /// Filter to use when subscribing to events.
 #[derive(Debug, Deserialize, Serialize)]
-#[allow(missing_docs)]
 pub enum SubscribeFilter {
+    /// Filter events using a Messages filter.
     Messages(Vec<MessagesFilter>),
+
+    /// Filter events using a Records filter.
     Records(RecordsFilter),
 }
 
@@ -97,14 +99,12 @@ impl SubscribeFilter {
 // TODO: move this close to RecordsFilter
 impl RecordsFilter {
     /// Determine whether the specified `Entry` matches the filter.
-    #[allow(clippy::too_many_lines)]
     #[allow(clippy::cognitive_complexity)]
     #[must_use]
     pub fn is_match(&self, event: &Entry) -> bool {
         let EventType::Write(write) = &event.message else {
             return false;
         };
-        let indexes = &event.indexes;
         let descriptor = &write.descriptor;
 
         if let Some(author) = &self.author {
@@ -113,7 +113,7 @@ impl RecordsFilter {
             }
         }
         if let Some(attester) = self.attester.clone() {
-            if Some(&attester) != indexes.get("attester") {
+            if Some(&attester) != event.indexes.get("attester") {
                 return false;
             }
         }
@@ -199,7 +199,6 @@ impl RecordsFilter {
                 return false;
             }
         }
-
         true
     }
 }

@@ -195,15 +195,12 @@ impl Message for Write {
     }
 
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        // FIXME: fix this lint
-        #[allow(clippy::large_futures)]
         handle(owner, self, provider).await
     }
 }
 
 /// `Write` reply
 #[derive(Clone, Debug)]
-#[allow(clippy::module_name_repetitions)]
 pub struct WriteReply;
 
 impl TryFrom<Entry> for Write {

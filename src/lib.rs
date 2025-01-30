@@ -51,31 +51,38 @@ pub struct Descriptor {
 
 /// Web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
-#[allow(missing_docs)]
 pub enum Interface {
+    /// Records interface.
     #[default]
     Records,
+    /// Protocols interface.
     Protocols,
+    /// Messages interface.
     Messages,
 }
 
 /// Interface methods.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]
-#[allow(missing_docs)]
 pub enum Method {
+    /// Read method.
     #[default]
     Read,
+    /// Write method.
     Write,
+    /// Query method.
     Query,
+    /// Configure method.
     Configure,
+    /// Subscribe method.
     Subscribe,
+    /// Delete method.
     Delete,
 }
 
 /// Interface protocols.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[allow(missing_docs)]
 pub enum Protocol {
+    /// HTTP protocol.
     #[default]
     Http,
 }
@@ -84,9 +91,10 @@ pub enum Protocol {
 /// objects.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
-#[allow(missing_docs)]
 pub enum OneOrMany<T> {
+    /// A single object.
     One(T),
+    /// A set of objects.
     Many(Vec<T>),
 }
 

@@ -480,21 +480,20 @@ pub enum Action {
 /// Protocol tags
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(clippy::struct_field_names)]
 pub struct Tags {
     /// Tags required for this protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$requiredTags")]
-    pub required_tags: Option<Vec<String>>,
+    pub required: Option<Vec<String>>,
 
     /// Allow tags other than those explicitly listed.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$allowUndefinedTags")]
-    pub allow_undefined_tags: Option<bool>,
+    pub allow_undefined: Option<bool>,
 
     /// Tag properties
     #[serde(flatten)]
-    pub undefined_tags: BTreeMap<String, Value>,
+    pub undefined: BTreeMap<String, Value>,
 }
 
 /// Verify the structure (rule sets) of the protocol definition.
@@ -528,7 +527,7 @@ fn validate_rule_set(
 
     // validate tags schemas
     if let Some(tags) = &rule_set.tags {
-        for tag in tags.undefined_tags.keys() {
+        for tag in tags.undefined.keys() {
             let schema = serde_json::from_str(tag)?;
             jsonschema::validator_for(&schema)
                 .map_err(|e| unexpected!("tag schema validation error: {e}"))?;

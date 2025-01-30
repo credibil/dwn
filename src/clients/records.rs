@@ -884,8 +884,7 @@ impl<'a, O, A> WriteBuilder<'a, O, A, Unsigned> {
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
 impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
-    // FIXME: break into separate functions
-    #[allow(clippy::too_many_lines)]
+    // TODO: break into separate functions
     fn to_write(&self, author_did: &str) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
             write.clone()

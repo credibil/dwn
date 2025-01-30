@@ -236,10 +236,10 @@ fn check_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<(
         return Ok(());
     };
 
-    let additional_properties = rule_set_tags.allow_undefined_tags.unwrap_or_default();
+    let additional_properties = rule_set_tags.allow_undefined.unwrap_or_default();
     let required_default = vec![];
-    let required = rule_set_tags.required_tags.as_ref().unwrap_or(&required_default);
-    let properties = &rule_set_tags.undefined_tags;
+    let required = rule_set_tags.required.as_ref().unwrap_or(&required_default);
+    let properties = &rule_set_tags.undefined;
 
     let schema = json!({
         "type": "object",
