@@ -48,7 +48,8 @@ impl Entry {
     }
 
     /// Indexes for this entry.
-    pub fn indexes(&self) -> &HashMap<String, String> {
+    #[must_use]
+    pub const fn indexes(&self) -> &HashMap<String, String> {
         &self.indexes
     }
 
