@@ -1,15 +1,15 @@
 //! # Protocol Integrity
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use serde_json::{Map, Value, json};
+use serde_json::json;
 
 use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{
     self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet, query,
 };
 use crate::provider::MessageStore;
-use crate::records::{RecordsFilter, Write};
+use crate::records::{RecordsFilter, Tag, Write};
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden, schema, unexpected, utils};
 
@@ -101,7 +101,7 @@ fn check_scope(write: &Write, scope: &Scope) -> Result<()> {
     let Some(tag_protocol) = tags.get("protocol") else {
         return Err(forbidden!("grant tags must contain a \"protocol\" tag",));
     };
-    if tag_protocol != protocol {
+    if tag_protocol.as_str() != Some(protocol) {
         return Err(forbidden!("grant scope protocol does not match protocol"));
     }
 
@@ -226,7 +226,7 @@ fn check_size_limit(data_size: usize, rule_set: &RuleSet) -> Result<()> {
     Ok(())
 }
 
-fn check_tags(tags: Option<&Map<String, Value>>, rule_set: &RuleSet) -> Result<()> {
+fn check_tags(tags: Option<&HashMap<String, Tag>>, rule_set: &RuleSet) -> Result<()> {
     let Some(rule_set_tags) = &rule_set.tags else {
         return Ok(());
     };

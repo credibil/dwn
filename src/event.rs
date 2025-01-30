@@ -6,10 +6,9 @@ use std::task::{Context, Poll};
 
 use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::messages::MessagesFilter;
-use crate::records::{RecordsFilter, TagFilter};
+use crate::records::{RecordsFilter, Tag, TagFilter};
 use crate::store::{Entry, EntryType};
 
 /// Alias for `store::Entry` used for event-related functionality.
@@ -163,8 +162,7 @@ impl RecordsFilter {
                 let Some(tags) = &descriptor.tags else {
                     return false;
                 };
-                let value = tags.get(property).unwrap_or(&Value::Null);
-                if !filter.is_match(value) {
+                if !filter.is_match(tags.get(property).unwrap_or(&Tag::Empty)) {
                     return false;
                 }
             }
@@ -204,7 +202,7 @@ impl RecordsFilter {
 }
 
 impl TagFilter {
-    fn is_match(&self, tag: &Value) -> bool {
+    fn is_match(&self, tag: &Tag) -> bool {
         match self {
             Self::StartsWith(value) => {
                 let tag = tag.as_str().unwrap_or_default();
@@ -214,7 +212,7 @@ impl TagFilter {
                 let tag = tag.as_u64().unwrap_or_default();
                 range.contains(&usize::try_from(tag).unwrap_or_default())
             }
-            Self::Equal(value) => tag == value,
+            Self::Equal(other) => tag == other,
         }
     }
 }

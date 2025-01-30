@@ -10,7 +10,6 @@ use chrono::format::SecondsFormat::Micros;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 use vercre_infosec::Signer;
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
@@ -538,9 +537,10 @@ impl Write {
 
         // verify protocols match
         if let Some(tags) = &self.descriptor.tags {
-            let tag_protocol = tags.get("protocol").unwrap_or(&Value::Null);
-            if tag_protocol.as_str() != grant.data.scope.protocol() {
-                return Err(unexpected!("revocation protocol does not match grant protocol"));
+            if let Some(tag_protocol) = tags.get("protocol") {
+                if tag_protocol.as_str() != grant.data.scope.protocol() {
+                    return Err(unexpected!("revocation protocol does not match grant protocol"));
+                }
             }
         }
 
@@ -762,10 +762,9 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
-    // FIXME: does `tags` need to use Value?
     /// Tags associated with the record
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Map<String, Value>>,
+    pub tags: Option<HashMap<String, Tag>>,
 
     /// The CID of the record's parent (if exists).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -792,6 +791,54 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "rfc3339_micros_opt")]
     pub date_published: Option<DateTime<Utc>>,
+}
+
+/// Tag value types.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+// #[serde(rename_all = "camelCase")]
+#[serde(untagged)]
+pub enum Tag {
+    /// Empty tag value.
+    #[default]
+    Empty,
+
+    /// String tag value.
+    String(String),
+
+    /// Number tag value.
+    Number(u64),
+
+    /// Boolean tag value.
+    Boolean(bool),
+}
+
+impl Tag {
+    /// Attempt to convert the tag value to a string.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Attempt to convert the tag value to a u64.
+    #[must_use]
+    pub const fn as_u64(&self) -> Option<u64> {
+        match self {
+            Self::Number(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    /// Attempt to convert the tag value to a bool.
+    #[must_use]
+    pub const fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Boolean(b) => Some(*b),
+            _ => None,
+        }
+    }
 }
 
 // Fetch previous entries for this record, ordered from earliest to latest.

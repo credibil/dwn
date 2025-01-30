@@ -11,14 +11,13 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 pub use self::delete::{Delete, DeleteDescriptor};
 pub use self::encryption::{EncryptOptions, EncryptedKey, EncryptionProperty, Recipient, decrypt};
 pub use self::query::{Query, QueryDescriptor};
 pub use self::read::{Read, ReadDescriptor};
 pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
-pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Write, WriteDescriptor};
+pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Tag, Write, WriteDescriptor};
 use crate::{DateRange, OneOrMany, Range, Result, utils};
 
 // TODO: add builder for RecordsFilter
@@ -357,11 +356,11 @@ pub enum TagFilter {
     Range(Range<usize>),
 
     /// Filter by a specific value.
-    Equal(Value),
+    Equal(Tag),
 }
 
 impl Default for TagFilter {
     fn default() -> Self {
-        Self::Equal(Value::Null)
+        Self::Equal(Tag::Empty)
     }
 }

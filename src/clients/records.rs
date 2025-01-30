@@ -1,10 +1,10 @@
 //! # Records
 
+use std::collections::HashMap;
 use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
-use serde_json::{Map, Value};
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder};
@@ -12,8 +12,8 @@ use crate::hd_key::DerivationScheme;
 use crate::provider::Signer;
 use crate::records::{
     Attestation, DelegatedGrant, Delete, DeleteDescriptor, EncryptionProperty, Query,
-    QueryDescriptor, Read, ReadDescriptor, RecordsFilter, Subscribe, SubscribeDescriptor, Write,
-    WriteDescriptor,
+    QueryDescriptor, Read, ReadDescriptor, RecordsFilter, Subscribe, SubscribeDescriptor, Tag,
+    Write, WriteDescriptor,
 };
 use crate::store::{Pagination, Sort};
 use crate::utils::cid;
@@ -532,7 +532,7 @@ pub struct WriteBuilder<'a, O, A, S> {
     recipient: Option<String>,
     protocol: Option<ProtocolBuilder<'a>>,
     schema: Option<String>,
-    tags: Option<Map<String, Value>>,
+    tags: Option<HashMap<String, Tag>>,
     record_id: Option<String>,
     data: Option<Data>,
     data_format: String,
@@ -743,8 +743,8 @@ impl<O> WriteBuilder<'_, O, Unattested, Unsigned> {
 
     /// Add a tag to the record.
     #[must_use]
-    pub fn add_tag(mut self, name: String, value: Value) -> Self {
-        self.tags.get_or_insert_with(Map::new).insert(name, value);
+    pub fn add_tag(mut self, name: impl Into<String>, tag: Tag) -> Self {
+        self.tags.get_or_insert_with(HashMap::new).insert(name.into(), tag);
         self
     }
 
