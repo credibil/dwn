@@ -228,7 +228,7 @@ impl Grant {
         // verify protocols match
         if self.data.scope.protocol().is_none() {
             return Ok(());
-        };
+        }
         if descriptor.filter.protocol.as_deref() != self.data.scope.protocol() {
             return Err(forbidden!("grant protocol does not match query protocol",));
         }
@@ -249,7 +249,7 @@ impl Grant {
         // must be deleting a record with the same protocol
         if self.data.scope.protocol().is_none() {
             return Ok(());
-        };
+        }
         if write.descriptor.protocol.as_deref() != self.data.scope.protocol() {
             return Err(forbidden!("grant protocol does not match delete protocol",));
         }

@@ -84,7 +84,7 @@ impl Query {
         // verify filter protocol
         if grant.data.scope.protocol().is_none() {
             return Ok(());
-        };
+        }
 
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {

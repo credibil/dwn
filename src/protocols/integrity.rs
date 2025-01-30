@@ -190,7 +190,7 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
         write.context_id.as_ref().and_then(|id| id.rsplit_once('/').map(|x| x.0))
     {
         filter = filter.context_id(parent_context);
-    };
+    }
 
     let query = RecordsQueryBuilder::new().add_filter(filter).build();
     let (entries, _) = store.query(owner, &query).await?;

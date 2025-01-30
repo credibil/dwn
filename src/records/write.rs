@@ -80,7 +80,7 @@ pub async fn handle(
             return Err(unexpected!("latest existing record not found"));
         };
         write.clone_data(owner, existing, provider).await?;
-    };
+    }
 
     // response codes
     let code = if write.data_stream.is_some() || !is_initial {
@@ -349,7 +349,7 @@ impl Write {
         // (we established `record_owner`== web node owner above)
         if record_owner.is_some() {
             return Ok(());
-        };
+        }
 
         // when author is the owner, we can directly grant access
         if author == owner {
@@ -362,7 +362,7 @@ impl Write {
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
-        };
+        }
 
         // protocol-specific authorization
         if let Some(protocol) = &self.descriptor.protocol {
@@ -762,7 +762,7 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
-    // TODO: does `tags` need to use Value?
+    // FIXME: does `tags` need to use Value?
     /// Tags associated with the record
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Map<String, Value>>,

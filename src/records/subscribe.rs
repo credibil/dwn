@@ -118,7 +118,7 @@ impl Subscribe {
         // only need to authorize subscriptions to private records
         if self.descriptor.filter.published.unwrap_or_default() {
             return Ok(());
-        };
+        }
 
         let Some(authzn) = &self.authorization else {
             return Err(forbidden!("missing authorization"));

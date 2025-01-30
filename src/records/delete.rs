@@ -163,7 +163,7 @@ impl Delete {
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = delegated_grant.to_grant()?;
             grant.permit_delete(author, &authzn.signer()?, self, write, store).await?;
-        };
+        }
 
         if author == owner {
             return Ok(());
@@ -364,7 +364,7 @@ async fn delete_data(
         if existing_write.descriptor.data_cid == latest_write.descriptor.data_cid {
             return Ok(());
         }
-    };
+    }
 
     // // short-circuit when data is encoded in message (i.e. not in block store)
     // if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {

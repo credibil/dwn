@@ -965,7 +965,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
                 write.descriptor.data_size = *data_size;
             }
             None => {}
-        };
+        }
 
         if let Some(encryption) = &self.encryption {
             for key in &encryption.key_encryption {

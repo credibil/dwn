@@ -129,7 +129,7 @@ impl GrantBuilder {
         if let Some(protocol) = scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
-        };
+        }
 
         let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
@@ -213,7 +213,7 @@ impl RequestBuilder {
         if let Some(protocol) = scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
-        };
+        }
 
         let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&request_bytes));
@@ -277,7 +277,7 @@ impl RevocationBuilder {
         if let Some(protocol) = grant_data.scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
             builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
-        };
+        }
 
         let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&revocation_bytes));
