@@ -187,13 +187,8 @@ async fn check_role_record(owner: &str, write: &Write, store: &impl MessageStore
         .add_recipient(recipient);
 
     if let Some(parent_context) =
-        write.context_id.as_ref().and_then(|context_id| context_id.rsplit_once('/').map(|x| x.0))
+        write.context_id.as_ref().and_then(|id| id.rsplit_once('/').map(|x| x.0))
     {
-        // FIXME: implement Range query in `store`
-        // query = query.context_id(Range::new(
-        //     Some(parent_context.to_string()),
-        //     Some(format!("{parent_context}\u{ffff}")),
-        // ));
         filter = filter.context_id(parent_context);
     };
 
