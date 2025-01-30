@@ -38,7 +38,7 @@ pub async fn handle(
     // unauthorized queries can only query for published protocols
     if query.authorize(owner, provider).await? == Access::Published {
         builder = builder.published(true);
-    };
+    }
 
     let (records, _) = MessageStore::query(provider, owner, &builder.build()).await?;
 

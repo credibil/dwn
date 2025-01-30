@@ -141,23 +141,17 @@ impl Task for Delete {
 impl Delete {
     /// Build flattened indexes for the write message.
     #[must_use]
-    pub fn indexes(&self) -> HashMap<String, String> {
+    pub(crate) fn build_indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
-        let descriptor = &self.descriptor;
-
         indexes.insert("interface".to_string(), Interface::Records.to_string());
         indexes.insert("method".to_string(), Method::Delete.to_string());
-
-        indexes.insert("record_id".to_string(), descriptor.record_id.clone());
-        indexes.insert("recordId".to_string(), descriptor.record_id.clone());
-        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert("recordId".to_string(), self.descriptor.record_id.clone());
         indexes.insert(
             "messageTimestamp".to_string(),
-            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
+            self.descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-        // indexes.insert("archived".to_string(), false.to_string());
-
+        indexes.insert("archived".to_string(), "false".to_string());
         indexes
     }
 
@@ -170,7 +164,7 @@ impl Delete {
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
             let grant = delegated_grant.to_grant()?;
             grant.permit_delete(author, &authzn.signer()?, self, write, store).await?;
-        };
+        }
 
         if author == owner {
             return Ok(());
@@ -216,31 +210,23 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(unexpected!("multiple messages exist"));
     }
 
-    let latest = &entries[0];
-
-    // TODO: merge this code with `RecordsWrite`
-    // if the incoming message is not the latest, return Conflict
-    let delete_ts = delete.descriptor().message_timestamp.timestamp_micros();
-    let latest_ts = latest.descriptor().message_timestamp.timestamp_micros();
-    if delete_ts < latest_ts {
+    // delete message should be the most recent message
+    let latest = &entries[entries.len() - 1];
+    if delete.descriptor().message_timestamp < latest.descriptor().message_timestamp {
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
 
-    let Some(earliest) = entries.first() else {
-        return Err(unexpected!("no records found"));
-    };
-
-    let write = Write::try_from(earliest)?;
+    // this should be the initial write
+    let write = Write::try_from(&entries[0])?;
     if !write.is_initial()? {
         return Err(unexpected!("initial write is not earliest message"));
     }
 
-    // save the delete message using same indexes as the initial write
+    // ensure the `RecordsDelete` message is searchable
     let mut delete_entry = Entry::from(delete);
-
-    let mut merged_indexes = write.indexes();
-    merged_indexes.extend(delete.indexes());
-    delete_entry.indexes = merged_indexes;
+    for (key, value) in write.build_indexes() {
+        delete_entry.add_index(key, value);
+    }
 
     MessageStore::put(provider, owner, &delete_entry).await?;
     EventLog::append(provider, owner, &delete_entry).await?;
@@ -330,23 +316,19 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
 async fn delete_earlier(
     owner: &str, latest: &Entry, existing: &[Entry], provider: &impl Provider,
 ) -> Result<()> {
-    // N.B. under normal circumstances, there will only be, at most, two existing
-    // records per `record_id` (initial + a potential subsequent write/delete),
+    // N.B. typically there will only be, at most, two existing records per
+    // `record_id` (initial + a potential subsequent write/delete),
     for entry in existing {
-        let entry_ts = entry.descriptor().message_timestamp.timestamp_micros();
-        let latest_ts = latest.descriptor().message_timestamp.timestamp_micros();
-
-        if entry_ts < latest_ts {
+        if entry.descriptor().message_timestamp < latest.descriptor().message_timestamp {
             delete_data(owner, entry, latest, provider).await?;
 
             // when the existing message is the initial write, retain it BUT,
             // ensure the message is marked as `archived`
-            if let Some(write) = entry.as_write()
-                && write.is_initial()?
-            {
-                let mut record = Entry::from(write);
-                record.indexes.insert("archived".to_string(), true.to_string());
-                MessageStore::put(provider, owner, &record).await?;
+            let write = Write::try_from(entry)?;
+            if write.is_initial()? {
+                let mut entry = Entry::from(&write);
+                entry.add_index("archived", true.to_string());
+                MessageStore::put(provider, owner, &entry).await?;
             } else {
                 let cid = entry.cid()?;
                 MessageStore::delete(provider, owner, &cid).await?;
@@ -371,7 +353,7 @@ async fn delete_data(
         if existing_write.descriptor.data_cid == latest_write.descriptor.data_cid {
             return Ok(());
         }
-    };
+    }
 
     // // short-circuit when data is encoded in message (i.e. not in block store)
     // if write.descriptor.data_size <= data::MAX_ENCODED_SIZE {

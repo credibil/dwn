@@ -222,7 +222,9 @@ async fn deleted_write() {
     let initial = Entry::from(&write);
 
     let mut entry = Entry::from(&delete);
-    entry.indexes.extend(initial.indexes);
+    for (key, value) in initial.indexes() {
+        entry.add_index(key, value);
+    }
     MessageStore::put(&provider, ALICE_DID, &entry).await.expect("should save");
 
     // --------------------------------------------------

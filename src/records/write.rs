@@ -10,7 +10,6 @@ use chrono::format::SecondsFormat::Micros;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 use vercre_infosec::Signer;
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
@@ -80,7 +79,7 @@ pub async fn handle(
             return Err(unexpected!("latest existing record not found"));
         };
         write.clone_data(owner, existing, provider).await?;
-    };
+    }
 
     // response codes
     let code = if write.data_stream.is_some() || !is_initial {
@@ -94,7 +93,7 @@ pub async fn handle(
     // set `archive` flag is set when the intial write has no data
     // N.B. this is used to prevent malicious access to another record's data
     let mut entry = Entry::from(&write);
-    entry.indexes.insert("archived".to_string(), (code == StatusCode::NO_CONTENT).to_string());
+    entry.add_index("archived", (code == StatusCode::NO_CONTENT).to_string());
 
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
@@ -102,12 +101,16 @@ pub async fn handle(
     EventStream::emit(provider, owner, &entry).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
-    if let Some(mut entry) = initial_entry {
-        entry.indexes.insert("archived".to_string(), true.to_string());
+    if let Some(entry) = initial_entry {
+        let initial = Write::try_from(&entry)?;
+
+        // HACK: rebuild entry's indexes
+        let mut entry = Entry::from(&initial);
+        entry.add_index("archived", true.to_string());
+
         MessageStore::put(provider, owner, &entry).await?;
         EventLog::append(provider, owner, &entry).await?;
 
-        let initial = Write::try_from(&entry)?;
         if !initial.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
             DataStore::delete(provider, owner, &initial.record_id, &initial.descriptor.data_cid)
                 .await?;
@@ -228,30 +231,23 @@ impl TryFrom<&Entry> for Write {
 impl Write {
     /// Build flattened indexes for the write message.
     #[must_use]
-    pub fn indexes(&self) -> HashMap<String, String> {
+    pub(crate) fn build_indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
         let descriptor = &self.descriptor;
 
         indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), descriptor.base.method.to_string());
-        indexes.insert("archived".to_string(), false.to_string());
-
-        // FIXME: add these fields back when cut over to new indexes
-        indexes.insert("record_id".to_string(), self.record_id.clone());
+        // indexes.insert("archived".to_string(), false.to_string());
+        indexes.insert("recordId".to_string(), self.record_id.clone());
         if let Some(context_id) = &self.context_id {
             indexes.insert("contextId".to_string(), context_id.clone());
         }
-        // TODO: remove this after cut over to new indexes
-        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
         indexes.insert(
             "messageTimestamp".to_string(),
             descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
-
-        // set to "false" when None
-        let published = descriptor.published.unwrap_or_default();
-        indexes.insert("published".to_string(), published.to_string());
-
+        indexes
+            .insert("published".to_string(), descriptor.published.unwrap_or_default().to_string());
         indexes.insert("dataFormat".to_string(), descriptor.data_format.clone());
         indexes.insert("dataCid".to_string(), descriptor.data_cid.clone());
         indexes.insert("dataSize".to_string(), format!("{:0>10}", descriptor.data_size));
@@ -281,13 +277,11 @@ impl Write {
 
         // special values
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-
         if let Ok(jws) = &self.authorization.payload() {
             if let Some(grant_id) = &jws.permission_grant_id {
                 indexes.insert("permissionGrantId".to_string(), grant_id.clone());
             }
         }
-
         if let Some(attestation) = &self.attestation {
             let attester = authorization::signer_did(attestation).unwrap_or_default();
             indexes.insert("attester".to_string(), attester);
@@ -333,7 +327,7 @@ impl Write {
         // if owner signature is set, it must be the same as the tenant DID
         if record_owner.as_ref().is_some_and(|ro| ro != owner) {
             return Err(forbidden!("record owner is not web node owner"));
-        };
+        }
 
         let author = authzn.author()?;
 
@@ -358,7 +352,7 @@ impl Write {
         // (we established `record_owner`== web node owner above)
         if record_owner.is_some() {
             return Ok(());
-        };
+        }
 
         // when author is the owner, we can directly grant access
         if author == owner {
@@ -371,7 +365,7 @@ impl Write {
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
-        };
+        }
 
         // protocol-specific authorization
         if let Some(protocol) = &self.descriptor.protocol {
@@ -402,16 +396,6 @@ impl Write {
         // verify integrity of messages with protocol
         if self.descriptor.protocol.is_some() {
             integrity::verify(owner, self, provider).await?;
-
-            // FIXME: extract data from stream 1x
-            // write record is a grant
-            // if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            //     let mut stream =
-            //         self.data_stream.clone().ok_or_else(|| unexpected!("missing data stream"))?;
-            //     let mut data_bytes = Vec::new();
-            //     stream.read_to_end(&mut data_bytes)?;
-            //     integrity::verify_schema(self, &data_bytes)?;
-            // }
         }
 
         let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)
@@ -534,14 +518,14 @@ impl Write {
                 DataStore::get(store, owner, &self.record_id, &self.descriptor.data_cid).await?;
             if result.is_none() {
                 return Err(unexpected!("referenced data does not exist"));
-            };
+            }
             return Ok(());
         }
 
         // otherwise, copy `encoded_data` to the new message
         if latest.encoded_data.is_none() {
             return Err(unexpected!("referenced data does not exist"));
-        };
+        }
         self.encoded_data = latest.encoded_data;
 
         Ok(())
@@ -557,9 +541,10 @@ impl Write {
 
         // verify protocols match
         if let Some(tags) = &self.descriptor.tags {
-            let tag_protocol = tags.get("protocol").unwrap_or(&Value::Null);
-            if tag_protocol.as_str() != grant.data.scope.protocol() {
-                return Err(unexpected!("revocation protocol does not match grant protocol"));
+            if let Some(tag_protocol) = tags.get("protocol") {
+                if tag_protocol.as_str() != grant.data.scope.protocol() {
+                    return Err(unexpected!("revocation protocol does not match grant protocol"));
+                }
             }
         }
 
@@ -781,10 +766,9 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
 
-    // TODO: does `tags` need to use Value?
     /// Tags associated with the record
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Map<String, Value>>,
+    pub tags: Option<HashMap<String, Tag>>,
 
     /// The CID of the record's parent (if exists).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -811,6 +795,54 @@ pub struct WriteDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "rfc3339_micros_opt")]
     pub date_published: Option<DateTime<Utc>>,
+}
+
+/// Tag value types.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+// #[serde(rename_all = "camelCase")]
+#[serde(untagged)]
+pub enum Tag {
+    /// Empty tag value.
+    #[default]
+    Empty,
+
+    /// String tag value.
+    String(String),
+
+    /// Number tag value.
+    Number(u64),
+
+    /// Boolean tag value.
+    Boolean(bool),
+}
+
+impl Tag {
+    /// Attempt to convert the tag value to a string.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Attempt to convert the tag value to a u64.
+    #[must_use]
+    pub const fn as_u64(&self) -> Option<u64> {
+        match self {
+            Self::Number(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    /// Attempt to convert the tag value to a bool.
+    #[must_use]
+    pub const fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Boolean(b) => Some(*b),
+            _ => None,
+        }
+    }
 }
 
 // Fetch previous entries for this record, ordered from earliest to latest.

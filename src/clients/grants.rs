@@ -3,13 +3,12 @@
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use serde_json::Value;
 
 use crate::clients::records::{Data, ProtocolBuilder, WriteBuilder};
 use crate::permissions::{Conditions, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{self};
 use crate::provider::Signer;
-use crate::records::{self, Write};
+use crate::records::{self, Tag, Write};
 use crate::{Interface, utils};
 
 /// Options to use when creating a permission grant.
@@ -128,8 +127,8 @@ impl GrantBuilder {
         // filter will return associated grants
         if let Some(protocol) = scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
-            builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
-        };
+            builder = builder.add_tag("protocol", Tag::String(protocol));
+        }
 
         let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&grant_bytes));
@@ -212,8 +211,8 @@ impl RequestBuilder {
         // filter will return this request
         if let Some(protocol) = scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
-            builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
-        };
+            builder = builder.add_tag("protocol", Tag::String(protocol));
+        }
 
         let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&request_bytes));
@@ -276,8 +275,8 @@ impl RevocationBuilder {
         // filter will return this request
         if let Some(protocol) = grant_data.scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
-            builder = builder.add_tag("protocol".to_string(), Value::String(protocol));
-        };
+            builder = builder.add_tag("protocol", Tag::String(protocol));
+        }
 
         let mut write = builder.sign(signer).build().await?;
         write.encoded_data = Some(Base64UrlUnpadded::encode_string(&revocation_bytes));

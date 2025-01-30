@@ -112,7 +112,6 @@ async fn owner_messages() {
     // Alice queries for messages beyond the cursor, and
     // expects to see only the additional record.
     // --------------------------------------------------
-    // FIXME: implement cursor
     let query = QueryBuilder::new().build(&alice_signer).await.expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);

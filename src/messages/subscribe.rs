@@ -95,7 +95,7 @@ impl Subscribe {
         // ensure subscribe filters include scoped protocol
         if grant.data.scope.protocol().is_none() {
             return Ok(());
-        };
+        }
 
         let protocol = grant.data.scope.protocol();
         for filter in &self.descriptor.filters {

@@ -34,11 +34,25 @@ pub struct Entry {
     pub message: EntryType,
 
     /// Indexable fields derived from the associated message object.
-    // #[serde(skip)]
-    pub indexes: HashMap<String, String>,
+    indexes: HashMap<String, String>,
 }
 
 impl Entry {
+    /// Adds a index item to the entry's indexes
+    pub fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        let key = key.into();
+        if self.indexes.contains_key(&key) {
+            return;
+        }
+        self.indexes.insert(key, value.into());
+    }
+
+    /// Indexes for this entry.
+    #[must_use]
+    pub const fn indexes(&self) -> &HashMap<String, String> {
+        &self.indexes
+    }
+
     /// The message's CID.
     ///
     /// # Errors
@@ -94,7 +108,7 @@ impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         Self {
             message: EntryType::Write(write.clone()),
-            indexes: write.indexes(),
+            indexes: write.build_indexes(),
         }
     }
 }
@@ -103,7 +117,7 @@ impl From<&Delete> for Entry {
     fn from(delete: &Delete) -> Self {
         Self {
             message: EntryType::Delete(delete.clone()),
-            indexes: delete.indexes(),
+            indexes: delete.build_indexes(),
         }
     }
 }
@@ -112,7 +126,7 @@ impl From<&Configure> for Entry {
     fn from(configure: &Configure) -> Self {
         Self {
             message: EntryType::Configure(configure.clone()),
-            indexes: configure.indexes(),
+            indexes: configure.build_indexes(),
         }
     }
 }
@@ -342,7 +356,7 @@ impl From<&RecordsFilter> for MatchSet {
 
         if let Some(record_id) = &filter.record_id {
             match_set.inner.push(Matcher {
-                field: "record_id".to_string(),
+                field: "recordId".to_string(),
                 value: MatchOn::Equal(record_id.to_string()),
             });
         }
