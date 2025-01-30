@@ -20,12 +20,10 @@ pub async fn handle(
 ) -> Result<Reply<QueryReply>> {
     query.authorize(owner, provider).await?;
 
-    // FIXME: use pagination cursor
     let query = store::Query::from(query);
-    let (events, _) = EventLog::query(provider, owner, &query).await?;
+    let (events, cursor) = EventLog::query(provider, owner, &query).await?;
 
-    let events =
-        events.iter().map(|e| e.cid().unwrap_or_else(|_| String::new())).collect::<Vec<String>>();
+    let events = events.iter().map(|e| e.cid().unwrap_or_default()).collect::<Vec<String>>();
     let entries = if events.is_empty() { None } else { Some(events) };
 
     Ok(Reply {
@@ -33,10 +31,7 @@ pub async fn handle(
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        body: Some(QueryReply {
-            entries,
-            cursor: None,
-        }),
+        body: Some(QueryReply { entries, cursor }),
     })
 }
 

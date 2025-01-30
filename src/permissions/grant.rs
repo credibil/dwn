@@ -262,7 +262,6 @@ impl Grant {
     async fn is_current(
         &self, grantor: &str, timestamp: &DateTime<Utc>, store: &impl MessageStore,
     ) -> Result<()> {
-        // FIXME: use chrono dattime for compare
         // Check that message is within the grant's time frame
         if timestamp.lt(&self.date_granted) {
             return Err(forbidden!("grant is not yet active"));

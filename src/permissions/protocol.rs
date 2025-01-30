@@ -246,13 +246,11 @@ impl Protocol<'_> {
             };
 
             // get parent context ID
-            let parent_segments = context_id.split('/').collect::<Vec<&str>>();
-            let parent = parent_segments[..role_segments].join("/");
-
-            // FIXME: convert `context_id` to range inside `store` module
-            // filter = filter
-            //     .context_id(Range::new(Some(parent.clone()), Some(format!("{parent}\u{ffff}"))));
-            filter = filter.context_id(&parent);
+            if let Some((parent, _)) = context_id.rsplit_once('/') {
+                filter = filter.context_id(parent);
+            } else {
+                filter = filter.context_id(context_id);
+            }
         }
 
         // check the invoked role record exists

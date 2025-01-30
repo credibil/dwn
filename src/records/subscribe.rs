@@ -115,7 +115,7 @@ pub struct SubscribeReplyEntry {
 
 impl Subscribe {
     async fn authorize(&self, owner: &str, provider: &impl Provider) -> Result<()> {
-        // only authorize subscriptions to private records
+        // only need to authorize subscriptions to private records
         if self.descriptor.filter.published.unwrap_or_default() {
             return Ok(());
         };
@@ -143,7 +143,7 @@ impl Subscribe {
             return Err(forbidden!("missing authorization"));
         };
         if authzn.payload()?.protocol_role.is_some() {
-            // FIXME: fix this
+            // TODO: determine whether this is required
             // filter.method = OneOrMany::Many(vec![Method::Write, Method::Delete]);
         }
 

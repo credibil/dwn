@@ -243,11 +243,8 @@ impl Write {
             "messageTimestamp".to_string(),
             descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
-
-        // set to "false" when None
-        let published = descriptor.published.unwrap_or_default();
-        indexes.insert("published".to_string(), published.to_string());
-
+        indexes
+            .insert("published".to_string(), descriptor.published.unwrap_or_default().to_string());
         indexes.insert("dataFormat".to_string(), descriptor.data_format.clone());
         indexes.insert("dataCid".to_string(), descriptor.data_cid.clone());
         indexes.insert("dataSize".to_string(), format!("{:0>10}", descriptor.data_size));
