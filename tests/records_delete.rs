@@ -190,9 +190,8 @@ async fn delete_data() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // ensure the second record has been deleted
-    let filter = RecordsFilter::new().record_id(&alice_write2.record_id);
     let read = ReadBuilder::new()
-        .filter(filter)
+        .filter(RecordsFilter::new().record_id(&alice_write2.record_id))
         .sign(&alice_signer)
         .build()
         .await

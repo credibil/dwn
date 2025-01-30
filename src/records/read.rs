@@ -39,18 +39,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             return Err(unexpected!("expected `RecordsDelete` message"));
         };
 
-        let Ok(initial_write) =
+        let Ok(Some(write)) =
             write::initial_write(owner, &delete.descriptor.record_id, provider).await
         else {
-            return Err(unexpected!("initial write for deleted record not found"));
-        };
-        let Some(write) = initial_write else {
             return Err(unexpected!("initial write for deleted record not found"));
         };
 
         read.authorize(owner, &write, provider).await?;
 
-        // FIXME: return optional body for NotFound error
+        // TODO: return optional body for NotFound error
         // return Err(Error::NotFound("record is deleted".to_string()));
 
         return Ok(Reply {

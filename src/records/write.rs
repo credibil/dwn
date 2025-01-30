@@ -93,7 +93,7 @@ pub async fn handle(
     // set `archive` flag is set when the intial write has no data
     // N.B. this is used to prevent malicious access to another record's data
     let mut entry = Entry::from(&write);
-    entry.indexes.insert("archived".to_string(), (code == StatusCode::NO_CONTENT).to_string());
+    entry.add_index("archived", (code == StatusCode::NO_CONTENT).to_string());
 
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
@@ -101,12 +101,16 @@ pub async fn handle(
     EventStream::emit(provider, owner, &entry).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
-    if let Some(mut entry) = initial_entry {
-        entry.indexes.insert("archived".to_string(), true.to_string());
+    if let Some(entry) = initial_entry {
+        let initial = Write::try_from(&entry)?;
+
+        // HACK: rebuild entry's indexes
+        let mut entry = Entry::from(&initial);
+        entry.add_index("archived", true.to_string());
+
         MessageStore::put(provider, owner, &entry).await?;
         EventLog::append(provider, owner, &entry).await?;
 
-        let initial = Write::try_from(&entry)?;
         if !initial.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
             DataStore::delete(provider, owner, &initial.record_id, &initial.descriptor.data_cid)
                 .await?;
@@ -227,13 +231,13 @@ impl TryFrom<&Entry> for Write {
 impl Write {
     /// Build flattened indexes for the write message.
     #[must_use]
-    pub fn indexes(&self) -> HashMap<String, String> {
+    pub(crate) fn build_indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
         let descriptor = &self.descriptor;
 
         indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), descriptor.base.method.to_string());
-        indexes.insert("archived".to_string(), false.to_string());
+        // indexes.insert("archived".to_string(), false.to_string());
         indexes.insert("recordId".to_string(), self.record_id.clone());
         if let Some(context_id) = &self.context_id {
             indexes.insert("contextId".to_string(), context_id.clone());

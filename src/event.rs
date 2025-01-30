@@ -112,7 +112,7 @@ impl RecordsFilter {
             }
         }
         if let Some(attester) = self.attester.clone() {
-            if Some(&attester) != event.indexes.get("attester") {
+            if Some(&attester) != event.indexes().get("attester") {
                 return false;
             }
         }

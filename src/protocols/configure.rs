@@ -133,7 +133,7 @@ impl TryFrom<Entry> for Configure {
 impl Configure {
     /// Build flattened indexes for the write message.
     #[must_use]
-    pub fn indexes(&self) -> HashMap<String, String> {
+    pub fn build_indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
         indexes.insert("interface".to_string(), self.descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), self.descriptor.base.method.to_string());
