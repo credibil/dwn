@@ -393,16 +393,6 @@ impl Write {
         // verify integrity of messages with protocol
         if self.descriptor.protocol.is_some() {
             integrity::verify(owner, self, provider).await?;
-
-            // FIXME: extract data from stream 1x
-            // write record is a grant
-            // if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            //     let mut stream =
-            //         self.data_stream.clone().ok_or_else(|| unexpected!("missing data stream"))?;
-            //     let mut data_bytes = Vec::new();
-            //     stream.read_to_end(&mut data_bytes)?;
-            //     integrity::verify_schema(self, &data_bytes)?;
-            // }
         }
 
         let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)

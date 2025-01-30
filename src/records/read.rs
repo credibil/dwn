@@ -71,7 +71,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     let mut write = Write::try_from(&entries[0])?;
 
-    // FIXME: review against the original code — it should take a store provider
     // verify the fetched message can be safely returned to the requestor
     read.authorize(owner, &write, provider).await?;
 
@@ -238,7 +237,7 @@ impl Read {
 
         // verify protocol role and action
         if let Some(protocol_id) = &write.descriptor.protocol {
-            // FIXME: add `parent_id` to protocol builder
+            // TODO: add `parent_id` to protocol builder
             let protocol = Protocol::new(protocol_id).context_id(write.context_id.as_ref());
             protocol.permit_read(owner, self, write, store).await?;
             return Ok(());

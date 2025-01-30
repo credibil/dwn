@@ -2339,7 +2339,6 @@ async fn date_sort() {
     assert_eq!(entries[0].write.record_id, write_2.record_id);
 }
 
-// FIXME: we need to sort by cid in records query
 // Should tiebreak using `message_cid` when sorting identical values.
 #[tokio::test]
 async fn sort_identical() {
