@@ -143,21 +143,14 @@ impl Delete {
     #[must_use]
     pub fn indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
-        let descriptor = &self.descriptor;
-
         indexes.insert("interface".to_string(), Interface::Records.to_string());
         indexes.insert("method".to_string(), Method::Delete.to_string());
-
-        indexes.insert("record_id".to_string(), descriptor.record_id.clone());
-        indexes.insert("recordId".to_string(), descriptor.record_id.clone());
-        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert("recordId".to_string(), self.descriptor.record_id.clone());
         indexes.insert(
             "messageTimestamp".to_string(),
-            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
+            self.descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-        // indexes.insert("archived".to_string(), false.to_string());
-
         indexes
     }
 

@@ -131,7 +131,7 @@ impl RecordsFilter {
     /// when querying.
     pub(crate) fn as_concise(&self) -> Option<(String, String)> {
         if let Some(record_id) = &self.record_id {
-            return Some(("record_id".to_string(), record_id.clone()));
+            return Some(("recordId".to_string(), record_id.clone()));
         }
         if let Some(protocol_path) = &self.protocol_path {
             return Some(("protocolPath".to_string(), protocol_path.clone()));

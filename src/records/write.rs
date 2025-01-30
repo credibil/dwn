@@ -235,14 +235,10 @@ impl Write {
         indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), descriptor.base.method.to_string());
         indexes.insert("archived".to_string(), false.to_string());
-
-        // FIXME: add these fields back when cut over to new indexes
-        indexes.insert("record_id".to_string(), self.record_id.clone());
+        indexes.insert("recordId".to_string(), self.record_id.clone());
         if let Some(context_id) = &self.context_id {
             indexes.insert("contextId".to_string(), context_id.clone());
         }
-        // TODO: remove this after cut over to new indexes
-        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
         indexes.insert(
             "messageTimestamp".to_string(),
             descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
@@ -281,13 +277,11 @@ impl Write {
 
         // special values
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-
         if let Ok(jws) = &self.authorization.payload() {
             if let Some(grant_id) = &jws.permission_grant_id {
                 indexes.insert("permissionGrantId".to_string(), grant_id.clone());
             }
         }
-
         if let Some(attestation) = &self.attestation {
             let attester = authorization::signer_did(attestation).unwrap_or_default();
             indexes.insert("attester".to_string(), attester);

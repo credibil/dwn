@@ -342,7 +342,7 @@ impl From<&RecordsFilter> for MatchSet {
 
         if let Some(record_id) = &filter.record_id {
             match_set.inner.push(Matcher {
-                field: "record_id".to_string(),
+                field: "recordId".to_string(),
                 value: MatchOn::Equal(record_id.to_string()),
             });
         }

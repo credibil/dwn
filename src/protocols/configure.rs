@@ -135,20 +135,14 @@ impl Configure {
     #[must_use]
     pub fn indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
-        let descriptor = &self.descriptor;
-
-        indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
-        indexes.insert("method".to_string(), descriptor.base.method.to_string());
-
-        // TODO: remove this after cut over to new indexes
-        indexes.insert("messageCid".to_string(), self.cid().unwrap_or_default());
+        indexes.insert("interface".to_string(), self.descriptor.base.interface.to_string());
+        indexes.insert("method".to_string(), self.descriptor.base.method.to_string());
+        indexes.insert("protocol".to_string(), self.descriptor.definition.protocol.clone());
+        indexes.insert("published".to_string(), self.descriptor.definition.published.to_string());
         indexes.insert(
             "messageTimestamp".to_string(),
-            descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
+            self.descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
-        indexes.insert("protocol".to_string(), descriptor.definition.protocol.clone());
-        indexes.insert("published".to_string(), descriptor.definition.published.to_string());
-
         indexes
     }
 
