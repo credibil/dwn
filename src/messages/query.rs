@@ -103,7 +103,6 @@ impl Query {
 }
 /// `Query` reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[allow(clippy::module_name_repetitions)]
 pub struct QueryReply {
     /// Entries matching the message's query.
     #[serde(skip_serializing_if = "Option::is_none")]

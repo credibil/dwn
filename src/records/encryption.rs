@@ -330,7 +330,6 @@ pub struct EncryptionProperty {
 /// encrypt the data.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(clippy::struct_field_names)]
 pub struct EncryptedKey {
     /// The fully qualified key ID (e.g. did:example:abc#encryption-key-id)
     /// of the root public key used to encrypt the symmetric encryption key.
@@ -424,7 +423,6 @@ pub async fn decrypt(
     Ok(plaintext)
 }
 
-#[allow(dead_code)]
 fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<String>> {
     let descriptor = &write.descriptor;
 

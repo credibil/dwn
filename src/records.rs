@@ -97,6 +97,12 @@ pub struct RecordsFilter {
 }
 
 impl RecordsFilter {
+    /// Returns a new [`RecordsFilter`]
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Normalizes `RecordsFilter` protocol and schema URLs within a provided.
     pub(crate) fn normalize(&self) -> Result<Self> {
         let mut filter = self.clone();
@@ -113,22 +119,16 @@ impl RecordsFilter {
 
     /// Check if the filter will return a concise set of results.
     pub(crate) const fn is_concise(&self) -> bool {
-        if self.record_id.is_some()
+        self.record_id.is_some()
             || self.protocol_path.is_some()
             || self.context_id.is_some()
             || self.parent_id.is_some()
             || self.schema.is_some()
-        {
-            return true;
-        }
-
-        false
     }
 
     /// Create an optimized filter to use with single-field indexes. This
     /// method chooses the best filter property, in order of priority, to use
     /// when querying.
-    #[allow(clippy::too_many_lines)]
     pub(crate) fn as_concise(&self) -> Option<(String, String)> {
         if let Some(record_id) = &self.record_id {
             return Some(("record_id".to_string(), record_id.clone()));
@@ -150,82 +150,8 @@ impl RecordsFilter {
     }
 }
 
-/// `EntryType` sort.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum Sort {
-    /// Sort `date_created` from oldest to newest.
-    #[serde(rename = "createdAscending")]
-    CreatedAsc,
-
-    /// Sort `date_created` newest to oldest.
-    #[serde(rename = "createdDescending")]
-    CreatedDesc,
-
-    /// Sort `date_published` from oldest to newest.
-    #[serde(rename = "publishedAscending")]
-    PublishedAsc,
-
-    /// Sort `date_published` from newest to oldest.
-    #[serde(rename = "publishedDescending")]
-    PublishedDesc,
-
-    /// Sort `message_timestamp` from oldest to newest.
-    #[serde(rename = "timestampAscending")]
-    #[default]
-    TimestampAsc,
-
-    /// Sort `message_timestamp` from newest to oldest.
-    #[serde(rename = "timestampDescending")]
-    TimestampDesc,
-}
-
-impl Sort {
-    /// Short-circuit testing for ascending/descending sort.
-    #[must_use]
-    pub const fn is_ascending(&self) -> bool {
-        matches!(self, Self::CreatedAsc | Self::PublishedAsc | Self::TimestampAsc)
-    }
-}
-
-impl Display for Sort {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::CreatedAsc | Self::CreatedDesc => write!(f, "dateCreated"),
-            Self::PublishedAsc | Self::PublishedDesc => write!(f, "datePublished"),
-            Self::TimestampAsc | Self::TimestampDesc => write!(f, "messageTimestamp"),
-        }
-    }
-}
-
-/// Tag filter.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TagFilter {
-    /// Match tags starting with a string value.
-    StartsWith(String),
-
-    /// Filter tags by range.
-    Range(Range<usize>),
-
-    /// Filter by a specific value.
-    Equal(Value),
-}
-
-impl Default for TagFilter {
-    fn default() -> Self {
-        Self::Equal(Value::Null)
-    }
-}
-
 /// Implement  builder-like behaviour.
 impl RecordsFilter {
-    /// Returns a new [`RecordsFilter`]
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Add one or more authors to the filter.
     #[must_use]
     pub fn add_author(mut self, author: impl Into<String>) -> Self {
@@ -369,5 +295,73 @@ impl RecordsFilter {
     pub const fn date_updated(mut self, date_updated: DateRange) -> Self {
         self.date_updated = Some(date_updated);
         self
+    }
+}
+
+/// `EntryType` sort.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Sort {
+    /// Sort `date_created` from oldest to newest.
+    #[serde(rename = "createdAscending")]
+    CreatedAsc,
+
+    /// Sort `date_created` newest to oldest.
+    #[serde(rename = "createdDescending")]
+    CreatedDesc,
+
+    /// Sort `date_published` from oldest to newest.
+    #[serde(rename = "publishedAscending")]
+    PublishedAsc,
+
+    /// Sort `date_published` from newest to oldest.
+    #[serde(rename = "publishedDescending")]
+    PublishedDesc,
+
+    /// Sort `message_timestamp` from oldest to newest.
+    #[serde(rename = "timestampAscending")]
+    #[default]
+    TimestampAsc,
+
+    /// Sort `message_timestamp` from newest to oldest.
+    #[serde(rename = "timestampDescending")]
+    TimestampDesc,
+}
+
+impl Sort {
+    /// Short-circuit testing for ascending/descending sort.
+    #[must_use]
+    pub const fn is_ascending(&self) -> bool {
+        matches!(self, Self::CreatedAsc | Self::PublishedAsc | Self::TimestampAsc)
+    }
+}
+
+impl Display for Sort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CreatedAsc | Self::CreatedDesc => write!(f, "dateCreated"),
+            Self::PublishedAsc | Self::PublishedDesc => write!(f, "datePublished"),
+            Self::TimestampAsc | Self::TimestampDesc => write!(f, "messageTimestamp"),
+        }
+    }
+}
+
+/// Tag filter.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TagFilter {
+    /// Match tags starting with a string value.
+    StartsWith(String),
+
+    /// Filter tags by range.
+    Range(Range<usize>),
+
+    /// Filter by a specific value.
+    Equal(Value),
+}
+
+impl Default for TagFilter {
+    fn default() -> Self {
+        Self::Equal(Value::Null)
     }
 }

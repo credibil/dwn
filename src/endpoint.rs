@@ -70,7 +70,6 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
 
 /// Reply used by all endpoints.
 #[derive(Debug, Default, Deserialize, Serialize)]
-#[allow(clippy::module_name_repetitions)]
 pub struct Reply<ReplyBody> {
     /// Status message to accompany the reply.
     pub status: Status,

@@ -179,7 +179,6 @@ async fn verify_scope(
 
 /// `Read` reply
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[allow(clippy::module_name_repetitions)]
 pub struct ReadReply {
     /// The `Read` descriptor.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -188,7 +187,6 @@ pub struct ReadReply {
 
 /// `Read` reply entry
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[allow(clippy::module_name_repetitions)]
 pub struct ReadReplyEntry {
     /// The CID of the message.
     pub message_cid: String,
