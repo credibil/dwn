@@ -324,7 +324,7 @@ impl Write {
         // if owner signature is set, it must be the same as the tenant DID
         if record_owner.as_ref().is_some_and(|ro| ro != owner) {
             return Err(forbidden!("record owner is not web node owner"));
-        };
+        }
 
         let author = authzn.author()?;
 
@@ -515,14 +515,14 @@ impl Write {
                 DataStore::get(store, owner, &self.record_id, &self.descriptor.data_cid).await?;
             if result.is_none() {
                 return Err(unexpected!("referenced data does not exist"));
-            };
+            }
             return Ok(());
         }
 
         // otherwise, copy `encoded_data` to the new message
         if latest.encoded_data.is_none() {
             return Err(unexpected!("referenced data does not exist"));
-        };
+        }
         self.encoded_data = latest.encoded_data;
 
         Ok(())
