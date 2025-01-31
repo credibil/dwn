@@ -9,8 +9,8 @@ A Rust-based implementation of the Decentralized Web Node [specification], as po
 >
 > The code in this repository is experimental and under active development.
 > 
-> While the library is functionally complete, it has not yet had the hardening that comes from a 
-> significant period of use in a production environment.
+> While the library is near functionally complete, it has not yet had the hardening that comes with
+> ongoing, real-world use.
 
 ## Getting Started
 
@@ -26,7 +26,7 @@ of usage scenarios.
 
 1. Read the [contributing guide](./CONTRIBUTING.md).
 2. Read the [code of conduct](./CODE_OF_CONDUCT.md).
-3. Choose a task from this project's issues and follow the instructions.
+3. Choose a task from this project's backlog of issues and follow the instructions.
 
 Have questions? Connecting with us in our [Zulip community](https://credibil.zulipchat.com).
 
