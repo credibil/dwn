@@ -1,10 +1,12 @@
 //! # Authorization
+//!
+//! The `Authorization` module groups types and functionality loosely related
+//! to message authorization and authentication.
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
-use vercre_did::DidResolver;
-pub use vercre_did::{Resource, dereference};
+use vercre_did::{DidResolver, Resource, dereference};
 use vercre_infosec::jose::JwsBuilder;
 use vercre_infosec::{Jws, Signer};
 
@@ -42,15 +44,18 @@ macro_rules! verify_key {
 }
 
 /// Message authorization.
+/// 
+/// Used in messages that require authorization material for processing in
+/// accordance with the permissions specified by the web node owner.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Authorization {
-    /// The signature of the message signer.
-    /// N.B.: Not the author of the message when signer is a delegate.
+    /// The message signer's signature.
+    /// N.B.: May be the signature of a delegate of the author's.
     pub signature: Jws,
 
-    /// An "overriding" signature for a web node owner or owner-delegate to
-    /// store a message authored by another entity.
+    /// An "overriding" signature for use by a web node owner or owner-delegate
+    /// when storing a message authored by another entity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner_signature: Option<Jws>,
 
