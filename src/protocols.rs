@@ -1,4 +1,4 @@
-//! # Protocols
+//! # Protocols Interface
 //!
 //! DWN nodes provide the substrate upon which a wide variety of decentralized
 //! applications and services can be implemented. By employing protocols, DWN
@@ -42,7 +42,7 @@ pub const GRANT_PATH: &str = "grant";
 ///The protocol path of the `revocation` record.
 pub const REVOCATION_PATH: &str = "grant/revocation";
 
-/// Protocols filter is used to query for protocols.
+/// The Protocols filter is used when querying for protocols.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolsFilter {

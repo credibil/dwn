@@ -1,4 +1,12 @@
-//! # Records
+//! # Records Interface
+//!
+//! The Records interface provides a mechanism to store data using shared
+//! schemas.
+//!
+//! Storing data using schemas, some of which may be well-known for a given
+//! domain, DWN apps and services can share the same datasets between one
+//! another, enabling, cross-platform, cross-device, cross-app experience for
+//! users.
 
 mod delete;
 mod encryption;
@@ -20,13 +28,12 @@ pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Tag, Write, WriteDescriptor};
 use crate::{DateRange, OneOrMany, Range, Result, utils};
 
-// TODO: add builder for RecordsFilter
-
-/// Records filter.
+/// The Records filter is used when querying for records.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordsFilter {
-    /// Get a single object by its ID.
+    /// Find a single record by its ID. May return two results — an initial
+    /// write and the latest update or Delete.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub record_id: Option<String>,
 
@@ -96,13 +103,13 @@ pub struct RecordsFilter {
 }
 
 impl RecordsFilter {
-    /// Returns a new [`RecordsFilter`]
+    /// Create a new [`RecordsFilter`]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Normalizes `RecordsFilter` protocol and schema URLs within a provided.
+    /// Normalizes protocol and schema URLs within the `RecordsFilter`.
     pub(crate) fn normalize(&self) -> Result<Self> {
         let mut filter = self.clone();
         filter.protocol = if let Some(protocol) = &self.protocol {
@@ -112,11 +119,10 @@ impl RecordsFilter {
         };
         filter.schema =
             if let Some(schema) = &self.schema { Some(utils::uri::clean(schema)?) } else { None };
-
         Ok(filter)
     }
 
-    /// Check if the filter will return a concise set of results.
+    /// Check whether the filter will return a concise set of results.
     pub(crate) const fn is_concise(&self) -> bool {
         self.record_id.is_some()
             || self.protocol_path.is_some()
@@ -144,7 +150,6 @@ impl RecordsFilter {
         if let Some(schema) = &self.schema {
             return Some(("schema".to_string(), schema.clone()));
         }
-
         None
     }
 }
@@ -297,7 +302,7 @@ impl RecordsFilter {
     }
 }
 
-/// `EntryType` sort.
+/// Specifies the way that `RecordsQuery`results should be sorted.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Sort {
@@ -345,7 +350,7 @@ impl Display for Sort {
     }
 }
 
-/// Tag filter.
+/// A tag filter is used when filter records by tag.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TagFilter {

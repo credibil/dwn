@@ -1,4 +1,4 @@
-//! # Messages
+//! # Messages Interface
 //!
 //! The `Messages` interface provides methods to query, read, and subscribe to
 //! any DWN message regardless of the interface or method.
