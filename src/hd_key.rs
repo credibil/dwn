@@ -5,8 +5,12 @@
 //!
 //! In the case of a DWN implementation, HD keys are used to derive a hierarchy
 //! of encryption keys from a parent key provided by the DWN owner. The derived
-//! keys can be distributed to other parties to allow them to encrypt data that
-//! can be decrypted by parties higher up the tree, including the owner.
+//! keys can be distributed to participating parties to allow them to encrypt
+//! data that can be decrypted by parties higher up the tree, including the
+//! owner.
+//!
+//! Derived private keys are typically encrypted (using the recipient's public
+//! key) and distributed  ahead of their actual use.
 
 use std::fmt::{self, Display};
 use std::str::FromStr;
