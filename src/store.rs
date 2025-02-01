@@ -176,7 +176,7 @@ impl Default for EntryType {
 /// `EventLog` queries.
 ///
 /// The query is composed of one or more `[MatchSet]`s derived from filters
-/// associated with the messagetype being queried. MatchSets are 'OR-ed'
+/// associated with the messagetype being queried. `[MatchSet]`s are 'OR-ed'
 /// together to form the query.
 ///
 /// Sorting and pagination options are also included although not always
