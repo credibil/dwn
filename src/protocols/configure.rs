@@ -13,7 +13,7 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
-use crate::protocols::{Size, query};
+use crate::protocols::query;
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, EntryType};
 use crate::utils::cid;
@@ -469,6 +469,18 @@ pub enum Action {
     /// Co-update
     #[serde(rename = "co-update")]
     CoUpdate,
+}
+
+/// Data size range.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Size {
+    /// The range's minimum value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<usize>,
+
+    /// The range's maximum value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<usize>,
 }
 
 /// Protocol tags

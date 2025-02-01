@@ -1,4 +1,18 @@
 //! # Protocols
+//!
+//! DWN nodes provide the substrate upon which a wide variety of decentralized
+//! applications and services can be implemented. By employing protocols, DWN
+//! owners can define the rules and constraints that govern the behavior of the
+//! data stored on their nodes.
+//!
+//! Protocols provide a mechanism for declaratively encoding an app or
+//! service’s rules, including segmentation of records, relationships
+//! between records, data-level requirements, and constraints on how
+//! DWN users interact with a protocol.
+//!
+//! DWN owners can model the protocols for a wide array of use cases in a way
+//! that enables interop-by-default between app implementations built on top of
+//! them.
 
 mod configure;
 pub(crate) mod integrity;
@@ -9,9 +23,10 @@ use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
 
+pub(crate) use self::configure::validate_structure;
 pub use self::configure::{
-    Action, ActionRule, Actor, Configure, ConfigureDescriptor, ConfigureReply, Definition,
-    ProtocolType, RuleSet, validate_structure,
+    Action, ActionRule, Actor, Configure, ConfigureDescriptor, Definition, ProtocolType, RuleSet,
+    Size,
 };
 pub use self::query::{Query, QueryDescriptor, QueryReply};
 
@@ -27,7 +42,7 @@ pub const GRANT_PATH: &str = "grant";
 ///The protocol path of the `revocation` record.
 pub const REVOCATION_PATH: &str = "grant/revocation";
 
-/// Protocol filter.
+/// Protocols filter is used to query for protocols.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolsFilter {
@@ -35,19 +50,7 @@ pub struct ProtocolsFilter {
     pub protocol: String,
 }
 
-/// Data size range.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Size {
-    /// The range's minimum value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub min: Option<usize>,
-
-    /// The range's maximum value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max: Option<usize>,
-}
-
-/// Default protocol definition.
+/// Define a default protocol definition.
 pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
     // default types
     let mut types = BTreeMap::new();
@@ -59,42 +62,43 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
     types.insert("grant".to_string(), default_type.clone());
     types.insert("revocation".to_string(), default_type);
 
-    // default structure (aka rules)
     let default_size = Size {
         min: None,
         max: Some(10000),
     };
 
-    let mut structure = BTreeMap::new();
-    structure.insert("request".to_string(), RuleSet {
-        size: Some(default_size.clone()),
-        actions: Some(vec![ActionRule {
-            who: Some(Actor::Anyone),
-            can: vec![Action::Create],
-            ..ActionRule::default()
-        }]),
-        ..RuleSet::default()
-    });
-    structure.insert("grant".to_string(), RuleSet {
-        size: Some(default_size.clone()),
-        actions: Some(vec![ActionRule {
-            who: Some(Actor::Recipient),
-            of: Some("grant".to_string()),
-            can: vec![Action::Read, Action::Query],
-            ..ActionRule::default()
-        }]),
-        // revocation is nested under grant
-        structure: BTreeMap::from([("revocation".to_string(), RuleSet {
-            size: Some(default_size),
+    // default structure (aka rules)
+    let structure = BTreeMap::from([
+        ("request".to_string(), RuleSet {
+            size: Some(default_size.clone()),
             actions: Some(vec![ActionRule {
                 who: Some(Actor::Anyone),
-                can: vec![Action::Read],
+                can: vec![Action::Create],
                 ..ActionRule::default()
             }]),
             ..RuleSet::default()
-        })]),
-        ..RuleSet::default()
-    });
+        }),
+        ("grant".to_string(), RuleSet {
+            size: Some(default_size.clone()),
+            actions: Some(vec![ActionRule {
+                who: Some(Actor::Recipient),
+                of: Some("grant".to_string()),
+                can: vec![Action::Read, Action::Query],
+                ..ActionRule::default()
+            }]),
+            // revocation is nested under grant
+            structure: BTreeMap::from([("revocation".to_string(), RuleSet {
+                size: Some(default_size),
+                actions: Some(vec![ActionRule {
+                    who: Some(Actor::Anyone),
+                    can: vec![Action::Read],
+                    ..ActionRule::default()
+                }]),
+                ..RuleSet::default()
+            })]),
+            ..RuleSet::default()
+        }),
+    ]);
 
     Definition {
         protocol: PROTOCOL_URI.to_string(),
