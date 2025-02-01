@@ -1,6 +1,8 @@
-//! # Service
+//! # Endpoint
 //!
-//! Decentralized Web Node messaging framework.
+//! `Endpoint` provides the entry point for DWN messages. Messages are routed
+//! to the appropriate handler for processing, returning a reply that can be
+//! serialized to a JSON object.
 
 use std::fmt::Debug;
 
