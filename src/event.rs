@@ -1,4 +1,7 @@
 //! # Event
+//!
+//! The event module provides the necessary structures and functionality for
+//! working with `RecordsSubscribe` events.
 
 use std::fmt;
 use std::pin::Pin;
@@ -11,10 +14,11 @@ use crate::messages::MessagesFilter;
 use crate::records::{RecordsFilter, Tag, TagFilter};
 use crate::store::{Entry, EntryType};
 
-/// Alias for `store::Entry` used for event-related functionality.
+/// `Event` aliases `store::Entry` to provide a common type to use when
+/// interacting with events for any message type.
 pub type Event = Entry;
 
-/// Alias for `store::EventType` to be used as the type of the event.
+/// `EventType` aliases `store::EntryType` to wrap the event message.
 pub type EventType = EntryType;
 
 /// Filter to use when subscribing to events.
@@ -33,13 +37,15 @@ impl Default for SubscribeFilter {
     }
 }
 
-/// Used by local clients to handle events subscribed to.
+/// `Subscriber` is intended to be used by local clients to process event
+///  subscriptions.
 pub struct Subscriber {
     pub(crate) inner: Pin<Box<dyn Stream<Item = Event> + Send>>,
 }
 
 impl Subscriber {
-    /// Wrap Provider's subscription Stream for ease of surfacing to users.
+    /// Wrap the event producer's subscription `futures::Stream` in order to simplify
+    /// surfacing to consumers.
     #[must_use]
     pub fn new(stream: impl Stream<Item = Event> + Send + 'static) -> Self {
         Self {
@@ -72,7 +78,7 @@ impl fmt::Debug for Subscriber {
 }
 
 impl SubscribeFilter {
-    /// Check the event matches the filter.
+    /// Determine whether the eventmatches the filter.
     #[must_use]
     pub fn is_match(&self, event: &Event) -> bool {
         match self {
@@ -85,7 +91,6 @@ impl SubscribeFilter {
                 false
             }
             Self::Records(filter) => {
-                // when filter is record filter, check event is a record
                 if let EventType::Configure(_) = event.message {
                     return false;
                 }
