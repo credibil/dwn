@@ -41,7 +41,7 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
     ///
     /// # Errors
     /// 
-    /// This method can fail if the message cannot be serialized to CBOR.
+    /// This method will fail if the message cannot be serialized to CBOR.
     fn cid(&self) -> Result<String>;
 
     /// Returns message descriptor properties common to all messages (i.e., 

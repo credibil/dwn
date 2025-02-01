@@ -1,10 +1,14 @@
 //! # `DWN` Errors
 
 use base64ct::Error as Base64Error;
+use http::StatusCode;
 use serde::{Deserialize, Serialize, Serializer};
 use thiserror::Error;
 
-/// `DWN` errors.
+/// The Error type represents all errors that may be returned by a `DWN`.
+///
+/// The error type is a `serde` serializable type that can be used to return
+/// JSON error responses to HTTP clients.
 #[derive(Error, Debug, Deserialize)]
 pub enum Error {
     /// The server cannot or will not process the request due to something that
@@ -51,17 +55,17 @@ impl Serialize for Error {
 }
 
 impl Error {
-    /// Returns the error code.
+    /// Returns the error code as an `[http::StatusCode]`.
     #[must_use]
-    pub const fn code(&self) -> u16 {
+    pub const fn code(&self) -> StatusCode {
         match self {
-            Self::BadRequest(_) => 400,
-            Self::Unauthorized(_) => 401,
-            Self::Forbidden(_) => 403,
-            Self::NotFound(_) => 404,
-            Self::Conflict(_) => 409,
-            Self::InternalServerError(_) => 500,
-            Self::Unimplemented(_) => 501,
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Unimplemented(_) => StatusCode::NOT_IMPLEMENTED,
         }
     }
 }
@@ -144,7 +148,7 @@ macro_rules! forbidden {
     };
 }
 
-/// Construct an `Error::Forbidden` error from a string or existing error
+/// Construct an `Error::Unauthorized` error from a string or existing error
 /// value.
 #[macro_export]
 macro_rules! unauthorized {
