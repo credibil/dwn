@@ -1,10 +1,12 @@
-#![allow(missing_docs)]
-
 //! # Hierarchical Deterministic Key
 //!
-//! Hierarchical deterministic (HD) keys are a type of deterministic bitcoin
-//! wallet derived from a known seed, that allow for the creation of child keys
-//! from the parent key.
+//! Hierarchical deterministic (HD) keys are a tree-like structure of keys
+//! derived from a single root or seed key.
+//!
+//! In the case of a DWN implementation, HD keys are used to derive a hierarchy
+//! of encryption keys from a parent key provided by the DWN owner. The derived
+//! keys can be distributed to other parties to allow them to encrypt data that
+//! can be decrypted by parties higher up the tree, including the owner.
 
 use std::fmt::{self, Display};
 use std::str::FromStr;
@@ -24,18 +26,20 @@ use crate::{Error, Result, unexpected};
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum DerivationScheme {
-    /// Key derivation using the `dataFormat` value for Flat-space records.
+    /// Key derivation using the `data_format` value for flat-space (non-
+    /// protocol-based) records.
     #[default]
     DataFormats,
+
+    /// Key derivation using the `schema` value for flat-space (non-
+    /// protocol-based) records.
+    Schemas,
 
     /// Key derivation using protocol context.
     ProtocolContext,
 
     /// Key derivation using the protocol path.
     ProtocolPath,
-
-    /// Key derivation using the `schema` value for Flat-space records.
-    Schemas,
 }
 
 impl Display for DerivationScheme {
@@ -67,22 +71,37 @@ impl FromStr for DerivationScheme {
 /// Simplified JSON Web Key (JWK) key structure.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrivateKeyJwk {
+    /// The private key's public key component.
     #[serde(flatten)]
     pub public_key: PublicKeyJwk,
 
+    /// The private key's secret component.
     pub d: String,
 }
 
+/// A derived private key data structure containing information related to the
+/// key derivation.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DerivedPrivateJwk {
+    /// The key ID of the root key this key has been derived from.
     pub root_key_id: String,
+
+    /// The key derivation scheme used to derive this key.
     pub derivation_scheme: DerivationScheme,
+
+    /// The derivation path for this key.
     pub derivation_path: Option<Vec<String>>,
+
+    /// The derived private key.
     pub derived_private_key: PrivateKeyJwk,
 }
 
+/// The hierarchical deterministic key derivation path.
 pub enum DerivationPath<'a> {
+    /// A full path from the root key to the descendant key.
     Full(&'a [String]),
+
+    /// A relative path from the ancestor key to the descendant key.
     Relative(&'a [String]),
 }
 
