@@ -1,3 +1,7 @@
+//! # JSON Schema Validation
+//! 
+//! This module validates messages against their JSON schemas.
+
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
 use serde::Serialize;
