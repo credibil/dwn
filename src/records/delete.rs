@@ -151,7 +151,7 @@ impl Delete {
             self.descriptor.base.message_timestamp.to_rfc3339_opts(Micros, true),
         );
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-        indexes.insert("archived".to_string(), "false".to_string());
+        indexes.insert("initial".to_string(), "false".to_string());
         indexes
     }
 
@@ -327,7 +327,7 @@ async fn delete_earlier(
             let write = Write::try_from(entry)?;
             if write.is_initial()? {
                 let mut entry = Entry::from(&write);
-                entry.add_index("archived", true.to_string());
+                entry.add_index("initial", true.to_string());
                 MessageStore::put(provider, owner, &entry).await?;
             } else {
                 let cid = entry.cid()?;

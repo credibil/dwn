@@ -259,7 +259,7 @@ impl From<records::Query> for Query {
             value: MatchOn::Equal(Method::Write.to_string()),
         });
         match_set.inner.push(Matcher {
-            field: "archived".to_string(),
+            field: "initial".to_string(),
             value: MatchOn::Equal(false.to_string()),
         });
 
@@ -276,7 +276,7 @@ impl From<records::Read> for Query {
         let mut match_set = MatchSet::from(&read.descriptor.filter);
 
         match_set.inner.push(Matcher {
-            field: "archived".to_string(),
+            field: "initial".to_string(),
             value: MatchOn::Equal(false.to_string()),
         });
 
@@ -615,7 +615,7 @@ impl RecordsQueryBuilder {
             }
             if !self.include_archived {
                 match_set.inner.push(Matcher {
-                    field: "archived".to_string(),
+                    field: "initial".to_string(),
                     value: MatchOn::Equal(false.to_string()),
                 });
             }

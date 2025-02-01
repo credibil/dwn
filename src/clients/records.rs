@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use vercre_infosec::jose::{Jws, JwsBuilder};
 
-use crate::authorization::{self, Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::hd_key::DerivationScheme;
 use crate::provider::Signer;
 use crate::records::{
@@ -1031,7 +1031,7 @@ impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
         let author_did = if let Some(grant) = &self.delegated_grant {
-            authorization::signer_did(&grant.authorization.signature)?
+            grant.authorization.signature.did()?
         } else {
             // TODO: add helper method to Signer trait
             self.signer
@@ -1058,7 +1058,7 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a
     /// LATER: Add errors
     pub async fn build(self) -> Result<Write> {
         let author_did = if let Some(grant) = &self.delegated_grant {
-            authorization::signer_did(&grant.authorization.signature)?
+            grant.authorization.signature.did()?
         } else {
             // TODO: add helper method to Signer trait
             self.signer

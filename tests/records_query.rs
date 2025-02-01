@@ -8,7 +8,7 @@ use dwn_node::clients::records::{Data, ProtocolBuilder, QueryBuilder, WriteBuild
 use dwn_node::protocols::Definition;
 use dwn_node::records::{RecordsFilter, Sort};
 use dwn_node::store::{MAX_ENCODED_SIZE, Pagination};
-use dwn_node::{DateRange, Error, Message, Range, authorization, endpoint};
+use dwn_node::{DateRange, Error, Message, Range, endpoint};
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use rand::RngCore;
@@ -318,7 +318,7 @@ async fn attester() {
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
 
-    let attester = authorization::signer_did(&entry.write.attestation.as_ref().unwrap()).unwrap();
+    let attester = entry.write.attestation.as_ref().unwrap().did().expect("should have attester");
     assert_eq!(attester, ALICE_DID);
 
     // --------------------------------------------------
@@ -337,7 +337,7 @@ async fn attester() {
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
 
-    let attester = authorization::signer_did(&entry.write.attestation.as_ref().unwrap()).unwrap();
+    let attester = entry.write.attestation.as_ref().unwrap().did().expect("should have attester");
     assert_eq!(attester, BOB_DID);
 
     // --------------------------------------------------
@@ -3650,7 +3650,7 @@ async fn paginate_non_owner() {
     let bob_sorted = sorted_writes
         .iter()
         .filter(|w| {
-            authorization::signer_did(&w.authorization.signature).unwrap() == BOB_DID
+            w.authorization.signature.did().unwrap() == BOB_DID
                 || w.descriptor.recipient.clone().unwrap_or_default() == BOB_DID
                 || w.descriptor.published.unwrap_or_default()
         })

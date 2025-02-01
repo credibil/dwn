@@ -22,7 +22,7 @@ use crate::records::{DateRange, EncryptionProperty, RecordsFilter};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
-use crate::{Descriptor, Error, Method, Result, authorization, forbidden, unexpected};
+use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
 /// Handle `RecordsWrite` messages.
 ///
@@ -93,7 +93,7 @@ pub async fn handle(
     // set `archive` flag is set when the intial write has no data
     // N.B. this is used to prevent malicious access to another record's data
     let mut entry = Entry::from(&write);
-    entry.add_index("archived", (code == StatusCode::NO_CONTENT).to_string());
+    entry.add_index("initial", (code == StatusCode::NO_CONTENT).to_string());
 
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
@@ -106,7 +106,7 @@ pub async fn handle(
 
         // HACK: rebuild entry's indexes
         let mut entry = Entry::from(&initial);
-        entry.add_index("archived", true.to_string());
+        entry.add_index("initial", true.to_string());
 
         MessageStore::put(provider, owner, &entry).await?;
         EventLog::append(provider, owner, &entry).await?;
@@ -155,7 +155,7 @@ pub struct Write {
     /// The message authorization.
     pub authorization: Authorization,
 
-    /// Entry CID
+    /// The Entry CID for the record.
     pub record_id: String,
 
     /// Entry context.
@@ -237,7 +237,7 @@ impl Write {
 
         indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), descriptor.base.method.to_string());
-        // indexes.insert("archived".to_string(), false.to_string());
+        // indexes.insert("initial".to_string(), false.to_string());
         indexes.insert("recordId".to_string(), self.record_id.clone());
         if let Some(context_id) = &self.context_id {
             indexes.insert("contextId".to_string(), context_id.clone());
@@ -283,7 +283,7 @@ impl Write {
             }
         }
         if let Some(attestation) = &self.attestation {
-            let attester = authorization::signer_did(attestation).unwrap_or_default();
+            let attester = attestation.did().unwrap_or_default();
             indexes.insert("attester".to_string(), attester);
         }
 

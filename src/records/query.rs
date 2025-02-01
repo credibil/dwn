@@ -12,7 +12,7 @@ use crate::provider::{MessageStore, Provider};
 use crate::records::{RecordsFilter, Write};
 use crate::store::{self, Cursor, Pagination, RecordsQueryBuilder, Sort};
 use crate::utils::cid;
-use crate::{Descriptor, Result, forbidden, unauthorized, unexpected, utils};
+use crate::{Descriptor, Result, forbidden, unexpected, utils};
 
 /// Process `Query` message.
 ///
@@ -161,11 +161,6 @@ impl Query {
         let Some(authzn) = &self.authorization else {
             return Err(forbidden!("missing authorization"));
         };
-
-        // authenticate the message
-        if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(unauthorized!("failed to authenticate: {e}"));
-        }
 
         // verify grant
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
