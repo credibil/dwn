@@ -1,6 +1,8 @@
-//! # Utils
+//! # Utility Functions
 //!
-//! TODO: documentation
+//! Utility functions that currenly have no better home.
+//! 
+//! Sub-modules are used to group related functionality.
 
 pub mod uri {
     use http::uri::Uri;
@@ -44,14 +46,11 @@ pub mod cid {
     /// Compute a CID from provided payload, serialized to CBOR.
     ///
     /// # Errors
-    /// LATER: Add errors
-    ///
-    /// # Panics
-    ///
-    /// When the payload cannot be serialized.
+    /// 
+    /// Fails when the payload cannot be serialized to CBOR.
     pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();
-        ciborium::into_writer(payload, &mut buf).expect("should serialize");
+        ciborium::into_writer(payload, &mut buf)?;
         let hash = multihash_codetable::Code::Sha2_256.digest(&buf);
         Ok(Cid::new_v1(RAW, hash).to_string())
     }

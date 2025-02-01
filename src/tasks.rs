@@ -7,7 +7,7 @@
 //! by network issues or other problems. It is responsible for running the task
 //! and ensuring that it is completed within a certain time frame.
 //!
-//!  # Implementer's Note:
+//! # Implementer Note:
 //!
 //! The implementation of the backing `[TaskStore]` must allow for
 //! concurrent access by multiple `TaskStore` instances when used in a
@@ -18,13 +18,13 @@
 //! when the `grab()`  method is called.
 //!
 //! A more performant, multi-node implementation could:
-//! 
-//!  1. Use a persistent store for storing the data of each resumable task
-//!  2. Use pub/sub to distribute task processing exclusively to a single
-//!     subscribing task manager service.
-//!  3. The `grab()` and/or `open()` implementation will need to publish
-//!     expired tasks for distributed processing when there are no resumable
-//!     tasks in the queue.
+//!
+//! 1. Use a persistent store for storing the data of each resumable task
+//! 2. Use pub/sub to distribute task processing exclusively to a single
+//!    subscribing task manager service.
+//! 3. The `grab()` and/or `open()` implementation will need to publish
+//!    expired tasks for distributed processing when there are no resumable
+//!    tasks in the queue.
 
 use chrono::Utc;
 use serde::de::DeserializeOwned;
@@ -82,7 +82,8 @@ where
     -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Used by the task manager to resume running a task.
+/// `ResumableTask` is used by the task manager to resume running a paused
+/// task.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ResumableTask {
     /// Globally unique ID. Used to extend or delete the task.
