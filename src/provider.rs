@@ -1,4 +1,7 @@
 //! # Provider
+//!
+//! Provider traits are required of implementers in order to provide data
+//! storage, DID resolution, and cryptographic capabilities to the library.
 
 use std::io::Read;
 
