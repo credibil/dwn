@@ -3,10 +3,9 @@
 //! The Records interface provides a mechanism to store data using shared
 //! schemas.
 //!
-//! Storing data using schemas, some of which may be well-known for a given
-//! domain, DWN apps and services can share the same datasets between one
-//! another, enabling, cross-platform, cross-device, cross-app experience for
-//! users.
+//! Shared schemas, some of which may be well-known for a given domain, allow
+//! DWN-baswed apps and services to share datasets with one another. This leads
+//! to improved cross-app experiences for users.
 
 mod delete;
 mod encryption;
