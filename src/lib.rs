@@ -11,7 +11,7 @@
 //! A DWN allows the owning entity to secure, manage, and transact data with
 //! others without reliance on location or provider-specific infrastructure,
 //! interfaces, or routing mechanisms.
-//! 
+//!
 //! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
 pub mod authorization;
@@ -68,7 +68,7 @@ pub enum Interface {
 
     /// Protocols interface.
     Protocols,
-    
+
     /// Messages interface.
     Messages,
 }

@@ -220,7 +220,7 @@ impl AuthorizationBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// 
+    ///
     /// Will return an error when an incorrect value has been provided or when
     /// there was an issue signing the Authorization
     pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {

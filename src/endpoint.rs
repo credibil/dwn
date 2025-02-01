@@ -40,11 +40,11 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
     /// Compute the content identifier (CID) for the message.
     ///
     /// # Errors
-    /// 
+    ///
     /// This method will fail if the message cannot be serialized to CBOR.
     fn cid(&self) -> Result<String>;
 
-    /// Returns message descriptor properties common to all messages (i.e., 
+    /// Returns message descriptor properties common to all messages (i.e.,
     /// `interface`, `method`, and `message_timestamp`).
     fn descriptor(&self) -> &Descriptor;
 
@@ -56,8 +56,8 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
         self, owner: &str, provider: &impl Provider,
     ) -> impl Future<Output = Result<Reply<Self::Reply>>> + Send;
 
-    /// Perform initial validation of the message. 
-    /// 
+    /// Perform initial validation of the message.
+    ///
     /// Validation undertaken here is common to all messages, with message-
     /// specific validation performed by the message's handler.
     fn validate(

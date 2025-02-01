@@ -4,7 +4,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{Conditions, Publication, RecordsScope, Scope};
+use super::{RecordsScope, Scope};
 use crate::protocols::REVOCATION_PATH;
 use crate::provider::MessageStore;
 use crate::records::{DelegatedGrant, Delete, Query, Read, RecordsFilter, Subscribe, Write};
@@ -98,6 +98,28 @@ pub struct GrantData {
     /// Optional conditions that must be met when the grant is used.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Conditions>,
+}
+
+/// `Conditions` contains conditions set on the parent `Grant`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conditions {
+    /// Indicates whether a message written with the invocation of a permission
+    /// must, may, or must not be marked as public. If unset, it is optional to
+    /// make the message public.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publication: Option<Publication>,
+}
+
+/// Condition for publication of a message.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum Publication {
+    /// The message must be marked as public.
+    #[default]
+    Required,
+
+    /// The message may be marked as public.
+    Prohibited,
 }
 
 /// Type for the data payload of a permission request message.
