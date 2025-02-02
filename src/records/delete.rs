@@ -1,6 +1,12 @@
-//! # Delete
+//! # Records Delete
 //!
-//! `Delete` is a message type used to delete a record in the web node.
+//! The records delete endpoint handles `RecordsDelete` messages — requests
+//! to delete a [`Write`] record.
+//!
+//! Technically, the [`Write`] record is not deleted, but rather a new
+//! [`Delete`] record is created to mark the record as deleted. The [`Delete`]
+//! record is used to prune the record and its descendants from the system,
+//! leaving only the [`Delete'] and initial [`Write`] records.
 
 use std::collections::HashMap;
 
@@ -19,10 +25,13 @@ use crate::tasks::{self, Task, TaskType};
 use crate::utils::cid;
 use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
 
-/// Process `Delete` message.
+/// Handle — or process — a [`Delete`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs attempting to delete the specified record from the
+/// [`MessageStore`].
 pub async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
 ) -> Result<Reply<DeleteReply>> {
@@ -75,7 +84,7 @@ pub async fn handle(
     })
 }
 
-/// Records delete message payload
+/// The [`Delete`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Delete {
@@ -106,7 +115,7 @@ impl Message for Delete {
     }
 }
 
-/// Delete reply.
+/// [`DeleteReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Debug)]
 pub struct DeleteReply;
 
@@ -179,7 +188,7 @@ impl Delete {
     }
 }
 
-/// Deletes delete descriptor.
+/// The [`Delete`] message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteDescriptor {

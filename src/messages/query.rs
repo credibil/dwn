@@ -1,6 +1,6 @@
 //! # Messages Query
 //!
-//! The messages query endpoint handles `MessagesQuery`s requests — requests
+//! The messages query endpoint handles `MessagesQuery` messages — requests
 //! to query the [`EventLog`] for matching persisted messages (of any type).
 
 use http::StatusCode;
@@ -14,7 +14,7 @@ use crate::store::{self, Cursor};
 use crate::utils::cid;
 use crate::{Descriptor, Result, forbidden, permissions};
 
-/// Handle a query message.
+/// Handle — or process — a [`Query`] message.
 ///
 /// # Errors
 ///
@@ -40,7 +40,7 @@ pub async fn handle(
     })
 }
 
-/// The [Query] message.
+/// The [`Query`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The `Query` descriptor.
@@ -101,7 +101,7 @@ impl Query {
         Ok(())
     }
 }
-/// `Query` reply
+/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
     /// Entries matching the message's query.
@@ -113,7 +113,7 @@ pub struct QueryReply {
     pub cursor: Option<Cursor>,
 }
 
-/// `Query` descriptor.
+/// The [`Query`] message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryDescriptor {

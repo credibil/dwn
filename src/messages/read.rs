@@ -1,6 +1,6 @@
 //! # Messages Read
 //! 
-//! The messages read endpoint handles `MessagesRead` requests — requests to
+//! The messages read endpoint handles `MessagesRead` messages — requests to
 //! read a persisted message.
 //!
 //! Typically, a read request is made to read a message following a successful
@@ -24,7 +24,7 @@ use crate::store::{Entry, EntryType};
 use crate::utils::cid;
 use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
 
-/// Handle a read message.
+/// Handle — or process — a [`Read`] message.
 ///
 /// # Errors
 /// 
@@ -83,7 +83,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     })
 }
 
-/// The [Read] message.
+/// The [Read] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Read {
     /// The `Read` descriptor.
@@ -186,7 +186,7 @@ async fn verify_scope(
     Err(forbidden!("message failed scope authorization"))
 }
 
-/// The `Read`-specific reply.
+/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ReadReply {
     /// The `Read` descriptor.
@@ -208,7 +208,7 @@ pub struct ReadReplyEntry {
     pub data: Option<Cursor<Vec<u8>>>,
 }
 
-/// Read descriptor.
+/// The [`Read`]`  message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadDescriptor {
