@@ -13,7 +13,7 @@
 //!
 //! ## Example Usage
 //!
-//! The following example demonstrates how to write a record to the DWN.
+//! The following example demonstrates how to write and query for a DWN record.
 //!
 //! ```rust
 //! use base64ct::{Base64UrlUnpadded, Encoding};
@@ -38,7 +38,6 @@
 //!     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 //!
 //!     // and to read the previously written record:
-//!
 //!     let query = QueryBuilder::new()
 //!         .filter(RecordsFilter::new().record_id(&write.record_id))
 //!         .sign(&alice_signer)

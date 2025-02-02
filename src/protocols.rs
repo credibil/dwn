@@ -1,18 +1,6 @@
-//! # Protocols Interface
+//! # Protocols Handlers
 //!
-//! DWN nodes provide the substrate upon which a wide variety of decentralized
-//! applications and services can be implemented. By employing protocols, DWN
-//! owners can define the rules and constraints that govern the behavior of the
-//! data stored on their nodes.
-//!
-//! Protocols provide a mechanism for declaratively encoding an app or
-//! service’s rules, including segmentation of records, relationships
-//! between records, data-level requirements, and constraints on how
-//! DWN users interact with a protocol.
-//!
-//! DWN owners can model the protocols for a wide array of use cases in a way
-//! that enables interop-by-default between app implementations built on top of
-//! them.
+//! Protocols handlers handle incoming `Protocols` interface messages.
 
 mod configure;
 pub mod query;

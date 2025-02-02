@@ -1,4 +1,11 @@
-//! # Records
+//! # Records Interface
+//!
+//! The Records interface provides a mechanism to store data using shared
+//! schemas.
+//!
+//! Shared schemas, some of which may be well-known for a given domain, allow
+//! DWN-baswed apps and services to share datasets with one another. This leads
+//! to improved cross-app experiences for users.
 
 use std::collections::HashMap;
 use std::io::Cursor;

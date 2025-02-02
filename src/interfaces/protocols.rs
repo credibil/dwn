@@ -1,4 +1,18 @@
-//! # Protocols Client
+//! # Protocols Interface
+//!
+//! DWN nodes provide the substrate upon which a wide variety of decentralized
+//! applications and services can be implemented. By employing protocols, DWN
+//! owners can define the rules and constraints that govern the behavior of the
+//! data stored on their nodes.
+//!
+//! Protocols provide a mechanism for declaratively encoding an app or
+//! service’s rules, including segmentation of records, relationships
+//! between records, data-level requirements, and constraints on how
+//! DWN users interact with a protocol.
+//!
+//! DWN owners can model the protocols for a wide array of use cases in a way
+//! that enables interop-by-default between app implementations built on top of
+//! them.
 //!
 //! The Protocols client provides a builder and related types to use in
 //! building Protocol-related messages (Configure and Query).
@@ -13,7 +27,7 @@ pub use crate::protocols::{
 use crate::provider::Signer;
 use crate::records::DelegatedGrant;
 use crate::utils::cid;
-use crate::{Descriptor, Interface, Method, Result, protocols, schema, unexpected, utils};
+use crate::{Descriptor, Interface, Method, Result, protocols, unexpected, utils};
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
@@ -94,15 +108,10 @@ impl ConfigureBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        let configure = Configure {
+        Ok(Configure {
             descriptor,
             authorization,
-        };
-
-        // TODO: move validation out of message
-        schema::validate(&configure)?;
-
-        Ok(configure)
+        })
     }
 }
 
@@ -162,14 +171,10 @@ impl QueryBuilder {
             authorization = authorization.permission_grant_id(id);
         }
 
-        let query = Query {
+        Ok(Query {
             descriptor,
             authorization: Some(authorization.build(signer).await?),
-        };
-
-        schema::validate(&query)?;
-
-        Ok(query)
+        })
     }
 
     /// Build an anonymous query.
@@ -177,7 +182,7 @@ impl QueryBuilder {
     /// # Errors
     /// LATER: Add errors
     pub fn anonymous(self) -> Result<Query> {
-        let query = Query {
+        Ok(Query {
             descriptor: QueryDescriptor {
                 base: Descriptor {
                     interface: Interface::Protocols,
@@ -187,10 +192,6 @@ impl QueryBuilder {
                 filter: self.filter,
             },
             authorization: None,
-        };
-
-        schema::validate(&query)?;
-
-        Ok(query)
+        })
     }
 }

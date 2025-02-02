@@ -1,7 +1,6 @@
-//! # Messages Interface
+//! # Messages Handlers
 //!
-//! The `Messages` interface provides methods to query, read, and subscribe to
-//! any DWN message regardless of the interface or method.
+//! Messages handlers handle incoming `Messages` interface messages.
 
 mod query;
 mod read;

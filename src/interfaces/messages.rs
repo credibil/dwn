@@ -1,4 +1,7 @@
-//! # Messages Query
+//! # Messages Interface
+//!
+//! The `Messages` interface provides methods to query, read, and subscribe to
+//! any DWN message regardless of the interface or method.
 
 use std::str::FromStr;
 
@@ -13,7 +16,7 @@ use crate::messages::{
 };
 use crate::provider::Signer;
 use crate::utils::cid;
-use crate::{Descriptor, Interface, Method, schema};
+use crate::{Descriptor, Interface, Method};
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
@@ -54,7 +57,12 @@ impl QueryBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// The [`build`] method will return an error when there is an issue is
+    /// ecountered signing the message.
+    ///
+    /// Schema validation could potentially fail in debug, but this is
+    /// considered unlikely due to the use of strongly-typed data structures.
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -73,14 +81,10 @@ impl QueryBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        let query = Query {
+        Ok(Query {
             descriptor,
             authorization,
-        };
-
-        schema::validate(&query)?;
-
-        Ok(query)
+        })
     }
 }
 
@@ -145,14 +149,10 @@ impl ReadBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        let read = Read {
+        Ok(Read {
             descriptor,
             authorization,
-        };
-
-        schema::validate(&read)?;
-
-        Ok(read)
+        })
     }
 }
 
@@ -211,13 +211,9 @@ impl SubscribeBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        let query = Subscribe {
+        Ok(Subscribe {
             descriptor,
             authorization,
-        };
-
-        schema::validate(&query)?;
-
-        Ok(query)
+        })
     }
 }
