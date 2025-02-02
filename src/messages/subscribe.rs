@@ -1,6 +1,7 @@
 //! # Messages Subscribe
 //!
-//! Decentralized Web Node messaging framework.
+//! The messages subscribe endpoint handles `MessagesSubscribe` requests —
+//! requests to subscribe to message events matching the provided filter(s).
 
 use futures::{StreamExt, future};
 use http::StatusCode;
@@ -14,10 +15,12 @@ use crate::provider::{EventStream, MessageStore, Provider};
 use crate::utils::cid;
 use crate::{Descriptor, Result, forbidden, permissions};
 
-/// Handle a subscribe message.
+/// Handle a [`Subscribe`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs creating the subscription [`Subscriber`].
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
@@ -46,7 +49,7 @@ pub async fn handle(
     })
 }
 
-/// Subscribe message.
+/// The [`Subscribe`] message.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Subscribe {
     /// The Subscribe descriptor.

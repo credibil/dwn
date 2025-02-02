@@ -3,13 +3,13 @@
 //! The `store` module provides utilities for storing and retrieving messages
 //! and associated data.
 //!
-//! The two primary types exposed by this module are `[Entry]` and `[Query]`.
+//! The two primary types exposed by this module are [`Entry`] and [`Query`].
 //!
-//! `[Entry]` wraps each message with a unifying type used to simplify storage
+//! [`Entry`] wraps each message with a unifying type used to simplify storage
 //! and retrieval as well as providing a vehicle for attaching addtional data
 //! alongside the message (i.e. indexes).
 //!
-//! `[Query]` wraps store-specific query options for querying the underlying
+//! [`Query`] wraps store-specific query options for querying the underlying
 //! store.
 
 pub(crate) mod block;
@@ -172,11 +172,11 @@ impl Default for EntryType {
     }
 }
 
-/// The top-level query data structure used for both `[MessageStore]` and
+/// The top-level query data structure used for both [`MessageStore`] and
 /// `EventLog` queries.
 ///
-/// The query is composed of one or more `[MatchSet]`s derived from filters
-/// associated with the messagetype being queried. `[MatchSet]`s are 'OR-ed'
+/// The query is composed of one or more [`MatchSet`]s derived from filters
+/// associated with the messagetype being queried. [`MatchSet`]s are 'OR-ed'
 /// together to form the query.
 ///
 /// Sorting and pagination options are also included although not always
@@ -304,8 +304,8 @@ impl From<messages::Query> for Query {
     }
 }
 
-/// A `MatchSet` contains a set of `[Matcher]`s derived from the underlying 
-/// filter object. `[Matcher]`s are 'AND-ed' together for a successful match.
+/// A `MatchSet` contains a set of [`Matcher`]s derived from the underlying
+/// filter object. [`Matcher`]s are 'AND-ed' together for a successful match.
 #[derive(Clone, Debug, Default)]
 pub struct MatchSet {
     /// The set of matchers.
@@ -353,7 +353,7 @@ impl Matcher {
     }
 }
 
-/// The `[MatchOn]` enum is used to specify the matching strategy to be
+/// The [`MatchOn`] enum is used to specify the matching strategy to be
 /// employed by the `Matcher`.
 #[derive(Clone, Debug)]
 pub enum MatchOn {

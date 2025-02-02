@@ -55,7 +55,7 @@ impl Serialize for Error {
 }
 
 impl Error {
-    /// Returns the error code as an `[http::StatusCode]`.
+    /// Returns the error code as an [`http::StatusCode`].
     #[must_use]
     pub const fn code(&self) -> StatusCode {
         match self {

@@ -9,7 +9,7 @@
 //!
 //! # Implementer Note:
 //!
-//! The implementation of the backing `[TaskStore]` must allow for
+//! The implementation of the backing [`TaskStore`] must allow for
 //! concurrent access by multiple `TaskStore` instances when used in a
 //! multi-node deployment. It would be undesirable to have many node
 //! instances attempting to run the same resumable task.

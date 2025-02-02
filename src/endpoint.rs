@@ -32,7 +32,7 @@ pub async fn handle<T>(
 /// Methods common to all messages.
 ///
 /// The primary role of this trait is to provide a common interface for
-/// messages so they can be handled by `[handle]` method.
+/// messages so they can be handled by [`handle`] method.
 pub trait Message: Serialize + Clone + Debug + Send + Sync {
     /// The inner reply type specific to the implementing message.
     type Reply;

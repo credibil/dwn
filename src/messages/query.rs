@@ -1,4 +1,7 @@
 //! # Messages Query
+//!
+//! The messages query endpoint handles `MessagesQuery`s requests — requests
+//! to query the [`EventLog`] for matching persisted messages (of any type).
 
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -14,7 +17,9 @@ use crate::{Descriptor, Result, forbidden, permissions};
 /// Handle a query message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs querying the [`EventLog`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
@@ -35,7 +40,7 @@ pub async fn handle(
     })
 }
 
-/// `Query` payload
+/// The [Query] message.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The `Query` descriptor.
@@ -116,7 +121,7 @@ pub struct QueryDescriptor {
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Filters to apply when querying messages.
+    /// Filters to apply when querying for messages.
     pub filters: Vec<MessagesFilter>,
 
     /// The pagination cursor.
