@@ -113,7 +113,11 @@ pub enum DerivationPath<'a> {
 /// Derives a descendant private key.
 ///
 /// # Errors
-/// LATER: document errors
+/// 
+/// This function will fail when:
+/// 
+/// - The ancestor and descendant key derivation paths do not match.
+/// - The secret key is invalid.
 pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<DerivedPrivateJwk> {
     let empty_path = vec![];
     let ancestor_path = ancestor.derivation_path.as_ref().unwrap_or(&empty_path);
@@ -175,7 +179,9 @@ pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<
 /// (HMAC-based Extract-and-Expand Key Derivation Function).
 ///
 /// # Errors
-/// LATER: document errors
+///
+/// This function will fail when the key derivation path has an empty segment
+/// or the HKDF key expansion fails.
 pub fn derive_key(
     from_key: [u8; PUBLIC_KEY_LENGTH], path: &[String],
 ) -> Result<[u8; PUBLIC_KEY_LENGTH]> {

@@ -101,6 +101,7 @@ impl Query {
         Ok(())
     }
 }
+
 /// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
