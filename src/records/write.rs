@@ -1,6 +1,7 @@
-//! # Write
+//! # Records Write
 //!
-//! `Write` is a message type used to create a new record in the web node.
+//! The records write endpoint handles `RecordsWrite` messages —
+//! requests to write to records to the DWN's [`MessageStore`].
 
 use std::collections::{HashMap, VecDeque};
 use std::io::{Cursor, Read};
@@ -24,10 +25,12 @@ use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, d
 use crate::utils::cid;
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
-/// Handle `RecordsWrite` messages.
+/// Handle — or process — a [`Write`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs attempting to save the [`Write`] message or attendant data.
 pub async fn handle(
     owner: &str, write: Write, provider: &impl Provider,
 ) -> Result<Reply<WriteReply>> {
@@ -145,7 +148,7 @@ pub async fn handle(
     })
 }
 
-/// Records write message payload
+/// The [`Write`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Write {
@@ -202,7 +205,8 @@ impl Message for Write {
     }
 }
 
-/// `Write` reply
+/// For consistency, [`WriteReply`] is returned by the handler in the [`Reply`]
+/// `body` field, but contains no data.
 #[derive(Clone, Debug)]
 pub struct WriteReply;
 
@@ -306,7 +310,8 @@ impl Write {
     /// Computes the deterministic Entry ID (Record ID) of the message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// Returns an error if the Entry ID cannot be serialized to CBOR.
     pub fn entry_id(&self, author: &str) -> Result<String> {
         #[derive(Serialize)]
         struct EntryId<'a> {
@@ -572,7 +577,10 @@ impl Write {
     /// Signs the Write message body. The signer is either the author or a delegate.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue serializing the message
+    /// to CBOR or when there is an issue signing message. The returned
+    /// [`Error`] will contain a brief clarifying description of the error.
     pub async fn sign_as_author(
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
         signer: &impl Signer,
@@ -606,14 +614,18 @@ impl Write {
         Ok(())
     }
 
-    /// Signs the `RecordsWrite` as the web node owner.
+    /// Signs the [`Write`] message as the DWN owner.
     ///
     /// This is used when the web node owner wants to retain a copy of a message that
     /// the owner did not author.
     /// N.B.: requires the `RecordsWrite` to already have the author's signature.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when the message has not been previously signed
+    /// by the author or there is an issue issue signing the message.
+    /// The returned [`Error`] will contain a brief clarifying description of the
+    /// error.
     pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
         if self.authorization.author().is_err() {
             return Err(unexpected!("message signature is required in order to sign as owner"));
@@ -636,7 +648,11 @@ impl Write {
     /// N.B. requires `Write` to have previously beeen signed by the author.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when the message has not been previously signed
+    /// by the author or there is an issue issue signing the message.
+    /// The returned [`Error`] will contain a brief clarifying description of the
+    /// error.
     pub async fn sign_as_delegate(
         &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
     ) -> Result<()> {
@@ -721,10 +737,7 @@ pub struct DelegatedGrant {
 
 impl DelegatedGrant {
     /// Convert [`DelegatedGrant`] to `permissions::Grant`.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn to_grant(&self) -> Result<Grant> {
+    pub(crate) fn to_grant(&self) -> Result<Grant> {
         self.try_into()
     }
 }
@@ -741,7 +754,7 @@ impl From<Write> for DelegatedGrant {
     }
 }
 
-/// Write descriptor.
+/// The [`Write`]  message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteDescriptor {
