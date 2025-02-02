@@ -7,7 +7,7 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::{Message, endpoint};
 use futures::StreamExt;
-use http::StatusCode;
+use dwn_node::StatusCode;
 use test_node::key_store::{self, ALICE_DID};
 use test_node::provider::ProviderImpl;
 use tokio::time;

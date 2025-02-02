@@ -15,8 +15,7 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::provider::EventLog;
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Message, Method, endpoint, interfaces, store};
-use http::StatusCode;
+use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint, interfaces, store};
 use rand::RngCore;
 use test_node::key_store::{
     self, ALICE_DID, ALICE_VERIFYING_KEY, APP_DID as ISSUER_DID, APP_DID as PFI_DID, BOB_DID,

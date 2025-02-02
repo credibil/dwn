@@ -13,7 +13,7 @@ use dwn_node::interfaces::records::{
 use dwn_node::provider::{DataStore, MessageStore};
 use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
 use dwn_node::{Error, Method, cid, endpoint};
-use http::StatusCode;
+use dwn_node::StatusCode;
 use rand::RngCore;
 use test_node::key_store::{
     self, ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID,

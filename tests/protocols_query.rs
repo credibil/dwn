@@ -11,8 +11,7 @@ use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder, Scope};
 use dwn_node::interfaces::protocols::{
     ConfigureBuilder, Definition, ProtocolType, ProtocolsFilter, QueryBuilder,
 };
-use dwn_node::{Error, Method, cid, endpoint};
-use http::StatusCode;
+use dwn_node::{Error, Method, StatusCode, cid, endpoint};
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use test_node::provider::ProviderImpl;
 use tokio::time;

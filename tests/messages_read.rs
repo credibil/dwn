@@ -12,7 +12,7 @@ use dwn_node::interfaces::records::{Data, DeleteBuilder, ProtocolBuilder, WriteB
 use dwn_node::provider::MessageStore;
 use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Interface, Message, Method, endpoint, store};
-use http::StatusCode;
+use dwn_node::StatusCode;
 use rand::RngCore;
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID, INVALID_DID};
 use test_node::provider::ProviderImpl;

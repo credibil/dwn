@@ -9,7 +9,7 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::store::{MAX_ENCODED_SIZE, Pagination};
 use dwn_node::{DateRange, Error, Message, Range, endpoint};
-use http::StatusCode;
+use dwn_node::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use rand::RngCore;
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
