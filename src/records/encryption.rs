@@ -122,7 +122,10 @@ impl<'a> EncryptOptions<'a> {
     /// CEK, IV, and AAD tag for later use.
     ///
     /// # Errors
-    /// LATER: Add error handling
+    /// 
+    /// Will fail if the [`Protected`] struct cannot be serialized to JSON or
+    /// if the provided data cannot be encrypted using the specified content 
+    /// encryption algorithm.
     pub fn encrypt(&mut self) -> Result<Encrypted> {
         use aes_gcm::Aes256Gcm;
         use aes_gcm::aead::KeyInit;
@@ -294,14 +297,15 @@ pub struct EncryptedKey {
 /// `Write` message.
 ///
 /// # Errors
-/// LATER: Add error handling
+///
+/// Will fail if the encryption properties are not set or if the data cannot be
+/// decrypted using the provided encryption properties.
 pub async fn decrypt(
     data: &[u8], write: &Write, ancestor_jwk: &DerivedPrivateJwk, _: &impl Receiver,
 ) -> Result<Vec<u8>> {
     let Some(encryption) = &write.encryption else {
         return Err(unexpected!("encryption parameter not set"));
     };
-
     let Some(recipient) = encryption.key_encryption.iter().find(|k| {
         k.root_key_id == ancestor_jwk.root_key_id
             && k.derivation_scheme == ancestor_jwk.derivation_scheme
