@@ -1,8 +1,8 @@
 //! # Protocol-based Permissions
-//! 
-//! Protocol-based permissions are a way to configure access control for DWN 
-//! users based on the protocol used in their interactions (messages). 
-//! 
+//!
+//! Protocol-based permissions are a way to configure access control for DWN
+//! users based on the protocol used in their interactions (messages).
+//!
 //! This module provides the logic to enforce these permissions.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
@@ -13,10 +13,9 @@ use crate::protocols::{
     Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
 use crate::provider::MessageStore;
-use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, write};
+use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, integrity, write};
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden};
-use crate::records::integrity;
 
 /// [`Protocol`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.
@@ -45,7 +44,7 @@ impl<'a> Protocol<'a> {
     }
 }
 
-/// Wrap Records interface messages into a common enum to allow for reuse of 
+/// Wrap Records interface messages into a common enum to allow for reuse of
 /// authorization checks.
 enum Record {
     Write(Write),

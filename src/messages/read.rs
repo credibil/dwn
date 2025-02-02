@@ -1,5 +1,5 @@
 //! # Messages Read
-//! 
+//!
 //! The messages read endpoint handles `MessagesRead` messages — requests to
 //! read a persisted message.
 //!
@@ -27,9 +27,9 @@ use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
 /// Handle — or process — a [`Read`] message.
 ///
 /// # Errors
-/// 
+///
 /// The endpoint will return an error when message authorization fails or when
-/// an issue occurs attempting to retrieve the specified message from the 
+/// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // validate message CID

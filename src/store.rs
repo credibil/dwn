@@ -218,10 +218,13 @@ impl From<records::Query> for Query {
     fn from(query: records::Query) -> Self {
         let mut match_set = MatchSet::from(&query.descriptor.filter);
 
-        match_set.inner.insert(0, Matcher {
-            field: "method".to_string(),
-            value: MatchOn::Equal(Method::Write.to_string()),
-        });
+        match_set.inner.insert(
+            0,
+            Matcher {
+                field: "method".to_string(),
+                value: MatchOn::Equal(Method::Write.to_string()),
+            },
+        );
         match_set.inner.push(Matcher {
             field: "initial".to_string(),
             value: MatchOn::Equal(false.to_string()),

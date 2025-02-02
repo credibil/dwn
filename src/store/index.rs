@@ -38,19 +38,25 @@ pub async fn insert(
 
     for (field, value) in &entry.indexes {
         let mut index = indexes.get(field).await?;
-        index.insert(value, IndexItem {
-            fields: entry.indexes.clone(),
-            message_cid: message_cid.clone(),
-        });
+        index.insert(
+            value,
+            IndexItem {
+                fields: entry.indexes.clone(),
+                message_cid: message_cid.clone(),
+            },
+        );
         indexes.put(index).await?;
     }
 
     // add reverse lookup to use when message is updated or deleted
     let mut index = indexes.get("message_cid").await?;
-    index.items.insert(message_cid.clone(), IndexItem {
-        fields: entry.indexes.clone(),
-        message_cid,
-    });
+    index.items.insert(
+        message_cid.clone(),
+        IndexItem {
+            fields: entry.indexes.clone(),
+            message_cid,
+        },
+    );
     indexes.put(index).await?;
 
     Ok(())

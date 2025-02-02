@@ -1,7 +1,7 @@
 //! # Utility Functions
 //!
 //! Utility functions that currenly have no better home.
-//! 
+//!
 //! Sub-modules are used to group related functionality.
 
 pub mod uri {
@@ -46,7 +46,7 @@ pub mod cid {
     /// Compute a CID from provided payload, serialized to CBOR.
     ///
     /// # Errors
-    /// 
+    ///
     /// Fails when the payload cannot be serialized to CBOR.
     pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();

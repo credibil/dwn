@@ -140,18 +140,27 @@ async fn overwrite_smaller() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 
-    let definition_1 = Definition::new("http://minimal.xyz").add_type("foo1", ProtocolType {
-        schema: None,
-        data_formats: Some(vec!["bar1".to_string()]),
-    });
-    let definition_2 = Definition::new("http://minimal.xyz").add_type("foo2", ProtocolType {
-        schema: None,
-        data_formats: Some(vec!["bar2".to_string()]),
-    });
-    let definition_3 = Definition::new("http://minimal.xyz").add_type("foo3", ProtocolType {
-        schema: None,
-        data_formats: Some(vec!["bar3".to_string()]),
-    });
+    let definition_1 = Definition::new("http://minimal.xyz").add_type(
+        "foo1",
+        ProtocolType {
+            schema: None,
+            data_formats: Some(vec!["bar1".to_string()]),
+        },
+    );
+    let definition_2 = Definition::new("http://minimal.xyz").add_type(
+        "foo2",
+        ProtocolType {
+            schema: None,
+            data_formats: Some(vec!["bar2".to_string()]),
+        },
+    );
+    let definition_3 = Definition::new("http://minimal.xyz").add_type(
+        "foo3",
+        ProtocolType {
+            schema: None,
+            data_formats: Some(vec!["bar3".to_string()]),
+        },
+    );
 
     // --------------------------------------------------
     // Alice creates 3 messages sorted in by CID.
@@ -248,19 +257,25 @@ async fn invalid_schema() {
     let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
-        .definition(Definition::new("http://minimal.xyz").add_type("foo", ProtocolType {
-            schema: Some("bad-schema.xyz/".to_string()),
-            data_formats: None,
-        }))
+        .definition(Definition::new("http://minimal.xyz").add_type(
+            "foo",
+            ProtocolType {
+                schema: Some("bad-schema.xyz/".to_string()),
+                data_formats: None,
+            },
+        ))
         .build(&alice_signer)
         .await
         .expect("should build");
 
     // override builder's normalizing of  protocol
-    configure.descriptor.definition.types.insert("foo".to_string(), ProtocolType {
-        schema: Some("bad-schema.xyz/".to_string()),
-        data_formats: None,
-    });
+    configure.descriptor.definition.types.insert(
+        "foo".to_string(),
+        ProtocolType {
+            schema: Some("bad-schema.xyz/".to_string()),
+            data_formats: None,
+        },
+    );
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
@@ -303,23 +318,25 @@ async fn duplicate_actor() {
         .expect("should build");
 
     // overwrite builder (it validates definition)
-    configure.descriptor.definition = Definition::new("http://foo.xyz")
-        .add_type("foo", ProtocolType::default())
-        .add_rule("foo", RuleSet {
-            actions: Some(vec![
-                ActionRule {
-                    who: Some(Actor::Anyone),
-                    can: vec![Action::Create],
-                    ..ActionRule::default()
-                },
-                ActionRule {
-                    who: Some(Actor::Anyone),
-                    can: vec![Action::Update],
-                    ..ActionRule::default()
-                },
-            ]),
-            ..RuleSet::default()
-        });
+    configure.descriptor.definition =
+        Definition::new("http://foo.xyz").add_type("foo", ProtocolType::default()).add_rule(
+            "foo",
+            RuleSet {
+                actions: Some(vec![
+                    ActionRule {
+                        who: Some(Actor::Anyone),
+                        can: vec![Action::Create],
+                        ..ActionRule::default()
+                    },
+                    ActionRule {
+                        who: Some(Actor::Anyone),
+                        can: vec![Action::Update],
+                        ..ActionRule::default()
+                    },
+                ]),
+                ..RuleSet::default()
+            },
+        );
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
@@ -339,27 +356,33 @@ async fn duplicate_actor() {
     configure.descriptor.definition = Definition::new("http://user-foo.xyz")
         .add_type("foo", ProtocolType::default())
         .add_type("bar", ProtocolType::default())
-        .add_rule("user", RuleSet {
-            role: Some(true),
-            ..RuleSet::default()
-        })
-        .add_rule("foo", RuleSet {
-            actions: Some(vec![
-                ActionRule {
-                    who: Some(Actor::Recipient),
-                    of: Some("foo".to_string()),
-                    can: vec![Action::Create],
-                    ..ActionRule::default()
-                },
-                ActionRule {
-                    who: Some(Actor::Recipient),
-                    of: Some("foo".to_string()),
-                    can: vec![Action::Update],
-                    ..ActionRule::default()
-                },
-            ]),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "user",
+            RuleSet {
+                role: Some(true),
+                ..RuleSet::default()
+            },
+        )
+        .add_rule(
+            "foo",
+            RuleSet {
+                actions: Some(vec![
+                    ActionRule {
+                        who: Some(Actor::Recipient),
+                        of: Some("foo".to_string()),
+                        can: vec![Action::Create],
+                        ..ActionRule::default()
+                    },
+                    ActionRule {
+                        who: Some(Actor::Recipient),
+                        of: Some("foo".to_string()),
+                        can: vec![Action::Update],
+                        ..ActionRule::default()
+                    },
+                ]),
+                ..RuleSet::default()
+            },
+        );
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
@@ -383,28 +406,37 @@ async fn duplicate_role() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("user", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule("user", RuleSet {
-            role: Some(true),
-            ..RuleSet::default()
-        })
-        .add_rule("foo", RuleSet {
-            structure: BTreeMap::from([("foo".to_string(), RuleSet {
-                actions: Some(vec![
-                    ActionRule {
-                        who: Some(Actor::Anyone),
-                        of: Some("foo".to_string()),
-                        ..ActionRule::default()
-                    },
-                    ActionRule {
-                        who: Some(Actor::Anyone),
-                        of: Some("foo".to_string()),
-                        ..ActionRule::default()
-                    },
-                ]),
+        .add_rule(
+            "user",
+            RuleSet {
+                role: Some(true),
                 ..RuleSet::default()
-            })]),
-            ..RuleSet::default()
-        });
+            },
+        )
+        .add_rule(
+            "foo",
+            RuleSet {
+                structure: BTreeMap::from([(
+                    "foo".to_string(),
+                    RuleSet {
+                        actions: Some(vec![
+                            ActionRule {
+                                who: Some(Actor::Anyone),
+                                of: Some("foo".to_string()),
+                                ..ActionRule::default()
+                            },
+                            ActionRule {
+                                who: Some(Actor::Anyone),
+                                of: Some("foo".to_string()),
+                                ..ActionRule::default()
+                            },
+                        ]),
+                        ..RuleSet::default()
+                    },
+                )]),
+                ..RuleSet::default()
+            },
+        );
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
         panic!("should not configure protocol");
@@ -431,18 +463,24 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule("friend", RuleSet {
-            role: Some(true),
-            ..RuleSet::default()
-        })
-        .add_rule("foo", RuleSet {
-            actions: Some(vec![ActionRule {
-                role: Some("friend".to_string()),
-                can: vec![Action::Read, Action::Query],
-                ..ActionRule::default()
-            }]),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "friend",
+            RuleSet {
+                role: Some(true),
+                ..RuleSet::default()
+            },
+        )
+        .add_rule(
+            "foo",
+            RuleSet {
+                actions: Some(vec![ActionRule {
+                    role: Some("friend".to_string()),
+                    can: vec![Action::Read, Action::Query],
+                    ..ActionRule::default()
+                }]),
+                ..RuleSet::default()
+            },
+        );
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
@@ -456,18 +494,24 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule("friend", RuleSet {
-            role: Some(true),
-            ..RuleSet::default()
-        })
-        .add_rule("foo", RuleSet {
-            actions: Some(vec![ActionRule {
-                role: Some("friend".to_string()),
-                can: vec![Action::Read, Action::Subscribe],
-                ..ActionRule::default()
-            }]),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "friend",
+            RuleSet {
+                role: Some(true),
+                ..RuleSet::default()
+            },
+        )
+        .add_rule(
+            "foo",
+            RuleSet {
+                actions: Some(vec![ActionRule {
+                    role: Some("friend".to_string()),
+                    can: vec![Action::Read, Action::Subscribe],
+                    ..ActionRule::default()
+                }]),
+                ..RuleSet::default()
+            },
+        );
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
@@ -481,18 +525,24 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule("friend", RuleSet {
-            role: Some(true),
-            ..RuleSet::default()
-        })
-        .add_rule("foo", RuleSet {
-            actions: Some(vec![ActionRule {
-                role: Some("friend".to_string()),
-                can: vec![Action::Query, Action::Subscribe],
-                ..ActionRule::default()
-            }]),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "friend",
+            RuleSet {
+                role: Some(true),
+                ..RuleSet::default()
+            },
+        )
+        .add_rule(
+            "foo",
+            RuleSet {
+                actions: Some(vec![ActionRule {
+                    role: Some("friend".to_string()),
+                    can: vec![Action::Query, Action::Subscribe],
+                    ..ActionRule::default()
+                }]),
+                ..RuleSet::default()
+            },
+        );
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
     else {
@@ -506,18 +556,24 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule("friend", RuleSet {
-            role: Some(true),
-            ..RuleSet::default()
-        })
-        .add_rule("foo", RuleSet {
-            actions: Some(vec![ActionRule {
-                role: Some("friend".to_string()),
-                can: vec![Action::Read, Action::Query, Action::Subscribe],
-                ..ActionRule::default()
-            }]),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "friend",
+            RuleSet {
+                role: Some(true),
+                ..RuleSet::default()
+            },
+        )
+        .add_rule(
+            "foo",
+            RuleSet {
+                actions: Some(vec![ActionRule {
+                    role: Some("friend".to_string()),
+                    can: vec![Action::Read, Action::Query, Action::Subscribe],
+                    ..ActionRule::default()
+                }]),
+                ..RuleSet::default()
+            },
+        );
 
     let reply =
         endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");

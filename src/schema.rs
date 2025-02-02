@@ -1,5 +1,5 @@
 //! # JSON Schema Validation
-//! 
+//!
 //! This module validates messages against their JSON schemas.
 
 use jsonschema::error::ValidationError;

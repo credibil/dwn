@@ -9,7 +9,7 @@ use serde_json::json;
 
 use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{
-    self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet
+    self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
 use crate::provider::MessageStore;
 use crate::records::{RecordsFilter, Tag, Write};

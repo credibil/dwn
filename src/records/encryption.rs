@@ -7,8 +7,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_infosec::Receiver;
 use vercre_infosec::jose::jwe::{
-    self, ContentAlgorithm, Header, KeyAlgorithm, KeyEncryption, Protected,
-    Recipients,
+    self, ContentAlgorithm, Header, KeyAlgorithm, KeyEncryption, Protected, Recipients,
 };
 use vercre_infosec::jose::{Curve, Jwe, PublicKeyJwk};
 use zeroize::{Zeroize, ZeroizeOnDrop};

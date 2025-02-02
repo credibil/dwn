@@ -29,8 +29,7 @@ pub use self::configure::{
 };
 pub use self::query::{Query, QueryDescriptor, QueryReply};
 use crate::provider::MessageStore;
-use crate::store;
-use crate::Result;
+use crate::{Result, store};
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL_URI: &str = "https://vercre.website/dwn/permissions";

@@ -15,11 +15,11 @@
 //! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
 pub mod authorization;
-pub mod interfaces;
 pub mod endpoint;
 mod error;
 pub mod event;
 pub mod hd_key;
+pub mod interfaces;
 pub mod messages;
 pub mod permissions;
 pub mod protocols;

@@ -113,9 +113,9 @@ pub enum DerivationPath<'a> {
 /// Derives a descendant private key.
 ///
 /// # Errors
-/// 
+///
 /// This function will fail when:
-/// 
+///
 /// - The ancestor and descendant key derivation paths do not match.
 /// - The secret key is invalid.
 pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<DerivedPrivateJwk> {
