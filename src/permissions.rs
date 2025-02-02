@@ -9,7 +9,6 @@
 
 mod grant;
 mod protocol;
-mod request;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};

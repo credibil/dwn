@@ -695,11 +695,10 @@ pub struct Attestation {
     pub descriptor_cid: String,
 }
 
-/// Delegated Grant is a special case of `records::Write` used in
-/// `Authorization` and `Attestation` grant references
-/// (`author_delegated_grant` and `owner_delegated_grant`).
+/// Delegated Grant is a special case of [`Write`] used in [`Authorization`]
+/// and [`Attestation`] grant references.
 ///
-/// It is structured to cope with recursive references to `Authorization`.
+/// It is structured to cope with recursive references to [`Authorization`].
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegatedGrant {

@@ -1,4 +1,7 @@
 //! # Grant
+//! 
+//! The [`grant`] module handles verification of previously issued permission
+//! grants.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
@@ -12,7 +15,8 @@ use crate::serde::rfc3339_micros;
 use crate::store::RecordsQueryBuilder;
 use crate::{Descriptor, Result, forbidden, unexpected};
 
-/// Used to grant another entity permission to access a web node's data.
+/// [`Grant`] holds permission grant information during the process of 
+/// verifying an incoming message's authorization.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Grant {
