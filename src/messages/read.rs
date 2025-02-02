@@ -208,7 +208,7 @@ pub struct ReadReplyEntry {
     pub data: Option<Cursor<Vec<u8>>>,
 }
 
-/// The [`Read`]`  message descriptor.
+/// The [`Read`]  message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadDescriptor {

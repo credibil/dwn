@@ -6,7 +6,7 @@
 //! Technically, the [`Write`] record is not deleted, but rather a new
 //! [`Delete`] record is created to mark the record as deleted. The [`Delete`]
 //! record is used to prune the record and its descendants from the system,
-//! leaving only the [`Delete'] and initial [`Write`] records.
+//! leaving only the [`Delete`] and initial [`Write`] records.
 
 use std::collections::HashMap;
 
