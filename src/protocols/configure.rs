@@ -1,6 +1,7 @@
 //! # Protocols Configure
 //!
-//! Decentralized Web Node messaging framework.
+//! The protocols configure endpoint handles `ProtocolsConfigure` messages —
+//! requests to write to [`Configure`] records to the DWN's [`MessageStore`].
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -19,10 +20,12 @@ use crate::store::{Entry, EntryType};
 use crate::utils::cid;
 use crate::{Descriptor, Error, Result, forbidden, permissions, unexpected, utils};
 
-/// Process query message.
+/// Handle — or process — a [`Configure`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs attempting to save the [`Configure`] message.
 pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
 ) -> Result<Reply<ConfigureReply>> {
@@ -82,7 +85,7 @@ pub async fn handle(
     })
 }
 
-/// Protocols Configure payload
+/// The [`Configure`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Configure {
     /// The Configure descriptor.
@@ -112,7 +115,7 @@ impl Message for Configure {
     }
 }
 
-/// Configure reply.
+/// [`ConfigureReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigureReply {
     #[serde(flatten)]
@@ -133,7 +136,7 @@ impl TryFrom<Entry> for Configure {
 impl Configure {
     /// Build flattened indexes for the write message.
     #[must_use]
-    pub fn build_indexes(&self) -> HashMap<String, String> {
+    pub(crate) fn build_indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();
         indexes.insert("interface".to_string(), self.descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), self.descriptor.base.method.to_string());
@@ -147,9 +150,6 @@ impl Configure {
     }
 
     /// Check message has sufficient privileges.
-    ///
-    /// # Errors
-    /// LATER: Add errors
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
 
@@ -193,7 +193,7 @@ impl Configure {
     }
 }
 
-/// Configure descriptor.
+/// The [`Configure`] message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigureDescriptor {
@@ -258,7 +258,8 @@ impl Definition {
     /// for each protocol path segment.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when an error occurs deriving the public key.
     pub fn add_encryption(
         mut self, root_key_id: &str, private_key_jwk: PrivateKeyJwk,
     ) -> Result<Self> {
@@ -503,9 +504,6 @@ pub struct Tags {
 }
 
 /// Verify the structure (rule sets) of the protocol definition.
-///
-/// # Errors
-/// LATER: Add errors
 pub fn validate_structure(definition: &Definition) -> Result<()> {
     let keys = definition.types.keys().collect::<Vec<&String>>();
 

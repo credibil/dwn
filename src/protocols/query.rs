@@ -1,4 +1,7 @@
 //! # Protocols Query
+//!
+//! The protocols query endpoint handles `ProtocolsQuery` messages — requests
+//! to query the [`MessageStore`] for protocols configured for the DWN.
 
 use serde::{Deserialize, Serialize};
 
@@ -17,10 +20,12 @@ enum Access {
     Unpublished,
 }
 
-/// Process query message.
+/// Handle — or process — a [`Query`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs querying the [`MessageStore`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
@@ -40,7 +45,7 @@ pub async fn handle(
         builder = builder.published(true);
     }
 
-    let (records, _) = MessageStore::query(provider, owner, &builder.build()).await?;
+    let (records, cursor) = MessageStore::query(provider, owner, &builder.build()).await?;
 
     // unpack messages
     let mut entries = vec![];
@@ -55,15 +60,12 @@ pub async fn handle(
         },
         body: Some(QueryReply {
             entries: Some(entries),
-            cursor: None,
+            cursor,
         }),
     })
 }
 
-/// Protocols Query payload
-///
-/// # Errors
-/// LATER: Add errors
+/// The [`Query`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
@@ -94,10 +96,10 @@ impl Message for Query {
     }
 }
 
-/// Query reply.
+/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
-    /// `ProtocolsConfigure` entries matching the query.
+    /// [`Configure`] entries matching the query.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<Configure>>,
 
@@ -133,9 +135,6 @@ pub(super) async fn fetch_config(
 
 impl Query {
     /// Check message has sufficient privileges.
-    ///
-    /// # Errors
-    /// LATER: Add errors
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<Access> {
         let Some(authzn) = &self.authorization else {
             return Ok(Access::Published);
@@ -171,7 +170,7 @@ impl Query {
     }
 }
 
-/// Query descriptor.
+/// The [`Query`] message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryDescriptor {
