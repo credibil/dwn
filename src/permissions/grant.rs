@@ -1,4 +1,4 @@
-//! # Grant
+//! # Permissions Grant
 //!
 //! The [`grant`] module handles verification of previously issued permission
 //! grants.
