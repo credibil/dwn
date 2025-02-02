@@ -1,4 +1,4 @@
-//! # Read
+//! # Records Read
 //!
 //! The records read endpoint handles `RecordsRead` messages — requests to
 //! read a persisted [`Write`] message.

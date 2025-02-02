@@ -1,6 +1,7 @@
-//! # Subscribe
+//! # Records Subscribe
 //!
-//! `Subscribe` is a message type used to subscribe a record in the web node.
+//! The records subscribe endpoint handles `RecordsSubscribe` messages —
+//! requests to subscribe to records events matching the provided filter(s).
 
 use futures::{StreamExt, future};
 use http::StatusCode;
@@ -11,14 +12,16 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
 use crate::permissions::{Grant, Protocol};
 use crate::provider::{EventStream, Provider};
-use crate::records::{RecordsFilter, Write};
+use crate::records::RecordsFilter;
 use crate::utils::cid;
 use crate::{Descriptor, OneOrMany, Result, forbidden};
 
-/// Process `Subscribe` message.
+/// Handle — or process — a [`Subscribe`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs creating the subscription [`Subscriber`].
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
 ) -> Result<Reply<SubscribeReply>> {
@@ -56,7 +59,7 @@ pub async fn handle(
     })
 }
 
-/// Records Subscribe payload
+/// The [`Subscribe`] message expected by the handler.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Subscribe {
@@ -88,7 +91,7 @@ impl Message for Subscribe {
     }
 }
 
-/// Subscribe reply.
+/// [`SubscribeReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeReply {
@@ -97,20 +100,6 @@ pub struct SubscribeReply {
     /// `Stream` is not serializable.
     #[serde(skip)]
     pub subscription: Subscriber,
-}
-
-/// Subscribe reply.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubscribeReplyEntry {
-    /// The `RecordsWrite` message of the record if record exists.
-    #[serde(flatten)]
-    pub write: Write,
-
-    /// The initial write of the record if the returned `RecordsWrite` message
-    /// itself is not the initial write.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial_write: Option<Write>,
 }
 
 impl Subscribe {
@@ -151,7 +140,7 @@ impl Subscribe {
     }
 }
 
-/// Subscribe descriptor.
+/// The [`Subscribe`]  message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeDescriptor {

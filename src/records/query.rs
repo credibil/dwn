@@ -1,4 +1,4 @@
-//! # Query
+//! # Records Query
 //!
 //! The records query endpoint handles `RecordsQuery` messages — requests
 //! to query the [`MessageStore`] for matching [`Write`] (and possibly
