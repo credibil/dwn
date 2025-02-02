@@ -2,8 +2,9 @@
 
 use std::time::Duration;
 
-use dwn_node::interfaces::records::{Data, QueryBuilder, SubscribeBuilder, WriteBuilder};
-use dwn_node::records::RecordsFilter;
+use dwn_node::interfaces::records::{
+    Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
+};
 use dwn_node::{Message, endpoint};
 use futures::StreamExt;
 use http::StatusCode;

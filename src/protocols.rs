@@ -15,19 +15,18 @@
 //! them.
 
 mod configure;
-pub(crate) mod query;
+pub mod query;
 
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) use self::configure::validate_structure;
 pub use self::configure::{
     Action, ActionRule, Actor, Configure, ConfigureDescriptor, Definition, ProtocolType, RuleSet,
-    Size,
+    Size, validate_structure,
 };
-pub use self::query::{Query, QueryDescriptor, QueryReply};
+pub use self::query::{Query, QueryDescriptor};
 use crate::provider::MessageStore;
 use crate::{Result, store};
 
@@ -119,7 +118,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 });
 
 // Fetch published protocols matching the filter
-pub(crate) async fn fetch_config(
+pub async fn fetch_config(
     owner: &str, protocol: Option<String>, store: &impl MessageStore,
 ) -> Result<Option<Vec<Configure>>> {
     // build query

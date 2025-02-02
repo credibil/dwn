@@ -9,11 +9,11 @@
 
 mod delete;
 mod encryption;
-pub(crate) mod integrity;
+pub mod integrity;
 mod query;
 mod read;
 mod subscribe;
-pub(crate) mod write;
+pub mod write;
 
 use std::collections::BTreeMap;
 use std::fmt::Display;
@@ -21,10 +21,10 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 pub use self::delete::{Delete, DeleteDescriptor};
-pub use self::encryption::{EncryptOptions, EncryptedKey, EncryptionProperty, Recipient, decrypt};
+pub use self::encryption::{EncryptOptions, EncryptionProperty, Recipient, decrypt};
 pub use self::query::{Query, QueryDescriptor};
 pub use self::read::{Read, ReadDescriptor};
-pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
+pub use self::subscribe::{Subscribe, SubscribeDescriptor};
 pub use self::write::{Attestation, DelegatedGrant, SignaturePayload, Tag, Write, WriteDescriptor};
 use crate::{DateRange, OneOrMany, Range, Result, utils};
 

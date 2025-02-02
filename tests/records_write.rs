@@ -7,15 +7,14 @@ use chrono::{DateTime, Duration, Utc};
 use dwn_node::authorization::JwsPayload;
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::interfaces::grants::GrantBuilder;
-use dwn_node::interfaces::protocols::ConfigureBuilder;
+use dwn_node::interfaces::messages::MessagesFilter;
+use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet, Size};
 use dwn_node::interfaces::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
-use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{Conditions, Publication, RecordsScope, Scope};
-use dwn_node::protocols::{Definition, ProtocolType, RuleSet, Size};
 use dwn_node::provider::EventLog;
-use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
+use dwn_node::interfaces::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
 use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Interface, Message, Method, endpoint, interfaces, store};
 use http::StatusCode;

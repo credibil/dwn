@@ -211,7 +211,7 @@ impl Encrypted {
                 ephemeral_public_key: ke.header.epk.clone(),
                 initialization_vector: ke.header.iv.clone(),
                 message_authentication_code: ke.header.tag.clone(),
-                encrypted_key: ke.encrypted_key.clone(),
+                cek: ke.encrypted_key.clone(),
                 derivation_scheme: recipient.derivation_scheme.clone(),
                 derived_public_key: None,
             };
@@ -290,7 +290,8 @@ pub struct EncryptedKey {
     /// The encrypted Content Encryption Key (CEK). Equivalent to the JWE
     /// Encrypted Key (JWE `encrypted_key` property), this is the key used to
     /// encrypt the data.
-    pub encrypted_key: String,
+    #[serde(rename = "encryptedKey")]
+    pub cek: String,
 }
 
 /// Decrypt the provided data using the encryption properties specified in the
@@ -340,7 +341,7 @@ pub async fn decrypt(
                 iv: recipient.initialization_vector.clone(),
                 tag: recipient.message_authentication_code.clone(),
             },
-            encrypted_key: recipient.encrypted_key.clone(),
+            encrypted_key: recipient.cek.clone(),
         }),
         aad: Base64UrlUnpadded::encode_string(&aad),
         iv: encryption.initialization_vector.clone(),

@@ -1,6 +1,6 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_node::endpoint;
-use dwn_node::protocols::Query;
+use dwn_node::interfaces::protocols::Query;
 use dwn_node::provider::Signer;
 use serde_json::json;
 use test_node::key_store::{self, ALICE_DID};

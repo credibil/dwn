@@ -10,12 +10,15 @@ use vercre_infosec::jose::{Jws, JwsBuilder};
 use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::hd_key::DerivationScheme;
 use crate::provider::Signer;
-use crate::records::{
-    Attestation, DelegatedGrant, Delete, DeleteDescriptor, EncryptionProperty, Query,
-    QueryDescriptor, Read, ReadDescriptor, RecordsFilter, Subscribe, SubscribeDescriptor, Tag,
-    Write, WriteDescriptor,
+pub use crate::records::{
+    Attestation, DelegatedGrant, DeleteDescriptor, EncryptOptions, Recipient, RecordsFilter,
+    SignaturePayload, Sort, decrypt,
 };
-use crate::store::{Pagination, Sort};
+use crate::records::{
+    Delete, EncryptionProperty, Query, QueryDescriptor, Read, ReadDescriptor, Subscribe,
+    SubscribeDescriptor, Tag, Write, WriteDescriptor,
+};
+use crate::store::Pagination;
 use crate::utils::cid;
 use crate::{Descriptor, Interface, Method, utils};
 

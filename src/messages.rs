@@ -9,9 +9,9 @@ mod subscribe;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::query::{Query, QueryDescriptor, QueryReply};
-pub use self::read::{Read, ReadDescriptor, ReadReply};
-pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
+pub use self::query::{Query, QueryDescriptor};
+pub use self::read::{Read, ReadDescriptor};
+pub use self::subscribe::{Subscribe, SubscribeDescriptor};
 use crate::{DateRange, Interface, Method};
 
 /// The `Messages` can be used to filter messages by interface, method,

@@ -7,8 +7,7 @@
 use std::io::Read;
 
 use dwn_node::endpoint;
-use dwn_node::interfaces::records::{Data, ReadBuilder, WriteBuilder};
-use dwn_node::records::RecordsFilter;
+use dwn_node::interfaces::records::{Data,RecordsFilter, ReadBuilder, WriteBuilder};
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{Value, json};

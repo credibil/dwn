@@ -10,9 +10,9 @@ use dwn_node::interfaces::records::{
     Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder,
 };
 use dwn_node::permissions::{RecordsScope, Scope};
-use dwn_node::protocols::Definition;
+use dwn_node::interfaces::protocols::Definition;
 use dwn_node::provider::{DataStore, MessageStore};
-use dwn_node::records::{EncryptOptions, Recipient, RecordsFilter, decrypt};
+use dwn_node::interfaces::records::{EncryptOptions, Recipient, RecordsFilter, decrypt};
 use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
 use dwn_node::{Error, Method, cid, endpoint};
 use http::StatusCode;

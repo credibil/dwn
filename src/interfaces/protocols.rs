@@ -7,12 +7,13 @@ use chrono::{DateTime, Utc};
 
 use crate::authorization::AuthorizationBuilder;
 pub use crate::protocols::{
-    self, Configure, ConfigureDescriptor, Definition, ProtocolsFilter, Query, QueryDescriptor,
+    Action, ActionRule, Actor, Configure, ConfigureDescriptor, Definition, ProtocolType,
+    ProtocolsFilter, Query, QueryDescriptor, RuleSet, Size,
 };
 use crate::provider::Signer;
 use crate::records::DelegatedGrant;
 use crate::utils::cid;
-use crate::{Descriptor, Interface, Method, Result, schema, unexpected, utils};
+use crate::{Descriptor, Interface, Method, Result, protocols, schema, unexpected, utils};
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
