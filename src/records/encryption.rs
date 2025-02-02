@@ -122,9 +122,9 @@ impl<'a> EncryptOptions<'a> {
     /// CEK, IV, and AAD tag for later use.
     ///
     /// # Errors
-    /// 
+    ///
     /// Will fail if the [`Protected`] struct cannot be serialized to JSON or
-    /// if the provided data cannot be encrypted using the specified content 
+    /// if the provided data cannot be encrypted using the specified content
     /// encryption algorithm.
     pub fn encrypt(&mut self) -> Result<Encrypted> {
         use aes_gcm::Aes256Gcm;
