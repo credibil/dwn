@@ -17,13 +17,14 @@ use vercre_infosec::jose::{Jws, JwsBuilder};
 use crate::authorization::{Authorization, JwsPayload};
 use crate::endpoint::{Message, Reply, Status};
 use crate::permissions::{self, Grant, Protocol};
-use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH, integrity};
+use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::{DateRange, EncryptionProperty, RecordsFilter};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
+use crate::records::integrity;
 
 /// Handle — or process — a [`Write`] message.
 ///

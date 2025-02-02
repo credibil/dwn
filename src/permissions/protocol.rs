@@ -11,12 +11,12 @@ use crate::authorization::Authorization;
 use crate::permissions::{self, GrantData, RequestData, Scope};
 use crate::protocols::{
     Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,
-    integrity,
 };
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, write};
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden};
+use crate::records::integrity;
 
 /// [`Protocol`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.

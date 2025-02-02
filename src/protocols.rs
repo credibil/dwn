@@ -15,8 +15,7 @@
 //! them.
 
 mod configure;
-pub(crate) mod integrity;
-mod query;
+pub(crate) mod query;
 
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -29,6 +28,9 @@ pub use self::configure::{
     Size,
 };
 pub use self::query::{Query, QueryDescriptor, QueryReply};
+use crate::provider::MessageStore;
+use crate::store;
+use crate::Result;
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL_URI: &str = "https://vercre.website/dwn/permissions";
@@ -69,35 +71,44 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 
     // default structure (aka rules)
     let structure = BTreeMap::from([
-        ("request".to_string(), RuleSet {
-            size: Some(default_size.clone()),
-            actions: Some(vec![ActionRule {
-                who: Some(Actor::Anyone),
-                can: vec![Action::Create],
-                ..ActionRule::default()
-            }]),
-            ..RuleSet::default()
-        }),
-        ("grant".to_string(), RuleSet {
-            size: Some(default_size.clone()),
-            actions: Some(vec![ActionRule {
-                who: Some(Actor::Recipient),
-                of: Some("grant".to_string()),
-                can: vec![Action::Read, Action::Query],
-                ..ActionRule::default()
-            }]),
-            // revocation is nested under grant
-            structure: BTreeMap::from([("revocation".to_string(), RuleSet {
-                size: Some(default_size),
+        (
+            "request".to_string(),
+            RuleSet {
+                size: Some(default_size.clone()),
                 actions: Some(vec![ActionRule {
                     who: Some(Actor::Anyone),
-                    can: vec![Action::Read],
+                    can: vec![Action::Create],
                     ..ActionRule::default()
                 }]),
                 ..RuleSet::default()
-            })]),
-            ..RuleSet::default()
-        }),
+            },
+        ),
+        (
+            "grant".to_string(),
+            RuleSet {
+                size: Some(default_size.clone()),
+                actions: Some(vec![ActionRule {
+                    who: Some(Actor::Recipient),
+                    of: Some("grant".to_string()),
+                    can: vec![Action::Read, Action::Query],
+                    ..ActionRule::default()
+                }]),
+                // revocation is nested under grant
+                structure: BTreeMap::from([(
+                    "revocation".to_string(),
+                    RuleSet {
+                        size: Some(default_size),
+                        actions: Some(vec![ActionRule {
+                            who: Some(Actor::Anyone),
+                            can: vec![Action::Read],
+                            ..ActionRule::default()
+                        }]),
+                        ..RuleSet::default()
+                    },
+                )]),
+                ..RuleSet::default()
+            },
+        ),
     ]);
 
     Definition {
@@ -107,3 +118,28 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
         structure,
     }
 });
+
+// Fetch published protocols matching the filter
+pub(crate) async fn fetch_config(
+    owner: &str, protocol: Option<String>, store: &impl MessageStore,
+) -> Result<Option<Vec<Configure>>> {
+    // build query
+    let mut builder = store::ProtocolsQueryBuilder::new();
+    if let Some(protocol) = protocol {
+        builder = builder.protocol(&protocol);
+    }
+
+    // execute query
+    let (messages, _) = store.query(owner, &builder.build()).await?;
+    if messages.is_empty() {
+        return Ok(None);
+    }
+
+    // unpack messages
+    let mut entries = vec![];
+    for message in messages {
+        entries.push(Configure::try_from(message)?);
+    }
+
+    Ok(Some(entries))
+}

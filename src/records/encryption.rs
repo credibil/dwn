@@ -1,11 +1,17 @@
+//! # Encryption
+//!
+//! This module provides data structures and functions used in the encrypting
+//! and decrypting of [`Write`] data.
+
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 use vercre_infosec::Receiver;
 use vercre_infosec::jose::jwe::{
-    self, ContentAlgorithm, Header, JweBuilder, KeyAlgorithm, KeyEncryption, Protected, PublicKey,
+    self, ContentAlgorithm, Header, KeyAlgorithm, KeyEncryption, Protected,
     Recipients,
 };
 use vercre_infosec::jose::{Curve, Jwe, PublicKeyJwk};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
 use crate::records::Write;
@@ -14,33 +20,36 @@ use crate::{Result, unexpected};
 /// Encryption settings.
 #[derive(Clone, Debug, Default)]
 pub struct EncryptOptions<'a> {
-    // The algorithm to use to encrypt the message data.
+    /// The algorithm to use to encrypt the message data.
     content_algorithm: ContentAlgorithm,
 
-    // The algorithm to use to encrypt (or derive) the content encryption key
-    // (CEK).
+    /// The algorithm to use to encrypt (or derive) the content encryption key
+    /// (CEK).
     key_algorithm: KeyAlgorithm,
 
-    // The data to encrypt.
+    /// The data to encrypt.
     data: &'a [u8],
 
-    // An array of inputs specifying how the CEK key is to be encrypted. Each
-    // entry in the array will result in a unique ciphertext for the CEK.
+    /// An array of inputs specifying how the CEK key is to be encrypted. Each
+    /// entry in the array will result in a unique ciphertext for the CEK.
     recipients: Vec<Recipient>,
 }
 
 /// Encrypted data. Intermediate work product.
-// #[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct Encrypted {
-    // The algorithm to use to encrypt the message data.
+    /// The algorithm to use to encrypt the message data.
+    #[zeroize(skip)]
     content_algorithm: ContentAlgorithm,
 
-    // The algorithm to use to encrypt (or derive) the content encryption key
-    // (CEK).
+    /// The algorithm to use to encrypt (or derive) the content encryption key
+    /// (CEK).
+    #[zeroize(skip)]
     key_algorithm: KeyAlgorithm,
 
     /// An array of inputs specifying how the CEK key is to be encrypted. Each
     /// entry in the array will result in a unique ciphertext for the CEK.
+    #[zeroize(skip)]
     pub recipients: Vec<Recipient>,
 
     /// The content encryption key (CEK) used to encrypt the data.
@@ -115,7 +124,7 @@ impl<'a> EncryptOptions<'a> {
     ///
     /// # Errors
     /// LATER: Add error handling
-    pub fn encrypt2(&mut self) -> Result<Encrypted> {
+    pub fn encrypt(&mut self) -> Result<Encrypted> {
         use aes_gcm::Aes256Gcm;
         use aes_gcm::aead::KeyInit;
 
@@ -142,87 +151,6 @@ impl<'a> EncryptOptions<'a> {
             tag: encrypted.tag,
             ciphertext: encrypted.ciphertext,
         })
-    }
-
-    /// Encrypt the provided data using the specified encryption options.
-    ///
-    /// # Returns
-    ///
-    /// A tuple containing the encrypted data (ciphertext) and the settings
-    /// used to encrypt it.
-    ///
-    /// # Errors
-    /// LATER: Add error handling
-    pub fn encrypt(&self, data: &[u8]) -> Result<(Vec<u8>, EncryptionProperty)> {
-        // build JWE
-        let mut builder = JweBuilder::new()
-            .content_algorithm(ContentAlgorithm::A256Gcm)
-            .key_algorithm(KeyAlgorithm::EcdhEsA256Kw)
-            .payload(&data);
-
-        for recipient in &self.recipients {
-            let jwk = &recipient.public_key;
-            let decoded = if jwk.crv == Curve::Ed25519 {
-                Base64UrlUnpadded::decode_vec(&jwk.x)?
-            } else {
-                let mut decoded = Base64UrlUnpadded::decode_vec(&jwk.x)?;
-                let Some(y) = &jwk.y else {
-                    return Err(unexpected!("missing y"));
-                };
-                decoded.extend(&Base64UrlUnpadded::decode_vec(y)?);
-                decoded
-            };
-            builder = builder.add_recipient(&recipient.key_id, PublicKey::from_slice(&decoded)?);
-        }
-
-        let jwe = builder.build()?;
-
-        // use JWE to build EncryptionProperty
-        let mut encryption = EncryptionProperty {
-            algorithm: jwe.protected.enc.clone(),
-            initialization_vector: jwe.iv.clone(),
-            message_authentication_code: Some(jwe.tag.clone()),
-            key_encryption: vec![],
-        };
-
-        // extract fields from JWE
-        let key_encryptions = match &jwe.recipients {
-            Recipients::One(recipient) => vec![recipient.clone()],
-            Recipients::Many { recipients } => recipients.clone(),
-        };
-
-        for (i, key_encryption) in key_encryptions.iter().enumerate() {
-            let key_input = &self.recipients[i];
-
-            let header = &key_encryption.header;
-            let Some(key_id) = header.kid.clone() else {
-                return Err(unexpected!("missing key id"));
-            };
-
-            let mut encrypted = EncryptedKey {
-                root_key_id: key_id,
-                algorithm: header.alg.clone(),
-                ephemeral_public_key: header.epk.clone(),
-                initialization_vector: header.iv.clone(),
-                message_authentication_code: header.tag.clone(),
-                encrypted_key: key_encryption.encrypted_key.clone(),
-                derivation_scheme: key_input.derivation_scheme.clone(),
-                derived_public_key: None,
-            };
-
-            // attach the public key when derivation scheme is protocol-context,
-            // so that the responder to this message is able to encrypt the
-            // content encryption key using the same protocol-context derived
-            // public key, without needing the knowledge of the corresponding
-            // private key
-            if key_input.derivation_scheme == DerivationScheme::ProtocolContext {
-                encrypted.derived_public_key = Some(key_input.public_key.clone());
-            }
-
-            encryption.key_encryption.push(encrypted);
-        }
-
-        Ok((Base64UrlUnpadded::decode_vec(&jwe.ciphertext)?, encryption))
     }
 }
 

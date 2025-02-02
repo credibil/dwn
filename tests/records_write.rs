@@ -5,19 +5,19 @@ use std::io::Cursor;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::authorization::JwsPayload;
+use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::interfaces::grants::GrantBuilder;
 use dwn_node::interfaces::protocols::ConfigureBuilder;
 use dwn_node::interfaces::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
-use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::messages::MessagesFilter;
 use dwn_node::permissions::{Conditions, Publication, RecordsScope, Scope};
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet, Size};
 use dwn_node::provider::EventLog;
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Message, Method, interfaces, endpoint, store};
+use dwn_node::{Error, Interface, Message, Method, endpoint, interfaces, store};
 use http::StatusCode;
 use rand::RngCore;
 use test_node::key_store::{
@@ -3987,7 +3987,7 @@ async fn invalid_encryption_cid() {
     // generate data and encrypt
     let data = "Hello Alice".as_bytes().to_vec();
     let mut options = EncryptOptions::new().data(&data);
-    let mut encrypted = options.encrypt2().expect("should encrypt");
+    let mut encrypted = options.encrypt().expect("should encrypt");
     let ciphertext = encrypted.ciphertext.clone();
 
     // get the rule set for the protocol path
@@ -4411,13 +4411,16 @@ async fn protocol_size_range() {
     let definition = Definition::new("http://blob-size.xyz")
         .published(true)
         .add_type("blob", ProtocolType::default())
-        .add_rule("blob", RuleSet {
-            size: Some(Size {
-                min: Some(1),
-                max: Some(1000),
-            }),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "blob",
+            RuleSet {
+                size: Some(Size {
+                    min: Some(1),
+                    max: Some(1000),
+                }),
+                ..RuleSet::default()
+            },
+        );
 
     let configure = ConfigureBuilder::new()
         .definition(definition)
@@ -4507,13 +4510,16 @@ async fn protocol_min_size() {
     let definition = Definition::new("http://blob-size.xyz")
         .published(true)
         .add_type("blob", ProtocolType::default())
-        .add_rule("blob", RuleSet {
-            size: Some(Size {
-                min: Some(1000),
-                max: None,
-            }),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "blob",
+            RuleSet {
+                size: Some(Size {
+                    min: Some(1000),
+                    max: None,
+                }),
+                ..RuleSet::default()
+            },
+        );
 
     let configure = ConfigureBuilder::new()
         .definition(definition)
@@ -4582,13 +4588,16 @@ async fn protocol_max_size() {
     let definition = Definition::new("http://blob-size.xyz")
         .published(true)
         .add_type("blob", ProtocolType::default())
-        .add_rule("blob", RuleSet {
-            size: Some(Size {
-                min: None,
-                max: Some(1000),
-            }),
-            ..RuleSet::default()
-        });
+        .add_rule(
+            "blob",
+            RuleSet {
+                size: Some(Size {
+                    min: None,
+                    max: Some(1000),
+                }),
+                ..RuleSet::default()
+            },
+        );
 
     let configure = ConfigureBuilder::new()
         .definition(definition)

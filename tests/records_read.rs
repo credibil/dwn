@@ -3,10 +3,12 @@
 use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::interfaces::grants::GrantBuilder;
 use dwn_node::interfaces::protocols::{ConfigureBuilder, QueryBuilder};
-use dwn_node::interfaces::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder};
-use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
+use dwn_node::interfaces::records::{
+    Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder,
+};
 use dwn_node::permissions::{RecordsScope, Scope};
 use dwn_node::protocols::Definition;
 use dwn_node::provider::{DataStore, MessageStore};
@@ -2067,14 +2069,16 @@ async fn decrypt_schema() {
 
     // generate data and encrypt
     let data = "hello world".as_bytes().to_vec();
-    let (ciphertext, settings) = options.encrypt(&data).expect("should encrypt");
+    let encrypted = options.data(&data).encrypt().expect("should encrypt");
+    let ciphertext = encrypted.ciphertext.clone();
+    let encryption = encrypted.finalize().expect("should encrypt");
 
     // create Write record
     let write = WriteBuilder::new()
         .data(Data::from(ciphertext))
         .schema(schema)
         .data_format(&data_format)
-        .encryption(settings)
+        .encryption(encryption)
         .sign(&alice_signer)
         .build()
         .await
@@ -2187,19 +2191,24 @@ async fn decrypt_schemaless() {
     // generate data and encrypt
     let data = "hello world".as_bytes().to_vec();
 
-    let options = EncryptOptions::new().with_recipient(Recipient {
-        key_id: alice_kid.clone(),
-        public_key: data_formats_public,
-        derivation_scheme: DerivationScheme::DataFormats,
-    });
+    let encrypted = EncryptOptions::new()
+        .data(&data)
+        .with_recipient(Recipient {
+            key_id: alice_kid.clone(),
+            public_key: data_formats_public,
+            derivation_scheme: DerivationScheme::DataFormats,
+        })
+        .encrypt()
+        .expect("should encrypt");
 
-    let (ciphertext, settings) = options.encrypt(&data).expect("should encrypt");
+    let ciphertext = encrypted.ciphertext.clone();
+    let encryption = encrypted.finalize().expect("should encrypt");
 
     // create Write record
     let write = WriteBuilder::new()
         .data(Data::from(ciphertext))
         .data_format(&data_format)
-        .encryption(settings)
+        .encryption(encryption)
         .sign(&alice_signer)
         .build()
         .await
@@ -2346,7 +2355,7 @@ async fn decrypt_context() {
     // generate data and encrypt
     let data = "Hello Alice".as_bytes().to_vec();
     let mut options = EncryptOptions::new().data(&data);
-    let mut encrypted = options.encrypt2().expect("should encrypt");
+    let mut encrypted = options.encrypt().expect("should encrypt");
 
     // create Write record
     let mut write = WriteBuilder::new()
@@ -2442,7 +2451,7 @@ async fn decrypt_context() {
     // generate data and encrypt
     let data = "Hello Bob".as_bytes().to_vec();
     let mut options = EncryptOptions::new().data(&data);
-    let mut encrypted = options.encrypt2().expect("should encrypt");
+    let mut encrypted = options.encrypt().expect("should encrypt");
 
     // create Write record
     let mut write = WriteBuilder::new()
@@ -2582,7 +2591,7 @@ async fn decrypt_protocol() {
     // generate data and encrypt
     let data = "Hello Alice".as_bytes().to_vec();
     let mut options = EncryptOptions::new().data(&data);
-    let mut encrypted = options.encrypt2().expect("should encrypt");
+    let mut encrypted = options.encrypt().expect("should encrypt");
     let ciphertext = encrypted.ciphertext.clone();
 
     // get the rule set for the protocol path

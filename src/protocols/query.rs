@@ -9,7 +9,7 @@ use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider};
-use crate::store::{self, Cursor, ProtocolsQueryBuilder};
+use crate::store::{Cursor, ProtocolsQueryBuilder};
 use crate::utils::cid;
 use crate::{Descriptor, Result, permissions, utils};
 
@@ -106,31 +106,6 @@ pub struct QueryReply {
     /// Pagination cursor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<Cursor>,
-}
-
-// Fetch published protocols matching the filter
-pub(super) async fn fetch_config(
-    owner: &str, protocol: Option<String>, store: &impl MessageStore,
-) -> Result<Option<Vec<Configure>>> {
-    // build query
-    let mut builder = store::ProtocolsQueryBuilder::new();
-    if let Some(protocol) = protocol {
-        builder = builder.protocol(&protocol);
-    }
-
-    // execute query
-    let (messages, _) = store.query(owner, &builder.build()).await?;
-    if messages.is_empty() {
-        return Ok(None);
-    }
-
-    // unpack messages
-    let mut entries = vec![];
-    for message in messages {
-        entries.push(Configure::try_from(message)?);
-    }
-
-    Ok(Some(entries))
 }
 
 impl Query {

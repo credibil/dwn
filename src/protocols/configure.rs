@@ -14,7 +14,6 @@ use vercre_infosec::jose::jwk::PublicKeyJwk;
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
-use crate::protocols::query;
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, EntryType};
 use crate::utils::cid;
@@ -35,7 +34,7 @@ pub async fn handle(
     configure.validate()?;
 
     // find any matching protocol entries
-    let results = query::fetch_config(
+    let results = super::fetch_config(
         owner,
         Some(configure.descriptor.definition.protocol.clone()),
         provider,

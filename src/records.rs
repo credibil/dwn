@@ -9,6 +9,7 @@
 
 mod delete;
 mod encryption;
+pub(crate) mod integrity;
 mod query;
 mod read;
 mod subscribe;

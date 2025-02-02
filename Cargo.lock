@@ -758,6 +758,7 @@ dependencies = [
  "vercre-did",
  "vercre-infosec",
  "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]
