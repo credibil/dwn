@@ -83,7 +83,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     })
 }
 
-/// The [Read] message expected by the handler.
+/// The [`Read`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Read {
     /// The `Read` descriptor.
