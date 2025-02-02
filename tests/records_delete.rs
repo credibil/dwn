@@ -3,9 +3,9 @@
 use std::io::Read;
 
 use chrono::Days;
-use dwn_node::clients::messages;
-use dwn_node::clients::protocols::ConfigureBuilder;
-use dwn_node::clients::records::{
+use dwn_node::interfaces::messages;
+use dwn_node::interfaces::protocols::ConfigureBuilder;
+use dwn_node::interfaces::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
 use dwn_node::messages::MessagesFilter;

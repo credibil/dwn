@@ -5,10 +5,10 @@
 
 use std::io::{Cursor, Read};
 
-use dwn_node::clients::grants::{GrantBuilder, RequestBuilder, RevocationBuilder};
-use dwn_node::clients::messages::ReadBuilder;
-use dwn_node::clients::protocols::ConfigureBuilder;
-use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
+use dwn_node::interfaces::grants::{GrantBuilder, RequestBuilder, RevocationBuilder};
+use dwn_node::interfaces::messages::ReadBuilder;
+use dwn_node::interfaces::protocols::ConfigureBuilder;
+use dwn_node::interfaces::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::{Definition, ProtocolType, RuleSet};
 use dwn_node::provider::MessageStore;

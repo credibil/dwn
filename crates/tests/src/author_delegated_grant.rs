@@ -4,8 +4,8 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
-use dwn_node::clients::grants::GrantBuilder;
-use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
+use dwn_node::interfaces::grants::GrantBuilder;
+use dwn_node::interfaces::protocols::{ConfigureBuilder, QueryBuilder};
 use dwn_node::permissions::Scope;
 use dwn_node::protocols::Definition;
 use dwn_node::{Method, endpoint};

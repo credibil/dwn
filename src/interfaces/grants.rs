@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 
-use crate::clients::records::{Data, ProtocolBuilder, WriteBuilder};
+use crate::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
 use crate::permissions::{Conditions, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{self};
 use crate::provider::Signer;

@@ -1,4 +1,4 @@
-//! # Clients
+//! # Interfaces
 
 pub mod grants;
 pub mod messages;

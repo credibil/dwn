@@ -3,9 +3,9 @@
 use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use dwn_node::clients::grants::GrantBuilder;
-use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
-use dwn_node::clients::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder};
+use dwn_node::interfaces::grants::GrantBuilder;
+use dwn_node::interfaces::protocols::{ConfigureBuilder, QueryBuilder};
+use dwn_node::interfaces::records::{Data, DeleteBuilder, ProtocolBuilder, ReadBuilder, WriteBuilder};
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::permissions::{RecordsScope, Scope};
 use dwn_node::protocols::Definition;

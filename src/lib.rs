@@ -15,7 +15,7 @@
 //! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
 pub mod authorization;
-pub mod clients;
+pub mod interfaces;
 pub mod endpoint;
 mod error;
 pub mod event;

@@ -5,9 +5,9 @@ use std::io::Cursor;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use dwn_node::authorization::JwsPayload;
-use dwn_node::clients::grants::GrantBuilder;
-use dwn_node::clients::protocols::ConfigureBuilder;
-use dwn_node::clients::records::{
+use dwn_node::interfaces::grants::GrantBuilder;
+use dwn_node::interfaces::protocols::ConfigureBuilder;
+use dwn_node::interfaces::records::{
     Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
 };
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
@@ -17,7 +17,7 @@ use dwn_node::protocols::{Definition, ProtocolType, RuleSet, Size};
 use dwn_node::provider::EventLog;
 use dwn_node::records::{Attestation, EncryptOptions, Recipient, RecordsFilter, SignaturePayload};
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Message, Method, clients, endpoint, store};
+use dwn_node::{Error, Interface, Message, Method, interfaces, endpoint, store};
 use http::StatusCode;
 use rand::RngCore;
 use test_node::key_store::{
@@ -1203,7 +1203,7 @@ async fn log_initial_write() {
     // --------------------------------------------------
     // Verify an event was logged.
     // --------------------------------------------------
-    let query = clients::messages::QueryBuilder::new()
+    let query = interfaces::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .build(&alice_signer)
         .await
@@ -1257,7 +1257,7 @@ async fn retain_two_writes() {
     // --------------------------------------------------
     // Verify only the initial write and latest update remain.
     // --------------------------------------------------
-    let query = clients::messages::QueryBuilder::new()
+    let query = interfaces::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .build(&alice_signer)
         .await

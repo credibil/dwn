@@ -6,7 +6,7 @@
 
 use std::io::Read;
 
-use dwn_node::clients::records::{Data, ReadBuilder, WriteBuilder};
+use dwn_node::interfaces::records::{Data, ReadBuilder, WriteBuilder};
 use dwn_node::endpoint;
 use dwn_node::records::RecordsFilter;
 use http::StatusCode;
