@@ -17,8 +17,8 @@
 //!
 //! ```rust
 //! use base64ct::{Base64UrlUnpadded, Encoding};
-//! use dwn_node::interfaces::records::{Data, WriteBuilder};
 //! use dwn_node::endpoint;
+//! use dwn_node::interfaces::records::{Data, WriteBuilder};
 //! use test_node::key_store::ALICE_DID;
 //! use test_node::provider::ProviderImpl;
 //!
@@ -48,7 +48,10 @@
 //! let body = reply.body.expect("should have body");
 //! let entries = body.entries.expect("should have entries");
 //! assert_eq!(entries.len(), 1);
-//! assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"a new write record")));
+//! assert_eq!(
+//!     entries[0].write.encoded_data,
+//!     Some(Base64UrlUnpadded::encode_string(b"a new write record"))
+//! );
 //! ```
 
 pub mod grants;

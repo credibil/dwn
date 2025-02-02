@@ -21,7 +21,7 @@ pub mod event;
 pub mod hd_key;
 pub mod interfaces;
 pub(crate) mod messages;
-pub mod permissions;
+pub(crate) mod permissions;
 pub(crate) mod protocols;
 pub mod provider;
 pub(crate) mod records;

@@ -5,7 +5,8 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 
 use crate::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
-use crate::permissions::{Conditions, GrantData, RequestData, RevocationData, Scope};
+pub use crate::permissions::{Conditions, Publication, RecordsScope, Scope};
+use crate::permissions::{GrantData, RequestData, RevocationData};
 use crate::protocols::{self};
 use crate::provider::Signer;
 use crate::records::{self, Tag, Write};

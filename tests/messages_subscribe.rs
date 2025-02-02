@@ -5,11 +5,10 @@ use std::io::Cursor;
 use std::time::Duration;
 
 use dwn_node::authorization::Authorization;
-use dwn_node::interfaces::grants::GrantBuilder;
+use dwn_node::interfaces::grants::{GrantBuilder, Scope};
 use dwn_node::interfaces::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
 use dwn_node::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::permissions::Scope;
 use dwn_node::{Error, Interface, Message, Method, endpoint};
 use futures::StreamExt;
 use http::StatusCode;

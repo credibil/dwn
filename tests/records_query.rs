@@ -3,10 +3,10 @@
 use std::io::Cursor;
 
 use chrono::{DateTime, Duration, Utc};
-use dwn_node::interfaces::protocols::ConfigureBuilder;
-use dwn_node::interfaces::records::{Data, ProtocolBuilder, QueryBuilder, WriteBuilder};
-use dwn_node::interfaces::protocols::Definition;
-use dwn_node::interfaces::records::{RecordsFilter, Sort};
+use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
+use dwn_node::interfaces::records::{
+    Data, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, WriteBuilder,
+};
 use dwn_node::store::{MAX_ENCODED_SIZE, Pagination};
 use dwn_node::{DateRange, Error, Message, Range, endpoint};
 use http::StatusCode;

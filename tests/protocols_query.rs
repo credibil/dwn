@@ -7,11 +7,10 @@ use std::time::Duration;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Days;
-use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder};
+use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder, Scope};
 use dwn_node::interfaces::protocols::{
     ConfigureBuilder, Definition, ProtocolType, ProtocolsFilter, QueryBuilder,
 };
-use dwn_node::permissions::Scope;
 use dwn_node::{Error, Method, cid, endpoint};
 use http::StatusCode;
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};

@@ -4,9 +4,8 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
-use dwn_node::interfaces::grants::GrantBuilder;
-use dwn_node::interfaces::protocols::{ConfigureBuilder,Definition, QueryBuilder};
-use dwn_node::permissions::Scope;
+use dwn_node::interfaces::grants::{GrantBuilder, Scope};
+use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use dwn_node::{Method, endpoint};
 use http::StatusCode;
 use insta::assert_yaml_snapshot as assert_snapshot;

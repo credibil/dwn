@@ -14,16 +14,14 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Conditions, Grant, GrantData, Publication, RequestData, RevocationData};
-pub(crate) use self::protocol::{Protocol, fetch_scope};
+pub use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
 use crate::records::RecordsFilter;
 use crate::store::RecordsQueryBuilder;
 use crate::{Interface, Method, Result, forbidden};
 
 /// Fetches the grant specified by `grant_id`.
-pub(crate) async fn fetch_grant(
-    owner: &str, grant_id: &str, store: &impl MessageStore,
-) -> Result<Grant> {
+pub async fn fetch_grant(owner: &str, grant_id: &str, store: &impl MessageStore) -> Result<Grant> {
     let query =
         RecordsQueryBuilder::new().add_filter(RecordsFilter::new().record_id(grant_id)).build();
     let (entries, _) = store.query(owner, &query).await?;
