@@ -16,9 +16,6 @@ use crate::utils::cid;
 const MAX_BLOCK_SIZE: usize = 1_048_576; // 1 MiB
 
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
-///
-/// # Errors
-/// LATER: Add errors
 pub fn encode<T>(payload: &T) -> Result<Vec<u8>>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -32,9 +29,6 @@ where
 }
 
 /// Decodes a block.
-///
-/// # Errors
-/// LATER: Add errors
 pub fn decode<T>(data: &[u8]) -> Result<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -50,9 +44,6 @@ pub struct Block {
 
 impl Block {
     /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
-    ///
-    /// # Errors
-    /// LATER: Add errors
     pub fn encode<T>(payload: &T) -> Result<Self>
     where
         T: Serialize + for<'a> Deserialize<'a>,

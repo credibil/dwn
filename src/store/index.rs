@@ -22,9 +22,6 @@ const NULL: char = '\u{100000}';
 const MAX: char = '\u{10ffff}';
 
 /// Insert an entry's queryable fields into indexes.
-///
-/// # Errors
-/// LATER: Add errors
 pub async fn insert(
     owner: &str, partition: &str, entry: &Entry, store: &impl BlockStore,
 ) -> Result<()> {
@@ -63,9 +60,6 @@ pub async fn insert(
 }
 
 /// Query an index for matching entries.
-///
-/// # Errors
-/// LATER: Add errors
 pub async fn query(
     owner: &str, partition: &str, query: &Query, store: &impl BlockStore,
 ) -> Result<Vec<IndexItem>> {
@@ -78,9 +72,6 @@ pub async fn query(
 }
 
 /// Delete entry specified by `message_cid` from indexes.
-///
-/// # Errors
-/// LATER: Add errors
 pub async fn delete(
     owner: &str, partition: &str, message_cid: &str, store: &impl BlockStore,
 ) -> Result<()> {
@@ -103,9 +94,6 @@ pub async fn delete(
 struct Cid(String);
 
 /// Indexes store.
-///
-/// # Errors
-/// LATER: Add errors
 pub struct Indexes<'a, S: BlockStore> {
     owner: &'a str,
     partition: &'a str,
@@ -114,9 +102,6 @@ pub struct Indexes<'a, S: BlockStore> {
 
 impl<S: BlockStore> Indexes<'_, S> {
     /// Get an index.
-    ///
-    /// # Errors
-    /// LATER: Add errors
     pub async fn get(&self, field: &str) -> Result<Index> {
         let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, field)))?;
 
@@ -128,9 +113,6 @@ impl<S: BlockStore> Indexes<'_, S> {
     }
 
     /// Update an index.
-    ///
-    /// # Errors
-    /// LATER: Add errors
     pub async fn put(&self, index: Index) -> Result<()> {
         let index_cid = cid::from_value(&Cid(format!("{}-{}", self.owner, index.field)))?;
 
