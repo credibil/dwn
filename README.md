@@ -25,7 +25,7 @@ of usage scenarios.
 ### To get started:
 
 1. Read the [contributing guide](./CONTRIBUTING.md).
-2. Read the [code of conduct](./CODE_OF_CONDUCT.md).
+2. Read the [code of conduct](./CODE-OF-CONDUCT.md).
 3. Choose a task from this project's backlog of issues and follow the instructions.
 
 Have questions? Connecting with us in our [Zulip community](https://credibil.zulipchat.com).
@@ -50,8 +50,8 @@ a part-time basis. While we welcome suggestions and technical input, it may take
 
 The artefacts in this repository are dual licensed under either:
 
-- MIT license ([LICENSE-MIT] or <http://opensource.org/licenses/MIT>)
-- Apache License, Version 2.0 ([LICENSE-APACHE] or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
 
 The license applies to all parts of the source code, its documentation and supplementary files
 unless otherwise indicated.

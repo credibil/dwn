@@ -30,32 +30,52 @@ use crate::utils::cid;
 use crate::{Descriptor, Interface, Method, utils};
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct DeleteBuilder {
+pub struct DeleteBuilder<R, S> {
     message_timestamp: DateTime<Utc>,
-    record_id: Option<String>,
+    record_id: R,
     prune: Option<bool>,
     permission_grant_id: Option<String>,
     protocol_role: Option<String>,
+    signer: S,
 }
 
-impl DeleteBuilder {
+/// Builder state is unfiltered.
+#[doc(hidden)]
+pub struct NoRecordId;
+/// Builder state is filtered.
+#[doc(hidden)]
+pub struct RecordId(String);
+
+impl DeleteBuilder<NoRecordId, Unsigned> {
     /// Returns a new [`DeleteBuilder`]
     #[must_use]
     pub fn new() -> Self {
         Self {
             message_timestamp: Utc::now(),
-            ..Self::default()
+            record_id: NoRecordId,
+            prune: None,
+            permission_grant_id: None,
+            protocol_role: None,
+            signer: Unsigned,
         }
     }
 
     /// Specifies the permission grant ID.
     #[must_use]
-    pub fn record_id(mut self, record_id: impl Into<String>) -> Self {
-        self.record_id = Some(record_id.into());
-        self
-    }
+    pub fn record_id(self, record_id: impl Into<String>) -> DeleteBuilder<RecordId, Unsigned> {
+        DeleteBuilder {
+            record_id: RecordId(record_id.into()),
 
+            message_timestamp: self.message_timestamp,
+            prune: self.prune,
+            permission_grant_id: self.permission_grant_id,
+            protocol_role: self.protocol_role,
+            signer: self.signer,
+        }
+    }
+}
+
+impl<R> DeleteBuilder<R, Unsigned> {
     /// Specifies the permission grant ID.
     #[must_use]
     pub const fn prune(mut self, prune: bool) -> Self {
@@ -76,25 +96,41 @@ impl DeleteBuilder {
         self.protocol_role = Some(protocol_role.into());
         self
     }
+}
 
+impl DeleteBuilder<RecordId, Unsigned> {
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the
+    /// final build step.
+    #[must_use]
+    pub fn sign<'a, S: Signer>(self, signer: &'a S) -> DeleteBuilder<RecordId, Signed<'a, S>> {
+        DeleteBuilder {
+            signer: Signed(signer),
+
+            message_timestamp: self.message_timestamp,
+            record_id: self.record_id,
+            prune: self.prune,
+            permission_grant_id: self.permission_grant_id,
+            protocol_role: self.protocol_role,
+        }
+    }
+}
+
+impl<S: Signer> DeleteBuilder<RecordId, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
     ///
-    /// This method will fail when no `record_id` is set or there is an issue
-    /// authorizing the message.
-    pub async fn build(self, signer: &impl Signer) -> Result<Delete> {
-        let Some(record_id) = self.record_id else {
-            return Err(anyhow!("`record_id` is not set"));
-        };
-
+    /// This method will fail when there is an issue authorizing the message.
+    pub async fn build(self) -> Result<Delete> {
         let descriptor = DeleteDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
                 method: Method::Delete,
                 message_timestamp: self.message_timestamp,
             },
-            record_id,
+            record_id: self.record_id.0,
             prune: self.prune.unwrap_or(false),
         };
 
@@ -106,7 +142,7 @@ impl DeleteBuilder {
         if let Some(role) = self.protocol_role {
             auth_builder = auth_builder.protocol_role(role);
         }
-        let authorization = auth_builder.build(signer).await?;
+        let authorization = auth_builder.build(self.signer.0).await?;
 
         Ok(Delete {
             descriptor,

@@ -1989,7 +1989,8 @@ async fn recreate_role() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&bob_friend.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should delete");
@@ -2326,7 +2327,8 @@ async fn recreate_context_role() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&bob_thread.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should delete");
@@ -4694,7 +4696,8 @@ async fn deleted_parent() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&foo1.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should delete");
@@ -5534,7 +5537,8 @@ async fn write_after_delete() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&initial.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should delete");

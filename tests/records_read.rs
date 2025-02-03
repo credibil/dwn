@@ -211,7 +211,8 @@ async fn deleted_write() {
 
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -298,7 +299,8 @@ async fn non_author_deleted_write() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
@@ -1831,7 +1833,8 @@ async fn record_deleted() {
 
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");

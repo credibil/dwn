@@ -667,7 +667,8 @@ async fn protocol_grant() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -988,7 +989,8 @@ async fn delete_with_no_write() {
 
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create write");
 
