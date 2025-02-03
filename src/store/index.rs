@@ -439,7 +439,8 @@ mod tests {
 
         let configure = ConfigureBuilder::new()
             .definition(Definition::new("http://minimal.xyz"))
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build");
 

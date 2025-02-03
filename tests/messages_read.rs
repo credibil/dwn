@@ -49,7 +49,8 @@ async fn read_message() {
             method: Method::Read,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -65,7 +66,8 @@ async fn read_message() {
     let read = ReadBuilder::new()
         .message_cid(message_cid.clone())
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -85,7 +87,8 @@ async fn invalid_signature() {
 
     let read = ReadBuilder::new()
         .message_cid("bafkreihxrkspxsocoaoetqjm3iop26svz2k622cgart56v2ng7g6q6ofwa".to_string())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
     let Err(Error::Unauthorized(_)) = endpoint::handle(INVALID_DID, read, &provider).await else {
@@ -101,7 +104,8 @@ async fn invalid_request() {
 
     let mut read = ReadBuilder::new()
         .message_cid("bafkreihxrkspxsocoaoetqjm3iop26svz2k622cgart56v2ng7g6q6ofwa".to_string())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
     read.descriptor.base.interface = Interface::Protocols;
@@ -121,7 +125,8 @@ async fn invalid_message_cid() {
     let mut read = ReadBuilder::new()
         // a valid message CID is required by the builder
         .message_cid("bafkreihxrkspxsocoaoetqjm3iop26svz2k622cgart56v2ng7g6q6ofwa".to_string())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -142,7 +147,8 @@ async fn not_found() {
 
     let read = ReadBuilder::new()
         .message_cid("bafkreihxrkspxsocoaoetqjm3iop26svz2k622cgart56v2ng7g6q6ofwa".to_string())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -181,7 +187,8 @@ async fn forbidden() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(write.cid().unwrap())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -220,7 +227,8 @@ async fn data_lt_threshold() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(write_cid.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -267,7 +275,8 @@ async fn data_gt_threshold() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(write_cid.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
@@ -329,7 +338,8 @@ async fn no_data_after_update() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(initial_write_cid.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
@@ -355,7 +365,8 @@ async fn owner_not_author() {
     // unpublished
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://unpublished.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -368,7 +379,8 @@ async fn owner_not_author() {
     // published
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://published.xyz").published(true))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -384,7 +396,8 @@ async fn owner_not_author() {
     // unpublished
     let read = ReadBuilder::new()
         .message_cid(&unpublished_cid)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -396,7 +409,8 @@ async fn owner_not_author() {
     // published
     let read = ReadBuilder::new()
         .message_cid(&published_cid)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -411,7 +425,8 @@ async fn owner_not_author() {
     // unpublished
     let read = ReadBuilder::new()
         .message_cid(&unpublished_cid)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -424,7 +439,8 @@ async fn owner_not_author() {
     // published
     let read = ReadBuilder::new()
         .message_cid(&published_cid)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -448,7 +464,8 @@ async fn invalid_interface() {
     // unpublished
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -486,7 +503,8 @@ async fn invalid_interface() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -502,7 +520,8 @@ async fn invalid_interface() {
     let read = ReadBuilder::new()
         .message_cid(write_cid)
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -547,7 +566,8 @@ async fn permissive_grant() {
             method: Method::Read,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -562,7 +582,8 @@ async fn permissive_grant() {
     let read = ReadBuilder::new()
         .message_cid(&write_cid)
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -591,7 +612,8 @@ async fn protocol_grant() {
                 .add_type("foo", ProtocolType::default())
                 .add_rule("foo", RuleSet::default()),
         )
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -610,7 +632,8 @@ async fn protocol_grant() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: None,
         })
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -629,7 +652,8 @@ async fn protocol_grant() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -706,7 +730,8 @@ async fn protocol_grant() {
     // --------------------------------------------------
     let carol_revocation = RevocationBuilder::new()
         .grant(carol_grant)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create revocation");
 
@@ -726,7 +751,8 @@ async fn protocol_grant() {
             method: Method::Read,
             protocol: Some("http://minimal.xyz".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -739,7 +765,8 @@ async fn protocol_grant() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(&alice_write_cid)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -755,7 +782,8 @@ async fn protocol_grant() {
     let mut read = ReadBuilder::new()
         .message_cid(&alice_configure_cid)
         .permission_grant_id(&bob_grant.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -840,7 +868,8 @@ async fn protocol_grant() {
     // Bob is unable to read the control message
     let read = ReadBuilder::new()
         .message_cid(&write_cid)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -866,7 +895,8 @@ async fn invalid_protocol_grant() {
                 .add_type("foo", ProtocolType::default())
                 .add_rule("foo", RuleSet::default()),
         )
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -906,7 +936,8 @@ async fn invalid_protocol_grant() {
             method: Method::Read,
             protocol: Some("http://minimal.xyz".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -921,7 +952,8 @@ async fn invalid_protocol_grant() {
     let read = ReadBuilder::new()
         .message_cid(&write_cid)
         .permission_grant_id(grant_cid)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 
@@ -943,7 +975,8 @@ async fn delete_with_no_write() {
     // --------------------------------------------------
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -960,7 +993,8 @@ async fn delete_with_no_write() {
             method: Method::Read,
             protocol: Some("http://minimal.xyz".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -1003,7 +1037,8 @@ async fn delete_with_no_write() {
     let read = ReadBuilder::new()
         .message_cid(&delete.cid().expect("should get CID"))
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create read");
 

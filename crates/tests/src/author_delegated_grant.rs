@@ -32,7 +32,7 @@ async fn configure_any() {
             protocol: None,
         });
 
-    let bob_grant = builder.build(&alice_signer).await.expect("should create grant");
+    let bob_grant = builder.sign(&alice_signer).build().await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
@@ -43,7 +43,8 @@ async fn configure_any() {
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .delegated_grant(bob_grant.try_into().expect("should convert"))
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -68,7 +69,8 @@ async fn configure_any() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(definition.protocol)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 

@@ -1202,7 +1202,8 @@ async fn log_initial_write() {
     // --------------------------------------------------
     let query = interfaces::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
 
@@ -1256,7 +1257,8 @@ async fn retain_two_writes() {
     // --------------------------------------------------
     let query = interfaces::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
 
@@ -1282,7 +1284,8 @@ async fn anyone_create() {
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1343,7 +1346,8 @@ async fn anyone_update() {
     let definition: Definition = serde_json::from_slice(collab).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1414,7 +1418,8 @@ async fn ancestor_create() {
     let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1499,7 +1504,8 @@ async fn ancestor_update() {
     let definition: Definition = serde_json::from_slice(recipient).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1594,7 +1600,8 @@ async fn direct_update() {
     let definition: Definition = serde_json::from_slice(recipient).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1665,7 +1672,8 @@ async fn block_non_author() {
     let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1770,7 +1778,8 @@ async fn ancestor_author_update() {
     let definition: Definition = serde_json::from_slice(author_can).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1863,7 +1872,8 @@ async fn update_role() {
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1915,7 +1925,8 @@ async fn no_role_recipient() {
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -1958,7 +1969,8 @@ async fn recreate_role() {
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2029,7 +2041,8 @@ async fn context_role() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2100,7 +2113,8 @@ async fn context_roles() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2197,7 +2211,8 @@ async fn duplicate_context_role() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2278,7 +2293,8 @@ async fn recreate_context_role() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2368,7 +2384,8 @@ async fn role_can_create() {
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2429,7 +2446,8 @@ async fn role_can_update() {
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2504,7 +2522,8 @@ async fn invalid_protocol_role() {
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2587,7 +2606,8 @@ async fn unassigned_protocol_role() {
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2632,7 +2652,8 @@ async fn create_protocol_role() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2711,7 +2732,8 @@ async fn update_protocol_role() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2803,7 +2825,8 @@ async fn forbidden_role_path() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2903,7 +2926,8 @@ async fn invalid_role_path() {
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -2947,7 +2971,8 @@ async fn initial_author_update() {
     let definition: Definition = serde_json::from_slice(message).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3036,7 +3061,8 @@ async fn no_author_update() {
     let definition: Definition = serde_json::from_slice(message).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3121,7 +3147,8 @@ async fn no_recipient_update() {
     let definition: Definition = serde_json::from_slice(message).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3207,7 +3234,8 @@ async fn unauthorized_create() {
     let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3302,7 +3330,8 @@ async fn invalid_schema() {
     let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3345,7 +3374,8 @@ async fn invalid_protocol_path() {
     let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3387,7 +3417,8 @@ async fn incorrect_protocol_path() {
     let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3430,7 +3461,8 @@ async fn invalid_data_format() {
     let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3515,7 +3547,8 @@ async fn any_data_format() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3586,7 +3619,8 @@ async fn schema_hierarchy() {
     let definition: Definition = serde_json::from_slice(issuance).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3716,7 +3750,8 @@ async fn owner_no_rule() {
     let definition: Definition = serde_json::from_slice(private).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3781,7 +3816,8 @@ async fn deep_nesting() {
     let definition: Definition = serde_json::from_slice(dex).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&pfi_signer)
+        .sign(&pfi_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3882,7 +3918,8 @@ async fn invalid_parent_id() {
     let definition: Definition = serde_json::from_slice(dex).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&pfi_signer)
+        .sign(&pfi_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -3973,7 +4010,8 @@ async fn invalid_encryption_cid() {
 
     let email = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4043,7 +4081,8 @@ async fn protocol_not_normalized() {
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4106,7 +4145,8 @@ async fn small_data_cid_protocol() {
     let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4224,7 +4264,8 @@ async fn large_data_cid_protocol() {
     let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4325,7 +4366,8 @@ async fn protocol_schema() {
     let definition: Definition = serde_json::from_slice(collaborate).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4423,7 +4465,8 @@ async fn protocol_size_range() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4522,7 +4565,8 @@ async fn protocol_min_size() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4600,7 +4644,8 @@ async fn protocol_max_size() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4665,7 +4710,8 @@ async fn deleted_parent() {
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4739,7 +4785,8 @@ async fn incorrect_parent_context() {
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4806,7 +4853,8 @@ async fn protocol_grant_match() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4823,7 +4871,8 @@ async fn protocol_grant_match() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -4863,7 +4912,8 @@ async fn protocol_grant_mismatch() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4874,7 +4924,8 @@ async fn protocol_grant_mismatch() {
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4891,7 +4942,8 @@ async fn protocol_grant_mismatch() {
             protocol: "http://email-protocol.xyz".to_string(),
             limited_to: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -4933,7 +4985,8 @@ async fn protocol_context_grant() {
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -4970,7 +5023,8 @@ async fn protocol_context_grant() {
             protocol: "http://email-protocol.xyz".to_string(),
             limited_to: Some(RecordsScope::ContextId(alice_write.context_id.clone().unwrap())),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -5012,7 +5066,8 @@ async fn protocol_context_no_grant() {
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -5049,7 +5104,8 @@ async fn protocol_context_no_grant() {
             protocol: "http://email-protocol.xyz".to_string(),
             limited_to: Some(RecordsScope::ContextId("nonexistentparentid".to_string())),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -5093,7 +5149,8 @@ async fn protocol_path_grant() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -5110,7 +5167,8 @@ async fn protocol_path_grant() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: Some(RecordsScope::ProtocolPath("foo".to_string())),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -5150,7 +5208,8 @@ async fn protocol_path_no_grant() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -5167,7 +5226,8 @@ async fn protocol_path_no_grant() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: Some(RecordsScope::ProtocolPath("some-other-path".to_string())),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -5210,7 +5270,8 @@ async fn grant_publish_required() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -5230,7 +5291,8 @@ async fn grant_publish_required() {
         .conditions(Conditions {
             publication: Some(Publication::Required),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -5292,7 +5354,8 @@ async fn grant_publish_prohibited() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -5312,7 +5375,8 @@ async fn grant_publish_prohibited() {
         .conditions(Conditions {
             publication: Some(Publication::Prohibited),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -5374,7 +5438,8 @@ async fn grant_publish_undefined() {
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply =
@@ -5392,7 +5457,8 @@ async fn grant_publish_undefined() {
             limited_to: None,
         })
         .conditions(Conditions { publication: None })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =

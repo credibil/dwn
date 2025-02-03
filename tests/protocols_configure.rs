@@ -27,7 +27,8 @@ async fn minimal() {
     // --------------------------------------------------
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -50,7 +51,8 @@ async fn forbidden() {
     // configure a protocol
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -76,7 +78,8 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let older = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -87,7 +90,8 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let newer = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -108,7 +112,8 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let update = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -121,7 +126,8 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://minimal.xyz")
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -167,17 +173,20 @@ async fn overwrite_smaller() {
     let mut messages = vec![
         ConfigureBuilder::new()
             .definition(definition_1)
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build"),
         ConfigureBuilder::new()
             .definition(definition_2)
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build"),
         ConfigureBuilder::new()
             .definition(definition_3)
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build"),
     ];
@@ -217,7 +226,8 @@ async fn overwrite_smaller() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://minimal.xyz")
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
@@ -236,7 +246,8 @@ async fn invalid_protocol() {
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("bad-protocol.xyz/"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -263,7 +274,8 @@ async fn invalid_schema() {
                 data_formats: None,
             },
         ))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -290,7 +302,8 @@ async fn no_grant() {
 
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -312,7 +325,8 @@ async fn duplicate_actor() {
     // --------------------------------------------------
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -347,7 +361,8 @@ async fn duplicate_actor() {
     // --------------------------------------------------
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -397,7 +412,8 @@ async fn duplicate_role() {
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://foo.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -452,7 +468,8 @@ async fn invalid_read_action() {
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://foo.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -596,7 +613,8 @@ async fn valid_grant() {
             method: Method::Configure,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -612,7 +630,8 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -626,7 +645,8 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -641,7 +661,8 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_revocation = RevocationBuilder::new()
         .grant(bob_grant)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create revocation");
 
@@ -654,7 +675,8 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(bob_grant_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -680,7 +702,8 @@ async fn configure_scope() {
             method: Method::Configure,
             protocol: Some("https://example.com/protocol/allowed".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -696,7 +719,8 @@ async fn configure_scope() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://example.com/protocol/allowed"))
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -710,7 +734,8 @@ async fn configure_scope() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://example.com/protocol/not-allowed"))
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -729,7 +754,8 @@ async fn configure_event() {
 
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -752,7 +778,8 @@ async fn delete_older_events() {
 
     let oldest = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -764,7 +791,8 @@ async fn delete_older_events() {
 
     let newest = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 

@@ -365,7 +365,8 @@ async fn anyone_delete() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -422,7 +423,8 @@ async fn ancestor_recipient() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -515,7 +517,8 @@ async fn direct_recipient() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -588,7 +591,8 @@ async fn ancestor_author() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -680,7 +684,8 @@ async fn context_role() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -797,7 +802,8 @@ async fn root_role() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -1056,7 +1062,8 @@ async fn log_delete() {
     // --------------------------------------------------
     let query = messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
     let query = store::Query::from(query);
@@ -1115,7 +1122,8 @@ async fn delete_updates() {
     // --------------------------------------------------
     let query = messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
     let query = store::Query::from(query);

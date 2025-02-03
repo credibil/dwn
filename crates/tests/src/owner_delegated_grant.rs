@@ -29,7 +29,7 @@ async fn configure() {
             protocol: "chat".to_string(),
             limited_to: None,
         });
-    let grant_to_appx = builder.build(&alice_signer).await.expect("should create grant");
+    let grant_to_appx = builder.sign(&alice_signer).build().await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob creates a RecordsWrite message

@@ -27,7 +27,8 @@ async fn invalid_message() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 
-    let mut subscribe = SubscribeBuilder::new().build(&alice_signer).await.expect("should build");
+    let mut subscribe =
+        SubscribeBuilder::new().sign(&alice_signer).build().await.expect("should build");
     subscribe.descriptor.filters.push(MessagesFilter::default());
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
@@ -48,7 +49,8 @@ async fn owner_events() {
     let filter = MessagesFilter::new().interface(Interface::Records);
     let subscribe = SubscribeBuilder::new()
         .add_filter(filter)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should subscribe");
@@ -74,7 +76,7 @@ async fn owner_events() {
     // --------------------------------------------------
     // Ensure the RecordsWrite event exists.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&alice_signer).await.expect("should create query");
+    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -110,7 +112,8 @@ async fn unauthorized() {
     // --------------------------------------------------
     // An anonymous use attempts to subscribe to Alice's event stream.
     // --------------------------------------------------
-    let mut subscribe = SubscribeBuilder::new().build(&alice_signer).await.expect("should build");
+    let mut subscribe =
+        SubscribeBuilder::new().sign(&alice_signer).build().await.expect("should build");
     subscribe.authorization = Authorization::default();
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
@@ -121,7 +124,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Bob attempts to subscribe to Alice's event stream.
     // --------------------------------------------------
-    let subscribe = SubscribeBuilder::new().build(&bob_signer).await.expect("should build");
+    let subscribe = SubscribeBuilder::new().sign(&bob_signer).build().await.expect("should build");
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
@@ -144,7 +147,8 @@ async fn interface_scope() {
             method: Method::Subscribe,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -158,7 +162,8 @@ async fn interface_scope() {
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -176,7 +181,8 @@ async fn interface_scope() {
     let definition = serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -189,7 +195,8 @@ async fn interface_scope() {
     // 2. configure a random protocol
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://random.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -269,7 +276,8 @@ async fn unauthorized_interface() {
             protocol: "http://allow-any".to_string(),
             limited_to: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -283,7 +291,8 @@ async fn unauthorized_interface() {
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -309,7 +318,8 @@ async fn unauthorized_method() {
             method: Method::Query,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -323,7 +333,8 @@ async fn unauthorized_method() {
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -351,7 +362,8 @@ async fn protocol_filter() {
     definition.protocol = "http://protocol1.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -363,7 +375,8 @@ async fn protocol_filter() {
     definition.protocol = "http://protocol2.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -380,7 +393,8 @@ async fn protocol_filter() {
             method: Method::Subscribe,
             protocol: Some("http://protocol1.xyz".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -396,7 +410,8 @@ async fn protocol_filter() {
     let subscribe = SubscribeBuilder::new()
         .add_filter(filter)
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -487,7 +502,8 @@ async fn invalid_protocol() {
     definition.protocol = "http://protocol1.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -499,7 +515,8 @@ async fn invalid_protocol() {
     definition.protocol = "http://protocol2.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -516,7 +533,8 @@ async fn invalid_protocol() {
             method: Method::Subscribe,
             protocol: Some("http://protocol1.xyz".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -531,7 +549,8 @@ async fn invalid_protocol() {
     let subscribe = SubscribeBuilder::new()
         .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -547,7 +566,8 @@ async fn invalid_protocol() {
         .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
