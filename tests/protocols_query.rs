@@ -7,12 +7,11 @@ use std::time::Duration;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Days;
-use dwn_node::clients::grants::{GrantBuilder, RevocationBuilder};
-use dwn_node::clients::protocols::{ConfigureBuilder, QueryBuilder};
-use dwn_node::permissions::Scope;
-use dwn_node::protocols::{Definition, ProtocolType, ProtocolsFilter};
-use dwn_node::{Error, Method, cid, endpoint};
-use http::StatusCode;
+use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder, Scope};
+use dwn_node::interfaces::protocols::{
+    ConfigureBuilder, Definition, ProtocolType, ProtocolsFilter, QueryBuilder,
+};
+use dwn_node::{Error, Method, StatusCode, cid, endpoint};
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use test_node::provider::ProviderImpl;
 use tokio::time;
@@ -91,8 +90,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query for a protocol as an anonymous (unauthenticated) user.
     // --------------------------------------------------
-    let query =
-        QueryBuilder::new().filter("http://protocol-2.xyz").anonymous().expect("should build");
+    let query = QueryBuilder::new().filter("http://protocol-2.xyz").anonymous();
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -116,7 +114,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query all published protocols as an anonymous (unauthenticated) user.
     // --------------------------------------------------
-    let query = QueryBuilder::new().anonymous().expect("should build");
+    let query = QueryBuilder::new().anonymous();
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 

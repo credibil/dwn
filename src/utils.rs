@@ -1,6 +1,8 @@
-//! # Utils
+//! # Utility Functions
 //!
-//! TODO: documentation
+//! Utility functions that currenly have no better home.
+//!
+//! Sub-modules are used to group related functionality.
 
 pub mod uri {
     use http::uri::Uri;
@@ -44,14 +46,11 @@ pub mod cid {
     /// Compute a CID from provided payload, serialized to CBOR.
     ///
     /// # Errors
-    /// LATER: Add errors
     ///
-    /// # Panics
-    ///
-    /// When the payload cannot be serialized.
+    /// Fails when the payload cannot be serialized to CBOR.
     pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
         let mut buf = Vec::new();
-        ciborium::into_writer(payload, &mut buf).expect("should serialize");
+        ciborium::into_writer(payload, &mut buf)?;
         let hash = multihash_codetable::Code::Sha2_256.digest(&buf);
         Ok(Cid::new_v1(RAW, hash).to_string())
     }
@@ -59,7 +58,9 @@ pub mod cid {
     /// Compute a CID for the provided data reader.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// Fails when there is an issue processing the provided data using the
+    /// mock [`BlockStore`].
     pub fn from_reader(reader: impl Read) -> Result<(String, usize)> {
         // use the default storage algorithm to compute CID and size
         block_on(async { data::put("owner", "record_id", "data_cid", reader, &MockStore).await })

@@ -1,20 +1,30 @@
 #![feature(let_chains)]
-#![feature(btree_cursors)]
-// #![feature(type_changing_struct_update)]
 
-//! # Decentralized Web Node (web node)
+//! # Decentralized Web Node (DWN)
+//!
+//! A [Decentralized Web Node (DWN)] is a data storage and message relay
+//! mechanism entities can use to locate public or private permissioned data
+//! related to a given Decentralized Identifier (DID). Decentralized Web Nodes
+//! are designed to be deployed in mesh-like datastore construct that enables
+//! an entity to operate multiple nodes that replicate state across all nodes.
+//!
+//! A DWN allows the owning entity to secure, manage, and transact data with
+//! others without reliance on location or provider-specific infrastructure,
+//! interfaces, or routing mechanisms.
+//!
+//! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
 pub mod authorization;
-pub mod clients;
 pub mod endpoint;
 mod error;
 pub mod event;
 pub mod hd_key;
-pub mod messages;
-pub mod permissions;
-pub mod protocols;
+pub mod interfaces;
+mod messages;
+mod permissions;
+mod protocols;
 pub mod provider;
-pub mod records;
+mod records;
 mod schema;
 pub mod store;
 mod tasks;
@@ -23,6 +33,7 @@ mod utils;
 use ::serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use derive_more::Display;
+pub use http::StatusCode;
 
 pub use crate::endpoint::Message;
 pub use crate::error::Error;
@@ -55,8 +66,10 @@ pub enum Interface {
     /// Records interface.
     #[default]
     Records,
+
     /// Protocols interface.
     Protocols,
+
     /// Messages interface.
     Messages,
 }

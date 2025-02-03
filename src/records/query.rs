@@ -1,6 +1,8 @@
-//! # Query
+//! # Records Query
 //!
-//! `Query` is a message type used to query a record in the web node.
+//! The records query endpoint handles `RecordsQuery` messages — requests
+//! to query the [`MessageStore`] for matching [`Write`] (and possibly
+//! [`Delete`]) messages.
 
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -12,12 +14,14 @@ use crate::provider::{MessageStore, Provider};
 use crate::records::{RecordsFilter, Write};
 use crate::store::{self, Cursor, Pagination, RecordsQueryBuilder, Sort};
 use crate::utils::cid;
-use crate::{Descriptor, Result, forbidden, unauthorized, unexpected, utils};
+use crate::{Descriptor, Result, forbidden, unexpected, utils};
 
-/// Process `Query` message.
+/// Handle — or process — a [`Query`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs querying the [`MessageStore`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
@@ -97,7 +101,7 @@ pub async fn handle(
     })
 }
 
-/// Records Query payload
+/// The [`Query`] message expected by the handler.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Query {
@@ -129,7 +133,7 @@ impl Message for Query {
     }
 }
 
-/// Query reply.
+/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryReply {
@@ -142,7 +146,7 @@ pub struct QueryReply {
     pub cursor: Option<Cursor>,
 }
 
-/// Query reply.
+/// [`QueryReplyEntry`] represents a [`Write`] entry returned by the query.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryReplyEntry {
@@ -161,11 +165,6 @@ impl Query {
         let Some(authzn) = &self.authorization else {
             return Err(forbidden!("missing authorization"));
         };
-
-        // authenticate the message
-        if let Err(e) = authzn.authenticate(provider.clone()).await {
-            return Err(unauthorized!("failed to authenticate: {e}"));
-        }
 
         // verify grant
         if let Some(delegated_grant) = &authzn.author_delegated_grant {
@@ -285,7 +284,7 @@ impl Query {
     }
 }
 
-/// Query descriptor.
+/// The [`Query`] message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryDescriptor {

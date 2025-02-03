@@ -1,6 +1,30 @@
-//! # Task Manager
-
-// use std::time::Duration;
+//! # Resumable Task Manager
+//!
+//! The task manager is responsible for running long-running or background
+//! tasks — tasks that can be paused and restarted at a later time.
+//!
+//! The task manager is useful for long-running tasks that may be interrupted
+//! by network issues or other problems. It is responsible for running the task
+//! and ensuring that it is completed within a certain time frame.
+//!
+//! # Implementer Note:
+//!
+//! The implementation of the backing [`TaskStore`] must allow for
+//! concurrent access by multiple `TaskStore` instances when used in a
+//! multi-node deployment. It would be undesirable to have many node
+//! instances attempting to run the same resumable task.
+//!
+//! A minimal viable implementation may use a per tenant lock on the store
+//! when the `grab()`  method is called.
+//!
+//! A more performant, multi-node implementation could:
+//!
+//! 1. Use a persistent store for storing the data of each resumable task
+//! 2. Use pub/sub to distribute task processing exclusively to a single
+//!    subscribing task manager service.
+//! 3. The `grab()` and/or `open()` implementation will need to publish
+//!    expired tasks for distributed processing when there are no resumable
+//!    tasks in the queue.
 
 use chrono::Utc;
 use serde::de::DeserializeOwned;
@@ -12,7 +36,7 @@ use crate::provider::{Provider, TaskStore};
 use crate::records::Delete;
 use crate::{Result, unexpected};
 
-// Frequency with which an automatic timeout extension is requested.
+// The frequency with which an automatic timeout extension is requested.
 const EXTEND_SECS: u64 = 30;
 
 /// Runs a resumable task with automatic timeout extension.
@@ -58,7 +82,8 @@ where
     -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Used by the task manager to resume running a task.
+/// `ResumableTask` is used by the task manager to resume running a paused
+/// task.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ResumableTask {
     /// Globally unique ID. Used to extend or delete the task.

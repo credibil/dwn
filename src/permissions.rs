@@ -1,23 +1,27 @@
 //! # Permissions
+//!
+//! Permissions are grants of authority or pre-configured access rights
+//! (protocols) that can be used by authorized users to interact with a DWN.
+//!
+//! The [`permissions`] module brings together methods for evaluating
+//! incoming messages to determine whether they have sufficient privileges to
+//! undertake the message's action(s).
 
 mod grant;
 mod protocol;
-mod request;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
-pub use self::grant::{Grant, GrantData, RequestData, RevocationData};
-pub(crate) use self::protocol::{Protocol, fetch_scope};
+pub use self::grant::{Conditions, Grant, GrantData, Publication, RequestData, RevocationData};
+pub use self::protocol::{Protocol, fetch_scope};
 use crate::provider::MessageStore;
 use crate::records::RecordsFilter;
 use crate::store::RecordsQueryBuilder;
 use crate::{Interface, Method, Result, forbidden};
 
-/// Fetch the grant specified by `grant_id`.
-pub(crate) async fn fetch_grant(
-    owner: &str, grant_id: &str, store: &impl MessageStore,
-) -> Result<Grant> {
+/// Fetches the grant specified by `grant_id`.
+pub async fn fetch_grant(owner: &str, grant_id: &str, store: &impl MessageStore) -> Result<Grant> {
     let query =
         RecordsQueryBuilder::new().add_filter(RecordsFilter::new().record_id(grant_id)).build();
     let (entries, _) = store.query(owner, &query).await?;
@@ -47,7 +51,8 @@ pub(crate) async fn fetch_grant(
     })
 }
 
-/// Scope of the permission grant.
+/// The `Scope` enum specifies the interface-specific scope of a permission
+/// grant.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "interface")]
 pub enum Scope {
@@ -97,7 +102,7 @@ impl Default for Scope {
 }
 
 impl Scope {
-    /// Get the scope protocol.
+    /// A shortcut to unpack the scope protocol.
     #[must_use]
     pub const fn interface(&self) -> Interface {
         match &self {
@@ -107,7 +112,7 @@ impl Scope {
         }
     }
 
-    /// Get the scope method.
+    /// A shortcut to unpack the scope method.
     #[must_use]
     pub fn method(&self) -> Method {
         match self {
@@ -117,7 +122,7 @@ impl Scope {
         }
     }
 
-    /// Get the scope protocol.
+    /// A shortcut to unpack the scope protocol.
     #[must_use]
     pub fn protocol(&self) -> Option<&str> {
         match &self {
@@ -129,7 +134,8 @@ impl Scope {
     }
 }
 
-/// Fields specific to the `records` scope.
+/// `RecordsScope` contains values specific to records-scoped permission
+/// grants.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RecordsScope {
@@ -147,7 +153,7 @@ impl Default for RecordsScope {
 }
 
 impl RecordsScope {
-    /// Get the context ID.
+    /// A shortcut to unpack the context ID, if it is set.
     #[must_use]
     pub fn context_id(&self) -> Option<&str> {
         match self {
@@ -156,7 +162,7 @@ impl RecordsScope {
         }
     }
 
-    /// Get the protocol path.
+    /// A shortcut to access the protocol path, if it is set.
     #[must_use]
     pub fn protocol_path(&self) -> Option<&str> {
         match self {
@@ -164,26 +170,4 @@ impl RecordsScope {
             Self::ContextId(_) => None,
         }
     }
-}
-
-/// Conditions that must be met when the grant is used.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Conditions {
-    /// Indicates whether a message written with the invocation of a permission
-    /// must, may, or must not be marked as public. If unset, it is optional to
-    /// make the message public.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub publication: Option<Publication>,
-}
-
-/// Condition for publication of a message.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub enum Publication {
-    /// The message must be marked as public.
-    #[default]
-    Required,
-
-    /// The message may be marked as public.
-    Prohibited,
 }

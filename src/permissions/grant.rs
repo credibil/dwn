@@ -1,10 +1,13 @@
-//! # Grant
+//! # Permissions Grant
+//!
+//! The [`grant`] module handles verification of previously issued permission
+//! grants.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{Conditions, Publication, RecordsScope, Scope};
+use super::{RecordsScope, Scope};
 use crate::protocols::REVOCATION_PATH;
 use crate::provider::MessageStore;
 use crate::records::{DelegatedGrant, Delete, Query, Read, RecordsFilter, Subscribe, Write};
@@ -12,7 +15,8 @@ use crate::serde::rfc3339_micros;
 use crate::store::RecordsQueryBuilder;
 use crate::{Descriptor, Result, forbidden, unexpected};
 
-/// Used to grant another entity permission to access a web node's data.
+/// [`Grant`] holds permission grant information during the process of
+/// verifying an incoming message's authorization.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Grant {
@@ -70,37 +74,68 @@ impl TryFrom<&DelegatedGrant> for Grant {
     }
 }
 
-/// Permission grant message payload
+/// The [`GrantData`] data structure holds information related to a permission
+/// grant.
+///
+/// The grant is issued as a [`Write`] message with the base64 URL-encoded
+/// [`GrantData`] structure in the `encoded_data` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GrantData {
-    /// Describes intended grant use.
+    /// Describes the intended grant use.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
-    /// CID of permission request. Optional as grants may be given without
-    /// being requested.
+    /// The CID of permission request. This is optional as grants may be issued
+    /// without being requested.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub request_id: Option<String>,
 
-    /// Datetime when grant expires.
+    /// The date-time when grant expires.
     #[serde(serialize_with = "rfc3339_micros")]
     pub date_expires: DateTime<Utc>,
 
-    /// Whether grant is delegated or not. When `true`, the `granted_to` acts
-    /// as the `granted_to` within the scope of the grant.
+    /// Specifies whether grant is delegated or not. When set to `true`, the
+    /// `granted_to` property acts as the `granted_to` within the scope of the
+    /// grant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated: Option<bool>,
 
-    /// The scope of the allowed access.
+    /// The scope of access permitted by the grant.
     pub scope: Scope,
 
-    /// Optional conditions that must be met when the grant is used.
+    /// Specifies an conditions that must be met when the grant is used.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Conditions>,
 }
 
-/// Type for the data payload of a permission request message.
+/// [`Conditions`] contains conditions set on the parent `Grant`.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conditions {
+    /// Indicates whether a message written with the invocation of a permission
+    /// must, may, or must not be marked as public. If unset, it is optional to
+    /// make the message public.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publication: Option<Publication>,
+}
+
+/// Condition for publication of a message.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum Publication {
+    /// The message must be marked as public.
+    #[default]
+    Required,
+
+    /// The message may be marked as public.
+    Prohibited,
+}
+
+/// The [`RequestData`] data structure holds information related to a permission
+/// grant request.
+///
+/// The request is made using a [`Write`] message with the base64 URL-encoded
+/// [`RequestData`] structure in the `encoded_data` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct RequestData {
     /// If the grant is a delegated grant or not. If `true`, `granted_to` will
@@ -119,7 +154,11 @@ pub struct RequestData {
     pub conditions: Option<Conditions>,
 }
 
-/// Type for the data payload of a permission revocation message.
+/// The [`RevocationData`] data structure holds information related to a permission
+/// grant revocation.
+///
+/// The revocation is saved as a [`Write`] message with the base64 URL-encoded
+/// [`RevocationData`] structure in the `encoded_data` field.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RevocationData {
     /// Optional string that communicates the details of the revocation.
@@ -128,14 +167,12 @@ pub struct RevocationData {
 }
 
 impl Grant {
-    /// Validate message is sufficiently authorized.
+    /// Verify the `grantee` is sufficiently authorized to undertake the
+    /// action reference by the [`Descriptor`].
     ///
     /// Does not validate grant `conditions` or `scope` beyond `interface` and
     /// `method`.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn verify(
+    pub(crate) async fn verify(
         &self, grantor: &str, grantee: &str, descriptor: &Descriptor, store: &impl MessageStore,
     ) -> Result<()> {
         // verify the `grantee` against intended recipient
@@ -165,10 +202,7 @@ impl Grant {
     }
 
     /// Verify the grant allows the `records::Write` message to be written.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn permit_write(
+    pub(crate) async fn permit_write(
         &self, grantor: &str, grantee: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
         self.verify(grantor, grantee, &write.descriptor.base, store).await?;
@@ -179,10 +213,7 @@ impl Grant {
 
     /// Verify the grant allows the requestor to access `records::Query` and
     /// `records::Subscribe` records.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn permit_read(
+    pub(crate) async fn permit_read(
         &self, grantor: &str, grantee: &str, read: &Read, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
         self.verify(grantor, grantee, &read.descriptor.base, store).await?;
@@ -192,10 +223,7 @@ impl Grant {
 
     /// Verify the grant allows the requestor to access `records::Query` and
     /// `records::Subscribe` records.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn permit_query(
+    pub(crate) async fn permit_query(
         &self, grantor: &str, grantee: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let descriptor = &query.descriptor;
@@ -215,10 +243,7 @@ impl Grant {
 
     /// Verify the grant allows the requestor to access `records::Query` and
     /// `records::Subscribe` records.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn permit_subscribe(
+    pub(crate) async fn permit_subscribe(
         &self, grantor: &str, grantee: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
         let descriptor = &subscribe.descriptor;
@@ -237,10 +262,7 @@ impl Grant {
     }
 
     /// Verify the grant allows the `records::Write` message to be deleted.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub async fn permit_delete(
+    pub(crate) async fn permit_delete(
         &self, grantor: &str, grantee: &str, delete: &Delete, write: &Write,
         store: &impl MessageStore,
     ) -> Result<()> {

@@ -1,4 +1,18 @@
-//! # Protocols Client
+//! # Protocols Interface
+//!
+//! DWN nodes provide the substrate upon which a wide variety of decentralized
+//! applications and services can be implemented. By employing protocols, DWN
+//! owners can define the rules and constraints that govern the behavior of the
+//! data stored on their nodes.
+//!
+//! Protocols provide a mechanism for declaratively encoding an app or
+//! service’s rules, including segmentation of records, relationships
+//! between records, data-level requirements, and constraints on how
+//! DWN users interact with a protocol.
+//!
+//! DWN owners can model the protocols for a wide array of use cases in a way
+//! that enables interop-by-default between app implementations built on top of
+//! them.
 //!
 //! The Protocols client provides a builder and related types to use in
 //! building Protocol-related messages (Configure and Query).
@@ -7,12 +21,13 @@ use chrono::{DateTime, Utc};
 
 use crate::authorization::AuthorizationBuilder;
 pub use crate::protocols::{
-    self, Configure, ConfigureDescriptor, Definition, ProtocolsFilter, Query, QueryDescriptor,
+    Action, ActionRule, Actor, Configure, ConfigureDescriptor, Definition, ProtocolType,
+    ProtocolsFilter, Query, QueryDescriptor, RuleSet, Size,
 };
 use crate::provider::Signer;
 use crate::records::DelegatedGrant;
 use crate::utils::cid;
-use crate::{Descriptor, Interface, Method, Result, schema, unexpected, utils};
+use crate::{Descriptor, Interface, Method, Result, protocols, unexpected, utils};
 
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
@@ -60,7 +75,9 @@ impl ConfigureBuilder {
     /// Generate the Configure message body..
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when an invalid Definition is provided or there
+    /// is an issue authorizing the message.
     pub async fn build(self, signer: &impl Signer) -> Result<Configure> {
         // check definition has been set
         let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;
@@ -93,15 +110,10 @@ impl ConfigureBuilder {
         }
         let authorization = builder.build(signer).await?;
 
-        let configure = Configure {
+        Ok(Configure {
             descriptor,
             authorization,
-        };
-
-        // TODO: move validation out of message
-        schema::validate(&configure)?;
-
-        Ok(configure)
+        })
     }
 }
 
@@ -144,7 +156,8 @@ impl QueryBuilder {
     /// Build the query.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue authorizing the message.
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -161,22 +174,16 @@ impl QueryBuilder {
             authorization = authorization.permission_grant_id(id);
         }
 
-        let query = Query {
+        Ok(Query {
             descriptor,
             authorization: Some(authorization.build(signer).await?),
-        };
-
-        schema::validate(&query)?;
-
-        Ok(query)
+        })
     }
 
     /// Build an anonymous query.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn anonymous(self) -> Result<Query> {
-        let query = Query {
+    #[must_use]
+    pub fn anonymous(self) -> Query {
+        Query {
             descriptor: QueryDescriptor {
                 base: Descriptor {
                     interface: Interface::Protocols,
@@ -186,10 +193,6 @@ impl QueryBuilder {
                 filter: self.filter,
             },
             authorization: None,
-        };
-
-        schema::validate(&query)?;
-
-        Ok(query)
+        }
     }
 }

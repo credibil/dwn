@@ -1,4 +1,7 @@
 //! # Protocol Integrity
+//!
+//! Functionality to verify the integrity of `RecordsWrite` messages using a
+//! protocol.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -6,7 +9,7 @@ use serde_json::json;
 
 use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{
-    self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet, query,
+    self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
 use crate::provider::MessageStore;
 use crate::records::{RecordsFilter, Tag, Write};
@@ -296,7 +299,7 @@ pub async fn protocol_definition(
         return Ok(protocols::DEFINITION.clone());
     }
 
-    let Some(protocols) = query::fetch_config(owner, Some(protocol_uri), store).await? else {
+    let Some(protocols) = protocols::fetch_config(owner, Some(protocol_uri), store).await? else {
         return Err(forbidden!("unable to find protocol definition"));
     };
     if protocols.is_empty() {

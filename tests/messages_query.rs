@@ -5,15 +5,11 @@
 
 use std::io::Cursor;
 
-use dwn_node::clients::grants::GrantBuilder;
-use dwn_node::clients::messages::{QueryBuilder, ReadBuilder};
-use dwn_node::clients::protocols::ConfigureBuilder;
-use dwn_node::clients::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::messages::MessagesFilter;
-use dwn_node::permissions::Scope;
-use dwn_node::protocols::Definition;
-use dwn_node::{Error, Interface, Message, Method, endpoint};
-use http::StatusCode;
+use dwn_node::interfaces::grants::{GrantBuilder, Scope};
+use dwn_node::interfaces::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
+use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
+use dwn_node::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
+use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint};
 use test_node::key_store::{self, ALICE_DID, BOB_DID};
 use test_node::provider::ProviderImpl;
 

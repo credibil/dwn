@@ -1,10 +1,12 @@
 //! # Authorization
+//!
+//! The `Authorization` module groups types and functionality loosely related
+//! to message authorization and authentication.
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
-use vercre_did::DidResolver;
-pub use vercre_did::{Resource, dereference};
+use vercre_did::{DidResolver, Resource, dereference};
 use vercre_infosec::jose::JwsBuilder;
 use vercre_infosec::{Jws, Signer};
 
@@ -12,7 +14,7 @@ use crate::records::DelegatedGrant;
 use crate::utils::cid;
 use crate::{Result, unexpected};
 
-/// Generate a closure to resolve pub key material required by `Jws::decode`.
+/// Creates a closure to resolve pub key material required by `Jws::decode`.
 ///
 /// # Example
 ///
@@ -41,67 +43,52 @@ macro_rules! verify_key {
     }};
 }
 
-/// Message authorization.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Authorization {
-    /// The signature of the message signer.
-    /// N.B.: Not the author of the message when signer is a delegate.
-    pub signature: Jws,
-
-    /// An "overriding" signature for a web node owner or owner-delegate to
-    /// store a message authored by another entity.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner_signature: Option<Jws>,
-
-    /// The delegated grant required when the message is signed by an
-    /// author-delegate.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub author_delegated_grant: Option<DelegatedGrant>,
-
-    /// The delegated grant required when the message is signed by an
-    /// owner-delegate.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner_delegated_grant: Option<DelegatedGrant>,
-}
-
-/// Signature payload.
+/// JWS signature payload for message authorization.
+///
+/// The payload is used to attest to the veracity of the message by providing
+/// the means to verify the message's contents and permissions.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JwsPayload {
-    /// The CID of the message descriptor.
+    /// The CID (CBOR hash) of the message descriptor.
     pub descriptor_cid: String,
 
-    /// The ID of the permission grant for the message.
+    /// The Entry ID (`record_id`) of the permission grant `RecordsWrite`
+    /// message used to authorize the message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permission_grant_id: Option<String>,
 
-    /// Entry ID of a permission grant web node `RecordsWrite` with `delegated` set to `true`.
+    /// The Entry ID (`record_id`) of the delegated permission grant
+    /// `RecordsWrite` message used to authorize the message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_grant_id: Option<String>,
 
-    /// Used in the Records interface to authorize role-authorized actions for protocol records.
+    /// Used to authorize role-authorized actions for protocol records in the
+    /// Records interface.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol_role: Option<String>,
 }
 
 /// Message authorization.
+///
+/// Used in messages that require authorization material for processing in
+/// accordance with the permissions specified by the web node owner.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Attestation {
-    /// The signature of the message signer.
-    /// N.B.: Not the author of the message when signer is a delegate.
+pub struct Authorization {
+    /// The message signer's signature.
+    /// N.B.: May be the signature of a delegate of the author's.
     pub signature: Jws,
+
+    /// An "overriding" signature for use by a web node owner or owner-delegate
+    /// when storing a message authored by another entity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_signature: Option<Jws>,
 
     /// The delegated grant required when the message is signed by an
     /// author-delegate.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author_delegated_grant: Option<DelegatedGrant>,
-
-    /// An "overriding" signature for a web node owner or owner-delegate to store a
-    /// message authored by another entity.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub owner_signature: Option<Jws>,
 
     /// The delegated grant required when the message is signed by an
     /// owner-delegate.
@@ -110,52 +97,54 @@ pub struct Attestation {
 }
 
 impl Authorization {
-    /// Verify message signatures.
-    pub(crate) async fn authenticate(&self, resolver: impl DidResolver) -> Result<()> {
-        // let verifier = verify_key!(resolver);
-        self.signature.verify(verify_key!(resolver.clone())).await?;
+    /// Verify message signature.
+    pub(crate) async fn verify(&self, resolver: impl DidResolver) -> Result<()> {
+        let verifier = verify_key!(resolver);
 
+        self.signature.verify(verifier.clone()).await?;
         if let Some(signature) = &self.owner_signature {
-            signature.verify(verify_key!(resolver.clone())).await?;
+            signature.verify(verifier.clone()).await?;
         }
         if let Some(grant) = &self.author_delegated_grant {
-            grant.authorization.signature.verify(verify_key!(resolver.clone())).await?;
+            grant.authorization.signature.verify(verifier.clone()).await?;
         }
         if let Some(grant) = &self.owner_delegated_grant {
-            grant.authorization.signature.verify(verify_key!(resolver)).await?;
+            grant.authorization.signature.verify(verifier).await?;
         }
 
         Ok(())
     }
 
-    // TODO: cache this value
-    /// Get message author's DID.
+    /// Extract message author's DID from the message authorization.
     ///
     /// # Errors
-    /// LATER: add error docs
+    ///
+    /// This method will return an error if the author's DID cannot be
+    /// retrieved from the message signature or the signature of the
+    /// author-delegate.
     pub fn author(&self) -> Result<String> {
-        self.author_delegated_grant.as_ref().map_or_else(
-            || signer_did(&self.signature),
-            |grant| signer_did(&grant.authorization.signature),
-        )
+        self.author_delegated_grant
+            .as_ref()
+            .map_or_else(|| self.signature.did(), |grant| grant.authorization.signature.did())
+            .map_err(|e| unexpected!("issue getting author's DID: {e}"))
     }
 
     /// Get message owner's DID.
     pub(crate) fn owner(&self) -> Result<Option<String>> {
         let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
-            signer_did(&grant.authorization.signature)?
+            grant.authorization.signature.did()?
         } else {
             let Some(signature) = &self.owner_signature else {
                 return Ok(None);
             };
-            signer_did(signature)?
+            signature.did()?
         };
         Ok(Some(signer))
     }
 
     /// Get message signer's DID from the message authorization.
     pub(crate) fn signer(&self) -> Result<String> {
-        signer_did(&self.signature)
+        self.signature.did().map_err(|e| unexpected!("issue getting signer's DID: {e}"))
     }
 
     /// Get the owner's signing DID from the owner signature.
@@ -163,34 +152,24 @@ impl Authorization {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
             return Err(unexpected!("owner delegated grant not found"));
         };
-        signer_did(&grant.authorization.signature)
+        grant
+            .authorization
+            .signature
+            .did()
+            .map_err(|e| unexpected!("issue getting owner's DID: {e}"))
     }
 
-    /// Get the JWS payload of the message.
+    /// Extract the JWS payload from the authorization's signature.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// Will return an error if the payload cannot be decoded or deserialized.
     pub fn payload(&self) -> Result<JwsPayload> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.signature.payload)
-            .map_err(|e| unexpected!("issue decoding header: {e}"))?;
-        serde_json::from_slice(&decoded).map_err(|e| unexpected!("issue deserializing header: {e}"))
+            .map_err(|e| unexpected!("issue decoding signature payload: {e}"))?;
+        serde_json::from_slice(&decoded)
+            .map_err(|e| unexpected!("issue deserializing signature payload: {e}"))
     }
-}
-
-/// Gets the DID of the signer of the given message, returning an error if the
-/// message is not signed.
-///
-/// # Errors
-/// LATER: Add errors
-/// Returns an error if the message is not signed.
-pub fn signer_did(jws: &Jws) -> Result<String> {
-    let Some(kid) = jws.signatures[0].protected.kid() else {
-        return Err(unexpected!("Invalid `kid`"));
-    };
-    let Some(did) = kid.split('#').next() else {
-        return Err(unexpected!("Invalid DID"));
-    };
-    Ok(did.to_owned())
 }
 
 /// Options to use when creating a permission grant.
@@ -241,7 +220,9 @@ impl AuthorizationBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// Will return an error when an incorrect value has been provided or when
+    /// there was an issue signing the Authorization
     pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
         let descriptor_cid =
             self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;

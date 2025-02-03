@@ -3,17 +3,15 @@
 use std::io::Read;
 
 use chrono::Days;
-use dwn_node::clients::messages;
-use dwn_node::clients::protocols::ConfigureBuilder;
-use dwn_node::clients::records::{
-    Data, DeleteBuilder, ProtocolBuilder, QueryBuilder, ReadBuilder, WriteBuilder,
+use dwn_node::interfaces::messages;
+use dwn_node::interfaces::messages::MessagesFilter;
+use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
+use dwn_node::interfaces::records::{
+    Data, DeleteBuilder, DeleteDescriptor, ProtocolBuilder, QueryBuilder, ReadBuilder,
+    RecordsFilter, WriteBuilder,
 };
-use dwn_node::messages::MessagesFilter;
-use dwn_node::protocols::Definition;
 use dwn_node::provider::{EventLog, MessageStore};
-use dwn_node::records::{DeleteDescriptor, RecordsFilter};
-use dwn_node::{Error, Interface, Method, endpoint, store};
-use http::StatusCode;
+use dwn_node::{Error, Interface, Method, StatusCode, endpoint, store};
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use test_node::provider::ProviderImpl;
 

@@ -1,4 +1,6 @@
-//! # Messages
+//! # Messages Handlers
+//!
+//! Messages handlers handle incoming `Messages` interface messages.
 
 mod query;
 mod read;
@@ -6,12 +8,13 @@ mod subscribe;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::query::{Query, QueryDescriptor, QueryReply};
-pub use self::read::{Read, ReadDescriptor, ReadReply};
-pub use self::subscribe::{Subscribe, SubscribeDescriptor, SubscribeReply};
+pub use self::query::{Query, QueryDescriptor};
+pub use self::read::{Read, ReadDescriptor};
+pub use self::subscribe::{Subscribe, SubscribeDescriptor};
 use crate::{DateRange, Interface, Method};
 
-/// `Messages` filter.
+/// The `Messages` can be used to filter messages by interface, method,
+/// protocol, and timestamp.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MessagesFilter {
@@ -32,29 +35,29 @@ pub struct MessagesFilter {
     pub message_timestamp: Option<DateRange>,
 }
 
-/// Implement  builder-like behaviour.
+/// Provide  builder-like behaviour to create a [`MessagesFilter`].
 impl MessagesFilter {
-    /// Returns a new [`RecordsFilter`]
+    /// Returns a new [`MessagesFilter`]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add interface to the filter.
+    /// Specify the interface to filter mesages on.
     #[must_use]
     pub const fn interface(mut self, interface: Interface) -> Self {
         self.interface = Some(interface);
         self
     }
 
-    /// Add method to the filter.
+    /// Specify the method to filter mesages on.
     #[must_use]
     pub const fn method(mut self, method: Method) -> Self {
         self.method = Some(method);
         self
     }
 
-    /// Add protocol to the filter.
+    /// Specify a protocol to filter messages by.
     #[must_use]
     pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
         self.protocol = Some(protocol.into());

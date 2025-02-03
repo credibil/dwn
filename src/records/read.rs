@@ -1,6 +1,7 @@
-//! # Read
+//! # Records Read
 //!
-//! `Read` is a message type used to read a record in the web node.
+//! The records read endpoint handles `RecordsRead` messages — requests to
+//! read a persisted [`Write`] message.
 
 use std::io::Cursor;
 
@@ -17,10 +18,13 @@ use crate::store::{self, RecordsQueryBuilder};
 use crate::utils::cid;
 use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
 
-/// Process `Read` message.
+/// Handle — or process — a [`Read`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs attempting to retrieve the specified message from the
+/// [`MessageStore`].
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = store::Query::from(read.clone());
@@ -128,7 +132,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     })
 }
 
-/// Records read message payload
+/// The [`Read`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Read {
@@ -160,7 +164,7 @@ impl Message for Read {
     }
 }
 
-/// Read reply.
+/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadReply {
@@ -168,7 +172,8 @@ pub struct ReadReply {
     pub entry: ReadReplyEntry,
 }
 
-/// Read reply.
+/// [`ReadReplyEntry`] represents the [`Write`] entry returned for a successful
+/// 'read'.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadReplyEntry {
@@ -244,7 +249,7 @@ impl Read {
     }
 }
 
-/// Reads read descriptor.
+/// The [`Read`]  message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadDescriptor {

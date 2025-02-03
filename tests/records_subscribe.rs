@@ -2,11 +2,11 @@
 
 use std::time::Duration;
 
-use dwn_node::clients::records::{Data, QueryBuilder, SubscribeBuilder, WriteBuilder};
-use dwn_node::records::RecordsFilter;
-use dwn_node::{Message, endpoint};
+use dwn_node::interfaces::records::{
+    Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
+};
+use dwn_node::{Message, StatusCode, endpoint};
 use futures::StreamExt;
-use http::StatusCode;
 use test_node::key_store::{self, ALICE_DID};
 use test_node::provider::ProviderImpl;
 use tokio::time;

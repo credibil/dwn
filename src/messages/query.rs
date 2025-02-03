@@ -1,4 +1,7 @@
 //! # Messages Query
+//!
+//! The messages query endpoint handles `MessagesQuery` messages — requests
+//! to query the [`EventLog`] for matching persisted messages (of any type).
 
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -11,10 +14,12 @@ use crate::store::{self, Cursor};
 use crate::utils::cid;
 use crate::{Descriptor, Result, forbidden, permissions};
 
-/// Handle a query message.
+/// Handle — or process — a [`Query`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs querying the [`EventLog`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
@@ -35,7 +40,7 @@ pub async fn handle(
     })
 }
 
-/// `Query` payload
+/// The [`Query`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The `Query` descriptor.
@@ -96,7 +101,8 @@ impl Query {
         Ok(())
     }
 }
-/// `Query` reply
+
+/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
     /// Entries matching the message's query.
@@ -108,7 +114,7 @@ pub struct QueryReply {
     pub cursor: Option<Cursor>,
 }
 
-/// `Query` descriptor.
+/// The [`Query`] message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryDescriptor {
@@ -116,7 +122,7 @@ pub struct QueryDescriptor {
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Filters to apply when querying messages.
+    /// Filters to apply when querying for messages.
     pub filters: Vec<MessagesFilter>,
 
     /// The pagination cursor.

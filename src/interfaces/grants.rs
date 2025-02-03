@@ -4,8 +4,9 @@ use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 
-use crate::clients::records::{Data, ProtocolBuilder, WriteBuilder};
-use crate::permissions::{Conditions, GrantData, RequestData, RevocationData, Scope};
+use crate::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
+pub use crate::permissions::{Conditions, Publication, RecordsScope, Scope};
+use crate::permissions::{GrantData, RequestData, RevocationData};
 use crate::protocols::{self};
 use crate::provider::Signer;
 use crate::records::{self, Tag, Write};
@@ -89,17 +90,19 @@ impl GrantBuilder {
         self
     }
 
-    /// Generate the permission grant.
+    /// Generate a permission grant.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when required grant settings are missing or there
+    /// is an issue authorizing the revocation message.
     pub async fn build(self, signer: &impl Signer) -> Result<records::Write> {
-        let Some(scope) = self.scope else {
-            return Err(anyhow!("missing `scope`"));
-        };
         if self.granted_to.is_empty() {
             return Err(anyhow!("missing `granted_to`"));
         }
+        let Some(scope) = self.scope else {
+            return Err(anyhow!("missing `scope`"));
+        };
         if scope.interface() == Interface::Records && scope.protocol().is_none() {
             return Err(anyhow!("`Records` scope must have protocol set"));
         }
@@ -182,10 +185,12 @@ impl RequestBuilder {
         self
     }
 
-    /// Generate the permission grant.
+    /// Generate a grant request.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when required grant settings are missing or there
+    /// is an issue authorizing the request message.
     pub async fn build(self, signer: &impl Signer) -> Result<records::Write> {
         let Some(scope) = self.scope else {
             return Err(anyhow!("missing `scope`"));
@@ -243,15 +248,19 @@ impl RevocationBuilder {
         self
     }
 
-    /// Generate the permission grant.
+    /// Generate a grant revocation.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// The primary reason this method may fail are:
+    ///
+    /// - The grant to revoke has not been specified.
+    /// - The grant data cannot be deserialized from the `encoded_data` property.
+    /// - There is an issue authorizing the revocation message.
     pub async fn build(self, signer: &impl Signer) -> Result<records::Write> {
         let Some(grant) = self.grant else {
             return Err(anyhow!("missing `grant`"));
         };
-
         let Some(encoded) = &grant.encoded_data else {
             return Err(anyhow!("missing grant data"));
         };

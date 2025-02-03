@@ -1,4 +1,7 @@
 //! # Protocols Query
+//!
+//! The protocols query endpoint handles `ProtocolsQuery` messages — requests
+//! to query the [`MessageStore`] for protocols configured for the DWN.
 
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +9,7 @@ use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider};
-use crate::store::{self, Cursor, ProtocolsQueryBuilder};
+use crate::store::{Cursor, ProtocolsQueryBuilder};
 use crate::utils::cid;
 use crate::{Descriptor, Result, permissions, utils};
 
@@ -17,10 +20,12 @@ enum Access {
     Unpublished,
 }
 
-/// Process query message.
+/// Handle — or process — a [`Query`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs querying the [`MessageStore`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
 ) -> Result<Reply<QueryReply>> {
@@ -40,7 +45,7 @@ pub async fn handle(
         builder = builder.published(true);
     }
 
-    let (records, _) = MessageStore::query(provider, owner, &builder.build()).await?;
+    let (records, cursor) = MessageStore::query(provider, owner, &builder.build()).await?;
 
     // unpack messages
     let mut entries = vec![];
@@ -55,15 +60,12 @@ pub async fn handle(
         },
         body: Some(QueryReply {
             entries: Some(entries),
-            cursor: None,
+            cursor,
         }),
     })
 }
 
-/// Protocols Query payload
-///
-/// # Errors
-/// LATER: Add errors
+/// The [`Query`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// The Query descriptor.
@@ -94,10 +96,10 @@ impl Message for Query {
     }
 }
 
-/// Query reply.
+/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
-    /// `ProtocolsConfigure` entries matching the query.
+    /// [`Configure`] entries matching the query.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entries: Option<Vec<Configure>>,
 
@@ -106,36 +108,8 @@ pub struct QueryReply {
     pub cursor: Option<Cursor>,
 }
 
-// Fetch published protocols matching the filter
-pub(super) async fn fetch_config(
-    owner: &str, protocol: Option<String>, store: &impl MessageStore,
-) -> Result<Option<Vec<Configure>>> {
-    // build query
-    let mut builder = store::ProtocolsQueryBuilder::new();
-    if let Some(protocol) = protocol {
-        builder = builder.protocol(&protocol);
-    }
-
-    // execute query
-    let (messages, _) = store.query(owner, &builder.build()).await?;
-    if messages.is_empty() {
-        return Ok(None);
-    }
-
-    // unpack messages
-    let mut entries = vec![];
-    for message in messages {
-        entries.push(Configure::try_from(message)?);
-    }
-
-    Ok(Some(entries))
-}
-
 impl Query {
     /// Check message has sufficient privileges.
-    ///
-    /// # Errors
-    /// LATER: Add errors
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<Access> {
         let Some(authzn) = &self.authorization else {
             return Ok(Access::Published);
@@ -171,7 +145,7 @@ impl Query {
     }
 }
 
-/// Query descriptor.
+/// The [`Query`] message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryDescriptor {

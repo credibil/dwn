@@ -1,6 +1,18 @@
 //! # Store
+//!
+//! The `store` module provides utilities for storing and retrieving messages
+//! and associated data.
+//!
+//! The two primary types exposed by this module are [`Entry`] and [`Query`].
+//!
+//! [`Entry`] wraps each message with a unifying type used to simplify storage
+//! and retrieval as well as providing a vehicle for attaching addtional data
+//! alongside the message (i.e. indexes).
+//!
+//! [`Query`] wraps store-specific query options for querying the underlying
+//! store.
 
-pub(crate) mod block;
+mod block;
 pub mod data;
 pub(crate) mod event_log;
 pub(crate) mod index;
@@ -29,16 +41,24 @@ use crate::{
 /// `indexes` property).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Entry {
-    /// The message type to store.
+    /// The message to store.
+    ///
+    /// N.B. It is necessary to use an enum rather than generics because a
+    /// `Records` query may return both `RecordsWrite` and `RecordsDelete`
+    /// messages.
     #[serde(flatten)]
     pub message: EntryType,
 
     /// Indexable fields derived from the associated message object.
+    ///
+    /// N.B. These are not stored with the message, rather as separate indexes
+    /// in the underlying store.
+    #[serde(skip)]
     indexes: HashMap<String, String>,
 }
 
 impl Entry {
-    /// Adds a index item to the entry's indexes
+    /// Adds a index item to the entry's indexes.
     pub fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
         let key = key.into();
         if self.indexes.contains_key(&key) {
@@ -56,7 +76,9 @@ impl Entry {
     /// The message's CID.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// The underlying CID computation is not infallible and may fail if the
+    /// message cannot be serialized to CBOR.
     pub fn cid(&self) -> Result<String> {
         match self.message {
             EntryType::Write(ref write) => write.cid(),
@@ -75,7 +97,7 @@ impl Entry {
         }
     }
 
-    /// Return the `RecordsWrite` message, if set.
+    /// Returns the `RecordsWrite` message, when set.
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
         match &self.message {
@@ -84,7 +106,7 @@ impl Entry {
         }
     }
 
-    /// Return the `RecordsDelete` message, if set.
+    /// Returns the `RecordsDelete` message, when set.
     #[must_use]
     pub const fn as_delete(&self) -> Option<&records::Delete> {
         match &self.message {
@@ -93,7 +115,7 @@ impl Entry {
         }
     }
 
-    /// Return the `ProtocolsConfigure` message, if set.
+    /// Returns the `ProtocolsConfigure` message, when set.
     #[must_use]
     pub const fn as_configure(&self) -> Option<&protocols::Configure> {
         match &self.message {
@@ -103,7 +125,6 @@ impl Entry {
     }
 }
 
-// LATER: perhaps should be TryFrom?
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         Self {
@@ -131,7 +152,7 @@ impl From<&Configure> for Entry {
     }
 }
 
-/// `EntryType` holds the read message payload.
+/// `EntryType` wraps the message payload.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum EntryType {
@@ -151,7 +172,15 @@ impl Default for EntryType {
     }
 }
 
-/// `EventsQuery` for `EventLog` queries.
+/// The top-level query data structure used for both [`MessageStore`] and
+/// `EventLog` queries.
+///
+/// The query is composed of one or more [`MatchSet`]s derived from filters
+/// associated with the messagetype being queried. [`MatchSet`]s are 'OR-ed'
+/// together to form the query.
+///
+/// Sorting and pagination options are also included although not always
+/// used.
 #[derive(Clone, Debug, Default)]
 pub struct Query {
     /// One or more sets of events to match.
@@ -162,71 +191,6 @@ pub struct Query {
 
     /// Pagination options.
     pub(crate) pagination: Option<Pagination>,
-}
-
-/// A set of field/value matchers that must be 'AND-ed' together for a
-/// successful match.
-#[derive(Clone, Debug, Default)]
-pub struct MatchSet {
-    /// The set of matchers.
-    pub inner: Vec<Matcher>,
-
-    /// Index to use for the query.
-    pub index: Option<(String, String)>,
-}
-
-/// A field/value matcher for use in finding matching indexed values.
-#[derive(Clone, Debug)]
-pub struct Matcher {
-    /// The name of the field this matcher applies to.
-    pub(crate) field: String,
-
-    /// The value and strategy to use for a successful match.
-    pub(crate) value: MatchOn,
-}
-
-impl Matcher {
-    /// Check if the field value matches the filter value.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub(crate) fn is_match(&self, value: &str) -> Result<bool> {
-        let matched = match &self.value {
-            MatchOn::Equal(filter_val) => value == filter_val,
-            MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
-            MatchOn::OneOf(values) => values.contains(&value.to_string()),
-            MatchOn::Range(range) => {
-                let int_val: usize =
-                    value.parse().map_err(|e| unexpected!("issue parsing usize: {e}"))?;
-                range.contains(&int_val)
-            }
-            MatchOn::DateRange(range) => {
-                let date_val = DateTime::parse_from_rfc3339(value)
-                    .map_err(|e| unexpected!("issue parsing date: {e}"))?;
-                range.contains(&date_val.into())
-            }
-        };
-        Ok(matched)
-    }
-}
-
-/// Filter value.
-#[derive(Clone, Debug)]
-pub enum MatchOn {
-    /// Match must be equal.
-    Equal(String),
-
-    /// Match must start with the specified value.
-    StartsWith(String),
-
-    /// Match on one of the items specified.
-    OneOf(Vec<String>),
-
-    /// Match must be in the specified range.
-    Range(Range<usize>),
-
-    /// Match must be in the specified date range.
-    DateRange(DateRange),
 }
 
 impl Query {
@@ -254,12 +218,15 @@ impl From<records::Query> for Query {
     fn from(query: records::Query) -> Self {
         let mut match_set = MatchSet::from(&query.descriptor.filter);
 
-        match_set.inner.insert(0, Matcher {
-            field: "method".to_string(),
-            value: MatchOn::Equal(Method::Write.to_string()),
-        });
+        match_set.inner.insert(
+            0,
+            Matcher {
+                field: "method".to_string(),
+                value: MatchOn::Equal(Method::Write.to_string()),
+            },
+        );
         match_set.inner.push(Matcher {
-            field: "archived".to_string(),
+            field: "initial".to_string(),
             value: MatchOn::Equal(false.to_string()),
         });
 
@@ -276,7 +243,7 @@ impl From<records::Read> for Query {
         let mut match_set = MatchSet::from(&read.descriptor.filter);
 
         match_set.inner.push(Matcher {
-            field: "archived".to_string(),
+            field: "initial".to_string(),
             value: MatchOn::Equal(false.to_string()),
         });
 
@@ -338,6 +305,75 @@ impl From<messages::Query> for Query {
             pagination: None,
         }
     }
+}
+
+/// A `MatchSet` contains a set of [`Matcher`]s derived from the underlying
+/// filter object. [`Matcher`]s are 'AND-ed' together for a successful match.
+#[derive(Clone, Debug, Default)]
+pub struct MatchSet {
+    /// The set of matchers.
+    pub inner: Vec<Matcher>,
+
+    /// The index to use for the query.
+    pub index: Option<(String, String)>,
+}
+
+/// A `Matcher` is used to match the `field`/`value` pair to a proovided index
+/// value during the process of executing a query.
+#[derive(Clone, Debug)]
+pub struct Matcher {
+    /// The name of the field this matcher applies to.
+    pub(crate) field: String,
+
+    /// The value and strategy to use for a successful match.
+    pub(crate) value: MatchOn,
+}
+
+impl Matcher {
+    /// Check if the field value matches the filter value.
+    ///
+    /// # Errors
+    ///
+    /// The `Matcher` may fail to parse the provided value to the correct type
+    /// and will return an error in this case.
+    pub(crate) fn is_match(&self, value: &str) -> Result<bool> {
+        let matched = match &self.value {
+            MatchOn::Equal(filter_val) => value == filter_val,
+            MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
+            MatchOn::OneOf(values) => values.contains(&value.to_string()),
+            MatchOn::Range(range) => {
+                let int_val: usize =
+                    value.parse().map_err(|e| unexpected!("issue parsing usize: {e}"))?;
+                range.contains(&int_val)
+            }
+            MatchOn::DateRange(range) => {
+                let date_val = DateTime::parse_from_rfc3339(value)
+                    .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+                range.contains(&date_val.into())
+            }
+        };
+        Ok(matched)
+    }
+}
+
+/// The [`MatchOn`] enum is used to specify the matching strategy to be
+/// employed by the `Matcher`.
+#[derive(Clone, Debug)]
+pub enum MatchOn {
+    /// The match must be equal.
+    Equal(String),
+
+    /// The match must start with the specified value.
+    StartsWith(String),
+
+    /// The match must be with at least one of the items specified.
+    OneOf(Vec<String>),
+
+    /// The match must be in the specified range.
+    Range(Range<usize>),
+
+    /// The match must be in the specified date range.
+    DateRange(DateRange),
 }
 
 impl From<&RecordsFilter> for MatchSet {
@@ -615,7 +651,7 @@ impl RecordsQueryBuilder {
             }
             if !self.include_archived {
                 match_set.inner.push(Matcher {
-                    field: "archived".to_string(),
+                    field: "initial".to_string(),
                     value: MatchOn::Equal(false.to_string()),
                 });
             }

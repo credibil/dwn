@@ -1,4 +1,10 @@
 //! # Messages Read
+//!
+//! The messages read endpoint handles `MessagesRead` messages — requests to
+//! read a persisted message.
+//!
+//! Typically, a read request is made to read a message following a successful
+//! messages query.
 
 use std::io::Cursor;
 use std::str::FromStr;
@@ -18,10 +24,13 @@ use crate::store::{Entry, EntryType};
 use crate::utils::cid;
 use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
 
-/// Handle a read message.
+/// Handle — or process — a [`Read`] message.
 ///
 /// # Errors
-/// LATER: Add errors
+///
+/// The endpoint will return an error when message authorization fails or when
+/// an issue occurs attempting to retrieve the specified message from the
+/// [`MessageStore`].
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // validate message CID
     let cid =
@@ -74,7 +83,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     })
 }
 
-/// `Read` payload
+/// The [`Read`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Read {
     /// The `Read` descriptor.
@@ -177,7 +186,7 @@ async fn verify_scope(
     Err(forbidden!("message failed scope authorization"))
 }
 
-/// `Read` reply
+/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ReadReply {
     /// The `Read` descriptor.
@@ -199,7 +208,7 @@ pub struct ReadReplyEntry {
     pub data: Option<Cursor<Vec<u8>>>,
 }
 
-/// Read descriptor.
+/// The [`Read`]  message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadDescriptor {
