@@ -3966,7 +3966,7 @@ async fn invalid_encryption_cid() {
     let email = include_bytes!("protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let definition = definition
-        .add_encryption(&alice_kid, alice_private_jwk.clone())
+        .with_encryption(&alice_kid, alice_private_jwk.clone())
         .expect("should add encryption");
 
     let email = ConfigureBuilder::new()

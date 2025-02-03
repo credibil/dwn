@@ -2292,7 +2292,7 @@ async fn decrypt_context() {
     let chat = include_bytes!("protocols/chat.json");
     let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
     let definition = definition
-        .add_encryption(&alice_kid, alice_private_jwk.clone())
+        .with_encryption(&alice_kid, alice_private_jwk.clone())
         .expect("should add encryption");
 
     let configure_alice = ConfigureBuilder::new()
@@ -2310,7 +2310,7 @@ async fn decrypt_context() {
     // --------------------------------------------------
     let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
     let definition = definition
-        .add_encryption(&bob_kid, bob_private_jwk.clone())
+        .with_encryption(&bob_kid, bob_private_jwk.clone())
         .expect("should add encryption");
 
     let configure_bob = ConfigureBuilder::new()
@@ -2547,7 +2547,7 @@ async fn decrypt_protocol() {
     let email = include_bytes!("protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let definition = definition
-        .add_encryption(&alice_kid, alice_private_jwk.clone())
+        .with_encryption(&alice_kid, alice_private_jwk.clone())
         .expect("should add encryption");
 
     let email = ConfigureBuilder::new()

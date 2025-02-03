@@ -1,8 +1,7 @@
 ---
-source: crates/test-node/src/scenarios/author_delegated_grant.rs
-assertion_line: 89
+source: crates/tests/src/author_delegated_grant.rs
+assertion_line: 78
 expression: reply
-snapshot_kind: text
 ---
 status:
   code: 200
@@ -62,7 +61,7 @@ entries:
           protocolPath: grant
           recipient: "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD"
           dataCid: "[dataCid]"
-          dataSize: 194
+          dataSize: 189
           dataFormat: application/json
           dateCreated: "[dateCreated]"
         authorization:

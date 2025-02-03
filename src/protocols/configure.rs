@@ -259,16 +259,9 @@ impl Definition {
     /// # Errors
     ///
     /// This method will fail when an error occurs deriving the public key.
-    pub fn add_encryption(
+    pub fn with_encryption(
         mut self, root_key_id: &str, private_key_jwk: PrivateKeyJwk,
     ) -> Result<Self> {
-        // TODO: refactor to recursive function
-        // create recursive closure to add encryption property to all rules sets
-        #[allow(clippy::type_complexity)]
-        struct AddEnc<'a> {
-            f: &'a dyn Fn(&AddEnc, &mut BTreeMap<String, RuleSet>, DerivedPrivateJwk) -> Result<()>,
-        }
-
         let root_key = DerivedPrivateJwk {
             root_key_id: root_key_id.to_string(),
             derivation_scheme: DerivationScheme::ProtocolPath,
@@ -276,36 +269,33 @@ impl Definition {
             derived_private_key: private_key_jwk,
         };
 
-        // add `encryption` property to each rule set
-        let add_enc = AddEnc {
-            f: &|add_enc, rule_sets, parent_key| {
-                for (key, rule_set) in rule_sets {
-                    let derived_jwk = hd_key::derive_jwk(
-                        parent_key.clone(),
-                        &DerivationPath::Relative(&[key.clone()]),
-                    )?;
-                    let public_key_jwk = derived_jwk.derived_private_key.public_key.clone();
-                    rule_set.encryption = Some(PathEncryption {
-                        root_key_id: root_key_id.into(),
-                        public_key_jwk,
-                    });
-
-                    // recurse into nested rules sets
-                    (add_enc.f)(add_enc, &mut rule_set.structure, derived_jwk)?;
-                }
-
-                Ok(())
-            },
-        };
-
-        // recursively create and add `encryption` property to each rule set
+        // create protocol-derived jwk
         let path = vec![DerivationScheme::ProtocolPath.to_string(), self.protocol.clone()];
-        let protocol_derived_jwk = hd_key::derive_jwk(root_key, &DerivationPath::Relative(&path))?;
+        let derived_jwk = hd_key::derive_jwk(root_key, &DerivationPath::Relative(&path))?;
 
-        (add_enc.f)(&add_enc, &mut self.structure, protocol_derived_jwk)?;
+        // recursively add `encryption` property to each rule set
+        add_encryption(&mut self.structure, &derived_jwk)?;
 
         Ok(self)
     }
+}
+
+fn add_encryption(
+    structure: &mut BTreeMap<String, RuleSet>, parent_key: &DerivedPrivateJwk,
+) -> Result<()> {
+    for (key, rule_set) in structure {
+        let derived_jwk =
+            hd_key::derive_jwk(parent_key.clone(), &DerivationPath::Relative(&[key.clone()]))?;
+        let public_key_jwk = derived_jwk.derived_private_key.public_key.clone();
+        rule_set.encryption = Some(PathEncryption {
+            root_key_id: parent_key.root_key_id.clone(),
+            public_key_jwk,
+        });
+
+        // recurse into nested rules sets
+        add_encryption(&mut rule_set.structure, &derived_jwk)?;
+    }
+    Ok(())
 }
 
 /// Protocol type

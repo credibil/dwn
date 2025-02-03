@@ -50,7 +50,7 @@ async fn configure() {
     // App X signs over Bob's RecordsWrite as owner but does
     // not include the delegated grant (removed below)
     // --------------------------------------------------
-    // TODO: look at merging the `DelegatedGrant` into `Write`
+    // LATER: investigate merging `DelegatedGrant` into `Write`
     let delegated_grant = DelegatedGrant {
         authorization: Box::new(grant_to_appx.authorization),
         descriptor: grant_to_appx.descriptor,
