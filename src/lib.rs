@@ -30,10 +30,10 @@ pub mod store;
 mod tasks;
 mod utils;
 
-pub use http::StatusCode;
 use ::serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use derive_more::Display;
+pub use http::StatusCode;
 
 pub use crate::endpoint::Message;
 pub use crate::error::Error;

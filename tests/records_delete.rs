@@ -11,8 +11,7 @@ use dwn_node::interfaces::records::{
     RecordsFilter, WriteBuilder,
 };
 use dwn_node::provider::{EventLog, MessageStore};
-use dwn_node::{Error, Interface, Method, endpoint, store};
-use dwn_node::StatusCode;
+use dwn_node::{Error, Interface, Method, StatusCode, endpoint, store};
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use test_node::provider::ProviderImpl;
 

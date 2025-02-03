@@ -80,7 +80,9 @@ impl DeleteBuilder {
     /// Build the write message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when no `record_id` is set or there is an issue
+    /// authorizing the message.
     pub async fn build(self, signer: &impl Signer) -> Result<Delete> {
         let Some(record_id) = self.record_id else {
             return Err(anyhow!("`record_id` is not set"));
@@ -239,7 +241,8 @@ impl QueryBuilder<Filtered, Unsigned> {
     /// Build the write message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue normalizing filter URLs.
     pub fn build(self) -> Result<Query> {
         Ok(Query {
             descriptor: QueryDescriptor {
@@ -262,7 +265,9 @@ impl<S: Signer> QueryBuilder<Filtered, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue nomalizng filter URLs or
+    /// authorizing the message.
     pub async fn build(self) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -388,10 +393,8 @@ impl<'a, F> ReadBuilder<F, Unsigned> {
 
 impl ReadBuilder<Filtered, Unsigned> {
     /// Build and return an anonymous (unsigned) Read message.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn build(self) -> Result<Read> {
+    #[must_use]
+    pub fn build(self) -> Read {
         let descriptor = ReadDescriptor {
             base: Descriptor {
                 interface: Interface::Records,
@@ -401,10 +404,10 @@ impl ReadBuilder<Filtered, Unsigned> {
             filter: self.filter.0,
         };
 
-        Ok(Read {
+        Read {
             descriptor,
             authorization: None,
-        })
+        }
     }
 }
 
@@ -412,7 +415,9 @@ impl<S: Signer> ReadBuilder<Filtered, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue nomalizng filter URLs or
+    /// authorizing the message.
     pub async fn build(self) -> Result<Read> {
         let descriptor = ReadDescriptor {
             base: Descriptor {
@@ -501,7 +506,9 @@ impl SubscribeBuilder {
     /// Build the write message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue nomalizng filter URLs or
+    /// authorizing the message.
     pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
         let descriptor = SubscribeDescriptor {
             base: Descriptor {
@@ -1038,20 +1045,13 @@ impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue authorizing the message.
     pub async fn build(self) -> Result<Write> {
         let author_did = if let Some(grant) = &self.delegated_grant {
             grant.authorization.signature.did()?
         } else {
-            // TODO: add helper method to Signer trait
-            self.signer
-                .0
-                .verification_method()
-                .await?
-                .split('#')
-                .next()
-                .map(ToString::to_string)
-                .unwrap_or_default()
+            did_from_kid(&self.signer.0.verification_method().await?)?
         };
 
         let mut write = self.to_write(&author_did)?;
@@ -1065,20 +1065,14 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a
     /// Build the `Write` message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue attesting to or
+    /// authorizing the message.
     pub async fn build(self) -> Result<Write> {
         let author_did = if let Some(grant) = &self.delegated_grant {
             grant.authorization.signature.did()?
         } else {
-            // TODO: add helper method to Signer trait
-            self.signer
-                .0
-                .verification_method()
-                .await?
-                .split('#')
-                .next()
-                .map(ToString::to_string)
-                .unwrap_or_default()
+            did_from_kid(&self.signer.0.verification_method().await?)?
         };
 
         let signer = self.signer.0;
@@ -1090,4 +1084,12 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a
         write.sign_as_author(permission_grant_id, protocol_role, signer).await?;
         Ok(write)
     }
+}
+
+fn did_from_kid(kid: &str) -> Result<String> {
+    let parts: Vec<&str> = kid.split('#').collect();
+    if parts.len() != 2 {
+        return Err(anyhow!("Invalid key ID"));
+    }
+    Ok(parts[0].to_string())
 }

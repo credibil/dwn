@@ -11,8 +11,7 @@ use dwn_node::interfaces::protocols::{
 };
 use dwn_node::provider::MessageStore;
 use dwn_node::store::ProtocolsQueryBuilder;
-use dwn_node::{Error, Message, Method, endpoint};
-use dwn_node::StatusCode;
+use dwn_node::{Error, Message, Method, StatusCode, endpoint};
 use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
 use test_node::provider::ProviderImpl;
 use tokio::time;

@@ -12,8 +12,7 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::provider::{DataStore, MessageStore};
 use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
-use dwn_node::{Error, Method, cid, endpoint};
-use dwn_node::StatusCode;
+use dwn_node::{Error, Method, StatusCode, cid, endpoint};
 use rand::RngCore;
 use test_node::key_store::{
     self, ALICE_DID, ALICE_VERIFYING_KEY, BOB_DID, BOB_VERIFYING_KEY, CAROL_DID,
@@ -112,10 +111,7 @@ async fn published_anonymous() {
     // --------------------------------------------------
     // Read the record.
     // --------------------------------------------------
-    let read = ReadBuilder::new()
-        .filter(RecordsFilter::new().record_id(&write.record_id))
-        .build()
-        .expect("should create read");
+    let read = ReadBuilder::new().filter(RecordsFilter::new().record_id(&write.record_id)).build();
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -550,10 +546,7 @@ async fn no_anonymous() {
     // --------------------------------------------------
     // An anonymous users attempts to read the message.
     // --------------------------------------------------
-    let read = ReadBuilder::new()
-        .filter(RecordsFilter::new().record_id(&write.record_id))
-        .build()
-        .expect("should create read");
+    let read = ReadBuilder::new().filter(RecordsFilter::new().record_id(&write.record_id)).build();
     let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
         panic!("should be Forbidden");
     };

@@ -125,7 +125,9 @@ impl ReadBuilder {
     /// Generate the Read message.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue signing the message or
+    /// serilaizing the descriptor to CBOR.
     pub async fn build(self, signer: &impl Signer) -> Result<Read> {
         // verify CID
         let Some(message_cid) = self.message_cid else {
@@ -193,7 +195,9 @@ impl SubscribeBuilder {
     /// Generate the permission grant.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue signing the message or
+    /// serilaizing the descriptor to CBOR.
     pub async fn build(self, signer: &impl Signer) -> Result<Subscribe> {
         let descriptor = SubscribeDescriptor {
             base: Descriptor {

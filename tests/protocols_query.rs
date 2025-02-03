@@ -90,8 +90,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query for a protocol as an anonymous (unauthenticated) user.
     // --------------------------------------------------
-    let query =
-        QueryBuilder::new().filter("http://protocol-2.xyz").anonymous().expect("should build");
+    let query = QueryBuilder::new().filter("http://protocol-2.xyz").anonymous();
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -115,7 +114,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query all published protocols as an anonymous (unauthenticated) user.
     // --------------------------------------------------
-    let query = QueryBuilder::new().anonymous().expect("should build");
+    let query = QueryBuilder::new().anonymous();
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 

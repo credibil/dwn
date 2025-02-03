@@ -75,7 +75,9 @@ impl ConfigureBuilder {
     /// Generate the Configure message body..
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when an invalid Definition is provided or there
+    /// is an issue authorizing the message.
     pub async fn build(self, signer: &impl Signer) -> Result<Configure> {
         // check definition has been set
         let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;
@@ -154,7 +156,8 @@ impl QueryBuilder {
     /// Build the query.
     ///
     /// # Errors
-    /// LATER: Add errors
+    ///
+    /// This method will fail when there is an issue authorizing the message.
     pub async fn build(self, signer: &impl Signer) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
@@ -178,11 +181,9 @@ impl QueryBuilder {
     }
 
     /// Build an anonymous query.
-    ///
-    /// # Errors
-    /// LATER: Add errors
-    pub fn anonymous(self) -> Result<Query> {
-        Ok(Query {
+    #[must_use]
+    pub fn anonymous(self) -> Query {
+        Query {
             descriptor: QueryDescriptor {
                 base: Descriptor {
                     interface: Interface::Protocols,
@@ -192,6 +193,6 @@ impl QueryBuilder {
                 filter: self.filter,
             },
             authorization: None,
-        })
+        }
     }
 }

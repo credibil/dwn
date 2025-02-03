@@ -9,8 +9,7 @@ use dwn_node::interfaces::grants::{GrantBuilder, Scope};
 use dwn_node::interfaces::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
 use dwn_node::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::{Error, Interface, Message, Method, endpoint};
-use dwn_node::StatusCode;
+use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint};
 use test_node::key_store::{self, ALICE_DID, BOB_DID};
 use test_node::provider::ProviderImpl;
 
