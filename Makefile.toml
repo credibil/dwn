@@ -26,12 +26,11 @@ dependencies = ["clean"]
 
 [tasks.test]
 command = "cargo"
-args = ["nextest", "run", "--no-fail-fast"]
-# args = ["nextest", "run", "--workspace", "--no-fail-fast"]
-# dependencies = ["testdocs"]
+# args = ["nextest", "run", "--no-fail-fast"]
+args = ["nextest", "run", "--workspace", "--no-fail-fast"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
-[tasks.testdocs]
+[tasks.doctest]
 command = "cargo"
 args = ["test", "--workspace", "doc"]
 env = { RUSTFLAGS = "-Dwarnings" }
@@ -115,11 +114,3 @@ command = "cargo"
 args = ["release", "${@}", "--execute"]
 install_crate = "cargo-release"
 
-# -----------------------------------------------------------------------------
-# Type generation for Tauri wallet example
-# -----------------------------------------------------------------------------
-
-[tasks.typegen]
-command = "typeshare"
-args = ["./examples/wallet/src-tauri", "--lang=typescript", "--output-file=./examples/wallet/src/types/generated.ts"]
-install_crate = "typeshare-cli"

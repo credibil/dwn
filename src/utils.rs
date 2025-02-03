@@ -58,7 +58,7 @@ pub mod cid {
     /// Compute a CID for the provided data reader.
     ///
     /// # Errors
-    /// 
+    ///
     /// Fails when there is an issue processing the provided data using the
     /// mock [`BlockStore`].
     pub fn from_reader(reader: impl Read) -> Result<(String, usize)> {

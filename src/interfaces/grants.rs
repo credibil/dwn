@@ -188,7 +188,7 @@ impl RequestBuilder {
     /// Generate a grant request.
     ///
     /// # Errors
-    /// 
+    ///
     /// This method will fail when required grant settings are missing or there
     /// is an issue authorizing the request message.
     pub async fn build(self, signer: &impl Signer) -> Result<records::Write> {
