@@ -202,9 +202,6 @@ impl Grant {
     }
 
     /// Verify the grant allows the `records::Write` message to be written.
-    ///
-    /// # Errors
-    /// LATER: Add errors
     pub(crate) async fn permit_write(
         &self, grantor: &str, grantee: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
