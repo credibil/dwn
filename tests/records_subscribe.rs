@@ -21,8 +21,12 @@ async fn owner_events() {
     // Alice subscribes to own event stream.
     // --------------------------------------------------
     let filter = RecordsFilter::new().add_author(ALICE_DID);
-    let subscribe =
-        SubscribeBuilder::new().filter(filter).build(&alice_signer).await.expect("should build");
+    let subscribe = SubscribeBuilder::new()
+        .filter(filter)
+        .sign(&alice_signer)
+        .build()
+        .await
+        .expect("should build");
     let reply =
         endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
