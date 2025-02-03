@@ -478,7 +478,6 @@ impl Write {
             self.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
 
             // write record is a grant
-            // TODO: move this check to `verify_integrity` method
             if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
                 integrity::verify_schema(self, &data_bytes)?;
             }

@@ -53,7 +53,8 @@ async fn delete_record() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -72,7 +73,8 @@ async fn delete_record() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -148,7 +150,8 @@ async fn delete_data() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&alice_write1.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -181,7 +184,8 @@ async fn delete_data() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&alice_write2.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
@@ -235,7 +239,8 @@ async fn not_found() {
 
     let delete = DeleteBuilder::new()
         .record_id("imaginary_record_id")
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -284,7 +289,8 @@ async fn newer_version() {
     // --------------------------------------------------
     let mut delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -324,7 +330,8 @@ async fn rewrite_data() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
@@ -358,7 +365,8 @@ async fn anyone_delete() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -390,7 +398,8 @@ async fn anyone_delete() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -414,7 +423,8 @@ async fn ancestor_recipient() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -467,7 +477,8 @@ async fn ancestor_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&tag.record_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -481,7 +492,8 @@ async fn ancestor_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&tag.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -505,7 +517,8 @@ async fn direct_recipient() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -538,7 +551,8 @@ async fn direct_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -552,7 +566,8 @@ async fn direct_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -576,7 +591,8 @@ async fn ancestor_author() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -628,7 +644,8 @@ async fn ancestor_author() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&comment.record_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -642,7 +659,8 @@ async fn ancestor_author() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&comment.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -666,7 +684,8 @@ async fn context_role() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -742,7 +761,8 @@ async fn context_role() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -757,7 +777,8 @@ async fn context_role() {
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
         .protocol_role("thread/admin")
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -781,7 +802,8 @@ async fn root_role() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -836,7 +858,8 @@ async fn root_role() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -851,7 +874,8 @@ async fn root_role() {
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
         .protocol_role("admin")
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -886,7 +910,8 @@ async fn forbidden() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -907,7 +932,8 @@ async fn unauthorized() {
     // --------------------------------------------------
     let mut delete = DeleteBuilder::new()
         .record_id("record_id")
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -930,7 +956,8 @@ async fn invalid_message() {
     // --------------------------------------------------
     let mut delete = DeleteBuilder::new()
         .record_id("record_id")
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
     delete.descriptor = DeleteDescriptor::default();
@@ -968,7 +995,8 @@ async fn index_additional() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -1021,7 +1049,8 @@ async fn log_delete() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -1033,7 +1062,8 @@ async fn log_delete() {
     // --------------------------------------------------
     let query = messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
     let query = store::Query::from(query);
@@ -1078,7 +1108,8 @@ async fn delete_updates() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write2.record_id)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create delete");
 
@@ -1091,7 +1122,8 @@ async fn delete_updates() {
     // --------------------------------------------------
     let query = messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create query");
     let query = store::Query::from(query);

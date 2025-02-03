@@ -47,7 +47,6 @@ pub fn verify_schema(write: &Write, data: &[u8]) -> Result<()> {
         return Err(forbidden!("missing protocol path"));
     };
 
-    // TODO: convert xxx_PATH to enum
     match protocol_path.as_str() {
         REQUEST_PATH => {
             let request_data: RequestData = serde_json::from_slice(data)?;

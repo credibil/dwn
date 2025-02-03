@@ -27,36 +27,66 @@ pub use crate::protocols::{
 use crate::provider::Signer;
 use crate::records::DelegatedGrant;
 use crate::utils::cid;
-use crate::{Descriptor, Interface, Method, Result, protocols, unexpected, utils};
+use crate::{Descriptor, Interface, Method, Result, protocols, utils};
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct ConfigureBuilder {
+pub struct ConfigureBuilder<D, S> {
     message_timestamp: DateTime<Utc>,
-    definition: Option<Definition>,
+    definition: D,
     delegated_grant: Option<DelegatedGrant>,
     permission_grant_id: Option<String>,
+    signer: S,
+}
+
+/// Builder state is unsigned.
+#[doc(hidden)]
+pub struct Unsigned;
+/// Builder state is signed.
+#[doc(hidden)]
+pub struct Signed<'a, S: Signer>(pub &'a S);
+
+/// Builder state has no Definition.
+#[doc(hidden)]
+pub struct Undefined;
+/// Builder state has a Definition.
+#[doc(hidden)]
+pub struct Defined(Definition);
+
+impl Default for ConfigureBuilder<Undefined, Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Builder for creating a permission grant.
-impl ConfigureBuilder {
+impl ConfigureBuilder<Undefined, Unsigned> {
     /// Returns a new [`ConfigureBuilder`]
     #[must_use]
     pub fn new() -> Self {
         // set defaults
         Self {
             message_timestamp: Utc::now(),
-            ..Self::default()
+            definition: Undefined,
+            delegated_grant: None,
+            permission_grant_id: None,
+            signer: Unsigned,
         }
     }
 
     /// Specify the protocol's definition.
     #[must_use]
-    pub fn definition(mut self, definition: Definition) -> Self {
-        self.definition = Some(definition);
-        self
+    pub fn definition(self, definition: Definition) -> ConfigureBuilder<Defined, Unsigned> {
+        ConfigureBuilder {
+            message_timestamp: self.message_timestamp,
+            definition: Defined(definition),
+            delegated_grant: self.delegated_grant,
+            permission_grant_id: self.permission_grant_id,
+            signer: Unsigned,
+        }
     }
+}
 
+impl<D> ConfigureBuilder<D, Unsigned> {
     /// The delegated grant invoked to sign on behalf of the logical author,
     /// who is the grantor of the delegated grant.
     #[must_use]
@@ -72,23 +102,39 @@ impl ConfigureBuilder {
         self
     }
 
-    /// Generate the Configure message body..
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the
+    /// final build step.
+    #[must_use]
+    pub fn sign<S: Signer>(self, signer: &S) -> ConfigureBuilder<D, Signed<'_, S>> {
+        ConfigureBuilder {
+            signer: Signed(signer),
+            message_timestamp: self.message_timestamp,
+            definition: self.definition,
+            delegated_grant: self.delegated_grant,
+            permission_grant_id: self.permission_grant_id,
+        }
+    }
+}
+
+impl<S: Signer> ConfigureBuilder<Defined, Signed<'_, S>> {
+    /// Generate the Configure message.
     ///
     /// # Errors
     ///
     /// This method will fail when an invalid Definition is provided or there
     /// is an issue authorizing the message.
-    pub async fn build(self, signer: &impl Signer) -> Result<Configure> {
-        // check definition has been set
-        let mut definition = self.definition.ok_or_else(|| unexpected!("definition not found"))?;
-
+    pub async fn build(self) -> Result<Configure> {
         // normalize definition urls
+        let mut definition = self.definition.0;
         definition.protocol = utils::uri::clean(&definition.protocol)?;
         for t in definition.types.values_mut() {
             if let Some(schema) = &t.schema {
                 t.schema = Some(utils::uri::clean(schema)?);
             }
         }
+
         protocols::validate_structure(&definition)?;
 
         let descriptor = ConfigureDescriptor {
@@ -108,7 +154,7 @@ impl ConfigureBuilder {
         if let Some(delegated_grant) = self.delegated_grant {
             builder = builder.delegated_grant(delegated_grant);
         }
-        let authorization = builder.build(signer).await?;
+        let authorization = builder.build(self.signer.0).await?;
 
         Ok(Configure {
             descriptor,
@@ -118,22 +164,30 @@ impl ConfigureBuilder {
 }
 
 /// Options to use when creating a permission grant.
-#[derive(Clone, Debug, Default)]
-pub struct QueryBuilder {
+pub struct QueryBuilder<S> {
     message_timestamp: DateTime<Utc>,
     filter: Option<ProtocolsFilter>,
     permission_grant_id: Option<String>,
+    signer: S,
+}
+
+impl Default for QueryBuilder<Unsigned> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Builder for creating a permission grant.
-impl QueryBuilder {
+impl QueryBuilder<Unsigned> {
     /// Returns a new [`QueryBuilder`]
     #[must_use]
     pub fn new() -> Self {
         // set defaults
         Self {
             message_timestamp: Utc::now(),
-            ..Self::default()
+            filter: None,
+            permission_grant_id: None,
+            signer: Unsigned,
         }
     }
 
@@ -153,12 +207,44 @@ impl QueryBuilder {
         self
     }
 
+    /// Logically (from user POV), sign the record.
+    ///
+    /// At this point, the builder simply captures the signer for use in the
+    /// final build step.
+    #[must_use]
+    pub fn sign<S: Signer>(self, signer: &S) -> QueryBuilder<Signed<'_, S>> {
+        QueryBuilder {
+            signer: Signed(signer),
+            message_timestamp: self.message_timestamp,
+            filter: self.filter,
+            permission_grant_id: self.permission_grant_id,
+        }
+    }
+
+    /// Build an anonymous query.
+    #[must_use]
+    pub fn build(self) -> Query {
+        Query {
+            descriptor: QueryDescriptor {
+                base: Descriptor {
+                    interface: Interface::Protocols,
+                    method: Method::Query,
+                    message_timestamp: self.message_timestamp,
+                },
+                filter: self.filter,
+            },
+            authorization: None,
+        }
+    }
+}
+
+impl<S: Signer> QueryBuilder<Signed<'_, S>> {
     /// Build the query.
     ///
     /// # Errors
     ///
     /// This method will fail when there is an issue authorizing the message.
-    pub async fn build(self, signer: &impl Signer) -> Result<Query> {
+    pub async fn build(self) -> Result<Query> {
         let descriptor = QueryDescriptor {
             base: Descriptor {
                 interface: Interface::Protocols,
@@ -176,23 +262,7 @@ impl QueryBuilder {
 
         Ok(Query {
             descriptor,
-            authorization: Some(authorization.build(signer).await?),
+            authorization: Some(authorization.build(self.signer.0).await?),
         })
-    }
-
-    /// Build an anonymous query.
-    #[must_use]
-    pub fn anonymous(self) -> Query {
-        Query {
-            descriptor: QueryDescriptor {
-                base: Descriptor {
-                    interface: Interface::Protocols,
-                    method: Method::Query,
-                    message_timestamp: self.message_timestamp,
-                },
-                filter: self.filter,
-            },
-            authorization: None,
-        }
     }
 }

@@ -29,7 +29,8 @@ async fn authorized() {
     for i in 1..=3 {
         let configure = ConfigureBuilder::new()
             .definition(Definition::new(format!("http://protocol-{i}.xyz")))
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build");
         let reply =
@@ -42,7 +43,8 @@ async fn authorized() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://protocol-1.xyz")
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
@@ -54,7 +56,7 @@ async fn authorized() {
     // --------------------------------------------------
     // Execute a 'fetch-all' query without filter.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
+    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -79,7 +81,8 @@ async fn unauthorized() {
                     .add_type("foo", ProtocolType::default())
                     .published(i > 1),
             )
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build");
         let reply =
@@ -90,7 +93,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query for a protocol as an anonymous (unauthenticated) user.
     // --------------------------------------------------
-    let query = QueryBuilder::new().filter("http://protocol-2.xyz").anonymous();
+    let query = QueryBuilder::new().filter("http://protocol-2.xyz").build();
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -102,7 +105,8 @@ async fn unauthorized() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://protocol-3.xyz")
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
@@ -114,7 +118,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query all published protocols as an anonymous (unauthenticated) user.
     // --------------------------------------------------
-    let query = QueryBuilder::new().anonymous();
+    let query = QueryBuilder::new().build();
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -124,7 +128,7 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Query all published protocols as an unauthorized user.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&bob_signer).await.expect("should build");
+    let query = QueryBuilder::new().sign(&bob_signer).build().await.expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -140,7 +144,8 @@ async fn bad_protocol() {
 
     let mut query = QueryBuilder::new()
         .filter("http://protocol-3.xyz")
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -161,7 +166,7 @@ async fn tampered_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 
-    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
+    let mut query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should build");
     let authorization = query.authorization.as_mut().unwrap();
 
     let mut payload = authorization.payload().expect("should have payload");
@@ -182,7 +187,7 @@ async fn bad_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 
-    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
+    let mut query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should build");
     let authorization = query.authorization.as_mut().unwrap();
 
     authorization.signature = Jws {
@@ -212,7 +217,8 @@ async fn valid_grant() {
     for i in 1..=2 {
         let configure = ConfigureBuilder::new()
             .definition(Definition::new(format!("http://protocol-{i}.xyz")))
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build");
         let reply =
@@ -229,7 +235,8 @@ async fn valid_grant() {
             method: Method::Query,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -244,7 +251,8 @@ async fn valid_grant() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should match");
@@ -258,7 +266,8 @@ async fn valid_grant() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -272,7 +281,8 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_revocation = RevocationBuilder::new()
         .grant(bob_grant)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create revocation");
 
@@ -282,7 +292,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     // Bob attempts to query Alice's protocols but fails.
     // --------------------------------------------------
-    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should build");
+    let mut query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should build");
     let authorization = query.authorization.as_mut().unwrap();
 
     authorization.signature = Jws {
@@ -311,7 +321,8 @@ async fn valid_scope() {
     for i in 1..=3 {
         let configure = ConfigureBuilder::new()
             .definition(Definition::new(format!("http://protocol-{i}.xyz")).published(i > 2))
-            .build(&alice_signer)
+            .sign(&alice_signer)
+            .build()
             .await
             .expect("should build");
         let reply =
@@ -328,7 +339,8 @@ async fn valid_scope() {
             method: Method::Query,
             protocol: Some("http://protocol-1.xyz".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -344,7 +356,8 @@ async fn valid_scope() {
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
         .filter("http://protocol-1.xyz")
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -362,7 +375,8 @@ async fn valid_scope() {
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
         .filter("http://protocol-2.xyz")
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -379,7 +393,8 @@ async fn valid_scope() {
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
         .filter("http://protocol-3.xyz")
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -396,7 +411,8 @@ async fn valid_scope() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -426,7 +442,8 @@ async fn expired_grant() {
             protocol: None,
         })
         .expires_in(1)
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -443,7 +460,8 @@ async fn expired_grant() {
 
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -469,7 +487,8 @@ async fn inactive_grant() {
             method: Method::Query,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -484,7 +503,8 @@ async fn inactive_grant() {
     // --------------------------------------------------
     let mut query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -520,7 +540,8 @@ async fn invalid_scope() {
             protocol: "https://example.com/protocol/test".to_string(),
             limited_to: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -535,7 +556,8 @@ async fn invalid_scope() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -557,7 +579,8 @@ async fn missing_grant() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id("somerandomgrantid")
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -585,7 +608,8 @@ async fn incorrect_grantor() {
             protocol: "https://example.com/protocol/test".to_string(),
             limited_to: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -606,7 +630,8 @@ async fn incorrect_grantor() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(carol_grant.record_id)
-        .build(&carol_signer)
+        .sign(&carol_signer)
+        .build()
         .await
         .expect("should build");
 

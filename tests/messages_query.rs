@@ -27,7 +27,8 @@ async fn owner_messages() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -70,7 +71,7 @@ async fn owner_messages() {
     // Alice queries for messages without a cursor, and expects to see
     // all 5 records as well as the protocol configuration message.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&alice_signer).await.expect("should create query");
+    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -108,7 +109,7 @@ async fn owner_messages() {
     // Alice queries for messages beyond the cursor, and
     // expects to see only the additional record.
     // --------------------------------------------------
-    let query = QueryBuilder::new().build(&alice_signer).await.expect("should create query");
+    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
@@ -121,7 +122,8 @@ async fn owner_messages() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(&entries[0])
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create read");
     let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
@@ -135,7 +137,7 @@ async fn no_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 
-    let query = QueryBuilder::new().build(&alice_signer).await.expect("should create write");
+    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should create write");
     let Err(Error::Forbidden(e)) = endpoint::handle(BOB_DID, query, &provider).await else {
         panic!("should be Forbidden");
     };
@@ -148,7 +150,8 @@ async fn invalid_request() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 
-    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should create query");
+    let mut query =
+        QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
     query.descriptor.base.interface = Interface::Protocols;
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
@@ -163,7 +166,8 @@ async fn empty_filter() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice_signer = key_store::signer(ALICE_DID);
 
-    let mut query = QueryBuilder::new().build(&alice_signer).await.expect("should create query");
+    let mut query =
+        QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
     query.descriptor.filters = vec![MessagesFilter::default()];
 
     let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
@@ -188,7 +192,8 @@ async fn match_grant_scope() {
             method: Method::Query,
             protocol: None,
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -204,7 +209,8 @@ async fn match_grant_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -218,7 +224,8 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     let configure_rand = ConfigureBuilder::new()
         .definition(Definition::new("http://random.xyz"))
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -275,7 +282,8 @@ async fn match_grant_scope() {
 
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create write");
     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
@@ -313,7 +321,7 @@ async fn mismatched_grant_scope() {
         method: Method::Subscribe,
         protocol: None,
     });
-    let bob_grant = builder.build(&alice_signer).await.expect("should create grant");
+    let bob_grant = builder.sign(&alice_signer).build().await.expect("should create grant");
 
     let reply =
         endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
@@ -324,7 +332,8 @@ async fn mismatched_grant_scope() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create write");
 
@@ -350,7 +359,8 @@ async fn match_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -363,7 +373,8 @@ async fn match_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
     let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
@@ -380,7 +391,8 @@ async fn match_protocol_scope() {
             method: Method::Query,
             protocol: Some("http://protocol1".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
     let reply =
@@ -393,7 +405,8 @@ async fn match_protocol_scope() {
     let query = QueryBuilder::new()
         .add_filter(MessagesFilter::new().protocol("http://protocol1"))
         .permission_grant_id(&bob_grant.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create write");
 
@@ -423,7 +436,8 @@ async fn mismatched_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -436,7 +450,8 @@ async fn mismatched_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should build");
 
@@ -454,7 +469,8 @@ async fn mismatched_protocol_scope() {
             method: Method::Query,
             protocol: Some("http://protocol1".to_string()),
         })
-        .build(&alice_signer)
+        .sign(&alice_signer)
+        .build()
         .await
         .expect("should create grant");
 
@@ -469,7 +485,8 @@ async fn mismatched_protocol_scope() {
     let query = QueryBuilder::new()
         .add_filter(filter)
         .permission_grant_id(&bob_grant.record_id)
-        .build(&bob_signer)
+        .sign(&bob_signer)
+        .build()
         .await
         .expect("should create write");
 

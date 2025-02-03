@@ -29,7 +29,7 @@ async fn configure() {
             protocol: "chat".to_string(),
             limited_to: None,
         });
-    let grant_to_appx = builder.build(&alice_signer).await.expect("should create grant");
+    let grant_to_appx = builder.sign(&alice_signer).build().await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob creates a RecordsWrite message
@@ -50,7 +50,7 @@ async fn configure() {
     // App X signs over Bob's RecordsWrite as owner but does
     // not include the delegated grant (removed below)
     // --------------------------------------------------
-    // TODO: look at merging the `DelegatedGrant` into `Write`
+    // LATER: investigate merging `DelegatedGrant` into `Write`
     let delegated_grant = DelegatedGrant {
         authorization: Box::new(grant_to_appx.authorization),
         descriptor: grant_to_appx.descriptor,

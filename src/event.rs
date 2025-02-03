@@ -100,7 +100,6 @@ impl SubscribeFilter {
     }
 }
 
-// TODO: move this close to RecordsFilter
 impl RecordsFilter {
     /// Determine whether the specified `Entry` matches the filter.
     #[allow(clippy::cognitive_complexity)]
