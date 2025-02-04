@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, Protocol};
+use crate::permissions;
+use crate::records::protocol::Protocol;
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::{Delete, RecordsFilter, Write, write};
 use crate::store::{self, RecordsQueryBuilder};

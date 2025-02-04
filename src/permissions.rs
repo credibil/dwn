@@ -8,13 +8,11 @@
 //! undertake the message's action(s).
 
 mod grant;
-mod protocol;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Conditions, Grant, GrantData, Publication, RequestData, RevocationData};
-pub use self::protocol::Protocol;
 use crate::protocols::{GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH};
 use crate::provider::MessageStore;
 use crate::records::{RecordsFilter, Write};

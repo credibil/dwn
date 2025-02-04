@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{Grant, Protocol};
+use crate::permissions::Grant;
 use crate::provider::{MessageStore, Provider};
+use crate::records::protocol::Protocol;
 use crate::records::{RecordsFilter, Write};
 use crate::store::{self, Cursor, Pagination, RecordsQueryBuilder, Sort};
 use crate::utils::cid;

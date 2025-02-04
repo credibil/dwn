@@ -10,9 +10,10 @@ use serde::{Deserialize, Serialize};
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::event::{SubscribeFilter, Subscriber};
-use crate::permissions::{Grant, Protocol};
+use crate::permissions::Grant;
 use crate::provider::{EventStream, Provider};
 use crate::records::RecordsFilter;
+use crate::records::protocol::Protocol;
 use crate::utils::cid;
 use crate::{Descriptor, OneOrMany, Result, forbidden};
 

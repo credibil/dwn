@@ -4,7 +4,8 @@
 
 mod delete;
 mod encryption;
-pub mod integrity;
+mod integrity;
+mod protocol;
 mod query;
 mod read;
 mod subscribe;
