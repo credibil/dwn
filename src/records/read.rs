@@ -238,9 +238,10 @@ impl Read {
 
         // verify protocol role and action
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol =
-                protocol::Authorizer::new(protocol).context_id(write.context_id.as_ref());
-            protocol.permit_read(owner, self, write, store).await?;
+            let protocol = protocol::Authorizer::new(protocol)
+                .context_id(write.context_id.as_ref())
+                .initial_write(write);
+            protocol.permit_read(owner, self, store).await?;
             return Ok(());
         }
 

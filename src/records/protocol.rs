@@ -17,6 +17,7 @@ use crate::{Result, forbidden};
 pub struct Authorizer<'a> {
     protocol: &'a str,
     context_id: Option<&'a String>,
+    initial_write: Option<&'a Write>,
 }
 
 // TODO: use typestate builder pattern to enforce correct usage for each record
@@ -24,10 +25,11 @@ pub struct Authorizer<'a> {
 impl<'a> Authorizer<'a> {
     /// Create a new `Authorizer` instance for the specified protocol.
     #[must_use]
-    pub const fn new(protocol: &'a str) -> Self {
+    pub fn new(protocol: &'a str) -> Self {
         Self {
             protocol,
             context_id: None,
+            initial_write: None,
         }
     }
 
@@ -35,6 +37,13 @@ impl<'a> Authorizer<'a> {
     #[must_use]
     pub const fn context_id(mut self, context_id: Option<&'a String>) -> Self {
         self.context_id = context_id;
+        self
+    }
+
+    /// The initial Write to use with `permit_read` and `permit_delete`.
+    #[must_use]
+    pub fn initial_write(mut self, initial_write: &'a Write) -> Self {
+        self.initial_write = Some(initial_write);
         self
     }
 }
@@ -53,10 +62,13 @@ impl Authorizer<'_> {
 
     /// Authorizer-based authorization for [`Query`] and [`Read`] messages.
     pub async fn permit_read(
-        &self, owner: &str, read: &Read, write: &Write, store: &impl MessageStore,
+        &self, owner: &str, read: &Read, store: &impl MessageStore,
     ) -> Result<()> {
         // Read record does not contain protocol information so we get it from
         // the initial write record.
+        let Some(write) = self.initial_write else {
+            return Err(forbidden!("missing initial write record"));
+        };
         let write_record: Record = write.into();
         let rule_set = write_record.rule_set(owner, store).await?;
         let record = read.into();
@@ -92,8 +104,11 @@ impl Authorizer<'_> {
 
     /// Authorizer-based authorization for [`Delete`] messages.
     pub async fn permit_delete(
-        &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
+        &self, owner: &str, delete: &Delete, store: &impl MessageStore,
     ) -> Result<()> {
+        let Some(write) = self.initial_write else {
+            return Err(forbidden!("missing initial write record"));
+        };
         let write_record: Record = write.into();
         let rule_set = write_record.rule_set(owner, store).await?;
         let record = delete.into();

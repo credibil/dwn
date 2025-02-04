@@ -179,9 +179,10 @@ impl Delete {
         }
 
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol =
-                protocol::Authorizer::new(protocol).context_id(write.context_id.as_ref());
-            return protocol.permit_delete(owner, self, write, store).await;
+            let protocol = protocol::Authorizer::new(protocol)
+                .context_id(write.context_id.as_ref())
+                .initial_write(write);
+            return protocol.permit_delete(owner, self, store).await;
         }
 
         Err(forbidden!("delete request failed authorization"))
