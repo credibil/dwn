@@ -11,7 +11,7 @@ use crate::protocols::{Configure, ProtocolsFilter};
 use crate::provider::{MessageStore, Provider};
 use crate::store::{Cursor, ProtocolsQueryBuilder};
 use crate::utils::cid;
-use crate::{Descriptor, Result, permissions, utils};
+use crate::{Descriptor, Result, grants, utils};
 
 // Access level for query.
 #[derive(PartialEq, PartialOrd)]
@@ -125,7 +125,7 @@ impl Query {
         };
 
         // verify permission grant
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        let grant = grants::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // if set, query and grant protocols need to match

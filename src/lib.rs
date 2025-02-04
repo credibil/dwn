@@ -21,7 +21,7 @@ pub mod event;
 pub mod hd_key;
 pub mod interfaces;
 mod messages;
-mod permissions;
+mod grants;
 mod protocols;
 pub mod provider;
 mod records;

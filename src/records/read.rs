@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions;
+use crate::grants;
 use crate::records::protocol::Protocol;
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::{Delete, RecordsFilter, Write, write};
@@ -233,7 +233,7 @@ impl Read {
 
         // verify grant
         if let Some(grant_id) = &authzn.payload()?.permission_grant_id {
-            let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+            let grant = grants::fetch_grant(owner, grant_id, store).await?;
             grant.permit_read(owner, &author, self, write, store).await?;
             return Ok(());
         }

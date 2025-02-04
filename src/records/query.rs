@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::Grant;
+use crate::grants::Grant;
 use crate::provider::{MessageStore, Provider};
 use crate::records::protocol::Protocol;
 use crate::records::{RecordsFilter, Write};

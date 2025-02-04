@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde_json::json;
 
-use crate::permissions::{self, GrantData, RequestData, RevocationData, Scope};
+use crate::grants::{self, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{
     self, Definition, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
@@ -266,7 +266,7 @@ async fn check_revoke(owner: &str, write: &Write, store: &impl MessageStore) -> 
         let Some(parent_id) = &write.descriptor.parent_id else {
             return Err(forbidden!("missing `parent_id`"));
         };
-        let grant = permissions::fetch_grant(owner, parent_id, store).await?;
+        let grant = grants::fetch_grant(owner, parent_id, store).await?;
 
         // compare revocation message protocol and grant scope protocol
         if let Some(tags) = &write.descriptor.tags {

@@ -16,7 +16,7 @@ use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{Authorization, JwsPayload};
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, Grant};
+use crate::grants::{self, Grant};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::protocol::Protocol;
@@ -369,7 +369,7 @@ impl Write {
         let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
         let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
-            let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+            let grant = grants::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
         }
 
@@ -542,7 +542,7 @@ impl Write {
         let Some(grant_id) = &self.descriptor.parent_id else {
             return Err(unexpected!("missing `parent_id`"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
 
         // verify protocols match
         if let Some(tags) = &self.descriptor.tags {
