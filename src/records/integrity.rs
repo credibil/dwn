@@ -10,7 +10,7 @@ use serde_json::json;
 use crate::grants::{self, GrantData, RequestData, RevocationData, Scope};
 use crate::protocols::{self, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet};
 use crate::provider::MessageStore;
-use crate::records::{RecordsFilter, Write, protocol};
+use crate::records::{RecordsFilter, Write};
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden, schema, unexpected};
 
@@ -20,11 +20,11 @@ impl Write {
         let Some(protocol) = &self.descriptor.protocol else {
             return Err(forbidden!("missing protocol"));
         };
-        let definition = protocol::definition(owner, protocol, store).await?;
+        let definition = protocols::definition(owner, protocol, store).await?;
         let Some(protocol_path) = &self.descriptor.protocol_path else {
             return Err(forbidden!("missing protocol"));
         };
-        let Some(rule_set) = protocol::rule_set(protocol_path, &definition.structure) else {
+        let Some(rule_set) = protocols::rule_set(protocol_path, &definition.structure) else {
             return Err(forbidden!("invalid protocol path"));
         };
 
@@ -226,27 +226,20 @@ impl Write {
     }
 
     fn verify_tags(&self, rule_set: &RuleSet) -> Result<()> {
-        let tags = self.descriptor.tags.as_ref();
-
-        let Some(rule_set_tags) = &rule_set.tags else {
+        let Some(rule_tags) = &rule_set.tags else {
             return Ok(());
         };
 
-        let additional_properties = rule_set_tags.allow_undefined.unwrap_or_default();
-        let required_default = vec![];
-        let required = rule_set_tags.required.as_ref().unwrap_or(&required_default);
-        let properties = &rule_set_tags.undefined;
-
+        // build schema from rule set tags
         let schema = json!({
             "type": "object",
-            "properties": properties,
-            "required": required,
-            "additionalProperties": additional_properties,
+            "properties": rule_tags.undefined,
+            "required": rule_tags.required.clone().unwrap_or_default(),
+            "additionalProperties": rule_tags.allow_undefined.unwrap_or_default(),
         });
 
         // validate tags against schema
-        let instance = serde_json::to_value(tags)?;
-        if !jsonschema::is_valid(&schema, &instance) {
+        if !jsonschema::is_valid(&schema, &serde_json::to_value(&self.descriptor.tags)?) {
             return Err(forbidden!("tags do not match schema"));
         }
 

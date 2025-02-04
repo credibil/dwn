@@ -16,7 +16,7 @@ pub use self::configure::{
 };
 pub use self::query::{Query, QueryDescriptor};
 use crate::provider::MessageStore;
-use crate::{Result, store};
+use crate::{Result, forbidden, store, utils};
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL_URI: &str = "https://vercre.website/dwn/permissions";
@@ -128,4 +128,32 @@ pub async fn fetch_config(
     }
 
     Ok(Some(entries))
+}
+
+// Fetches the protocol definition for the the protocol specified in the message.
+pub async fn definition(
+    owner: &str, protocol_uri: &str, store: &impl MessageStore,
+) -> Result<Definition> {
+    let protocol_uri = utils::uri::clean(protocol_uri)?;
+
+    // use default definition if first-class protocol
+    if protocol_uri == PROTOCOL_URI {
+        return Ok(DEFINITION.clone());
+    }
+
+    let Some(protocols) = fetch_config(owner, Some(protocol_uri), store).await? else {
+        return Err(forbidden!("unable to find protocol definition"));
+    };
+    if protocols.is_empty() {
+        return Err(forbidden!("unable to find protocol definition"));
+    }
+
+    Ok(protocols[0].descriptor.definition.clone())
+}
+
+pub fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {
+    let Some((type_name, protocol_path)) = protocol_path.split_once('/') else {
+        return structure.get(protocol_path).cloned();
+    };
+    rule_set(protocol_path, &structure.get(type_name)?.structure)
 }

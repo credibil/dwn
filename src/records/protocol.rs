@@ -5,14 +5,12 @@
 //!
 //! This module provides the logic to enforce these permissions.
 
-use std::collections::BTreeMap;
-
 use crate::authorization::Authorization;
-use crate::protocols::{self, Action, ActionRule, Actor, Definition, RuleSet};
+use crate::protocols::{self, Action, ActionRule, Actor, RuleSet};
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, write};
 use crate::store::RecordsQueryBuilder;
-use crate::{Result, forbidden, utils};
+use crate::{Result, forbidden};
 
 /// [`Protocol`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.
@@ -21,7 +19,7 @@ pub struct Protocol<'a> {
     context_id: Option<&'a String>,
 }
 
-// FIXME: use typestate builder pattern to enforce correct usage for each record
+// TODO: use typestate builder pattern to enforce correct usage for each record
 // type and reduce args passed to permit_* methods
 impl<'a> Protocol<'a> {
     /// Create a new `Protocol` instance.
@@ -124,9 +122,9 @@ impl Record {
         };
 
         let protocol = self.protocol()?;
-        let definition = definition(owner, protocol, store).await?;
+        let definition = protocols::definition(owner, protocol, store).await?;
 
-        let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
+        let Some(rule_set) = protocols::rule_set(protocol_path, &definition.structure) else {
             return Err(forbidden!("invalid protocol path"));
         };
 
@@ -144,7 +142,7 @@ impl Protocol<'_> {
         let rule_set = record.rule_set(owner, store).await?;
 
         self.allow_role(owner, &record, record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for [`Query`] and [`Read`] messages.
@@ -161,8 +159,8 @@ impl Protocol<'_> {
 
         self.allow_role(owner, &read_record, write_record.protocol()?, store).await?;
 
-        // FIXME: pass ancestor_chain to `allow_action` method
-        self.allow_action(owner, &read_record, &rule_set, store).await
+        // FIXME: pass ancestor_chain to `permit_action` method
+        self.permit_action(owner, &read_record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for [`Query`] messages.
@@ -173,7 +171,7 @@ impl Protocol<'_> {
         let rule_set = record.rule_set(owner, store).await?;
 
         self.allow_role(owner, &record, record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for [`Subscribe`] messages.
@@ -184,7 +182,7 @@ impl Protocol<'_> {
         let rule_set = record.rule_set(owner, store).await?;
 
         self.allow_role(owner, &record, record.protocol()?, store).await?;
-        self.allow_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, &rule_set, store).await
     }
 
     /// Protocol-based authorization for [`Delete`] messages.
@@ -196,7 +194,7 @@ impl Protocol<'_> {
         let rule_set = write_record.rule_set(owner, store).await?;
 
         self.allow_role(owner, &delete_record, write_record.protocol()?, store).await?;
-        self.allow_action(owner, &delete_record, &rule_set, store).await
+        self.permit_action(owner, &delete_record, &rule_set, store).await
     }
 
     // Check if the incoming message is invoking a role. If so, verify the invoked role.
@@ -211,8 +209,8 @@ impl Protocol<'_> {
             return Ok(());
         };
 
-        let definition = definition(owner, protocol, store).await?;
-        let Some(role_rule_set) = rule_set(&protocol_role, &definition.structure) else {
+        let definition = protocols::definition(owner, protocol, store).await?;
+        let Some(role_rule_set) = protocols::rule_set(&protocol_role, &definition.structure) else {
             return Err(forbidden!("no rule set defined for invoked role"));
         };
         if !role_rule_set.role.unwrap_or_default() {
@@ -252,7 +250,7 @@ impl Protocol<'_> {
 
     // Verifies the given message is authorized by one of the action rules in the
     // given protocol rule set.
-    async fn allow_action(
+    async fn permit_action(
         &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
     ) -> Result<()> {
         // build chain of ancestor records
@@ -278,14 +276,14 @@ impl Protocol<'_> {
         };
         let author = authzn.author()?;
         let invoked_role = authzn.payload()?.protocol_role;
-        let allowed_actions = self.allowed_actions(owner, record, store).await?;
+        let permitted_actions = self.permitted_actions(owner, record, store).await?;
         let Some(action_rules) = &rule_set.actions else {
             return Err(forbidden!("no rule defined for action"));
         };
 
         // find a rule that authorizes the incoming message
         for rule in action_rules {
-            if !rule.can.iter().any(|action| allowed_actions.contains(action)) {
+            if !rule.can.iter().any(|action| permitted_actions.contains(action)) {
                 continue;
             }
             if rule.who == Some(Actor::Anyone) {
@@ -315,7 +313,7 @@ impl Protocol<'_> {
             }
 
             // is actor allowed by the current action rule?
-            if check_actor(&author, rule, &ancestor_chain)? {
+            if permit_actor(&author, rule, &ancestor_chain)? {
                 return Ok(());
             }
         }
@@ -350,7 +348,7 @@ impl Protocol<'_> {
 
     // Match `Action`s that authorize the incoming message.
     // N.B. keep in mind an author's 'write' access may be revoked.
-    async fn allowed_actions(
+    async fn permitted_actions(
         &self, owner: &str, record: &Record, store: &impl MessageStore,
     ) -> Result<Vec<Action>> {
         match record {
@@ -400,7 +398,7 @@ impl Protocol<'_> {
 }
 
 // Checks for a match with the `who` rule in record chain.
-fn check_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write]) -> Result<bool> {
+fn permit_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write]) -> Result<bool> {
     // find a message with matching protocolPath
     let ancestor =
         ancestor_chain.iter().find(|write| write.descriptor.protocol_path == action_rule.of);
@@ -413,32 +411,4 @@ fn check_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write])
         return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
     }
     Ok(author == ancestor.authorization.author()?)
-}
-
-// Fetches the protocol definition for the the protocol specified in the message.
-pub async fn definition(
-    owner: &str, protocol_uri: &str, store: &impl MessageStore,
-) -> Result<Definition> {
-    let protocol_uri = utils::uri::clean(protocol_uri)?;
-
-    // use default definition if first-class protocol
-    if protocol_uri == protocols::PROTOCOL_URI {
-        return Ok(protocols::DEFINITION.clone());
-    }
-
-    let Some(protocols) = protocols::fetch_config(owner, Some(protocol_uri), store).await? else {
-        return Err(forbidden!("unable to find protocol definition"));
-    };
-    if protocols.is_empty() {
-        return Err(forbidden!("unable to find protocol definition"));
-    }
-
-    Ok(protocols[0].descriptor.definition.clone())
-}
-
-pub fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {
-    let Some((type_name, protocol_path)) = protocol_path.split_once('/') else {
-        return structure.get(protocol_path).cloned();
-    };
-    rule_set(protocol_path, &structure.get(type_name)?.structure)
 }
