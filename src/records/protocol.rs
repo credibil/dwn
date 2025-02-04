@@ -51,7 +51,7 @@ impl<'a> Authorizer<'a> {
 impl Authorizer<'_> {
     /// Authorizer-based authorization for [`Write`] messages.
     pub async fn permit_write(
-        &self, owner: &str, write: &Write, store: &impl MessageStore,
+        &self, owner: &str, write: impl Into<Record>, store: &impl MessageStore,
     ) -> Result<()> {
         let record = write.into();
         self.permit_role(owner, &record, store).await?;
@@ -60,7 +60,7 @@ impl Authorizer<'_> {
 
     /// Authorizer-based authorization for [`Query`] and [`Read`] messages.
     pub async fn permit_read(
-        &self, owner: &str, read: &Read, store: &impl MessageStore,
+        &self, owner: &str, read: impl Into<Record>, store: &impl MessageStore,
     ) -> Result<()> {
         let record = read.into();
         self.permit_role(owner, &record, store).await?;
@@ -69,7 +69,7 @@ impl Authorizer<'_> {
 
     /// Authorizer-based authorization for [`Query`] messages.
     pub async fn permit_query(
-        &self, owner: &str, query: &Query, store: &impl MessageStore,
+        &self, owner: &str, query: impl Into<Record>, store: &impl MessageStore,
     ) -> Result<()> {
         let record = query.into();
         self.permit_role(owner, &record, store).await?;
@@ -78,7 +78,7 @@ impl Authorizer<'_> {
 
     /// Authorizer-based authorization for [`Subscribe`] messages.
     pub async fn permit_subscribe(
-        &self, owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
+        &self, owner: &str, subscribe: impl Into<Record>, store: &impl MessageStore,
     ) -> Result<()> {
         let record = subscribe.into();
         self.permit_role(owner, &record, store).await?;
@@ -87,7 +87,7 @@ impl Authorizer<'_> {
 
     /// Authorizer-based authorization for [`Delete`] messages.
     pub async fn permit_delete(
-        &self, owner: &str, delete: &Delete, store: &impl MessageStore,
+        &self, owner: &str, delete: impl Into<Record>, store: &impl MessageStore,
     ) -> Result<()> {
         let record = delete.into();
         self.permit_role(owner, &record, store).await?;
@@ -321,7 +321,7 @@ fn permit_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write]
 
 /// Wrap Records interface messages into a common enum to allow for reuse of
 /// authorization checks.
-enum Record {
+pub enum Record {
     Write(Write),
     Read(Read),
     Query(Query),
