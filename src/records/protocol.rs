@@ -47,7 +47,7 @@ impl Authorizer<'_> {
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.permit_role(owner, &record, record.protocol()?, store).await?;
+        self.permit_role(owner, &record, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
@@ -64,7 +64,7 @@ impl Authorizer<'_> {
         // FIXME: pass ancestor_chain to `permit_action` method
         // let ancestor_chain = self.ancestor_chain(owner, &write.record_id, store).await?;
 
-        self.permit_role(owner, &record, write_record.protocol()?, store).await?;
+        self.permit_role(owner, &record, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
@@ -75,7 +75,7 @@ impl Authorizer<'_> {
         let record: Record = query.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.permit_role(owner, &record, record.protocol()?, store).await?;
+        self.permit_role(owner, &record, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
@@ -86,7 +86,7 @@ impl Authorizer<'_> {
         let record: Record = subscribe.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.permit_role(owner, &record, record.protocol()?, store).await?;
+        self.permit_role(owner, &record, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
@@ -98,7 +98,7 @@ impl Authorizer<'_> {
         let rule_set = write_record.rule_set(owner, store).await?;
         let record = delete.into();
 
-        self.permit_role(owner, &record, write_record.protocol()?, store).await?;
+        self.permit_role(owner, &record, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 }
@@ -106,7 +106,7 @@ impl Authorizer<'_> {
 impl Authorizer<'_> {
     // Check if the incoming message is invoking a role. If so, verify the invoked role.
     async fn permit_role(
-        &self, owner: &str, record: &Record, protocol: &str, store: &impl MessageStore,
+        &self, owner: &str, record: &Record, store: &impl MessageStore,
     ) -> Result<()> {
         let Some(authzn) = record.authorization() else {
             return Err(forbidden!("missing authorization"));
@@ -116,7 +116,7 @@ impl Authorizer<'_> {
             return Ok(());
         };
 
-        let definition = protocols::definition(owner, protocol, store).await?;
+        let definition = protocols::definition(owner, self.protocol, store).await?;
         let Some(role_rule_set) = protocols::rule_set(&protocol_role, &definition.structure) else {
             return Err(forbidden!("no rule set defined for invoked role"));
         };
