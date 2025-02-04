@@ -11,13 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::grants;
-use crate::records::protocol::Protocol;
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::{Delete, RecordsFilter, Write, write};
+use crate::records::{Delete, RecordsFilter, Write, protocol, write};
 use crate::store::{self, RecordsQueryBuilder};
 use crate::utils::cid;
-use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
+use crate::{Descriptor, Error, Method, Result, forbidden, grants, unexpected};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -240,7 +238,8 @@ impl Read {
 
         // verify protocol role and action
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = Protocol::new(protocol).context_id(write.context_id.as_ref());
+            let protocol =
+                protocol::Permission::new(protocol).context_id(write.context_id.as_ref());
             protocol.permit_read(owner, self, write, store).await?;
             return Ok(());
         }

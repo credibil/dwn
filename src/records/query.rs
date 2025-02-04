@@ -11,8 +11,7 @@ use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::Grant;
 use crate::provider::{MessageStore, Provider};
-use crate::records::protocol::Protocol;
-use crate::records::{RecordsFilter, Write};
+use crate::records::{RecordsFilter, Write, protocol};
 use crate::store::{self, Cursor, Pagination, RecordsQueryBuilder, Sort};
 use crate::utils::cid;
 use crate::{Descriptor, Result, forbidden, unexpected, utils};
@@ -186,8 +185,8 @@ impl Query {
             }
 
             // verify protocol role is authorized
-            let verifier =
-                Protocol::new(protocol).context_id(self.descriptor.filter.context_id.as_ref());
+            let verifier = protocol::Permission::new(protocol)
+                .context_id(self.descriptor.filter.context_id.as_ref());
             return verifier.permit_query(owner, self, provider).await;
         }
 

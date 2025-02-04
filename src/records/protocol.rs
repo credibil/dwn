@@ -1,6 +1,6 @@
-//! # Protocol-based Permissions
+//! # Permission-based Permissions
 //!
-//! Protocol-based permissions are a way to configure access control for DWN
+//! Permission-based permissions are a way to configure access control for DWN
 //! users based on the protocol used in their interactions (messages).
 //!
 //! This module provides the logic to enforce these permissions.
@@ -12,17 +12,17 @@ use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, write
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden};
 
-/// [`Protocol`] holds protocol-related information required during the process
+/// [`Permission`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.
-pub struct Protocol<'a> {
+pub struct Permission<'a> {
     protocol: &'a str,
     context_id: Option<&'a String>,
 }
 
 // TODO: use typestate builder pattern to enforce correct usage for each record
 // type and reduce args passed to permit_* methods
-impl<'a> Protocol<'a> {
-    /// Create a new `Protocol` instance.
+impl<'a> Permission<'a> {
+    /// Create a new `Permission` instance.
     #[must_use]
     pub const fn new(protocol: &'a str) -> Self {
         Self {
@@ -132,21 +132,21 @@ impl Record {
     }
 }
 
-impl Protocol<'_> {
-    /// Protocol-based authorization for [`Write`] messages.
-    pub(crate) async fn permit_write(
+impl Permission<'_> {
+    /// Permission-based authorization for [`Write`] messages.
+    pub async fn permit_write(
         &self, owner: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
         // get permitted roles
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.permit_role(owner, &record, record.protocol()?, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
-    /// Protocol-based authorization for [`Query`] and [`Read`] messages.
-    pub(crate) async fn permit_read(
+    /// Permission-based authorization for [`Query`] and [`Read`] messages.
+    pub async fn permit_read(
         &self, owner: &str, read: &Read, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
         // Read record does not contain protocol information so we get it from
@@ -157,48 +157,48 @@ impl Protocol<'_> {
 
         let read_record: Record = read.into();
 
-        self.allow_role(owner, &read_record, write_record.protocol()?, store).await?;
+        self.permit_role(owner, &read_record, write_record.protocol()?, store).await?;
 
         // FIXME: pass ancestor_chain to `permit_action` method
         self.permit_action(owner, &read_record, &rule_set, store).await
     }
 
-    /// Protocol-based authorization for [`Query`] messages.
-    pub(crate) async fn permit_query(
+    /// Permission-based authorization for [`Query`] messages.
+    pub async fn permit_query(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
         let record: Record = query.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.permit_role(owner, &record, record.protocol()?, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
-    /// Protocol-based authorization for [`Subscribe`] messages.
-    pub(crate) async fn permit_subscribe(
+    /// Permission-based authorization for [`Subscribe`] messages.
+    pub async fn permit_subscribe(
         &self, owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
         let record: Record = subscribe.into();
         let rule_set = record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &record, record.protocol()?, store).await?;
+        self.permit_role(owner, &record, record.protocol()?, store).await?;
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
-    /// Protocol-based authorization for [`Delete`] messages.
-    pub(crate) async fn permit_delete(
+    /// Permission-based authorization for [`Delete`] messages.
+    pub async fn permit_delete(
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
         let write_record: Record = write.into();
         let delete_record = delete.into();
         let rule_set = write_record.rule_set(owner, store).await?;
 
-        self.allow_role(owner, &delete_record, write_record.protocol()?, store).await?;
+        self.permit_role(owner, &delete_record, write_record.protocol()?, store).await?;
         self.permit_action(owner, &delete_record, &rule_set, store).await
     }
 
     // Check if the incoming message is invoking a role. If so, verify the invoked role.
-    async fn allow_role(
+    async fn permit_role(
         &self, owner: &str, record: &Record, protocol: &str, store: &impl MessageStore,
     ) -> Result<()> {
         let Some(authzn) = record.authorization() else {

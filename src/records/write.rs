@@ -19,8 +19,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::grants::{self, Grant};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::protocol::Protocol;
-use crate::records::{DateRange, EncryptionProperty, RecordsFilter};
+use crate::records::{DateRange, EncryptionProperty, RecordsFilter, protocol};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
@@ -375,7 +374,7 @@ impl Write {
 
         // protocol-specific authorization
         if let Some(protocol) = &self.descriptor.protocol {
-            let protocol = Protocol::new(protocol).context_id(self.context_id.as_ref());
+            let protocol = protocol::Permission::new(protocol).context_id(self.context_id.as_ref());
             return protocol.permit_write(owner, self, store).await;
         }
 

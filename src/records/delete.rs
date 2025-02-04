@@ -18,8 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::protocol::Protocol;
-use crate::records::{RecordsFilter, Write};
+use crate::records::{RecordsFilter, Write, protocol};
 use crate::store::{Entry, EntryType, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
 use crate::utils::cid;
@@ -180,7 +179,7 @@ impl Delete {
         }
 
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = Protocol::new(protocol).context_id(write.context_id.as_ref());
+            let protocol = protocol::Permission::new(protocol).context_id(write.context_id.as_ref());
             return protocol.permit_delete(owner, self, write, store).await;
         }
 
