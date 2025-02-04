@@ -20,7 +20,7 @@ use crate::grants::{self, Grant};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::records::protocol::Protocol;
-use crate::records::{DateRange, EncryptionProperty, RecordsFilter, integrity};
+use crate::records::{DateRange, EncryptionProperty, RecordsFilter};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
@@ -401,7 +401,7 @@ impl Write {
 
         // verify integrity of messages with protocol
         if self.descriptor.protocol.is_some() {
-            integrity::verify(owner, self, provider).await?;
+            self.verify(owner, provider).await?;
         }
 
         let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)
@@ -480,7 +480,7 @@ impl Write {
 
             // write record is a grant
             if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-                integrity::verify_schema(self, &data_bytes)?;
+                self.verify_schema(&data_bytes)?;
             }
         } else {
             // store data in DataStore

@@ -5,12 +5,14 @@
 //!
 //! This module provides the logic to enforce these permissions.
 
+use std::collections::BTreeMap;
+
 use crate::authorization::Authorization;
-use crate::protocols::{Action, ActionRule, Actor, RuleSet};
+use crate::protocols::{self, Action, ActionRule, Actor, Definition, RuleSet};
 use crate::provider::MessageStore;
-use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, integrity, write};
+use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, write};
 use crate::store::RecordsQueryBuilder;
-use crate::{Result, forbidden};
+use crate::{Result, forbidden, utils};
 
 /// [`Protocol`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.
@@ -122,9 +124,9 @@ impl Record {
         };
 
         let protocol = self.protocol()?;
-        let definition = integrity::protocol_definition(owner, protocol, store).await?;
+        let definition = definition(owner, protocol, store).await?;
 
-        let Some(rule_set) = integrity::rule_set(protocol_path, &definition.structure) else {
+        let Some(rule_set) = rule_set(protocol_path, &definition.structure) else {
             return Err(forbidden!("invalid protocol path"));
         };
 
@@ -209,8 +211,8 @@ impl Protocol<'_> {
             return Ok(());
         };
 
-        let definition = integrity::protocol_definition(owner, protocol, store).await?;
-        let Some(role_rule_set) = integrity::rule_set(&protocol_role, &definition.structure) else {
+        let definition = definition(owner, protocol, store).await?;
+        let Some(role_rule_set) = rule_set(&protocol_role, &definition.structure) else {
             return Err(forbidden!("no rule set defined for invoked role"));
         };
         if !role_rule_set.role.unwrap_or_default() {
@@ -411,4 +413,32 @@ fn check_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write])
         return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
     }
     Ok(author == ancestor.authorization.author()?)
+}
+
+// Fetches the protocol definition for the the protocol specified in the message.
+pub async fn definition(
+    owner: &str, protocol_uri: &str, store: &impl MessageStore,
+) -> Result<Definition> {
+    let protocol_uri = utils::uri::clean(protocol_uri)?;
+
+    // use default definition if first-class protocol
+    if protocol_uri == protocols::PROTOCOL_URI {
+        return Ok(protocols::DEFINITION.clone());
+    }
+
+    let Some(protocols) = protocols::fetch_config(owner, Some(protocol_uri), store).await? else {
+        return Err(forbidden!("unable to find protocol definition"));
+    };
+    if protocols.is_empty() {
+        return Err(forbidden!("unable to find protocol definition"));
+    }
+
+    Ok(protocols[0].descriptor.definition.clone())
+}
+
+pub fn rule_set(protocol_path: &str, structure: &BTreeMap<String, RuleSet>) -> Option<RuleSet> {
+    let Some((type_name, protocol_path)) = protocol_path.split_once('/') else {
+        return structure.get(protocol_path).cloned();
+    };
+    rule_set(protocol_path, &structure.get(type_name)?.structure)
 }
