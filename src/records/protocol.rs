@@ -25,7 +25,7 @@ pub struct Authorizer<'a> {
 impl<'a> Authorizer<'a> {
     /// Create a new `Authorizer` instance for the specified protocol.
     #[must_use]
-    pub fn new(protocol: &'a str) -> Self {
+    pub const fn new(protocol: &'a str) -> Self {
         Self {
             protocol,
             context_id: None,
@@ -42,7 +42,7 @@ impl<'a> Authorizer<'a> {
 
     /// The initial Write to use with `permit_read` and `permit_delete`.
     #[must_use]
-    pub fn initial_write(mut self, initial_write: &'a Write) -> Self {
+    pub const fn initial_write(mut self, initial_write: &'a Write) -> Self {
         self.initial_write = Some(initial_write);
         self
     }
