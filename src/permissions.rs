@@ -14,9 +14,10 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
 
 pub use self::grant::{Conditions, Grant, GrantData, Publication, RequestData, RevocationData};
-pub use self::protocol::{Protocol, fetch_scope};
+pub use self::protocol::Protocol;
+use crate::protocols::{GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH};
 use crate::provider::MessageStore;
-use crate::records::RecordsFilter;
+use crate::records::{RecordsFilter, Write};
 use crate::store::RecordsQueryBuilder;
 use crate::{Interface, Method, Result, forbidden};
 
@@ -49,6 +50,41 @@ pub async fn fetch_grant(owner: &str, grant_id: &str, store: &impl MessageStore)
         date_granted: desc.date_created,
         data: grant,
     })
+}
+
+/// Get the scope for a permission record. If the record is a revocation, the
+/// scope is fetched from the grant that is being revoked.
+pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) -> Result<Scope> {
+    if write.descriptor.protocol.as_deref() != Some(PROTOCOL_URI) {
+        return Err(forbidden!("unexpected protocol for permission record"));
+    }
+    let Some(protocol_path) = &write.descriptor.protocol_path else {
+        return Err(forbidden!("missing `protocol_path`"));
+    };
+    let Some(encoded) = &write.encoded_data else {
+        return Err(forbidden!("missing grant data"));
+    };
+    let raw_bytes = Base64UrlUnpadded::decode_vec(encoded)?;
+
+    match protocol_path.as_str() {
+        REQUEST_PATH => {
+            let data: RequestData = serde_json::from_slice(&raw_bytes)?;
+            Ok(data.scope)
+        }
+        GRANT_PATH => {
+            let data: GrantData = serde_json::from_slice(&raw_bytes)?;
+            Ok(data.scope)
+        }
+        REVOCATION_PATH => {
+            let Some(parent_id) = &write.descriptor.parent_id else {
+                return Err(forbidden!("missing parent ID for revocation record"));
+            };
+            let grant = fetch_grant(owner, parent_id, store).await?;
+            Ok(grant.data.scope)
+        }
+
+        _ => Err(forbidden!("invalid `protocol_path`")),
+    }
 }
 
 /// The `Scope` enum specifies the interface-specific scope of a permission

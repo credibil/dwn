@@ -5,13 +5,8 @@
 //!
 //! This module provides the logic to enforce these permissions.
 
-use base64ct::{Base64UrlUnpadded, Encoding};
-
 use crate::authorization::Authorization;
-use crate::permissions::{self, GrantData, RequestData, Scope};
-use crate::protocols::{
-    Action, ActionRule, Actor, GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH, RuleSet,
-};
+use crate::protocols::{Action, ActionRule, Actor, RuleSet};
 use crate::provider::MessageStore;
 use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, integrity, write};
 use crate::store::RecordsQueryBuilder;
@@ -416,39 +411,4 @@ fn check_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write])
         return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
     }
     Ok(author == ancestor.authorization.author()?)
-}
-
-/// Get the scope for a permission record. If the record is a revocation, the
-/// scope is fetched from the grant that is being revoked.
-pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) -> Result<Scope> {
-    if write.descriptor.protocol.as_deref() != Some(PROTOCOL_URI) {
-        return Err(forbidden!("unexpected protocol for permission record"));
-    }
-    let Some(protocol_path) = &write.descriptor.protocol_path else {
-        return Err(forbidden!("missing `protocol_path`"));
-    };
-    let Some(encoded) = &write.encoded_data else {
-        return Err(forbidden!("missing grant data"));
-    };
-    let raw_bytes = Base64UrlUnpadded::decode_vec(encoded)?;
-
-    match protocol_path.as_str() {
-        REQUEST_PATH => {
-            let data: RequestData = serde_json::from_slice(&raw_bytes)?;
-            Ok(data.scope)
-        }
-        GRANT_PATH => {
-            let data: GrantData = serde_json::from_slice(&raw_bytes)?;
-            Ok(data.scope)
-        }
-        REVOCATION_PATH => {
-            let Some(parent_id) = &write.descriptor.parent_id else {
-                return Err(forbidden!("missing parent ID for revocation record"));
-            };
-            let grant = permissions::fetch_grant(owner, parent_id, store).await?;
-            Ok(grant.data.scope)
-        }
-
-        _ => Err(forbidden!("invalid `protocol_path`")),
-    }
 }
