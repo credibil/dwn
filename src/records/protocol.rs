@@ -44,7 +44,6 @@ impl Authorizer<'_> {
     pub async fn permit_write(
         &self, owner: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
-        // get permitted roles
         let record: Record = write.into();
         let rule_set = record.rule_set(owner, store).await?;
 
@@ -60,14 +59,13 @@ impl Authorizer<'_> {
         // the initial write record.
         let write_record: Record = write.into();
         let rule_set = write_record.rule_set(owner, store).await?;
-        // let ancestor_chain = self.ancestor_chain(owner, &write.record_id, store).await?;
-
-        let read_record: Record = read.into();
-
-        self.permit_role(owner, &read_record, write_record.protocol()?, store).await?;
+        let record = read.into();
 
         // FIXME: pass ancestor_chain to `permit_action` method
-        self.permit_action(owner, &read_record, &rule_set, store).await
+        // let ancestor_chain = self.ancestor_chain(owner, &write.record_id, store).await?;
+
+        self.permit_role(owner, &record, write_record.protocol()?, store).await?;
+        self.permit_action(owner, &record, &rule_set, store).await
     }
 
     /// Authorizer-based authorization for [`Query`] messages.
@@ -97,11 +95,11 @@ impl Authorizer<'_> {
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
         let write_record: Record = write.into();
-        let delete_record = delete.into();
         let rule_set = write_record.rule_set(owner, store).await?;
+        let record = delete.into();
 
-        self.permit_role(owner, &delete_record, write_record.protocol()?, store).await?;
-        self.permit_action(owner, &delete_record, &rule_set, store).await
+        self.permit_role(owner, &record, write_record.protocol()?, store).await?;
+        self.permit_action(owner, &record, &rule_set, store).await
     }
 }
 
@@ -403,14 +401,11 @@ impl Record {
         let Some(protocol_path) = &protocol_path else {
             return Err(forbidden!("missing protocol"));
         };
-
         let protocol = self.protocol()?;
         let definition = protocols::definition(owner, protocol, store).await?;
-
         let Some(rule_set) = protocols::rule_set(protocol_path, &definition.structure) else {
             return Err(forbidden!("invalid protocol path"));
         };
-
         Ok(rule_set)
     }
 }
