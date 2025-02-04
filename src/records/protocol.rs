@@ -39,99 +39,6 @@ impl<'a> Authorizer<'a> {
     }
 }
 
-/// Wrap Records interface messages into a common enum to allow for reuse of
-/// authorization checks.
-enum Record {
-    Write(Write),
-    Read(Read),
-    Query(Query),
-    Subscribe(Subscribe),
-    Delete(Delete),
-}
-
-impl From<&Write> for Record {
-    fn from(write: &Write) -> Self {
-        Self::Write(write.clone())
-    }
-}
-
-impl From<&Read> for Record {
-    fn from(read: &Read) -> Self {
-        Self::Read(read.clone())
-    }
-}
-
-impl From<&Query> for Record {
-    fn from(query: &Query) -> Self {
-        Self::Query(query.clone())
-    }
-}
-
-impl From<&Subscribe> for Record {
-    fn from(subscribe: &Subscribe) -> Self {
-        Self::Subscribe(subscribe.clone())
-    }
-}
-
-impl From<&Delete> for Record {
-    fn from(delete: &Delete) -> Self {
-        Self::Delete(delete.clone())
-    }
-}
-
-impl Record {
-    const fn authorization(&self) -> Option<&Authorization> {
-        match self {
-            Self::Write(write) => Some(&write.authorization),
-            Self::Read(read) => read.authorization.as_ref(),
-            Self::Delete(delete) => Some(&delete.authorization),
-            Self::Query(query) => query.authorization.as_ref(),
-            Self::Subscribe(subscribe) => subscribe.authorization.as_ref(),
-        }
-    }
-
-    fn protocol(&self) -> Result<&str> {
-        let protocol = match self {
-            Self::Write(write) => &write.descriptor.protocol,
-            Self::Read(read) => &read.descriptor.filter.protocol,
-            Self::Query(query) => &query.descriptor.filter.protocol,
-            Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol,
-            Self::Delete(_) => {
-                unimplemented!("delete's protocol is provided by initial write record");
-            }
-        };
-
-        let Some(protocol) = protocol else {
-            return Err(forbidden!("missing protocol"));
-        };
-        Ok(protocol)
-    }
-
-    async fn rule_set(&self, owner: &str, store: &impl MessageStore) -> Result<RuleSet> {
-        let protocol_path = match self {
-            Self::Write(write) => &write.descriptor.protocol_path,
-            Self::Query(query) => &query.descriptor.filter.protocol_path,
-            Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol_path,
-            Self::Read(_) | Self::Delete(_) => {
-                unimplemented!("protocol is provided by initial write record");
-            }
-        };
-
-        let Some(protocol_path) = &protocol_path else {
-            return Err(forbidden!("missing protocol"));
-        };
-
-        let protocol = self.protocol()?;
-        let definition = protocols::definition(owner, protocol, store).await?;
-
-        let Some(rule_set) = protocols::rule_set(protocol_path, &definition.structure) else {
-            return Err(forbidden!("invalid protocol path"));
-        };
-
-        Ok(rule_set)
-    }
-}
-
 impl Authorizer<'_> {
     /// Authorizer-based authorization for [`Write`] messages.
     pub async fn permit_write(
@@ -196,7 +103,9 @@ impl Authorizer<'_> {
         self.permit_role(owner, &delete_record, write_record.protocol()?, store).await?;
         self.permit_action(owner, &delete_record, &rule_set, store).await
     }
+}
 
+impl Authorizer<'_> {
     // Check if the incoming message is invoking a role. If so, verify the invoked role.
     async fn permit_role(
         &self, owner: &str, record: &Record, protocol: &str, store: &impl MessageStore,
@@ -411,4 +320,97 @@ fn permit_actor(author: &str, action_rule: &ActionRule, ancestor_chain: &[Write]
         return Ok(Some(author.to_owned()) == ancestor.descriptor.recipient);
     }
     Ok(author == ancestor.authorization.author()?)
+}
+
+/// Wrap Records interface messages into a common enum to allow for reuse of
+/// authorization checks.
+enum Record {
+    Write(Write),
+    Read(Read),
+    Query(Query),
+    Subscribe(Subscribe),
+    Delete(Delete),
+}
+
+impl From<&Write> for Record {
+    fn from(write: &Write) -> Self {
+        Self::Write(write.clone())
+    }
+}
+
+impl From<&Read> for Record {
+    fn from(read: &Read) -> Self {
+        Self::Read(read.clone())
+    }
+}
+
+impl From<&Query> for Record {
+    fn from(query: &Query) -> Self {
+        Self::Query(query.clone())
+    }
+}
+
+impl From<&Subscribe> for Record {
+    fn from(subscribe: &Subscribe) -> Self {
+        Self::Subscribe(subscribe.clone())
+    }
+}
+
+impl From<&Delete> for Record {
+    fn from(delete: &Delete) -> Self {
+        Self::Delete(delete.clone())
+    }
+}
+
+impl Record {
+    const fn authorization(&self) -> Option<&Authorization> {
+        match self {
+            Self::Write(write) => Some(&write.authorization),
+            Self::Read(read) => read.authorization.as_ref(),
+            Self::Delete(delete) => Some(&delete.authorization),
+            Self::Query(query) => query.authorization.as_ref(),
+            Self::Subscribe(subscribe) => subscribe.authorization.as_ref(),
+        }
+    }
+
+    fn protocol(&self) -> Result<&str> {
+        let protocol = match self {
+            Self::Write(write) => &write.descriptor.protocol,
+            Self::Read(read) => &read.descriptor.filter.protocol,
+            Self::Query(query) => &query.descriptor.filter.protocol,
+            Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol,
+            Self::Delete(_) => {
+                unimplemented!("delete's protocol is provided by initial write record");
+            }
+        };
+
+        let Some(protocol) = protocol else {
+            return Err(forbidden!("missing protocol"));
+        };
+        Ok(protocol)
+    }
+
+    async fn rule_set(&self, owner: &str, store: &impl MessageStore) -> Result<RuleSet> {
+        let protocol_path = match self {
+            Self::Write(write) => &write.descriptor.protocol_path,
+            Self::Query(query) => &query.descriptor.filter.protocol_path,
+            Self::Subscribe(subscribe) => &subscribe.descriptor.filter.protocol_path,
+            Self::Read(_) | Self::Delete(_) => {
+                unimplemented!("protocol is provided by initial write record");
+            }
+        };
+
+        let Some(protocol_path) = &protocol_path else {
+            return Err(forbidden!("missing protocol"));
+        };
+
+        let protocol = self.protocol()?;
+        let definition = protocols::definition(owner, protocol, store).await?;
+
+        let Some(rule_set) = protocols::rule_set(protocol_path, &definition.structure) else {
+            return Err(forbidden!("invalid protocol path"));
+        };
+
+        Ok(rule_set)
+    }
 }
