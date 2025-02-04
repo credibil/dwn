@@ -53,68 +53,45 @@ impl Authorizer<'_> {
     pub async fn permit_write(
         &self, owner: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
-        let record: Record = write.into();
-        let rule_set = record.rule_set(owner, store).await?;
-
+        let record = write.into();
         self.permit_role(owner, &record, store).await?;
-        self.permit_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, store).await
     }
 
     /// Authorizer-based authorization for [`Query`] and [`Read`] messages.
     pub async fn permit_read(
         &self, owner: &str, read: &Read, store: &impl MessageStore,
     ) -> Result<()> {
-        // Read record does not contain protocol information so we get it from
-        // the initial write record.
-        let Some(write) = self.initial_write else {
-            return Err(forbidden!("missing initial write record"));
-        };
-        let write_record: Record = write.into();
-        let rule_set = write_record.rule_set(owner, store).await?;
         let record = read.into();
-
-        // FIXME: pass ancestor_chain to `permit_action` method
-        // let ancestor_chain = self.ancestor_chain(owner, &write.record_id, store).await?;
-
         self.permit_role(owner, &record, store).await?;
-        self.permit_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, store).await
     }
 
     /// Authorizer-based authorization for [`Query`] messages.
     pub async fn permit_query(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
-        let record: Record = query.into();
-        let rule_set = record.rule_set(owner, store).await?;
-
+        let record = query.into();
         self.permit_role(owner, &record, store).await?;
-        self.permit_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, store).await
     }
 
     /// Authorizer-based authorization for [`Subscribe`] messages.
     pub async fn permit_subscribe(
         &self, owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
-        let record: Record = subscribe.into();
-        let rule_set = record.rule_set(owner, store).await?;
-
+        let record = subscribe.into();
         self.permit_role(owner, &record, store).await?;
-        self.permit_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, store).await
     }
 
     /// Authorizer-based authorization for [`Delete`] messages.
     pub async fn permit_delete(
         &self, owner: &str, delete: &Delete, store: &impl MessageStore,
     ) -> Result<()> {
-        let Some(write) = self.initial_write else {
-            return Err(forbidden!("missing initial write record"));
-        };
-        let write_record: Record = write.into();
-        let rule_set = write_record.rule_set(owner, store).await?;
         let record = delete.into();
-
         self.permit_role(owner, &record, store).await?;
-        self.permit_action(owner, &record, &rule_set, store).await
+        self.permit_action(owner, &record, store).await
     }
 }
 
@@ -173,8 +150,15 @@ impl Authorizer<'_> {
     // Verifies the given message is authorized by one of the action rules in the
     // given protocol rule set.
     async fn permit_action(
-        &self, owner: &str, record: &Record, rule_set: &RuleSet, store: &impl MessageStore,
+        &self, owner: &str, record: &Record, store: &impl MessageStore,
     ) -> Result<()> {
+        let rule_set = if let Some(write) = self.initial_write {
+            let write_record: Record = write.into();
+            write_record.rule_set(owner, store).await?
+        } else {
+            record.rule_set(owner, store).await?
+        };
+
         // build chain of ancestor records
         let ancestor_chain = match record {
             Record::Write(write) => {
