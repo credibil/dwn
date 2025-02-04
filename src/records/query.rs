@@ -185,7 +185,7 @@ impl Query {
             }
 
             // verify protocol role is authorized
-            let verifier = protocol::Permission::new(protocol)
+            let verifier = protocol::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
             return verifier.permit_query(owner, self, provider).await;
         }

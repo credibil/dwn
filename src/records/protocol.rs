@@ -1,6 +1,6 @@
-//! # Permission-based Permissions
+//! # Authorizer-based Authorizers
 //!
-//! Permission-based permissions are a way to configure access control for DWN
+//! Authorizer-based permissions are a way to configure access control for DWN
 //! users based on the protocol used in their interactions (messages).
 //!
 //! This module provides the logic to enforce these permissions.
@@ -12,17 +12,17 @@ use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write, write
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden};
 
-/// [`Permission`] holds protocol-related information required during the process
+/// [`Authorizer`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.
-pub struct Permission<'a> {
+pub struct Authorizer<'a> {
     protocol: &'a str,
     context_id: Option<&'a String>,
 }
 
 // TODO: use typestate builder pattern to enforce correct usage for each record
 // type and reduce args passed to permit_* methods
-impl<'a> Permission<'a> {
-    /// Create a new `Permission` instance.
+impl<'a> Authorizer<'a> {
+    /// Create a new `Authorizer` instance for the specified protocol.
     #[must_use]
     pub const fn new(protocol: &'a str) -> Self {
         Self {
@@ -132,8 +132,8 @@ impl Record {
     }
 }
 
-impl Permission<'_> {
-    /// Permission-based authorization for [`Write`] messages.
+impl Authorizer<'_> {
+    /// Authorizer-based authorization for [`Write`] messages.
     pub async fn permit_write(
         &self, owner: &str, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
@@ -145,7 +145,7 @@ impl Permission<'_> {
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
-    /// Permission-based authorization for [`Query`] and [`Read`] messages.
+    /// Authorizer-based authorization for [`Query`] and [`Read`] messages.
     pub async fn permit_read(
         &self, owner: &str, read: &Read, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {
@@ -163,7 +163,7 @@ impl Permission<'_> {
         self.permit_action(owner, &read_record, &rule_set, store).await
     }
 
-    /// Permission-based authorization for [`Query`] messages.
+    /// Authorizer-based authorization for [`Query`] messages.
     pub async fn permit_query(
         &self, owner: &str, query: &Query, store: &impl MessageStore,
     ) -> Result<()> {
@@ -174,7 +174,7 @@ impl Permission<'_> {
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
-    /// Permission-based authorization for [`Subscribe`] messages.
+    /// Authorizer-based authorization for [`Subscribe`] messages.
     pub async fn permit_subscribe(
         &self, owner: &str, subscribe: &Subscribe, store: &impl MessageStore,
     ) -> Result<()> {
@@ -185,7 +185,7 @@ impl Permission<'_> {
         self.permit_action(owner, &record, &rule_set, store).await
     }
 
-    /// Permission-based authorization for [`Delete`] messages.
+    /// Authorizer-based authorization for [`Delete`] messages.
     pub async fn permit_delete(
         &self, owner: &str, delete: &Delete, write: &Write, store: &impl MessageStore,
     ) -> Result<()> {

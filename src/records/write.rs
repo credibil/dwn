@@ -374,7 +374,7 @@ impl Write {
 
         // protocol-specific authorization
         if let Some(protocol) = &self.descriptor.protocol {
-            let protocol = protocol::Permission::new(protocol).context_id(self.context_id.as_ref());
+            let protocol = protocol::Authorizer::new(protocol).context_id(self.context_id.as_ref());
             return protocol.permit_write(owner, self, store).await;
         }
 
