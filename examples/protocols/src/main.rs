@@ -19,10 +19,8 @@ async fn main() {
     let protected = Base64UrlUnpadded::encode_string(
         br#"{"alg":"EdDSA","typ":"jwt","kid":"did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"}"#
     );
-
-    let keyring = key_store::signer(&alice.did);
     let sig_bytes =
-        keyring.try_sign(format!("{protected}.{payload}").as_bytes()).await.expect("should sign");
+        alice.try_sign(format!("{protected}.{payload}").as_bytes()).await.expect("should sign");
     let signature = Base64UrlUnpadded::encode_string(&sig_bytes);
 
     // Query message

@@ -4045,16 +4045,11 @@ async fn invalid_encryption_cid() {
     // --------------------------------------------------
     let alice_kid = alice.verification_method().await.expect("should get kid");
 
-    // x25519 public key
-    let public_bytes: [u8; 32] =
-        Base64UrlUnpadded::decode_vec(&alice.public_key).unwrap().try_into().unwrap();
-    let alice_public = x25519_dalek::PublicKey::from(public_bytes);
-
     let alice_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+            x: Base64UrlUnpadded::encode_string(alice.public_key().as_bytes()),
             ..PublicKeyJwk::default()
         },
         d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),

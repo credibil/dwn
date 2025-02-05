@@ -1,8 +1,5 @@
 //! # Keystore
 
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex};
-
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
@@ -13,9 +10,6 @@ use vercre_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Si
 
 const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
 // const X25519_CODEC: [u8; 2] = [0xec, 0x01];
-
-static KEY_RINGS: LazyLock<Arc<Mutex<HashMap<String, Keyring>>>> =
-    LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[derive(Default, Clone, Debug)]
 pub struct Keyring {
@@ -40,28 +34,23 @@ pub fn new_keyring() -> Keyring {
     // multi_bytes.extend_from_slice(&x25519_bytes);
     // let public_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
 
-    let kr = Keyring {
+    Keyring {
         did: format!("did:key:{verifying_multi}"),
         public_key: Base64UrlUnpadded::encode_string(&x25519_bytes),
         secret_key: Base64UrlUnpadded::encode_string(signing_key.as_bytes()),
-    };
-
-    KEY_RINGS.lock().unwrap().insert(kr.did.clone(), kr.clone());
-
-    kr
+    }
 }
 
-pub fn signer(did: &str) -> impl Signer {
-    keyring(did)
-}
+impl Keyring {
+    pub fn did(&self) -> String {
+        self.did.clone()
+    }
 
-pub fn receiver(did: &str) -> impl Receiver {
-    keyring(did)
-}
-
-fn keyring(did: &str) -> impl Signer + Receiver {
-    let key_rings = KEY_RINGS.lock().unwrap();
-    key_rings.get(did).unwrap().clone()
+    pub fn public_key(&self) -> x25519_dalek::PublicKey {
+        let public_bytes: [u8; 32] =
+            Base64UrlUnpadded::decode_vec(&self.public_key).unwrap().try_into().unwrap();
+        x25519_dalek::PublicKey::from(public_bytes)
+    }
 }
 
 impl Signer for Keyring {

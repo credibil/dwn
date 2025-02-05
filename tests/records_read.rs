@@ -1,6 +1,7 @@
 //! Records Read
 
 use std::io::{Cursor, Read};
+use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
@@ -19,22 +20,24 @@ use test_node::provider::ProviderImpl;
 use vercre_infosec::Signer;
 use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
+static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+
 // Should allow an owner to read their own records.
 #[tokio::test]
 async fn owner() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
+    // let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Add a `write` record.
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -42,11 +45,11 @@ async fn owner() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&write.record_id))
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&alice.did, read, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -2042,13 +2045,7 @@ async fn block_data() {
 async fn decrypt_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice = key_store::new_keyring();
-    let alice_receiver = key_store::receiver(&alice.did);
     let alice_kid = alice.verification_method().await.expect("should get kid");
-
-    // x25519 public key
-    let public_bytes: [u8; 32] =
-        Base64UrlUnpadded::decode_vec(&alice.public_key).unwrap().try_into().unwrap();
-    let alice_public = x25519_dalek::PublicKey::from(public_bytes);
 
     let schema = String::from("https://some-schema.com");
     let data_format = String::from("some/format");
@@ -2072,7 +2069,7 @@ async fn decrypt_schema() {
             public_key: PublicKeyJwk {
                 kty: KeyType::Okp,
                 crv: Curve::Ed25519,
-                x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+                x: Base64UrlUnpadded::encode_string(alice.public_key().as_bytes()),
                 ..PublicKeyJwk::default()
             },
             d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
@@ -2149,24 +2146,22 @@ async fn decrypt_schema() {
 
     // decrypt using schema descendant key
     let plaintext =
-        decrypt(&encrypted, &write, &schema_leaf, &alice_receiver).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &schema_leaf, &alice).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // decrypt using data format descendant key
-    let plaintext = decrypt(&encrypted, &write, &data_formats_leaf, &alice_receiver)
-        .await
-        .expect("should decrypt");
+    let plaintext =
+        decrypt(&encrypted, &write, &data_formats_leaf, &alice).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // decrypt using schema root key
     let plaintext =
-        decrypt(&encrypted, &write, &schema_root, &alice_receiver).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &schema_root, &alice).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // decrypt using data format root key
-    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_receiver)
-        .await
-        .expect("should decrypt");
+    let plaintext =
+        decrypt(&encrypted, &write, &data_formats_root, &alice).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // --------------------------------------------------
@@ -2177,9 +2172,7 @@ async fn decrypt_schema() {
         hd_key::derive_jwk(data_formats_root.clone(), &DerivationPath::Full(&invalid_path))
             .expect("should derive private key");
 
-    let Err(Error::BadRequest(_)) =
-        decrypt(&encrypted, &write, &invalid_key, &alice_receiver).await
-    else {
+    let Err(Error::BadRequest(_)) = decrypt(&encrypted, &write, &invalid_key, &alice).await else {
         panic!("should be BadRequest");
     };
 }
@@ -2189,18 +2182,11 @@ async fn decrypt_schema() {
 async fn decrypt_schemaless() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice = key_store::new_keyring();
-    let alice_receiver = key_store::receiver(&alice.did);
 
     // --------------------------------------------------
     // Alice derives participants' keys.
     // --------------------------------------------------
     let alice_kid = alice.verification_method().await.expect("should get kid");
-
-    // x25519 public key
-    let public_bytes: [u8; 32] =
-        Base64UrlUnpadded::decode_vec(&alice.public_key).unwrap().try_into().unwrap();
-    let alice_public = x25519_dalek::PublicKey::from(public_bytes);
-
     let data_format = String::from("image/jpg");
 
     // encryption key
@@ -2212,7 +2198,7 @@ async fn decrypt_schemaless() {
             public_key: PublicKeyJwk {
                 kty: KeyType::Okp,
                 crv: Curve::Ed25519,
-                x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+                x: Base64UrlUnpadded::encode_string(alice.public_key().as_bytes()),
                 ..PublicKeyJwk::default()
             },
             d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
@@ -2277,9 +2263,8 @@ async fn decrypt_schemaless() {
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
     // decrypt using schema descendant key
-    let plaintext = decrypt(&encrypted, &write, &data_formats_root, &alice_receiver)
-        .await
-        .expect("should decrypt");
+    let plaintext =
+        decrypt(&encrypted, &write, &data_formats_root, &alice).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 }
 
@@ -2290,24 +2275,16 @@ async fn decrypt_context() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice = key_store::new_keyring();
     let bob = key_store::new_keyring();
-    let alice_receiver = key_store::receiver(&alice.did);
-    let bob_receiver = key_store::receiver(&bob.did);
 
     // --------------------------------------------------
     // Alice's keys.
     // --------------------------------------------------
     let alice_kid = alice.verification_method().await.expect("should get kid");
-
-    // x25519 public key
-    let public_bytes: [u8; 32] =
-        Base64UrlUnpadded::decode_vec(&alice.public_key).unwrap().try_into().unwrap();
-    let alice_public = x25519_dalek::PublicKey::from(public_bytes);
-
     let alice_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+            x: Base64UrlUnpadded::encode_string(alice.public_key().as_bytes()),
             ..PublicKeyJwk::default()
         },
         d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
@@ -2317,17 +2294,11 @@ async fn decrypt_context() {
     // Bob's keys.
     // --------------------------------------------------
     let bob_kid = bob.verification_method().await.expect("should get kid");
-
-    // x25519 public key
-    let public_bytes: [u8; 32] =
-        Base64UrlUnpadded::decode_vec(&bob.public_key).unwrap().try_into().unwrap();
-    let bob_public = x25519_dalek::PublicKey::from(public_bytes);
-
     let bob_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(bob_public.as_bytes()),
+            x: Base64UrlUnpadded::encode_string(bob.public_key().as_bytes()),
             ..PublicKeyJwk::default()
         },
         d: "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo".to_string(),
@@ -2482,7 +2453,7 @@ async fn decrypt_context() {
 
     // decrypt using context-derived descendant key
     let plaintext =
-        decrypt(&encrypted, &write, &context_jwk, &alice_receiver).await.expect("should decrypt");
+        decrypt(&encrypted, &write, &context_jwk, &alice).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 
     // --------------------------------------------------
@@ -2556,8 +2527,7 @@ async fn decrypt_context() {
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
     // decrypt using context-derived descendant key
-    let plaintext =
-        decrypt(&encrypted, &write, &context_jwk, &bob_receiver).await.expect("should decrypt");
+    let plaintext = decrypt(&encrypted, &write, &context_jwk, &bob).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 }
 
@@ -2568,23 +2538,17 @@ async fn decrypt_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice = key_store::new_keyring();
     let bob = key_store::new_keyring();
-    let bob_receiver = key_store::receiver(&bob.did);
 
     // --------------------------------------------------
     // Alice's keys.
     // --------------------------------------------------
     let alice_kid = alice.verification_method().await.expect("should get kid");
 
-    // x25519 public key
-    let public_bytes: [u8; 32] =
-        Base64UrlUnpadded::decode_vec(&alice.public_key).unwrap().try_into().unwrap();
-    let alice_public = x25519_dalek::PublicKey::from(public_bytes);
-
     let alice_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(alice_public.as_bytes()),
+            x: Base64UrlUnpadded::encode_string(alice.public_key().as_bytes()),
             ..PublicKeyJwk::default()
         },
         d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
@@ -2697,8 +2661,7 @@ async fn decrypt_protocol() {
         derived_private_key: alice_private_jwk.clone(),
     };
 
-    let plaintext =
-        decrypt(&encrypted, &write, &alice_jwk, &bob_receiver).await.expect("should decrypt");
+    let plaintext = decrypt(&encrypted, &write, &alice_jwk, &bob).await.expect("should decrypt");
     assert_eq!(plaintext, data);
 }
 
