@@ -1,29 +1,55 @@
 //! # Keystore
 
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex};
+
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
+use multibase::Base;
+use rand::rngs::OsRng;
 use sha2::Digest;
 use vercre_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 
-pub const ALICE_DID: &str = "did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX";
-pub const ALICE_VERIFYING_KEY: &str = "RW-Q0fO2oECyLs4rZDZZo4p6b7pu7UF2eu9JBsktDco";
-const ALICE_SECRET_KEY: &str = "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30";
+const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
+// const X25519_CODEC: [u8; 2] = [0xec, 0x01];
 
-pub const BOB_DID: &str = "did:key:z6MkqWGVUwMwt4ahxESTVg1gjvxZ4w4KkXomksSMdCB3eHeD";
-pub const BOB_VERIFYING_KEY: &str = "pDXNqUD-tOc2LolwWFOKTwNSMtUqkdLJy9dG3sXe0ZY";
-const BOB_SECRET_KEY: &str = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo";
+static KEY_RINGS: LazyLock<Arc<Mutex<HashMap<String, Keyring>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 
-pub const CAROL_DID: &str = "did:key:z6MkuY2MjELw3xQExptJtVkuW5YSjfeQYrVZv41RMYrwZmYd";
-pub const CAROL_VERIFYING_KEY: &str = "4Be7T4GDYNqXtdUIRSR4fcYEb-T3NV06uQJ-gSJA0xo";
-const CAROL_SECRET_KEY: &str = "V0YsmES1Tc8-sozoyYeBKemcrUaOLq_IceWbjWwmbMo";
+#[derive(Default, Clone, Debug)]
+pub struct Keyring {
+    pub did: String,
+    pub public_key: String,
+    pub secret_key: String,
+}
 
-pub const APP_DID: &str = "did:key:z6MkmR9wAW5BP3RoG8NMDRsw9DRxVYXjPNm3rqJtAQY3yfrH";
-pub const APP_VERIFYING_KEY: &str = "1mFX9lH0IiwfHh0Oeq9JL4rbm-kkbKFylQZygKXEtTI";
-const APP_SECRET_KEY: &str = "M5In2tCAa1xiK9HRJRz8wXgWOtaWPMVegIVW24rCf_E";
+pub fn new_keyring() -> Keyring {
+    let signing_key = SigningKey::generate(&mut OsRng);
 
-pub const INVALID_DID: &str = "did:key:z6Mkj85hWKz3rvxVt6gL54rCsEMia8ZRXMTmxaUv4yLDSnTA";
-const INVALID_SECRET_KEY: &str = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo";
+    // verifying key (Ed25519)
+    let verifying_key = signing_key.verifying_key();
+    let mut multi_bytes = ED25519_CODEC.to_vec();
+    multi_bytes.extend_from_slice(&verifying_key.to_bytes());
+    let verifying_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
+
+    // public key (X25519)
+    let x25519_bytes = verifying_key.to_montgomery().to_bytes();
+    // let mut multi_bytes = vec![];
+    // multi_bytes.extend_from_slice(&X25519_CODEC);
+    // multi_bytes.extend_from_slice(&x25519_bytes);
+    // let public_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
+
+    let kr = Keyring {
+        did: format!("did:key:{verifying_multi}"),
+        public_key: Base64UrlUnpadded::encode_string(&x25519_bytes),
+        secret_key: Base64UrlUnpadded::encode_string(signing_key.as_bytes()),
+    };
+
+    KEY_RINGS.lock().unwrap().insert(kr.did.clone(), kr.clone());
+
+    kr
+}
 
 pub fn signer(did: &str) -> impl Signer {
     keyring(did)
@@ -34,35 +60,8 @@ pub fn receiver(did: &str) -> impl Receiver {
 }
 
 fn keyring(did: &str) -> impl Signer + Receiver {
-    match did {
-        ALICE_DID => Keyring {
-            did: ALICE_DID.to_string(),
-            secret_key: ALICE_SECRET_KEY.to_string(),
-        },
-        BOB_DID => Keyring {
-            did: BOB_DID.to_string(),
-            secret_key: BOB_SECRET_KEY.to_string(),
-        },
-        CAROL_DID => Keyring {
-            did: CAROL_DID.to_string(),
-            secret_key: CAROL_SECRET_KEY.to_string(),
-        },
-        APP_DID => Keyring {
-            did: APP_DID.to_string(),
-            secret_key: APP_SECRET_KEY.to_string(),
-        },
-        INVALID_DID => Keyring {
-            did: INVALID_DID.to_string(),
-            secret_key: INVALID_SECRET_KEY.to_string(),
-        },
-        _ => panic!("Unknown DID"),
-    }
-}
-
-#[derive(Default, Clone, Debug)]
-pub struct Keyring {
-    pub did: String,
-    pub secret_key: String,
+    let key_rings = KEY_RINGS.lock().unwrap();
+    key_rings.get(did).unwrap().clone()
 }
 
 impl Signer for Keyring {
@@ -109,7 +108,7 @@ impl Receiver for Keyring {
             decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
         let signing_key = SigningKey::from_bytes(&bytes);
 
-        // derive X25519 secret for Diffie-Hellman from Ed25519 secret
+        // *** derive X25519 secret for Diffie-Hellman from Ed25519 secret ***
         let hash = sha2::Sha512::digest(signing_key.as_bytes());
         let mut hashed = [0u8; PUBLIC_KEY_LENGTH];
         hashed.copy_from_slice(&hash[..PUBLIC_KEY_LENGTH]);

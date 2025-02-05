@@ -9,13 +9,11 @@ pub mod block_store;
 mod event_stream;
 pub mod key_store;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use blockstore::InMemoryBlockstore;
 use dwn_node::provider::{
     DataStore, DidResolver, Document, EventLog, MessageStore, Provider, TaskStore,
 };
-
-use self::key_store::ALICE_DID;
 
 #[derive(Clone)]
 pub struct ProviderImpl {
@@ -40,12 +38,20 @@ impl TaskStore for ProviderImpl {}
 
 impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {
-        if url == ALICE_DID {
-            serde_json::from_slice(include_bytes!("./provider/data/alice_did.json"))
-                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
-        } else {
-            serde_json::from_slice(include_bytes!("./provider/data/bob_did.json"))
-                .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
-        }
+        // let resolved =
+        //     vercre_did::resolve(url, None, self.clone()).await.map_err(|e| anyhow!(e))?;
+        // Ok(resolved.document.unwrap())
+
+        // if url == &alice.did {
+        //     serde_json::from_slice(include_bytes!("./provider/data/alice_did.json"))
+        //         .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
+        // } else {
+        //     serde_json::from_slice(include_bytes!("./provider/data/bob_did.json"))
+        //         .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
+        // }
+
+        println!("resolve: {}", url);
+
+        Ok(Document::default())
     }
 }

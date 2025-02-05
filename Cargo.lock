@@ -2471,8 +2471,11 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "insta",
+ "multibase",
+ "rand",
  "serde_json",
  "sha2 0.10.8",
+ "vercre-did",
  "vercre-infosec",
  "x25519-dalek",
 ]

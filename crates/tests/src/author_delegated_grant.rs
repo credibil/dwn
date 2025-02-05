@@ -8,22 +8,21 @@ use dwn_node::interfaces::grants::{GrantBuilder, Scope};
 use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use dwn_node::{Method, endpoint};
 use http::StatusCode;
-use insta::assert_yaml_snapshot as assert_snapshot;
-use test_node::key_store::{self, ALICE_DID, BOB_DID};
+use test_node::key_store;
 use test_node::provider::ProviderImpl;
 
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]
 async fn configure_any() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice grants Bob the ability to configure any protocol
     // --------------------------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(BOB_DID)
+        .granted_to(&bob.did)
         .request_id("grant_id_1")
         .description("Allow Bob to configure any protocol")
         .delegated(true)
@@ -32,7 +31,7 @@ async fn configure_any() {
             protocol: None,
         });
 
-    let bob_grant = builder.sign(&alice_signer).build().await.expect("should create grant");
+    let bob_grant = builder.sign(&alice).build().await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
@@ -43,51 +42,33 @@ async fn configure_any() {
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .delegated_grant(bob_grant.try_into().expect("should convert"))
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&alice.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
-
-    assert_snapshot!("configure", reply, {
-        ".**.messageTimestamp" => "[messageTimestamp]",
-        ".**.signature.payload" => "[payload]",
-        ".**.signature.signatures[0].signature" => "[signature]",
-
-        ".*.authorDelegatedGrant.descriptor.dateCreated" => "[dateCreated]",
-        ".*.authorDelegatedGrant.descriptor.dataCid" => "[dataCid]",
-        ".*.authorDelegatedGrant.recordId" => "[recordId]",
-        ".*.authorDelegatedGrant.contextId" => "[contextId]",
-        ".*.authorDelegatedGrant.encodedData" => "[encodedData]",
-    });
 
     // --------------------------------------------------
     // Alice fetches the email protocol configured by Bob
     // --------------------------------------------------
     let query = QueryBuilder::new()
-        .filter(definition.protocol)
-        .sign(&alice_signer)
+        .filter(&definition.protocol)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should find protocol");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should find protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    assert_snapshot!("query", reply, {
-        ".**.messageTimestamp" => "[messageTimestamp]",
-        ".**.signature.payload" => "[payload]",
-        ".**.signature.signatures[0].signature" => "[signature]",
-
-        ".**.authorDelegatedGrant.descriptor.dateCreated" => "[dateCreated]",
-        ".**.authorDelegatedGrant.descriptor.dataCid" => "[dataCid]",
-        ".**.authorDelegatedGrant.recordId" => "[recordId]",
-        ".**.authorDelegatedGrant.contextId" => "[contextId]",
-        ".**.authorDelegatedGrant.encodedData" => "[encodedData]",
-    });
+    let body = reply.body.expect("should have body");
+    let entries = &body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].descriptor.definition.protocol, definition.protocol);
 }
 
 // Allow author-delegated grant to configure a specific protocol.

@@ -12,14 +12,14 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::provider::{EventLog, MessageStore};
 use dwn_node::{Error, Interface, Method, StatusCode, endpoint, store};
-use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::key_store;
 use test_node::provider::ProviderImpl;
 
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]
 async fn delete_record() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice writes a record
@@ -28,11 +28,11 @@ async fn delete_record() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -41,11 +41,11 @@ async fn delete_record() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should find write");
-    let reply = endpoint::handle(ALICE_DID, query.clone(), &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, query.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     // --------------------------------------------------
@@ -53,18 +53,18 @@ async fn delete_record() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Ensure record doesn't appear in query results.
     // --------------------------------------------------
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
     assert!(reply.body.is_none());
 
@@ -73,12 +73,12 @@ async fn delete_record() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::NotFound(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "cannot delete a `RecordsDelete` record");
@@ -88,8 +88,8 @@ async fn delete_record() {
 #[tokio::test]
 async fn delete_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     let data = br#"{"record": "test record write"}"#;
 
@@ -98,12 +98,12 @@ async fn delete_data() {
     // --------------------------------------------------
     let alice_write1 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(ALICE_DID, alice_write1.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, alice_write1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -111,12 +111,12 @@ async fn delete_data() {
     // --------------------------------------------------
     let alice_write2 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(ALICE_DID, alice_write2.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, alice_write2.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -124,12 +124,12 @@ async fn delete_data() {
     // --------------------------------------------------
     let bob_write1 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(BOB_DID, bob_write1.clone(), &provider).await.expect("should write");
+        endpoint::handle(&bob.did, bob_write1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -137,12 +137,12 @@ async fn delete_data() {
     // --------------------------------------------------
     let bob_write2 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(BOB_DID, bob_write2.clone(), &provider).await.expect("should write");
+        endpoint::handle(&bob.did, bob_write2.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -150,23 +150,23 @@ async fn delete_data() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&alice_write1.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // ensure the second record's data is unaffected
     let filter = RecordsFilter::new().record_id(&alice_write2.record_id);
     let read = ReadBuilder::new()
         .filter(filter)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should find write");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -184,25 +184,25 @@ async fn delete_data() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&alice_write2.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // ensure the second record has been deleted
     let read = ReadBuilder::new()
         .filter(RecordsFilter::new().record_id(&alice_write2.record_id))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should find write");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should be not found");
+    let reply = endpoint::handle(&alice.did, read, &provider).await.expect("should be not found");
     assert_eq!(reply.status.code, StatusCode::NOT_FOUND);
 
     // TODO: uncomment when NotFound error supports body with initial_write and delete records
-    // let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, read, &provider).await else {
+    // let Err(Error::NotFound(e)) = endpoint::handle(&alice.did, read, &provider).await else {
     //     panic!("should be NotFound");
     // };
     // assert_eq!(e, "record is deleted");
@@ -213,11 +213,11 @@ async fn delete_data() {
     let filter = RecordsFilter::new().record_id(&bob_write1.record_id);
     let read = ReadBuilder::new()
         .filter(filter)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should find write");
-    let reply = endpoint::handle(BOB_DID, read, &provider).await.expect("should read");
+    let reply = endpoint::handle(&bob.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
@@ -235,16 +235,16 @@ async fn delete_data() {
 #[tokio::test]
 async fn not_found() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     let delete = DeleteBuilder::new()
         .record_id("imaginary_record_id")
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::NotFound(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::NotFound(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "no matching record found");
@@ -254,7 +254,7 @@ async fn not_found() {
 #[tokio::test]
 async fn newer_version() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -263,11 +263,11 @@ async fn newer_version() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -277,11 +277,11 @@ async fn newer_version() {
 
     let write = WriteBuilder::from(write.clone())
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -289,7 +289,7 @@ async fn newer_version() {
     // --------------------------------------------------
     let mut delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
@@ -299,7 +299,7 @@ async fn newer_version() {
     delete.descriptor.base.message_timestamp =
         timestamp.checked_sub_days(Days::new(1)).expect("should subtract days");
 
-    let Err(Error::Conflict(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Conflict(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "newer record version exists");
@@ -309,7 +309,7 @@ async fn newer_version() {
 #[tokio::test]
 async fn rewrite_data() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     let data = br#"{"record": "test record write"}"#;
 
@@ -318,11 +318,11 @@ async fn rewrite_data() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -330,11 +330,11 @@ async fn rewrite_data() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -342,11 +342,11 @@ async fn rewrite_data() {
     // --------------------------------------------------
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -354,8 +354,8 @@ async fn rewrite_data() {
 #[tokio::test]
 async fn anyone_delete() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a protocol.
@@ -365,13 +365,13 @@ async fn anyone_delete() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -386,11 +386,11 @@ async fn anyone_delete() {
             protocol_path: "doc",
             parent_context_id: None,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -398,12 +398,12 @@ async fn anyone_delete() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -411,9 +411,9 @@ async fn anyone_delete() {
 #[tokio::test]
 async fn ancestor_recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
-    let carol_signer = key_store::signer(CAROL_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
+    let carol = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a protocol.
@@ -423,13 +423,13 @@ async fn ancestor_recipient() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -439,17 +439,17 @@ async fn ancestor_recipient() {
 
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .recipient(BOB_DID)
+        .recipient(&bob.did)
         .protocol(ProtocolBuilder {
             protocol: &definition.protocol,
             protocol_path: "post",
             parent_context_id: None,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, chat.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -464,12 +464,12 @@ async fn ancestor_recipient() {
             protocol_path: "post/tag",
             parent_context_id: chat.context_id,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, tag.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, tag.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -477,12 +477,12 @@ async fn ancestor_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&tag.record_id)
-        .sign(&carol_signer)
+        .sign(&carol)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "action not permitted");
@@ -492,12 +492,12 @@ async fn ancestor_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&tag.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -505,9 +505,9 @@ async fn ancestor_recipient() {
 #[tokio::test]
 async fn direct_recipient() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
-    let carol_signer = key_store::signer(CAROL_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
+    let carol = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a protocol.
@@ -517,13 +517,13 @@ async fn direct_recipient() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -533,17 +533,17 @@ async fn direct_recipient() {
 
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .recipient(BOB_DID)
+        .recipient(&bob.did)
         .protocol(ProtocolBuilder {
             protocol: &definition.protocol,
             protocol_path: "post",
             parent_context_id: None,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, chat.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -551,12 +551,12 @@ async fn direct_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .sign(&carol_signer)
+        .sign(&carol)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "action not permitted");
@@ -566,12 +566,12 @@ async fn direct_recipient() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -579,9 +579,9 @@ async fn direct_recipient() {
 #[tokio::test]
 async fn ancestor_author() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
-    let carol_signer = key_store::signer(CAROL_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
+    let carol = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a protocol.
@@ -591,13 +591,13 @@ async fn ancestor_author() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -612,11 +612,11 @@ async fn ancestor_author() {
             protocol_path: "post",
             parent_context_id: None,
         })
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, post.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, post.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -631,12 +631,12 @@ async fn ancestor_author() {
             protocol_path: "post/comment",
             parent_context_id: post.context_id,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(ALICE_DID, comment.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, comment.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -644,12 +644,12 @@ async fn ancestor_author() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&comment.record_id)
-        .sign(&carol_signer)
+        .sign(&carol)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "action not permitted");
@@ -659,12 +659,12 @@ async fn ancestor_author() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&comment.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -672,9 +672,9 @@ async fn ancestor_author() {
 #[tokio::test]
 async fn context_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
-    let carol_signer = key_store::signer(CAROL_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
+    let carol = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a protocol.
@@ -684,13 +684,13 @@ async fn context_role() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -700,18 +700,18 @@ async fn context_role() {
 
     let thread = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .recipient(BOB_DID)
+        .recipient(&bob.did)
         .protocol(ProtocolBuilder {
             protocol: &definition.protocol,
             protocol_path: "thread",
             parent_context_id: None,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, thread.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, thread.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -721,18 +721,18 @@ async fn context_role() {
 
     let admin = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .recipient(BOB_DID)
+        .recipient(&bob.did)
         .protocol(ProtocolBuilder {
             protocol: &definition.protocol,
             protocol_path: "thread/admin",
             parent_context_id: thread.context_id.clone(),
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, admin.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, admin.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -742,18 +742,18 @@ async fn context_role() {
 
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .recipient(ALICE_DID)
+        .recipient(&alice.did)
         .protocol(ProtocolBuilder {
             protocol: &definition.protocol,
             protocol_path: "thread/chat",
             parent_context_id: thread.context_id.clone(),
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, chat.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -761,12 +761,12 @@ async fn context_role() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .sign(&carol_signer)
+        .sign(&carol)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -777,12 +777,12 @@ async fn context_role() {
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
         .protocol_role("thread/admin")
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -790,9 +790,9 @@ async fn context_role() {
 #[tokio::test]
 async fn root_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
-    let carol_signer = key_store::signer(CAROL_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
+    let carol = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a protocol.
@@ -802,13 +802,13 @@ async fn root_role() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -818,18 +818,18 @@ async fn root_role() {
 
     let admin = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .recipient(BOB_DID)
+        .recipient(&bob.did)
         .protocol(ProtocolBuilder {
             protocol: &definition.protocol,
             protocol_path: "admin",
             parent_context_id: None,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, admin.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, admin.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -839,18 +839,18 @@ async fn root_role() {
 
     let chat = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .recipient(ALICE_DID)
+        .recipient(&alice.did)
         .protocol(ProtocolBuilder {
             protocol: &definition.protocol,
             protocol_path: "chat",
             parent_context_id: None,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, chat.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, chat.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -858,12 +858,12 @@ async fn root_role() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
-        .sign(&carol_signer)
+        .sign(&carol)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -874,12 +874,12 @@ async fn root_role() {
     let delete = DeleteBuilder::new()
         .record_id(&chat.record_id)
         .protocol_role("admin")
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -887,8 +887,8 @@ async fn root_role() {
 #[tokio::test]
 async fn forbidden() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice writes record.
@@ -897,12 +897,12 @@ async fn forbidden() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -910,12 +910,12 @@ async fn forbidden() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "delete request failed authorization");
@@ -925,21 +925,21 @@ async fn forbidden() {
 #[tokio::test]
 async fn unauthorized() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Bob attempts to delete the record but is unable to.
     // --------------------------------------------------
     let mut delete = DeleteBuilder::new()
         .record_id("record_id")
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
     delete.authorization.signature.signatures[0].signature = "bad_signature".to_string();
 
-    let Err(Error::Unauthorized(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::Unauthorized(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be Unauthorized");
     };
     assert!(e.starts_with("failed to authenticate"));
@@ -949,20 +949,20 @@ async fn unauthorized() {
 #[tokio::test]
 async fn invalid_message() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Bob attempts to delete the record but is unable to.
     // --------------------------------------------------
     let mut delete = DeleteBuilder::new()
         .record_id("record_id")
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
     delete.descriptor = DeleteDescriptor::default();
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, delete, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did, delete, &provider).await else {
         panic!("should be BadRequest");
     };
     assert!(e.starts_with("validation failed for "));
@@ -972,7 +972,7 @@ async fn invalid_message() {
 #[tokio::test]
 async fn index_additional() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice writes record.
@@ -982,12 +982,12 @@ async fn index_additional() {
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
         .schema("http://test_schema")
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -995,12 +995,12 @@ async fn index_additional() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete.clone(), &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1012,14 +1012,14 @@ async fn index_additional() {
         .include_archived(true)
         .build();
 
-    let (entries, _) = MessageStore::query(&provider, ALICE_DID, &query.clone().into())
+    let (entries, _) = MessageStore::query(&provider, &alice.did, &query.clone().into())
         .await
         .expect("should query");
     assert_eq!(entries.len(), 1);
 
     // check log
     let (entries, _) =
-        MessageStore::query(&provider, ALICE_DID, &query).await.expect("should query");
+        MessageStore::query(&provider, &alice.did, &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -1027,7 +1027,7 @@ async fn index_additional() {
 #[tokio::test]
 async fn log_delete() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice writes record.
@@ -1036,12 +1036,12 @@ async fn log_delete() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1049,12 +1049,12 @@ async fn log_delete() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
-    let reply = endpoint::handle(ALICE_DID, delete.clone(), &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, delete.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1062,13 +1062,13 @@ async fn log_delete() {
     // --------------------------------------------------
     let query = messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create query");
     let query = store::Query::from(query);
 
-    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
+    let (entries, _) = EventLog::query(&provider, &alice.did, &query).await.expect("should query");
     assert_eq!(entries.len(), 2);
 }
 
@@ -1076,7 +1076,7 @@ async fn log_delete() {
 #[tokio::test]
 async fn delete_updates() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice writes record.
@@ -1085,22 +1085,22 @@ async fn delete_updates() {
 
     let write1 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, write1.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write1.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     let write2 = WriteBuilder::from(write1.clone())
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, write2.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write2.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1108,13 +1108,13 @@ async fn delete_updates() {
     // --------------------------------------------------
     let delete = DeleteBuilder::new()
         .record_id(&write2.record_id)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create delete");
 
     let reply =
-        endpoint::handle(ALICE_DID, delete.clone(), &provider).await.expect("should delete");
+        endpoint::handle(&alice.did, delete.clone(), &provider).await.expect("should delete");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1122,12 +1122,12 @@ async fn delete_updates() {
     // --------------------------------------------------
     let query = messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create query");
     let query = store::Query::from(query);
 
-    let (entries, _) = EventLog::query(&provider, ALICE_DID, &query).await.expect("should query");
+    let (entries, _) = EventLog::query(&provider, &alice.did, &query).await.expect("should query");
     assert_eq!(entries.len(), 2);
 }

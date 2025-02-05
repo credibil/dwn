@@ -10,14 +10,14 @@ use dwn_node::interfaces::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
 use dwn_node::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
 use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint};
-use test_node::key_store::{self, ALICE_DID, BOB_DID};
+use test_node::key_store;
 use test_node::provider::ProviderImpl;
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
 async fn owner_messages() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a protocol.
@@ -27,15 +27,16 @@ async fn owner_messages() {
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
     let mut expected_cids = vec![configure.cid().unwrap()];
 
-    let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&alice.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -56,14 +57,14 @@ async fn owner_messages() {
             .schema(&schema)
             .data(Data::Stream(reader.clone()))
             .published(true)
-            .sign(&alice_signer)
+            .sign(&alice)
             .build()
             .await
             .expect("should create write");
 
         expected_cids.push(write.cid().unwrap());
 
-        let reply = endpoint::handle(ALICE_DID, write, &provider).await.expect("should write");
+        let reply = endpoint::handle(&alice.did, write, &provider).await.expect("should write");
         assert_eq!(reply.status.code, StatusCode::ACCEPTED);
     }
 
@@ -71,8 +72,8 @@ async fn owner_messages() {
     // Alice queries for messages without a cursor, and expects to see
     // all 5 records as well as the protocol configuration message.
     // --------------------------------------------------
-    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    let query = QueryBuilder::new().sign(&alice).build().await.expect("should create query");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
@@ -95,22 +96,22 @@ async fn owner_messages() {
         .schema(&schema)
         .data(Data::Stream(reader))
         .published(true)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
     expected_cids.push(message.cid().unwrap());
 
-    let reply = endpoint::handle(ALICE_DID, message, &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, message, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice queries for messages beyond the cursor, and
     // expects to see only the additional record.
     // --------------------------------------------------
-    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    let query = QueryBuilder::new().sign(&alice).build().await.expect("should create query");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
@@ -122,11 +123,11 @@ async fn owner_messages() {
     // --------------------------------------------------
     let read = ReadBuilder::new()
         .message_cid(&entries[0])
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(ALICE_DID, read, &provider).await.expect("should read");
+    let reply = endpoint::handle(&alice.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 }
 
@@ -135,10 +136,11 @@ async fn owner_messages() {
 #[tokio::test]
 async fn no_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
-    let query = QueryBuilder::new().sign(&alice_signer).build().await.expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(BOB_DID, query, &provider).await else {
+    let query = QueryBuilder::new().sign(&alice).build().await.expect("should create write");
+    let Err(Error::Forbidden(e)) = endpoint::handle(&bob.did, query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "author has no grant");
@@ -148,13 +150,12 @@ async fn no_grant() {
 #[tokio::test]
 async fn invalid_request() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
-    let mut query =
-        QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
+    let mut query = QueryBuilder::new().sign(&alice).build().await.expect("should create query");
     query.descriptor.base.interface = Interface::Protocols;
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did, query, &provider).await else {
         panic!("should be BadRequest");
     };
     assert!(e.starts_with("validation failed for "));
@@ -164,13 +165,12 @@ async fn invalid_request() {
 #[tokio::test]
 async fn empty_filter() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
-    let mut query =
-        QueryBuilder::new().sign(&alice_signer).build().await.expect("should create query");
+    let mut query = QueryBuilder::new().sign(&alice).build().await.expect("should create query");
     query.descriptor.filters = vec![MessagesFilter::default()];
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did, query, &provider).await else {
         panic!("should be BadRequest");
     };
     assert!(e.starts_with("validation failed for "));
@@ -180,25 +180,25 @@ async fn empty_filter() {
 #[tokio::test]
 async fn match_grant_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(BOB_DID)
+        .granted_to(&bob.did)
         .scope(Scope::Messages {
             method: Method::Query,
             protocol: None,
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create grant");
 
     let reply =
-        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -209,12 +209,12 @@ async fn match_grant_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
+    let reply = endpoint::handle(&alice.did, configure_any.clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -224,12 +224,12 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     let configure_rand = ConfigureBuilder::new()
         .definition(Definition::new("http://random.xyz"))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, configure_rand.clone(), &provider)
+    let reply = endpoint::handle(&alice.did, configure_rand.clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -250,13 +250,13 @@ async fn match_grant_scope() {
         })
         .schema(schema)
         .data(Data::Stream(reader))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
     let reply =
-        endpoint::handle(ALICE_DID, write_any.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, write_any.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -267,13 +267,13 @@ async fn match_grant_scope() {
 
     let write_rand = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
     let reply =
-        endpoint::handle(ALICE_DID, write_rand.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, write_rand.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -282,11 +282,11 @@ async fn match_grant_scope() {
 
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
@@ -311,20 +311,20 @@ async fn match_grant_scope() {
 #[tokio::test]
 async fn mismatched_grant_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice creates a grant scoped to `MessagesSubscribe` for Bob.
     // --------------------------------------------------
-    let builder = GrantBuilder::new().granted_to(BOB_DID).scope(Scope::Messages {
+    let builder = GrantBuilder::new().granted_to(&bob.did).scope(Scope::Messages {
         method: Method::Subscribe,
         protocol: None,
     });
-    let bob_grant = builder.sign(&alice_signer).build().await.expect("should create grant");
+    let bob_grant = builder.sign(&alice).build().await.expect("should create grant");
 
     let reply =
-        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -332,12 +332,12 @@ async fn mismatched_grant_scope() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "method is not within grant scope");
@@ -347,8 +347,8 @@ async fn mismatched_grant_scope() {
 #[tokio::test]
 async fn match_protocol_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures 2 protocols.
@@ -359,12 +359,12 @@ async fn match_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
+    let reply = endpoint::handle(&alice.did, configure_any.clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -373,11 +373,11 @@ async fn match_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
+    let reply = endpoint::handle(&alice.did, configure_any.clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -386,17 +386,17 @@ async fn match_protocol_scope() {
     // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(BOB_DID)
+        .granted_to(&bob.did)
         .scope(Scope::Messages {
             method: Method::Query,
             protocol: Some("http://protocol1".to_string()),
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create grant");
     let reply =
-        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -405,12 +405,12 @@ async fn match_protocol_scope() {
     let query = QueryBuilder::new()
         .add_filter(MessagesFilter::new().protocol("http://protocol1"))
         .permission_grant_id(&bob_grant.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
@@ -424,8 +424,8 @@ async fn match_protocol_scope() {
 #[tokio::test]
 async fn mismatched_protocol_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures 2 protocols.
@@ -436,12 +436,12 @@ async fn mismatched_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
+    let reply = endpoint::handle(&alice.did, configure_any.clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -450,12 +450,12 @@ async fn mismatched_protocol_scope() {
 
     let configure_any = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(ALICE_DID, configure_any.clone(), &provider)
+    let reply = endpoint::handle(&alice.did, configure_any.clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -464,18 +464,18 @@ async fn mismatched_protocol_scope() {
     // Alice creates a grant scoped to `EventsQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(BOB_DID)
+        .granted_to(&bob.did)
         .scope(Scope::Messages {
             method: Method::Query,
             protocol: Some("http://protocol1".to_string()),
         })
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create grant");
 
     let reply =
-        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+        endpoint::handle(&alice.did, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -485,12 +485,12 @@ async fn mismatched_protocol_scope() {
     let query = QueryBuilder::new()
         .add_filter(filter)
         .permission_grant_id(&bob_grant.record_id)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, query, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "filter and grant protocols do not match");

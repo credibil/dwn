@@ -7,7 +7,7 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::{Message, StatusCode, endpoint};
 use futures::StreamExt;
-use test_node::key_store::{self, ALICE_DID};
+use test_node::key_store;
 use test_node::provider::ProviderImpl;
 use tokio::time;
 
@@ -15,20 +15,20 @@ use tokio::time;
 #[tokio::test]
 async fn owner_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
+    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice subscribes to own event stream.
     // --------------------------------------------------
-    let filter = RecordsFilter::new().add_author(ALICE_DID);
+    let filter = RecordsFilter::new().add_author(&alice.did);
     let subscribe = SubscribeBuilder::new()
         .filter(filter)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should build");
     let reply =
-        endpoint::handle(ALICE_DID, subscribe, &provider).await.expect("should configure protocol");
+        endpoint::handle(&alice.did, subscribe, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
     let mut subscribe_reply = reply.body.expect("should have body");
 
@@ -39,14 +39,14 @@ async fn owner_events() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create write");
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply = endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -55,11 +55,11 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .sign(&alice_signer)
+        .sign(&alice)
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should have reply");

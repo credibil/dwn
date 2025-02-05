@@ -33,7 +33,9 @@ macro_rules! verify_key {
         move |kid: String| {
             let local_resolver = resolver.clone();
             async move {
-                let resp = dereference(&kid, None, local_resolver).await?;
+                let resp = dereference(&kid, None, local_resolver)
+                    .await
+                    .map_err(|e| anyhow!("issue dereferencing DID: {e}"))?;
                 let Some(Resource::VerificationMethod(vm)) = resp.content_stream else {
                     return Err(anyhow!("Verification method not found"));
                 };

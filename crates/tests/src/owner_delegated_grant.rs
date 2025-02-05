@@ -8,19 +8,19 @@ use dwn_node::Method;
 use dwn_node::interfaces::grants::{GrantBuilder, Scope};
 use dwn_node::interfaces::records::{Data, DelegatedGrant, WriteBuilder};
 use rand::RngCore;
-use test_node::key_store::{self, ALICE_DID, APP_DID, BOB_DID};
+use test_node::key_store;
 
 #[tokio::test]
 async fn configure() {
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
-    let appx_signer = key_store::signer(APP_DID);
+    let alice = key_store::new_keyring();
+    let bob = key_store::new_keyring();
+    let app = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice grants App X to write as her for the `chat` protocol
     // --------------------------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(APP_DID)
+        .granted_to(&app.did)
         .request_id("grant_id_1")
         .description("allow App X to write as me in chat protocol")
         .delegated(true)
@@ -29,7 +29,7 @@ async fn configure() {
             protocol: "chat".to_string(),
             limited_to: None,
         });
-    let grant_to_appx = builder.sign(&alice_signer).build().await.expect("should create grant");
+    let grant_to_appx = builder.sign(&alice).build().await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob creates a RecordsWrite message
@@ -41,7 +41,7 @@ async fn configure() {
     let mut write = WriteBuilder::new()
         .data_format("application/octet-stream")
         .data(write_data)
-        .sign(&bob_signer)
+        .sign(&bob)
         .build()
         .await
         .expect("should create write");
@@ -58,7 +58,7 @@ async fn configure() {
         context_id: grant_to_appx.context_id,
         encoded_data: grant_to_appx.encoded_data.unwrap_or_default(),
     };
-    write.sign_as_delegate(delegated_grant, &appx_signer).await.expect("should sign");
+    write.sign_as_delegate(delegated_grant, &app).await.expect("should sign");
 
     // intentionally remove `owner_delegated_grant` to cause exception
     write.authorization.owner_delegated_grant = None;

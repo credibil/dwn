@@ -384,7 +384,7 @@ mod tests {
     use anyhow::Result;
     use blockstore::{Blockstore as _, InMemoryBlockstore};
     use rand::RngCore;
-    use test_node::key_store::{self, ALICE_DID};
+    use test_node::key_store;
 
     use super::*;
     use crate::interfaces::protocols::{ConfigureBuilder, Definition};
@@ -396,7 +396,7 @@ mod tests {
     #[tokio::test]
     async fn query_records() {
         let block_store = BlockStoreImpl::new();
-        let alice_signer = key_store::signer(ALICE_DID);
+        let alice = key_store::new_keyring();
 
         let mut data = [0u8; 10];
         rand::thread_rng().fill_bytes(&mut data);
@@ -405,7 +405,7 @@ mod tests {
         let write = WriteBuilder::new()
             .data(Data::Stream(stream.clone()))
             .published(true)
-            .sign(&alice_signer)
+            .sign(&alice)
             .build()
             .await
             .unwrap();
@@ -414,32 +414,32 @@ mod tests {
         // add message
         let message_cid = entry.cid().unwrap();
         let block = block::encode(&entry).unwrap();
-        block_store.put(ALICE_DID, PARTITION, &message_cid, &block).await.unwrap();
+        block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(ALICE_DID, PARTITION, &entry, &block_store).await.unwrap();
+        super::insert(&alice.did, PARTITION, &entry, &block_store).await.unwrap();
 
         // execute query
         let query = RecordsQueryBuilder::new()
             .add_filter(
                 RecordsFilter::new()
-                    // .add_author(ALICE_DID)
+                    // .add_author(&alice.did)
                     // .data_size(Range::new().gt(8)),
                     .record_id(write.record_id),
             )
             .build();
 
-        let items = super::query(ALICE_DID, PARTITION, &query, &block_store).await.unwrap();
+        let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
     }
 
     #[tokio::test]
     async fn query_protocols() {
         let block_store = BlockStoreImpl::new();
-        let alice_signer = key_store::signer(ALICE_DID);
+        let alice = key_store::new_keyring();
 
         let configure = ConfigureBuilder::new()
             .definition(Definition::new("http://minimal.xyz"))
-            .sign(&alice_signer)
+            .sign(&alice)
             .build()
             .await
             .expect("should build");
@@ -449,14 +449,14 @@ mod tests {
         // add message
         let message_cid = entry.cid().unwrap();
         let block = block::encode(&entry).unwrap();
-        block_store.put(ALICE_DID, PARTITION, &message_cid, &block).await.unwrap();
+        block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(ALICE_DID, PARTITION, &entry, &block_store).await.unwrap();
+        super::insert(&alice.did, PARTITION, &entry, &block_store).await.unwrap();
 
         // execute query
         let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();
-        let items = super::query(ALICE_DID, PARTITION, &query, &block_store).await.unwrap();
+        let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
     }
 
     struct BlockStoreImpl {
