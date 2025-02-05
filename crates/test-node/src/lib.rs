@@ -2,7 +2,7 @@
 
 pub mod provider;
 
-pub use provider::key_store;
+pub use provider::keystore;
 
 /// Configure Insta snapshot name.
 ///

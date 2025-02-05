@@ -5,6 +5,8 @@ use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
+use credibil_infosec::Signer;
+use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 use dwn_node::authorization::JwsPayload;
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::interfaces::grants::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
@@ -18,16 +20,14 @@ use dwn_node::provider::EventLog;
 use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint, interfaces, store};
 use rand::RngCore;
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
-use credibil_infosec::Signer;
-use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static CAROL: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static ISSUER: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static PFI: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ISSUER: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static PFI: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // // Should handle pre-processing errors
 // #[tokio::test]
@@ -3196,7 +3196,7 @@ async fn no_recipient_update() {
 async fn unauthorized_create() {
     let provider = ProviderImpl::new().await.expect("should create provider");
 
-    let fake = key_store::new_keyring();
+    let fake = keystore::new_keyring();
 
     // --------------------------------------------------
     // Alice configures a credential issuance protocol.

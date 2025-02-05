@@ -13,12 +13,12 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::provider::{EventLog, MessageStore};
 use dwn_node::{Error, Interface, Method, StatusCode, endpoint, store};
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static CAROL: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]

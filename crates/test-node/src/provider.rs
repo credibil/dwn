@@ -7,7 +7,7 @@
 
 pub mod block_store;
 mod event_stream;
-pub mod key_store;
+pub mod keystore;
 
 use anyhow::Result;
 use blockstore::InMemoryBlockstore;

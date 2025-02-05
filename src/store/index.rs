@@ -384,7 +384,7 @@ mod tests {
     use anyhow::Result;
     use blockstore::{Blockstore as _, InMemoryBlockstore};
     use rand::RngCore;
-    use test_node::key_store;
+    use test_node::keystore;
 
     use super::*;
     use crate::interfaces::protocols::{ConfigureBuilder, Definition};
@@ -396,7 +396,7 @@ mod tests {
     #[tokio::test]
     async fn query_records() {
         let block_store = BlockStoreImpl::new();
-        let alice = key_store::new_keyring();
+        let alice = keystore::new_keyring();
 
         let mut data = [0u8; 10];
         rand::thread_rng().fill_bytes(&mut data);
@@ -435,7 +435,7 @@ mod tests {
     #[tokio::test]
     async fn query_protocols() {
         let block_store = BlockStoreImpl::new();
-        let alice = key_store::new_keyring();
+        let alice = keystore::new_keyring();
 
         let configure = ConfigureBuilder::new()
             .definition(Definition::new("http://minimal.xyz"))

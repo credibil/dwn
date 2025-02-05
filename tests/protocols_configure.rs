@@ -13,13 +13,13 @@ use dwn_node::interfaces::protocols::{
 use dwn_node::provider::MessageStore;
 use dwn_node::store::ProtocolsQueryBuilder;
 use dwn_node::{Error, Message, Method, StatusCode, endpoint};
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static CAROL: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]

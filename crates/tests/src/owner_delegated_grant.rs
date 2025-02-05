@@ -10,11 +10,11 @@ use dwn_node::Method;
 use dwn_node::interfaces::grants::{GrantBuilder, Scope};
 use dwn_node::interfaces::records::{Data, DelegatedGrant, WriteBuilder};
 use rand::RngCore;
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static APP: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static APP: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 #[tokio::test]
 async fn configure() {

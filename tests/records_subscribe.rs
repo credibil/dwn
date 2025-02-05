@@ -8,11 +8,11 @@ use dwn_node::interfaces::records::{
 };
 use dwn_node::{Message, StatusCode, endpoint};
 use futures::StreamExt;
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]

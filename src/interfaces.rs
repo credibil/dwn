@@ -25,7 +25,7 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let provider = ProviderImpl::new().await.expect("should create provider");
-//!     let alice = key_store::new_keyring();
+//!     let alice = keystore::new_keyring();
 //!
 //!     let write = WriteBuilder::new()
 //!         .data(Data::from(b"a new write record".to_vec()))
