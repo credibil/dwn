@@ -19,6 +19,10 @@ version.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["interfaces"]
+interfaces = []
+
 [dependencies]
 aes-gcm = "0.10.3"
 anyhow.workspace = true

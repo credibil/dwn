@@ -20,6 +20,7 @@ mod error;
 pub mod event;
 mod grants;
 pub mod hd_key;
+#[cfg(feature = "interfaces")]
 pub mod interfaces;
 mod messages;
 mod protocols;
