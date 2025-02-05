@@ -4,6 +4,8 @@
 //! another entity to perform an action on their behalf. In this case, Alice
 //! grants Bob the ability to configure a protocol on her behalf.
 
+use std::sync::LazyLock;
+
 use dwn_node::interfaces::grants::{GrantBuilder, Scope};
 use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use dwn_node::{Method, endpoint};
@@ -11,18 +13,19 @@ use http::StatusCode;
 use test_node::key_store;
 use test_node::provider::ProviderImpl;
 
+static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]
 async fn configure_any() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
-    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice grants Bob the ability to configure any protocol
     // --------------------------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(&bob.did)
+        .granted_to(&BOB.did)
         .request_id("grant_id_1")
         .description("Allow Bob to configure any protocol")
         .delegated(true)
@@ -31,7 +34,7 @@ async fn configure_any() {
             protocol: None,
         });
 
-    let bob_grant = builder.sign(&alice).build().await.expect("should create grant");
+    let bob_grant = builder.sign(&*ALICE).build().await.expect("should create grant");
 
     // --------------------------------------------------
     // Bob configures the email protocol on Alice's behalf
@@ -42,12 +45,12 @@ async fn configure_any() {
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
         .delegated_grant(bob_grant.try_into().expect("should convert"))
-        .sign(&bob)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did, configure, &provider)
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -57,12 +60,12 @@ async fn configure_any() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter(&definition.protocol)
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should find protocol");
+    let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should find protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let body = reply.body.expect("should have body");

@@ -2,6 +2,7 @@
 
 use core::panic;
 use std::io::Cursor;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use dwn_node::authorization::Authorization;
@@ -15,6 +16,9 @@ use test_node::key_store;
 use test_node::provider::ProviderImpl;
 use tokio::time;
 
+static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+
 // TODO: implement fake provider with no subscription support for this test.
 // // Should respond with a status of NotImplemented (501) if subscriptions are
 // // not supported.
@@ -25,13 +29,11 @@ use tokio::time;
 #[tokio::test]
 async fn invalid_message() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
 
-    let mut subscribe =
-        SubscribeBuilder::new().sign(&alice).build().await.expect("should build");
+    let mut subscribe = SubscribeBuilder::new().sign(&*ALICE).build().await.expect("should build");
     subscribe.descriptor.filters.push(MessagesFilter::default());
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did, subscribe, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be BadRequest");
     };
     assert!(e.starts_with("validation failed for "));
@@ -41,7 +43,6 @@ async fn invalid_message() {
 #[tokio::test]
 async fn owner_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice subscribes to own event stream.
@@ -49,11 +50,11 @@ async fn owner_events() {
     let filter = MessagesFilter::new().interface(Interface::Records);
     let subscribe = SubscribeBuilder::new()
         .add_filter(filter)
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did, subscribe, &provider).await.expect("should subscribe");
+    let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
     let mut event_stream = reply.body.expect("should have body").subscription;
 
@@ -63,21 +64,21 @@ async fn owner_events() {
     let reader = Cursor::new(br#"{"message": "test record write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create write");
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply = endpoint::handle(&alice.did, write, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Ensure the RecordsWrite event exists.
     // --------------------------------------------------
-    let query = QueryBuilder::new().sign(&alice).build().await.expect("should create query");
-    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should query");
+    let query = QueryBuilder::new().sign(&*ALICE).build().await.expect("should create query");
+    let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should have reply");
@@ -106,17 +107,14 @@ async fn owner_events() {
 #[tokio::test]
 async fn unauthorized() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
-    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // An anonymous use attempts to subscribe to Alice's event stream.
     // --------------------------------------------------
-    let mut subscribe =
-        SubscribeBuilder::new().sign(&alice).build().await.expect("should build");
+    let mut subscribe = SubscribeBuilder::new().sign(&*ALICE).build().await.expect("should build");
     subscribe.authorization = Authorization::default();
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did, subscribe, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be BadRequest");
     };
     assert!(e.starts_with("validation failed for "));
@@ -124,8 +122,8 @@ async fn unauthorized() {
     // --------------------------------------------------
     // Bob attempts to subscribe to Alice's event stream.
     // --------------------------------------------------
-    let subscribe = SubscribeBuilder::new().sign(&bob).build().await.expect("should build");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, subscribe, &provider).await else {
+    let subscribe = SubscribeBuilder::new().sign(&*BOB).build().await.expect("should build");
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "missing permission grant");
@@ -135,26 +133,24 @@ async fn unauthorized() {
 #[tokio::test]
 async fn interface_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
-    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice grants Bob permission to subscribe to all her messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did)
+        .granted_to(&BOB.did)
         .scope(Scope::Messages {
             method: Method::Subscribe,
             protocol: None,
         })
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create grant");
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = endpoint::handle(&alice.did, bob_grant, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -162,12 +158,12 @@ async fn interface_scope() {
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .sign(&bob)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did, subscribe, &provider).await.expect("should subscribe");
+    let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
     let mut alice_events = reply.body.expect("should have body").subscription;
 
@@ -181,29 +177,31 @@ async fn interface_scope() {
     let definition = serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
     message_cids.push(configure.cid().expect("should have cid"));
 
-    let reply =
-        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // 2. configure a random protocol
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://random.xyz"))
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
     message_cids.push(configure.cid().expect("should have cid"));
 
-    let reply =
-        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // 3. write a record to the 'allow-any' protocol
@@ -216,28 +214,28 @@ async fn interface_scope() {
             parent_context_id: None,
         })
         .schema("post")
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create write");
 
     message_cids.push(write.cid().expect("should have cid"));
 
-    let reply = endpoint::handle(&alice.did, write, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // 4. write a random record
     let reader = Cursor::new(br#"{"message": "test write"}"#.to_vec());
     let write = WriteBuilder::new()
         .data(Data::Stream(reader))
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create write");
 
     message_cids.push(write.cid().expect("should have cid"));
 
-    let reply = endpoint::handle(&alice.did, write, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -263,27 +261,25 @@ async fn interface_scope() {
 #[tokio::test]
 async fn unauthorized_interface() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
-    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice grants Bob permission to write records scoped to the 'allow-any' protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did)
+        .granted_to(&BOB.did)
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://allow-any".to_string(),
             limited_to: None,
         })
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create grant");
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = endpoint::handle(&alice.did, bob_grant, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -291,12 +287,12 @@ async fn unauthorized_interface() {
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .sign(&bob)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, subscribe, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "interface is not within grant scope");
@@ -306,26 +302,24 @@ async fn unauthorized_interface() {
 #[tokio::test]
 async fn unauthorized_method() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
-    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice grants Bob permission to query messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did)
+        .granted_to(&BOB.did)
         .scope(Scope::Messages {
             method: Method::Query,
             protocol: None,
         })
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create grant");
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = endpoint::handle(&alice.did, bob_grant, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -333,12 +327,12 @@ async fn unauthorized_method() {
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new()
         .permission_grant_id(bob_grant_id)
-        .sign(&bob)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, subscribe, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "method is not within grant scope");
@@ -348,8 +342,6 @@ async fn unauthorized_method() {
 #[tokio::test]
 async fn protocol_filter() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
-    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures 2 protocols.
@@ -362,45 +354,47 @@ async fn protocol_filter() {
     definition.protocol = "http://protocol1.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // protocol2
     definition.protocol = "http://protocol2.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition)
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to subscribe to `protocol1` messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did)
+        .granted_to(&BOB.did)
         .scope(Scope::Messages {
             method: Method::Subscribe,
             protocol: Some("http://protocol1.xyz".to_string()),
         })
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create grant");
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = endpoint::handle(&alice.did, bob_grant, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -410,12 +404,12 @@ async fn protocol_filter() {
     let subscribe = SubscribeBuilder::new()
         .add_filter(filter)
         .permission_grant_id(&bob_grant_id)
-        .sign(&bob)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did, subscribe, &provider).await.expect("should subscribe");
+    let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
     let mut alice_events = reply.body.expect("should have body").subscription;
 
@@ -432,14 +426,14 @@ async fn protocol_filter() {
             parent_context_id: None,
         })
         .schema("post")
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create write");
 
     let protocol1_cid = write.cid().expect("should have cid");
 
-    let reply = endpoint::handle(&alice.did, write, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // protocol2
@@ -452,12 +446,12 @@ async fn protocol_filter() {
             parent_context_id: None,
         })
         .schema("post")
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(&alice.did, write, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, write, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -488,8 +482,6 @@ async fn protocol_filter() {
 #[tokio::test]
 async fn invalid_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
-    let bob = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice configures 2 protocols.
@@ -502,45 +494,47 @@ async fn invalid_protocol() {
     definition.protocol = "http://protocol1.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // protocol2
     definition.protocol = "http://protocol2.xyz".to_string();
     let configure = ConfigureBuilder::new()
         .definition(definition)
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(&alice.did, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to subscribe to `protocol1` messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did)
+        .granted_to(&BOB.did)
         .scope(Scope::Messages {
             method: Method::Subscribe,
             protocol: Some("http://protocol1.xyz".to_string()),
         })
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create grant");
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = endpoint::handle(&alice.did, bob_grant, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -549,12 +543,12 @@ async fn invalid_protocol() {
     let subscribe = SubscribeBuilder::new()
         .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .sign(&bob)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, subscribe, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "filter and grant protocols do not match");
@@ -566,12 +560,12 @@ async fn invalid_protocol() {
         .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .add_filter(MessagesFilter::new().protocol("http://protocol2.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .sign(&bob)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did, subscribe, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "filter and grant protocols do not match");

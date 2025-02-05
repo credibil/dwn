@@ -1,5 +1,6 @@
 //! Messages Subscribe
 
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use dwn_node::interfaces::records::{
@@ -11,24 +12,22 @@ use test_node::key_store;
 use test_node::provider::ProviderImpl;
 use tokio::time;
 
+static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]
 async fn owner_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
 
     // --------------------------------------------------
     // Alice subscribes to own event stream.
     // --------------------------------------------------
-    let filter = RecordsFilter::new().add_author(&alice.did);
-    let subscribe = SubscribeBuilder::new()
-        .filter(filter)
-        .sign(&alice)
-        .build()
+    let filter = RecordsFilter::new().add_author(&ALICE.did);
+    let subscribe =
+        SubscribeBuilder::new().filter(filter).sign(&*ALICE).build().await.expect("should build");
+    let reply = endpoint::handle(&ALICE.did, subscribe, &provider)
         .await
-        .expect("should build");
-    let reply =
-        endpoint::handle(&alice.did, subscribe, &provider).await.expect("should configure protocol");
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
     let mut subscribe_reply = reply.body.expect("should have body");
 
@@ -39,14 +38,14 @@ async fn owner_events() {
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create write");
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply = endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, write.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -55,11 +54,11 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query = QueryBuilder::new()
         .filter(filter)
-        .sign(&alice)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should query");
+    let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should have reply");

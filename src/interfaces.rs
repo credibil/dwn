@@ -19,7 +19,7 @@
 //! use base64ct::{Base64UrlUnpadded, Encoding};
 //! use dwn_node::interfaces::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 //! use dwn_node::{StatusCode, endpoint};
-//! use test_node::key_store::{self, &alice.did};
+//! use test_node::key_store;
 //! use test_node::provider::ProviderImpl;
 //!
 //! #[tokio::main]
