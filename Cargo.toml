@@ -19,6 +19,10 @@ version.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["interfaces"]
+interfaces = []
+
 [dependencies]
 aes-gcm = "0.10.3"
 anyhow.workspace = true
@@ -43,7 +47,7 @@ sha2.workspace = true
 thiserror = "2.0.11"
 tokio.workspace = true
 ulid = "1.1.4"
-uuid = { version = "1.12.1", features = ["fast-rng", "v4"] }
+uuid = { version = "1.13.0", features = ["fast-rng", "v4"] }
 vercre-did.workspace = true
 vercre-infosec.workspace = true
 x25519-dalek.workspace = true
@@ -91,6 +95,7 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
 http = "1.2.0"
 insta = { version = "1.42.1", features = ["redactions", "yaml"] }
+multibase = "0.9"
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.138", features = ["alloc"] }

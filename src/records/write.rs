@@ -16,10 +16,10 @@ use vercre_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{Authorization, JwsPayload};
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, Grant, Protocol};
+use crate::grants::{self, Grant};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{DateRange, EncryptionProperty, RecordsFilter, integrity};
+use crate::records::{DateRange, EncryptionProperty, RecordsFilter, protocol};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
@@ -368,13 +368,13 @@ impl Write {
         let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
         let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
-            let grant = permissions::fetch_grant(owner, permission_grant_id, store).await?;
+            let grant = grants::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
         }
 
         // protocol-specific authorization
         if let Some(protocol) = &self.descriptor.protocol {
-            let protocol = Protocol::new(protocol).context_id(self.context_id.as_ref());
+            let protocol = protocol::Authorizer::new(protocol).context_id(self.context_id.as_ref());
             return protocol.permit_write(owner, self, store).await;
         }
 
@@ -400,7 +400,7 @@ impl Write {
 
         // verify integrity of messages with protocol
         if self.descriptor.protocol.is_some() {
-            integrity::verify(owner, self, provider).await?;
+            self.verify(owner, provider).await?;
         }
 
         let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)
@@ -479,7 +479,7 @@ impl Write {
 
             // write record is a grant
             if self.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-                integrity::verify_schema(self, &data_bytes)?;
+                self.verify_schema(&data_bytes)?;
             }
         } else {
             // store data in DataStore
@@ -541,7 +541,7 @@ impl Write {
         let Some(grant_id) = &self.descriptor.parent_id else {
             return Err(unexpected!("missing `parent_id`"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
 
         // verify protocols match
         if let Some(tags) = &self.descriptor.tags {

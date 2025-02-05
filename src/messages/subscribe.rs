@@ -13,7 +13,7 @@ use crate::event::{SubscribeFilter, Subscriber};
 use crate::messages::MessagesFilter;
 use crate::provider::{EventStream, MessageStore, Provider};
 use crate::utils::cid;
-use crate::{Descriptor, Result, forbidden, permissions};
+use crate::{Descriptor, Result, forbidden, grants};
 
 /// Handle — or process — a [`Subscribe`] message.
 ///
@@ -92,7 +92,7 @@ impl Subscribe {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("missing permission grant"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        let grant = grants::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // ensure subscribe filters include scoped protocol

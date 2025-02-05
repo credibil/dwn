@@ -17,7 +17,7 @@ use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, P
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, EntryType};
 use crate::utils::cid;
-use crate::{Descriptor, Error, Result, forbidden, permissions, unexpected, utils};
+use crate::{Descriptor, Error, Result, forbidden, grants, unexpected, utils};
 
 /// Handle — or process — a [`Configure`] message.
 ///
@@ -160,7 +160,7 @@ impl Configure {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("author has no grant"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+        let grant = grants::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.author()?, self.descriptor(), store).await?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant

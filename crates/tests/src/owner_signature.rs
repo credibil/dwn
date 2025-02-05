@@ -5,21 +5,22 @@
 //! grants Bob the ability to configure a protocol on her behalf.
 
 use std::io::Read;
+use std::sync::LazyLock;
 
 use dwn_node::endpoint;
 use dwn_node::interfaces::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
 use http::StatusCode;
-use insta::assert_yaml_snapshot as assert_snapshot;
 use serde_json::{Value, json};
-use test_node::key_store::{self, ALICE_DID, BOB_DID};
+use test_node::key_store;
 use test_node::provider::ProviderImpl;
+
+static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
 async fn flat_space() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Bob writes a message to his web node
@@ -32,57 +33,43 @@ async fn flat_space() {
     let bob_msg = WriteBuilder::new()
         .data(Data::from(bob_data))
         .published(true)
-        .sign(&bob_signer)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(BOB_DID, bob_msg.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(&BOB.did, bob_msg.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
     // --------------------------------------------------
-    let filter = RecordsFilter::new().record_id(bob_msg.record_id);
-    let alice_read = ReadBuilder::new()
-        .filter(filter)
-        .sign(&alice_signer)
-        .build()
-        .await
-        .expect("should create write");
+    let filter = RecordsFilter::new().record_id(&bob_msg.record_id);
+    let alice_read =
+        ReadBuilder::new().filter(filter).sign(&*ALICE).build().await.expect("should create write");
 
     let reply =
-        endpoint::handle(BOB_DID, alice_read.clone(), &provider).await.expect("should read");
+        endpoint::handle(&BOB.did, alice_read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    assert_snapshot!("alice_read", reply, {
-        ".**.recordId" => "[recordId]",
-        ".**.messageTimestamp" => "[messageTimestamp]",
-        ".**.dateCreated" => "[dateCreated]",
-        ".**.datePublished" => "[datePublished]",
-        ".**.signature.payload" => "[payload]",
-        ".**.signature.signatures[0].signature" => "[signature]",
-        ".**.attestation.payload" => "[payload]",
-        ".**.attestation.signatures[0].signature" => "[signature]",
-        ".entry.data" => "[data]",
-    });
+
+    let read_reply = reply.body.expect("should be records read");
+    let mut read_bob_msg = read_reply.entry.records_write.expect("should have records write entry");
+    assert_eq!(read_bob_msg.record_id, bob_msg.record_id);
 
     // --------------------------------------------------
     // Alice augments Bob's message and saves to her web node
     // --------------------------------------------------
-    let read_reply = reply.body.expect("should be records read");
     let alice_data = read_reply.entry.data.expect("should have data");
+    read_bob_msg.sign_as_owner(&*ALICE).await.expect("should sign as owner");
+    read_bob_msg.with_stream(alice_data);
 
-    let mut bob_msg = read_reply.entry.records_write.expect("should have records write entry");
-    bob_msg.sign_as_owner(&alice_signer).await.expect("should sign as owner");
-    bob_msg.with_stream(alice_data);
-
-    let reply = endpoint::handle(ALICE_DID, bob_msg, &provider).await.expect("should write");
+    let reply = endpoint::handle(&ALICE.did, read_bob_msg, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob's message can be read from Alice's web node
     // --------------------------------------------------
-    let reply = endpoint::handle(BOB_DID, alice_read, &provider).await.expect("should read");
+    let reply = endpoint::handle(&BOB.did, alice_read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let read_reply = reply.body.expect("should be records read");

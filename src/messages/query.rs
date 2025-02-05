@@ -12,7 +12,7 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::provider::{EventLog, Provider};
 use crate::store::{self, Cursor};
 use crate::utils::cid;
-use crate::{Descriptor, Result, forbidden, permissions};
+use crate::{Descriptor, Result, forbidden, grants};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -83,7 +83,7 @@ impl Query {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("author has no grant"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), provider).await?;
 
         // verify filter protocol

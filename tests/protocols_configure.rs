@@ -4,6 +4,7 @@
 //! messages and subsequently query for them.
 
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder, Scope};
 use dwn_node::interfaces::protocols::{
@@ -12,28 +13,32 @@ use dwn_node::interfaces::protocols::{
 use dwn_node::provider::MessageStore;
 use dwn_node::store::ProtocolsQueryBuilder;
 use dwn_node::{Error, Message, Method, StatusCode, endpoint};
-use test_node::key_store::{self, ALICE_DID, BOB_DID, CAROL_DID};
+use test_node::key_store;
 use test_node::provider::ProviderImpl;
 use tokio::time;
+
+static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static CAROL: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]
 async fn minimal() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -46,12 +51,11 @@ async fn minimal() {
 #[tokio::test]
 async fn forbidden() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     // configure a protocol
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -59,7 +63,7 @@ async fn forbidden() {
     // set a bad signature
     configure.authorization.signature.signatures[0].signature = "bad".to_string();
 
-    let Err(Error::Unauthorized(_)) = endpoint::handle(ALICE_DID, configure, &provider).await
+    let Err(Error::Unauthorized(_)) = endpoint::handle(&ALICE.did, configure, &provider).await
     else {
         panic!("should be Unauthorized");
     };
@@ -69,7 +73,6 @@ async fn forbidden() {
 #[tokio::test]
 async fn overwrite_older() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let definition = Definition::new("http://minimal.xyz");
 
@@ -78,7 +81,7 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let older = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -90,19 +93,19 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let newer = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, newer, &provider).await.expect("should configure protocol");
+        endpoint::handle(&ALICE.did, newer, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts to configure the older protocol and fails.
     // --------------------------------------------------
-    let Err(Error::Conflict(e)) = endpoint::handle(ALICE_DID, older, &provider).await else {
+    let Err(Error::Conflict(e)) = endpoint::handle(&ALICE.did, older, &provider).await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message is not the latest");
@@ -112,13 +115,13 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let update = ConfigureBuilder::new()
         .definition(definition)
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, update, &provider).await.expect("should configure protocol");
+        endpoint::handle(&ALICE.did, update, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -126,11 +129,11 @@ async fn overwrite_older() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://minimal.xyz")
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should exist");
@@ -143,7 +146,6 @@ async fn overwrite_older() {
 #[tokio::test]
 async fn overwrite_smaller() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let definition_1 = Definition::new("http://minimal.xyz").add_type(
         "foo1",
@@ -173,19 +175,19 @@ async fn overwrite_smaller() {
     let mut messages = vec![
         ConfigureBuilder::new()
             .definition(definition_1)
-            .sign(&alice_signer)
+            .sign(&*ALICE)
             .build()
             .await
             .expect("should build"),
         ConfigureBuilder::new()
             .definition(definition_2)
-            .sign(&alice_signer)
+            .sign(&*ALICE)
             .build()
             .await
             .expect("should build"),
         ConfigureBuilder::new()
             .definition(definition_3)
-            .sign(&alice_signer)
+            .sign(&*ALICE)
             .build()
             .await
             .expect("should build"),
@@ -203,20 +205,21 @@ async fn overwrite_smaller() {
     // CID is smaller than the existing entry.
     // --------------------------------------------------
     // configure protocol
-    let reply = endpoint::handle(ALICE_DID, messages[1].clone(), &provider)
+    let reply = endpoint::handle(&ALICE.did, messages[1].clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check the protocol with the smallest CID cannot be written
-    let Err(Error::Conflict(e)) = endpoint::handle(ALICE_DID, messages[0].clone(), &provider).await
+    let Err(Error::Conflict(e)) =
+        endpoint::handle(&ALICE.did, messages[0].clone(), &provider).await
     else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message CID is smaller than existing entry");
 
     // check the protocol with the largest CID can be written
-    let reply = endpoint::handle(ALICE_DID, messages[2].clone(), &provider)
+    let reply = endpoint::handle(&ALICE.did, messages[2].clone(), &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
@@ -226,11 +229,11 @@ async fn overwrite_smaller() {
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .filter("http://minimal.xyz")
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should query");
+    let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should exist");
@@ -242,11 +245,10 @@ async fn overwrite_smaller() {
 #[tokio::test]
 async fn invalid_protocol() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("bad-protocol.xyz/"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -254,7 +256,7 @@ async fn invalid_protocol() {
     // override builder's normalizing of  protocol
     configure.descriptor.definition.protocol = "minimal.xyz/".to_string();
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "invalid URL: minimal.xyz/");
@@ -264,7 +266,6 @@ async fn invalid_protocol() {
 #[tokio::test]
 async fn invalid_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz").add_type(
@@ -274,7 +275,7 @@ async fn invalid_schema() {
                 data_formats: None,
             },
         ))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -288,7 +289,7 @@ async fn invalid_schema() {
         },
     );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "invalid URL: bad-schema.xyz/");
@@ -298,16 +299,15 @@ async fn invalid_schema() {
 #[tokio::test]
 async fn no_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let bob_signer = key_store::signer(BOB_DID);
 
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .sign(&bob_signer)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "author has no grant");
@@ -318,14 +318,13 @@ async fn no_grant() {
 #[tokio::test]
 async fn duplicate_actor() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     // --------------------------------------------------
     // Duplicate 'who' with 'can'.
     // --------------------------------------------------
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -351,7 +350,7 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -361,7 +360,7 @@ async fn duplicate_actor() {
     // --------------------------------------------------
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -398,7 +397,7 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -408,11 +407,10 @@ async fn duplicate_actor() {
 #[tokio::test]
 async fn duplicate_role() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://foo.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -453,7 +451,7 @@ async fn duplicate_role() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should not configure protocol");
     };
     assert!(e.starts_with("validation failed for"));
@@ -464,11 +462,10 @@ async fn duplicate_role() {
 #[tokio::test]
 async fn invalid_read_action() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let mut configure = ConfigureBuilder::new()
         .definition(Definition::new("http://foo.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -498,7 +495,8 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::BadRequest(e)) =
+        endpoint::handle(&ALICE.did, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -529,7 +527,8 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::BadRequest(e)) =
+        endpoint::handle(&ALICE.did, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -560,7 +559,8 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::BadRequest(e)) =
+        endpoint::handle(&ALICE.did, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -591,8 +591,9 @@ async fn invalid_read_action() {
             },
         );
 
-    let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 }
 
@@ -600,20 +601,17 @@ async fn invalid_read_action() {
 #[tokio::test]
 async fn valid_grant() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
-    let carol_signer = key_store::signer(CAROL_DID);
 
     // --------------------------------------------------
     // Alice grants Bob permission to configure protocols.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(BOB_DID)
+        .granted_to(&BOB.did)
         .scope(Scope::Protocols {
             method: Method::Configure,
             protocol: None,
         })
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create grant");
@@ -621,7 +619,7 @@ async fn valid_grant() {
     let bob_grant_id = bob_grant.record_id.clone();
 
     let reply =
-        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+        endpoint::handle(&ALICE.did, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -630,13 +628,14 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .sign(&bob_signer)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -645,12 +644,12 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(&bob_grant_id)
-        .sign(&carol_signer)
+        .sign(&*CAROL)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -661,12 +660,13 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_revocation = RevocationBuilder::new()
         .grant(bob_grant)
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create revocation");
 
-    let reply = endpoint::handle(ALICE_DID, bob_revocation, &provider).await.expect("should write");
+    let reply =
+        endpoint::handle(&ALICE.did, bob_revocation, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -675,12 +675,12 @@ async fn valid_grant() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("http://minimal.xyz"))
         .permission_grant_id(bob_grant_id)
-        .sign(&carol_signer)
+        .sign(&*CAROL)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure, &provider).await else {
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -690,19 +690,17 @@ async fn valid_grant() {
 #[tokio::test]
 async fn configure_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
-    let bob_signer = key_store::signer(BOB_DID);
 
     // --------------------------------------------------
     // Alice grants Bob permission to configure protoocols for a specific protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(BOB_DID)
+        .granted_to(&BOB.did)
         .scope(Scope::Protocols {
             method: Method::Configure,
             protocol: Some("https://example.com/protocol/allowed".to_string()),
         })
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should create grant");
@@ -710,7 +708,7 @@ async fn configure_scope() {
     let bob_grant_id = bob_grant.record_id.clone();
 
     let reply =
-        endpoint::handle(ALICE_DID, bob_grant.clone(), &provider).await.expect("should write");
+        endpoint::handle(&ALICE.did, bob_grant.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -719,13 +717,14 @@ async fn configure_scope() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://example.com/protocol/allowed"))
         .permission_grant_id(&bob_grant_id)
-        .sign(&bob_signer)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -734,12 +733,12 @@ async fn configure_scope() {
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://example.com/protocol/not-allowed"))
         .permission_grant_id(bob_grant_id)
-        .sign(&bob_signer)
+        .sign(&*BOB)
         .build()
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(ALICE_DID, configure.clone(), &provider).await
+    let Err(Error::Forbidden(e)) = endpoint::handle(&ALICE.did, configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -750,23 +749,23 @@ async fn configure_scope() {
 #[tokio::test]
 async fn configure_event() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let configure = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(ALICE_DID, configure, &provider).await.expect("should configure protocol");
+    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check log
     let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
     let (entries, _) =
-        MessageStore::query(&provider, ALICE_DID, &query).await.expect("should query");
+        MessageStore::query(&provider, &ALICE.did, &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -774,24 +773,23 @@ async fn configure_event() {
 #[tokio::test]
 async fn delete_older_events() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_signer = key_store::signer(ALICE_DID);
 
     let oldest = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
 
     let reply =
-        endpoint::handle(ALICE_DID, oldest, &provider).await.expect("should configure protocol");
+        endpoint::handle(&ALICE.did, oldest, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     time::sleep(time::Duration::from_secs(1)).await;
 
     let newest = ConfigureBuilder::new()
         .definition(Definition::new("https://minimal.xyz"))
-        .sign(&alice_signer)
+        .sign(&*ALICE)
         .build()
         .await
         .expect("should build");
@@ -799,14 +797,14 @@ async fn delete_older_events() {
     let newest_cid = newest.cid().expect("should have CID");
 
     let reply =
-        endpoint::handle(ALICE_DID, newest, &provider).await.expect("should configure protocol");
+        endpoint::handle(&ALICE.did, newest, &provider).await.expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // check log
 
     let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
     let (entries, _) =
-        MessageStore::query(&provider, ALICE_DID, &query).await.expect("should query");
+        MessageStore::query(&provider, &ALICE.did, &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cid().unwrap(), newest_cid);
 }

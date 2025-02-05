@@ -19,32 +19,32 @@
 //! use base64ct::{Base64UrlUnpadded, Encoding};
 //! use dwn_node::interfaces::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 //! use dwn_node::{StatusCode, endpoint};
-//! use test_node::key_store::{self, ALICE_DID};
+//! use test_node::key_store;
 //! use test_node::provider::ProviderImpl;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let provider = ProviderImpl::new().await.expect("should create provider");
-//!     let alice_signer = key_store::signer(ALICE_DID);
+//!     let alice = key_store::new_keyring();
 //!
 //!     let write = WriteBuilder::new()
 //!         .data(Data::from(b"a new write record".to_vec()))
-//!         .sign(&alice_signer)
+//!         .sign(&alice)
 //!         .build()
 //!         .await
 //!         .expect("should create write");
 //!     let reply =
-//!         endpoint::handle(ALICE_DID, write.clone(), &provider).await.expect("should write");
+//!         endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
 //!     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 //!
 //!     // and to read the previously written record:
 //!     let query = QueryBuilder::new()
 //!         .filter(RecordsFilter::new().record_id(&write.record_id))
-//!         .sign(&alice_signer)
+//!         .sign(&alice)
 //!         .build()
 //!         .await
 //!         .expect("should create read");
-//!     let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should write");
+//!     let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should write");
 //!     assert_eq!(reply.status.code, StatusCode::OK);
 //!
 //!     let body = reply.body.expect("should have body");

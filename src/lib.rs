@@ -18,10 +18,11 @@ pub mod authorization;
 pub mod endpoint;
 mod error;
 pub mod event;
+mod grants;
 pub mod hd_key;
+#[cfg(feature = "interfaces")]
 pub mod interfaces;
 mod messages;
-mod permissions;
 mod protocols;
 pub mod provider;
 mod records;

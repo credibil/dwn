@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, Scope};
+use crate::grants::{self, Scope};
 use crate::protocols::PROTOCOL_URI;
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::write;
@@ -127,7 +127,7 @@ impl Read {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("missing grant ID"));
         };
-        let grant = permissions::fetch_grant(owner, grant_id, provider).await?;
+        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &author, self.descriptor(), provider).await?;
         verify_scope(owner, entry, grant.data.scope, provider).await?;
 
@@ -176,7 +176,7 @@ async fn verify_scope(
 
         // check if the protocol is the internal permissions protocol
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            let permission_scope = permissions::fetch_scope(owner, &write, store).await?;
+            let permission_scope = grants::fetch_scope(owner, &write, store).await?;
             if permission_scope.protocol() == Some(protocol) {
                 return Ok(());
             }

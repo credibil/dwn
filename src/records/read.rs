@@ -11,12 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::permissions::{self, Protocol};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::{Delete, RecordsFilter, Write, write};
+use crate::records::{Delete, RecordsFilter, Write, protocol, write};
 use crate::store::{self, RecordsQueryBuilder};
 use crate::utils::cid;
-use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
+use crate::{Descriptor, Error, Method, Result, forbidden, grants, unexpected};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -232,15 +231,17 @@ impl Read {
 
         // verify grant
         if let Some(grant_id) = &authzn.payload()?.permission_grant_id {
-            let grant = permissions::fetch_grant(owner, grant_id, store).await?;
+            let grant = grants::fetch_grant(owner, grant_id, store).await?;
             grant.permit_read(owner, &author, self, write, store).await?;
             return Ok(());
         }
 
         // verify protocol role and action
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = Protocol::new(protocol).context_id(write.context_id.as_ref());
-            protocol.permit_read(owner, self, write, store).await?;
+            let protocol = protocol::Authorizer::new(protocol)
+                .context_id(write.context_id.as_ref())
+                .initial_write(write);
+            protocol.permit_read(owner, self, store).await?;
             return Ok(());
         }
 

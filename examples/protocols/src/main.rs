@@ -3,12 +3,13 @@ use dwn_node::endpoint;
 use dwn_node::interfaces::protocols::Query;
 use dwn_node::provider::Signer;
 use serde_json::json;
-use test_node::key_store::{self, ALICE_DID};
+use test_node::key_store;
 use test_node::provider::ProviderImpl;
 
 #[tokio::main]
 async fn main() {
     let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice = key_store::new_keyring();
 
     // JWS JSON serialization
     let payload = Base64UrlUnpadded::encode_string(
@@ -18,10 +19,8 @@ async fn main() {
     let protected = Base64UrlUnpadded::encode_string(
         br#"{"alg":"EdDSA","typ":"jwt","kid":"did:key:z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX#z6Mkj8Jr1rg3YjVWWhg7ahEYJibqhjBgZt1pDCbT4Lv7D4HX"}"#
     );
-
-    let keyring = key_store::signer(ALICE_DID);
     let sig_bytes =
-        keyring.try_sign(format!("{protected}.{payload}").as_bytes()).await.expect("should sign");
+        alice.try_sign(format!("{protected}.{payload}").as_bytes()).await.expect("should sign");
     let signature = Base64UrlUnpadded::encode_string(&sig_bytes);
 
     // Query message
@@ -45,7 +44,7 @@ async fn main() {
     });
 
     let query: Query = serde_json::from_value(query_json).expect("should deserialize");
-    let reply = endpoint::handle(ALICE_DID, query, &provider).await.expect("should send message");
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should send message");
 
     println!("{:?}", reply);
 }
