@@ -11,8 +11,8 @@ use chrono::format::SecondsFormat::Micros;
 use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use vercre_infosec::Signer;
-use vercre_infosec::jose::{Jws, JwsBuilder};
+use credibil_infosec::Signer;
+use credibil_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{Authorization, JwsPayload};
 use crate::endpoint::{Message, Reply, Status};

@@ -38,7 +38,7 @@ specification makes its way from DRAFT to FINAL, our code will be updated to ref
 
 ## Additional
 
-[![ci](https://github.com/vercre/dwn/actions/workflows/ci.yaml/badge.svg)](https://github.com/vercre/dwn/actions/workflows/ci.yaml)
+[![ci](https://github.com/credibil/dwn/actions/workflows/ci.yaml/badge.svg)](https://github.com/credibil/dwn/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE-MIT)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](./LICENSE-APACHE)
 

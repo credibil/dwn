@@ -9,7 +9,7 @@ use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use vercre_infosec::jose::jwk::PublicKeyJwk;
+use credibil_infosec::jose::jwk::PublicKeyJwk;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};

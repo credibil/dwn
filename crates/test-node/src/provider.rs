@@ -38,20 +38,6 @@ impl TaskStore for ProviderImpl {}
 
 impl DidResolver for ProviderImpl {
     async fn resolve(&self, url: &str) -> Result<Document> {
-        // let resolved =
-        //     vercre_did::resolve(url, None, self.clone()).await.map_err(|e| anyhow!(e))?;
-        // Ok(resolved.document.unwrap())
-
-        // if url == &alice.did {
-        //     serde_json::from_slice(include_bytes!("./provider/data/alice_did.json"))
-        //         .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
-        // } else {
-        //     serde_json::from_slice(include_bytes!("./provider/data/bob_did.json"))
-        //         .map_err(|e| anyhow!(format!("issue deserializing document: {e}")))
-        // }
-
-        println!("resolve: {}", url);
-
-        Ok(Document::default())
+        unimplemented!("DidResolver::resolve")
     }
 }

@@ -19,7 +19,7 @@ use crate::provider::MessageStore;
 use crate::{Result, forbidden, store, utils};
 
 /// Default protocol for managing web node permission grants.
-pub const PROTOCOL_URI: &str = "https://vercre.website/dwn/permissions";
+pub const PROTOCOL_URI: &str = "https://credibil.website/dwn/permissions";
 
 /// The protocol path of the `request` record.
 pub const REQUEST_PATH: &str = "request";

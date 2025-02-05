@@ -6,8 +6,8 @@
 use std::io::Read;
 
 use anyhow::Result;
-pub use vercre_did::{DidResolver, Document};
-pub use vercre_infosec::{Receiver, Signer};
+pub use credibil_did::{DidResolver, Document};
+pub use credibil_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
 use crate::store::{Cursor, Entry, Query, data, event_log, message, task};

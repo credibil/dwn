@@ -47,9 +47,9 @@ sha2.workspace = true
 thiserror = "2.0.11"
 tokio.workspace = true
 ulid = "1.1.4"
-uuid = { version = "1.13.0", features = ["fast-rng", "v4"] }
-vercre-did.workspace = true
-vercre-infosec.workspace = true
+uuid = { version = "1.13.1", features = ["fast-rng", "v4"] }
+credibil-did.workspace = true
+credibil-infosec.workspace = true
 x25519-dalek.workspace = true
 zeroize = "1.8.1"
 
@@ -63,15 +63,15 @@ members = ["crates/*", "examples/*"]
 resolver = "2"
 
 [workspace.package]
-authors = ["Vercre"]
+authors = ["Credibil"]
 categories = ["data", "messaging", "didcomm", "identity", "verifiable"]
 edition = "2024"
 exclude = [".*", "/docs", "snapshots/"]
-homepage = "https://vercre.io"
+homepage = "https://credibil.io"
 keywords = ["credentials", "decentralized", "identity", "openid", "verifiable"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/vercre/dwn"
+repository = "https://github.com/credibil/dwn"
 rust-version = "1.85"
 version = "0.1.0-alpha.1"
 
@@ -102,12 +102,12 @@ serde_json = { version = "1.0.138", features = ["alloc"] }
 sha2 = "0.10.8"
 test-node = { path = "crates/test-node" }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time"] }
-vercre-did = { git = "https://github.com/vercre/did.git" }
-vercre-infosec = { git = "https://github.com/vercre/infosec.git" }
+credibil-did = { git = "https://github.com/credibil/did.git" }
+credibil-infosec = { git = "https://github.com/credibil/infosec.git" }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 
-# [patch."https://github.com/vercre/infosec.git"]
-# vercre-infosec = { path = "../infosec" }
+# [patch."https://github.com/credibil/infosec.git"]
+# credibil-infosec = { path = "../infosec" }
 
 [profile.release]
 # Optimize for small code size

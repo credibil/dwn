@@ -20,8 +20,8 @@ use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint, interfac
 use rand::RngCore;
 use test_node::key_store;
 use test_node::provider::ProviderImpl;
-use vercre_infosec::Signer;
-use vercre_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
+use credibil_infosec::Signer;
+use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 
 static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
 static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());

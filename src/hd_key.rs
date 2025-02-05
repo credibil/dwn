@@ -21,8 +21,8 @@ use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use vercre_infosec::jose::PublicKeyJwk;
-use vercre_infosec::{Curve, KeyType};
+use credibil_infosec::jose::PublicKeyJwk;
+use credibil_infosec::{Curve, KeyType};
 
 use crate::{Error, Result, unexpected};
 

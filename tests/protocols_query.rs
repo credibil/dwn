@@ -16,7 +16,7 @@ use dwn_node::{Error, Method, StatusCode, cid, endpoint};
 use test_node::key_store;
 use test_node::provider::ProviderImpl;
 use tokio::time;
-use vercre_infosec::jose::jws::{Jws, Protected, Signature};
+use credibil_infosec::jose::jws::{Jws, Protected, Signature};
 
 static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
 static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
