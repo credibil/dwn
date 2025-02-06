@@ -10,11 +10,11 @@ use dwn_node::interfaces::grants::{GrantBuilder, Scope};
 use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use dwn_node::{Method, endpoint};
 use http::StatusCode;
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]

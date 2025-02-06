@@ -14,12 +14,12 @@ use dwn_node::provider::MessageStore;
 use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint, store};
 use rand::RngCore;
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static CAROL: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]
@@ -86,7 +86,7 @@ async fn read_message() {
 #[tokio::test]
 async fn invalid_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let mut invalid = key_store::new_keyring();
+    let mut invalid = keystore::new_keyring();
     invalid.secret_key = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo".to_string();
 
     let read = ReadBuilder::new()

@@ -8,19 +8,19 @@ use std::time::Duration;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Days;
+use credibil_infosec::jose::jws::{Jws, Protected, Signature};
 use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder, Scope};
 use dwn_node::interfaces::protocols::{
     ConfigureBuilder, Definition, ProtocolType, ProtocolsFilter, QueryBuilder,
 };
 use dwn_node::{Error, Method, StatusCode, cid, endpoint};
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 use tokio::time;
-use vercre_infosec::jose::jws::{Jws, Protected, Signature};
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static CAROL: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // Should return protocols matching the query.
 #[tokio::test]

@@ -5,11 +5,11 @@
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use serde::{Deserialize, Serialize};
-use vercre_infosec::Receiver;
-use vercre_infosec::jose::jwe::{
+use credibil_infosec::Receiver;
+use credibil_infosec::jose::jwe::{
     self, ContentAlgorithm, Header, KeyAlgorithm, KeyEncryption, Protected, Recipients,
 };
-use vercre_infosec::jose::{Curve, Jwe, PublicKeyJwk};
+use credibil_infosec::jose::{Curve, Jwe, PublicKeyJwk};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
@@ -402,7 +402,7 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
 use anyhow::anyhow;
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SigningKey};
 use sha2::Digest;
-use vercre_infosec::{SecretKey, SharedSecret};
+use credibil_infosec::{SecretKey, SharedSecret};
 
 struct ReceiverImpl(String);
 
@@ -412,7 +412,7 @@ impl Receiver for ReceiverImpl {
     }
 
     async fn shared_secret(
-        &self, sender_public: vercre_infosec::PublicKey,
+        &self, sender_public: credibil_infosec::PublicKey,
     ) -> anyhow::Result<SharedSecret> {
         // EdDSA signing key
         let decoded = Base64UrlUnpadded::decode_vec(&self.0)?;

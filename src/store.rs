@@ -342,13 +342,14 @@ impl Matcher {
             MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
             MatchOn::OneOf(values) => values.contains(&value.to_string()),
             MatchOn::Range(range) => {
-                let int_val: usize =
-                    value.parse().map_err(|e| unexpected!("issue parsing usize: {e}"))?;
+                let int_val = value
+                    .parse()
+                    .map_err(|e| unexpected!("issue converting match value to usize: {e}"))?;
                 range.contains(&int_val)
             }
             MatchOn::DateRange(range) => {
                 let date_val = DateTime::parse_from_rfc3339(value)
-                    .map_err(|e| unexpected!("issue parsing date: {e}"))?;
+                    .map_err(|e| unexpected!("issue converting match value to date: {e}"))?;
                 range.contains(&date_val.into())
             }
         };

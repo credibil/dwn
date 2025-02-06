@@ -3,13 +3,13 @@ use dwn_node::endpoint;
 use dwn_node::interfaces::protocols::Query;
 use dwn_node::provider::Signer;
 use serde_json::json;
-use test_node::key_store;
+use test_node::keystore;
 use test_node::provider::ProviderImpl;
 
 #[tokio::main]
 async fn main() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = key_store::new_keyring();
+    let alice = keystore::new_keyring();
 
     // JWS JSON serialization
     let payload = Base64UrlUnpadded::encode_string(

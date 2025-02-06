@@ -6,7 +6,7 @@ use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
 use multibase::Base;
 use rand::rngs::OsRng;
 use sha2::Digest;
-use vercre_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
+use credibil_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 
 const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
 // const X25519_CODEC: [u8; 2] = [0xec, 0x01];
@@ -29,10 +29,6 @@ pub fn new_keyring() -> Keyring {
 
     // public key (X25519)
     let x25519_bytes = verifying_key.to_montgomery().to_bytes();
-    // let mut multi_bytes = vec![];
-    // multi_bytes.extend_from_slice(&X25519_CODEC);
-    // multi_bytes.extend_from_slice(&x25519_bytes);
-    // let public_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
 
     Keyring {
         did: format!("did:key:{verifying_multi}"),

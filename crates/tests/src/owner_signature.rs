@@ -11,11 +11,11 @@ use dwn_node::endpoint;
 use dwn_node::interfaces::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
 use http::StatusCode;
 use serde_json::{Value, json};
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]

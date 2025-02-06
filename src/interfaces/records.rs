@@ -12,7 +12,7 @@ use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
-use vercre_infosec::jose::{Jws, JwsBuilder};
+use credibil_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{Authorization, AuthorizationBuilder};
 use crate::hd_key::DerivationScheme;

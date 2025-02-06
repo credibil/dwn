@@ -5,10 +5,10 @@
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_did::{DidResolver, Resource, dereference};
+use credibil_infosec::jose::JwsBuilder;
+use credibil_infosec::{Jws, Signer};
 use serde::{Deserialize, Serialize};
-use vercre_did::{DidResolver, Resource, dereference};
-use vercre_infosec::jose::JwsBuilder;
-use vercre_infosec::{Jws, Signer};
 
 use crate::records::DelegatedGrant;
 use crate::utils::cid;
@@ -19,7 +19,7 @@ use crate::{Result, unexpected};
 /// # Example
 ///
 /// ```rust,ignore
-/// use vercre_infosec::{verify_key, SecOps};
+/// use credibil_infosec::{verify_key, SecOps};
 ///
 /// let resolver = SecOps::resolver(&provider, &request.credential_issuer)?;
 /// let jwt = jws::decode(proof_jwt, verify_key!(resolver)).await?;

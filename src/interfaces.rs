@@ -19,13 +19,13 @@
 //! use base64ct::{Base64UrlUnpadded, Encoding};
 //! use dwn_node::interfaces::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 //! use dwn_node::{StatusCode, endpoint};
-//! use test_node::key_store;
+//! use test_node::keystore;
 //! use test_node::provider::ProviderImpl;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let provider = ProviderImpl::new().await.expect("should create provider");
-//!     let alice = key_store::new_keyring();
+//!     let alice = keystore::new_keyring();
 //!
 //!     let write = WriteBuilder::new()
 //!         .data(Data::from(b"a new write record".to_vec()))

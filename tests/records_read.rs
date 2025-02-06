@@ -4,6 +4,8 @@ use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_infosec::Signer;
+use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::interfaces::grants::{GrantBuilder, RecordsScope, Scope};
 use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
@@ -15,14 +17,12 @@ use dwn_node::provider::{DataStore, MessageStore};
 use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
 use dwn_node::{Error, Method, StatusCode, cid, endpoint};
 use rand::RngCore;
-use test_node::key_store;
+use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
-use vercre_infosec::Signer;
-use vercre_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 
-static ALICE: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static BOB: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
-static CAROL: LazyLock<key_store::Keyring> = LazyLock::new(|| key_store::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 
 // Should allow an owner to read their own records.
 #[tokio::test]

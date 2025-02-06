@@ -534,6 +534,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "credibil-did"
+version = "0.1.0"
+source = "git+https://github.com/credibil/did.git#0667480c9522bfdc2a9822e0b848a1d638e90fd6"
+dependencies = [
+ "anyhow",
+ "base64ct",
+ "chrono",
+ "credibil-infosec",
+ "curve25519-dalek",
+ "ed25519-dalek",
+ "multibase",
+ "rand 0.8.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.11",
+ "url",
+]
+
+[[package]]
+name = "credibil-infosec"
+version = "0.1.0-alpha.6"
+source = "git+https://github.com/credibil/infosec.git#4013abd9f49d2d6bf38306094f7622e9aa78fc6a"
+dependencies = [
+ "aes-gcm",
+ "aes-kw",
+ "anyhow",
+ "base64ct",
+ "chacha20poly1305",
+ "ciborium",
+ "coset",
+ "ecdsa",
+ "ecies",
+ "ed25519-dalek",
+ "k256",
+ "multibase",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tracing",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
 name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -736,6 +781,8 @@ dependencies = [
  "chrono",
  "ciborium",
  "cid",
+ "credibil-did",
+ "credibil-infosec",
  "derive_more",
  "ed25519-dalek",
  "futures",
@@ -755,8 +802,6 @@ dependencies = [
  "tokio",
  "ulid",
  "uuid",
- "vercre-did",
- "vercre-infosec",
  "x25519-dalek",
  "zeroize",
 ]
@@ -2510,6 +2555,7 @@ dependencies = [
  "base64ct",
  "blockstore",
  "cid",
+ "credibil-infosec",
  "dwn-node",
  "ed25519-dalek",
  "futures",
@@ -2518,7 +2564,6 @@ dependencies = [
  "rand 0.8.5",
  "serde_json",
  "sha2 0.10.8",
- "vercre-infosec",
  "x25519-dalek",
 ]
 
@@ -2826,9 +2871,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.13.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b9d026a9ffd5fc7a7d88090ee3e480521e6af932f0d2a4eafb63da0c3927060"
+checksum = "ced87ca4be083373936a67f8de945faa23b6b42384bd5b64434850802c6dccd0"
 dependencies = [
  "getrandom 0.3.1",
  "rand 0.9.0",
@@ -2843,51 +2888,6 @@ dependencies = [
  "outref",
  "uuid",
  "vsimd",
-]
-
-[[package]]
-name = "vercre-did"
-version = "0.1.0"
-source = "git+https://github.com/vercre/did.git#ea21e46beef227f20e75ff105b200773ffbfc31a"
-dependencies = [
- "anyhow",
- "base64ct",
- "chrono",
- "curve25519-dalek",
- "ed25519-dalek",
- "multibase",
- "rand 0.8.5",
- "regex",
- "serde",
- "serde_json",
- "thiserror 2.0.11",
- "url",
- "vercre-infosec",
-]
-
-[[package]]
-name = "vercre-infosec"
-version = "0.1.0-alpha.6"
-source = "git+https://github.com/vercre/infosec.git#37b8deb6514ad43000663f6fe3cfef8d675805fd"
-dependencies = [
- "aes-gcm",
- "aes-kw",
- "anyhow",
- "base64ct",
- "chacha20poly1305",
- "ciborium",
- "coset",
- "ecdsa",
- "ecies",
- "ed25519-dalek",
- "k256",
- "multibase",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tracing",
- "x25519-dalek",
- "zeroize",
 ]
 
 [[package]]
