@@ -17,12 +17,12 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_infosec::jose::PublicKeyJwk;
+use credibil_infosec::{Curve, KeyType};
 use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use credibil_infosec::jose::PublicKeyJwk;
-use credibil_infosec::{Curve, KeyType};
 
 use crate::{Error, Result, unexpected};
 

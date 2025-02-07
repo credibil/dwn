@@ -13,9 +13,9 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::interfaces::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::protocols::{GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH};
 use crate::provider::MessageStore;
-use crate::records::{DelegatedGrant, RecordsFilter, Write};
 use crate::serde::rfc3339_micros;
 use crate::store::RecordsQueryBuilder;
 use crate::{Interface, Method, Result, forbidden, unexpected};

@@ -32,8 +32,8 @@ use serde::{Deserialize, Serialize};
 use tokio::time::{Duration, sleep};
 
 use crate::endpoint::Message;
+use crate::interfaces::records::Delete;
 use crate::provider::{Provider, TaskStore};
-use crate::records::Delete;
 use crate::{Result, unexpected};
 
 // The frequency with which an automatic timeout extension is requested.

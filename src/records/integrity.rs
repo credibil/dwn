@@ -8,14 +8,19 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use crate::grants::{self, GrantData, RequestData, RevocationData, Scope};
-use crate::protocols::{self, GRANT_PATH, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet};
+use crate::interfaces::protocols::{ProtocolType, RuleSet};
+use crate::interfaces::records::{RecordsFilter, Write};
+use crate::protocols::{self, GRANT_PATH, REQUEST_PATH, REVOCATION_PATH};
 use crate::provider::MessageStore;
-use crate::records::{RecordsFilter, Write};
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden, schema, unexpected};
 
 impl Write {
     /// Verify the integrity of `RecordsWrite` messages using a protocol.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if the message does not pass the integrity checks.
     pub async fn verify(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let Some(protocol) = &self.descriptor.protocol else {
             return Err(forbidden!("missing protocol"));
@@ -40,7 +45,12 @@ impl Write {
         Ok(())
     }
 
-    // Verifies the given `RecordsWrite` protocol.
+    /// Verifies the given `RecordsWrite` grant.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if the Grant schema is not valid or the scope cannot be
+    /// verified.
     pub fn verify_schema(&self, data: &[u8]) -> Result<()> {
         let Some(protocol_path) = &self.descriptor.protocol_path else {
             return Err(forbidden!("missing protocol path"));

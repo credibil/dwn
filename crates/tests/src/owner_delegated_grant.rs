@@ -7,8 +7,8 @@
 use std::sync::LazyLock;
 
 use dwn_node::Method;
-use dwn_node::interfaces::grants::{GrantBuilder, Scope};
-use dwn_node::interfaces::records::{Data, DelegatedGrant, WriteBuilder};
+use dwn_node::client::grants::{GrantBuilder, Scope};
+use dwn_node::client::records::{Data, DelegatedGrant, WriteBuilder};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 

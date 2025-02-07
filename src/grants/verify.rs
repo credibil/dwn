@@ -7,12 +7,12 @@ use chrono::{DateTime, Utc};
 
 use super::{RecordsScope, Scope};
 use crate::grants::{Grant, Publication};
+use crate::interfaces::Descriptor;
+use crate::interfaces::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write};
 use crate::protocols::REVOCATION_PATH;
 use crate::provider::MessageStore;
-use crate::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write};
 use crate::store::RecordsQueryBuilder;
-use crate::{Descriptor, Result, forbidden};
-
+use crate::{Result, forbidden};
 impl Grant {
     /// Verify the `grantee` is sufficiently authorized to undertake the
     /// action reference by the [`Descriptor`].

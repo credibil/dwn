@@ -4,12 +4,13 @@ use std::io::Cursor;
 use std::sync::LazyLock;
 
 use chrono::{DateTime, Duration, Utc};
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
-use dwn_node::interfaces::records::{
+use dwn_node::client::protocols::{ConfigureBuilder, Definition};
+use dwn_node::client::records::{
     Data, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, WriteBuilder,
 };
-use dwn_node::store::{MAX_ENCODED_SIZE, Pagination};
-use dwn_node::{DateRange, Error, Message, Range, StatusCode, endpoint};
+use dwn_node::interfaces::{DateRange, Pagination, Range};
+use dwn_node::store::MAX_ENCODED_SIZE;
+use dwn_node::{Error, Message, StatusCode, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

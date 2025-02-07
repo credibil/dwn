@@ -20,8 +20,11 @@ version.workspace = true
 workspace = true
 
 [features]
-default = ["interfaces"]
-interfaces = []
+default = ["client", "server"]
+# Includes DWN client features such as request builders.
+client = []
+# Includes DWN server features such handlers.
+server = []
 
 [dependencies]
 aes-gcm = "0.10.3"

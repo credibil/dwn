@@ -6,8 +6,8 @@
 
 use std::sync::LazyLock;
 
-use dwn_node::interfaces::grants::{GrantBuilder, Scope};
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use dwn_node::client::grants::{GrantBuilder, Scope};
+use dwn_node::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use dwn_node::{Method, endpoint};
 use http::StatusCode;
 use test_node::keystore::{self, Keyring};

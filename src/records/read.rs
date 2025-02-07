@@ -7,15 +7,16 @@ use std::io::Cursor;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::interfaces::Descriptor;
+use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::{Delete, RecordsFilter, Write, protocol, write};
+use crate::records::{protocol, write};
 use crate::store::{self, RecordsQueryBuilder};
 use crate::utils::cid;
-use crate::{Descriptor, Error, Method, Result, forbidden, grants, unexpected};
+use crate::{Error, Method, Result, forbidden, grants, unexpected};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -131,18 +132,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     })
 }
 
-/// The [`Read`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Read {
-    /// Read descriptor.
-    pub descriptor: ReadDescriptor,
-
-    /// Message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
-}
-
 impl Message for Read {
     type Reply = ReadReply;
 
@@ -161,38 +150,6 @@ impl Message for Read {
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(owner, self, provider).await
     }
-}
-
-/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadReply {
-    /// The read reply entry.
-    pub entry: ReadReplyEntry,
-}
-
-/// [`ReadReplyEntry`] represents the [`Write`] entry returned for a successful
-/// 'read'.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadReplyEntry {
-    /// The latest `RecordsWrite` message of the record if record exists
-    /// (not deleted).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub records_write: Option<Write>,
-
-    /// The `RecordsDelete` if the record is deleted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub records_delete: Option<Delete>,
-
-    /// The initial write of the record if the returned `RecordsWrite` message
-    /// itself is not the initial write or if a `RecordsDelete` is returned.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial_write: Option<Write>,
-
-    /// The data for the record.
-    #[serde(skip)]
-    pub data: Option<Cursor<Vec<u8>>>,
 }
 
 impl Read {
@@ -247,16 +204,4 @@ impl Read {
 
         Err(forbidden!("read cannot be authorized"))
     }
-}
-
-/// The [`Read`]  message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Defines the filter for the read.
-    pub filter: RecordsFilter,
 }

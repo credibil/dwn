@@ -10,7 +10,7 @@ use credibil_infosec::jose::JwsBuilder;
 use credibil_infosec::{Jws, Signer};
 use serde::{Deserialize, Serialize};
 
-use crate::records::DelegatedGrant;
+use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
 use crate::{Result, unexpected};
 

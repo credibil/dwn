@@ -8,22 +8,24 @@ use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat::Micros;
-use chrono::{DateTime, Utc};
-use http::StatusCode;
-use serde::{Deserialize, Serialize};
 use credibil_infosec::Signer;
-use credibil_infosec::jose::{Jws, JwsBuilder};
+use credibil_infosec::jose::JwsBuilder;
+use http::StatusCode;
+use serde::Serialize;
 
 use crate::authorization::{Authorization, JwsPayload};
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::{self, Grant};
+use crate::interfaces::records::{
+    DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteDescriptor, WriteReply,
+};
+use crate::interfaces::{DateRange, Descriptor, MessageType};
 use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{DateRange, EncryptionProperty, RecordsFilter, protocol};
-use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::store::{Entry, EntryType, GrantedQueryBuilder, RecordsQueryBuilder, data};
+use crate::records::protocol;
+use crate::store::{Entry, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
-use crate::{Descriptor, Error, Method, Result, forbidden, unexpected};
+use crate::{Error, Method, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Write`] message.
 ///
@@ -148,41 +150,6 @@ pub async fn handle(
     })
 }
 
-/// The [`Write`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Write {
-    /// Write descriptor.
-    pub descriptor: WriteDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-
-    /// The Entry CID for the record.
-    pub record_id: String,
-
-    /// Entry context.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
-
-    /// Entry attestation.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attestation: Option<Jws>,
-
-    /// Entry encryption.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption: Option<EncryptionProperty>,
-
-    /// The base64url encoded data of the record if the data associated with
-    /// the record is equal or smaller than `MAX_ENCODING_SIZE`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encoded_data: Option<String>,
-
-    /// The data stream of the record if the data associated with the record
-    #[serde(skip)]
-    pub data_stream: Option<Cursor<Vec<u8>>>,
-}
-
 impl Message for Write {
     type Reply = WriteReply;
 
@@ -205,17 +172,12 @@ impl Message for Write {
     }
 }
 
-/// For consistency, [`WriteReply`] is returned by the handler in the [`Reply`]
-/// `body` field, but contains no data.
-#[derive(Clone, Debug)]
-pub struct WriteReply;
-
 impl TryFrom<Entry> for Write {
     type Error = crate::Error;
 
     fn try_from(entry: Entry) -> Result<Self> {
         match entry.message {
-            EntryType::Write(write) => Ok(write),
+            MessageType::Write(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
@@ -226,7 +188,7 @@ impl TryFrom<&Entry> for Write {
 
     fn try_from(entry: &Entry) -> Result<Self> {
         match &entry.message {
-            EntryType::Write(write) => Ok(write.clone()),
+            MessageType::Write(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
@@ -678,62 +640,6 @@ impl Write {
     }
 }
 
-/// Signature payload.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SignaturePayload {
-    /// The standard signature payload.
-    #[serde(flatten)]
-    pub base: JwsPayload,
-
-    /// The ID of the record being signed.
-    pub record_id: String,
-
-    /// The context ID of the record being signed.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
-
-    /// Attestation CID.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attestation_cid: Option<String>,
-
-    /// Encryption CID .
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption_cid: Option<String>,
-}
-
-/// Attestation payload.
-#[derive(Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Attestation {
-    /// The attestation's descriptor CID.
-    pub descriptor_cid: String,
-}
-
-/// Delegated Grant is a special case of [`Write`] used in [`Authorization`]
-/// and [`Attestation`] grant references.
-///
-/// It is structured to cope with recursive references to [`Authorization`].
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DelegatedGrant {
-    /// The grant's descriptor.
-    pub descriptor: WriteDescriptor,
-
-    ///The grant's authorization.
-    pub authorization: Box<Authorization>,
-
-    /// CID referencing the record associated with the message.
-    pub record_id: String,
-
-    /// Context id.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_id: Option<String>,
-
-    /// Encoded grant data.
-    pub encoded_data: String,
-}
-
 impl DelegatedGrant {
     /// Convert [`DelegatedGrant`] to `permissions::Grant`.
     pub(crate) fn to_grant(&self) -> Result<Grant> {
@@ -749,109 +655,6 @@ impl From<Write> for DelegatedGrant {
             record_id: write.record_id,
             context_id: write.context_id,
             encoded_data: write.encoded_data.unwrap_or_default(),
-        }
-    }
-}
-
-/// The [`Write`]  message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WriteDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Entry's protocol.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol: Option<String>,
-
-    /// The protocol path.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub protocol_path: Option<String>,
-
-    /// The record's recipient.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub recipient: Option<String>,
-
-    /// The record's schema.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub schema: Option<String>,
-
-    /// Tags associated with the record
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<HashMap<String, Tag>>,
-
-    /// The CID of the record's parent (if exists).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub parent_id: Option<String>,
-
-    /// CID of the record's data.
-    pub data_cid: String,
-
-    /// The record's size in bytes.
-    pub data_size: usize,
-
-    /// The record's MIME type. For example, `application/json`.
-    pub data_format: String,
-
-    /// The datatime the record was created.
-    #[serde(serialize_with = "rfc3339_micros")]
-    pub date_created: DateTime<Utc>,
-
-    /// Indicates whether the record is published.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub published: Option<bool>,
-
-    /// The datetime of publishing, if published.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "rfc3339_micros_opt")]
-    pub date_published: Option<DateTime<Utc>>,
-}
-
-/// Tag value types.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-// #[serde(rename_all = "camelCase")]
-#[serde(untagged)]
-pub enum Tag {
-    /// Empty tag value.
-    #[default]
-    Empty,
-
-    /// String tag value.
-    String(String),
-
-    /// Number tag value.
-    Number(u64),
-
-    /// Boolean tag value.
-    Boolean(bool),
-}
-
-impl Tag {
-    /// Attempt to convert the tag value to a string.
-    #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Self::String(s) => Some(s.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Attempt to convert the tag value to a u64.
-    #[must_use]
-    pub const fn as_u64(&self) -> Option<u64> {
-        match self {
-            Self::Number(n) => Some(*n),
-            _ => None,
-        }
-    }
-
-    /// Attempt to convert the tag value to a bool.
-    #[must_use]
-    pub const fn as_bool(&self) -> Option<bool> {
-        match self {
-            Self::Boolean(b) => Some(*b),
-            _ => None,
         }
     }
 }

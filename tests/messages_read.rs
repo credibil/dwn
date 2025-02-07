@@ -6,10 +6,10 @@
 use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
-use dwn_node::interfaces::grants::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
-use dwn_node::interfaces::messages::ReadBuilder;
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
-use dwn_node::interfaces::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
+use dwn_node::client::grants::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
+use dwn_node::client::messages::ReadBuilder;
+use dwn_node::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
+use dwn_node::client::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
 use dwn_node::provider::MessageStore;
 use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint, store};

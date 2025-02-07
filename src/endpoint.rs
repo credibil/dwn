@@ -9,8 +9,10 @@ use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
+use crate::interfaces::Descriptor;
 use crate::provider::Provider;
-use crate::{Descriptor, Result, schema, unauthorized};
+use crate::utils::cid;
+use crate::{Result, schema, unauthorized};
 
 /// Handle incoming messages.
 ///
@@ -42,7 +44,9 @@ pub trait Message: Serialize + Clone + Debug + Send + Sync {
     /// # Errors
     ///
     /// This method will fail if the message cannot be serialized to CBOR.
-    fn cid(&self) -> Result<String>;
+    fn cid(&self) -> Result<String> {
+        cid::from_value(self)
+    }
 
     /// Returns message descriptor properties common to all messages (i.e.,
     /// `interface`, `method`, and `message_timestamp`).
@@ -107,3 +111,19 @@ pub struct Status {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
+
+// impl Message for Subscribe {
+//     type Reply = SubscribeReply;
+
+//     fn descriptor(&self) -> &Descriptor {
+//         &self.descriptor.base
+//     }
+
+//     fn authorization(&self) -> Option<&Authorization> {
+//         Some(&self.authorization)
+//     }
+
+//     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
+//         messages::subscribe::handle(owner, self, provider).await
+//     }
+// }

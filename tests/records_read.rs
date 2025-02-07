@@ -6,13 +6,13 @@ use std::sync::LazyLock;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
-use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
-use dwn_node::interfaces::grants::{GrantBuilder, RecordsScope, Scope};
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
-use dwn_node::interfaces::records::{
+use dwn_node::client::grants::{GrantBuilder, RecordsScope, Scope};
+use dwn_node::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use dwn_node::client::records::{
     Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
     WriteBuilder, decrypt,
 };
+use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::provider::{DataStore, MessageStore};
 use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
 use dwn_node::{Error, Method, StatusCode, cid, endpoint};

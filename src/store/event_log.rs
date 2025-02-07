@@ -1,9 +1,9 @@
 //! # Event Log
 
-use super::Pagination;
 use crate::event::Event;
+use crate::interfaces::{Cursor, Pagination};
 use crate::provider::BlockStore;
-use crate::store::{Cursor, Entry, Query, Sort, block, index};
+use crate::store::{Entry, Query, Sort, block, index};
 use crate::{Result, unexpected};
 
 const PARTITION: &str = "EVENTLOG";

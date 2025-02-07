@@ -10,7 +10,8 @@ pub use credibil_did::{DidResolver, Document};
 pub use credibil_infosec::{Receiver, Signer};
 
 use crate::event::{Event, Subscriber};
-use crate::store::{Cursor, Entry, Query, data, event_log, message, task};
+use crate::interfaces::Cursor;
+use crate::store::{Entry, Query, data, event_log, message, task};
 use crate::tasks::ResumableTask;
 
 /// Provider trait.

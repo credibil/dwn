@@ -387,8 +387,8 @@ mod tests {
     use test_node::keystore;
 
     use super::*;
-    use crate::interfaces::protocols::{ConfigureBuilder, Definition};
-    use crate::interfaces::records::{Data, WriteBuilder};
+    use crate::client::protocols::{ConfigureBuilder, Definition};
+    use crate::client::records::{Data, WriteBuilder};
     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 
     const PARTITION: &str = "TEST";

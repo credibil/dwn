@@ -10,16 +10,17 @@ use std::task::{Context, Poll};
 use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 
-use crate::messages::MessagesFilter;
-use crate::records::{RecordsFilter, Tag, TagFilter};
-use crate::store::{Entry, EntryType};
+use crate::interfaces::MessageType;
+use crate::interfaces::messages::MessagesFilter;
+use crate::interfaces::records::{RecordsFilter, Tag, TagFilter};
+use crate::store::Entry;
 
 /// `Event` aliases `store::Entry` to provide a common type to use when
 /// interacting with events for any message type.
 pub type Event = Entry;
 
-/// `EventType` aliases `store::EntryType` to wrap the event message.
-pub type EventType = EntryType;
+/// `EventType` aliases `store::MessageType` to wrap the event message.
+pub type EventType = MessageType;
 
 /// Filter to use when subscribing to events.
 #[derive(Debug, Deserialize, Serialize)]

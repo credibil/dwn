@@ -1,7 +1,8 @@
 //! # Message Store
 
+use crate::interfaces::Cursor;
 use crate::provider::BlockStore;
-use crate::store::{Cursor, Entry, Query, block, index};
+use crate::store::{Entry, Query, block, index};
 use crate::{Result, unexpected};
 
 const PARTITION: &str = "MESSAGE";

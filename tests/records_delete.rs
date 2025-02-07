@@ -4,10 +4,10 @@ use std::io::Read;
 use std::sync::LazyLock;
 
 use chrono::Days;
-use dwn_node::interfaces::messages;
-use dwn_node::interfaces::messages::MessagesFilter;
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
-use dwn_node::interfaces::records::{
+use dwn_node::client::messages;
+use dwn_node::client::messages::MessagesFilter;
+use dwn_node::client::protocols::{ConfigureBuilder, Definition};
+use dwn_node::client::records::{
     Data, DeleteBuilder, DeleteDescriptor, ProtocolBuilder, QueryBuilder, ReadBuilder,
     RecordsFilter, WriteBuilder,
 };

@@ -26,12 +26,10 @@ use serde::{Deserialize, Serialize};
 
 pub use self::data::MAX_ENCODED_SIZE;
 use crate::endpoint::Message;
-use crate::protocols::Configure;
-pub use crate::records::Sort;
-use crate::records::{self, Delete, RecordsFilter, TagFilter, Write};
-use crate::{
-    DateRange, Descriptor, Interface, Method, Range, Result, messages, protocols, unexpected,
-};
+use crate::interfaces::protocols::Configure;
+use crate::interfaces::records::{self, Delete, RecordsFilter, Sort, TagFilter, Write};
+use crate::interfaces::{DateRange, Descriptor, MessageType, Pagination, Range, messages};
+use crate::{Interface, Method, Result, unexpected};
 
 /// Entry wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -47,7 +45,7 @@ pub struct Entry {
     /// `Records` query may return both `RecordsWrite` and `RecordsDelete`
     /// messages.
     #[serde(flatten)]
-    pub message: EntryType,
+    pub message: MessageType,
 
     /// Indexable fields derived from the associated message object.
     ///
@@ -81,9 +79,9 @@ impl Entry {
     /// message cannot be serialized to CBOR.
     pub fn cid(&self) -> Result<String> {
         match self.message {
-            EntryType::Write(ref write) => write.cid(),
-            EntryType::Delete(ref delete) => delete.cid(),
-            EntryType::Configure(ref configure) => configure.cid(),
+            MessageType::Write(ref write) => write.cid(),
+            MessageType::Delete(ref delete) => delete.cid(),
+            MessageType::Configure(ref configure) => configure.cid(),
         }
     }
 
@@ -91,9 +89,9 @@ impl Entry {
     #[must_use]
     pub fn descriptor(&self) -> &Descriptor {
         match self.message {
-            EntryType::Write(ref write) => write.descriptor(),
-            EntryType::Delete(ref delete) => delete.descriptor(),
-            EntryType::Configure(ref configure) => configure.descriptor(),
+            MessageType::Write(ref write) => write.descriptor(),
+            MessageType::Delete(ref delete) => delete.descriptor(),
+            MessageType::Configure(ref configure) => configure.descriptor(),
         }
     }
 
@@ -101,7 +99,7 @@ impl Entry {
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
         match &self.message {
-            EntryType::Write(write) => Some(write),
+            MessageType::Write(write) => Some(write),
             _ => None,
         }
     }
@@ -110,16 +108,16 @@ impl Entry {
     #[must_use]
     pub const fn as_delete(&self) -> Option<&records::Delete> {
         match &self.message {
-            EntryType::Delete(delete) => Some(delete),
+            MessageType::Delete(delete) => Some(delete),
             _ => None,
         }
     }
 
     /// Returns the `ProtocolsConfigure` message, when set.
     #[must_use]
-    pub const fn as_configure(&self) -> Option<&protocols::Configure> {
+    pub const fn as_configure(&self) -> Option<&Configure> {
         match &self.message {
-            EntryType::Configure(configure) => Some(configure),
+            MessageType::Configure(configure) => Some(configure),
             _ => None,
         }
     }
@@ -128,7 +126,7 @@ impl Entry {
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         Self {
-            message: EntryType::Write(write.clone()),
+            message: MessageType::Write(write.clone()),
             indexes: write.build_indexes(),
         }
     }
@@ -137,7 +135,7 @@ impl From<&Write> for Entry {
 impl From<&Delete> for Entry {
     fn from(delete: &Delete) -> Self {
         Self {
-            message: EntryType::Delete(delete.clone()),
+            message: MessageType::Delete(delete.clone()),
             indexes: delete.build_indexes(),
         }
     }
@@ -146,29 +144,9 @@ impl From<&Delete> for Entry {
 impl From<&Configure> for Entry {
     fn from(configure: &Configure) -> Self {
         Self {
-            message: EntryType::Configure(configure.clone()),
+            message: MessageType::Configure(configure.clone()),
             indexes: configure.build_indexes(),
         }
-    }
-}
-
-/// `EntryType` wraps the message payload.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "type")]
-pub enum EntryType {
-    /// `RecordsWrite` message.
-    Write(records::Write),
-
-    /// `RecordsDelete` message.
-    Delete(records::Delete),
-
-    /// `ProtocolsConfigure` message.
-    Configure(protocols::Configure),
-}
-
-impl Default for EntryType {
-    fn default() -> Self {
-        Self::Write(records::Write::default())
     }
 }
 
@@ -739,60 +717,4 @@ impl GrantedQueryBuilder {
             ..Query::default()
         }
     }
-}
-
-/// Pagination cursor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Pagination {
-    /// The number of messages to return.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<usize>,
-
-    /// Cursor created form the previous page of results.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
-}
-
-impl Pagination {
-    /// Create a new `Pagination` instance.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            limit: None,
-            cursor: None,
-            // offinner: None,
-        }
-    }
-
-    /// Set the limit.
-    #[must_use]
-    pub const fn limit(mut self, limit: usize) -> Self {
-        self.limit = Some(limit);
-        self
-    }
-
-    /// Set the cursor.
-    #[must_use]
-    pub fn cursor(mut self, cursor: Cursor) -> Self {
-        self.cursor = Some(cursor);
-        self
-    }
-}
-
-/// Pagination cursor containing data from the last entry returned in the
-/// previous page of results.
-///
-/// Message CID ensures result cursor compatibility irrespective of DWN
-/// implementation. Meaning querying with the same cursor yields identical
-/// results regardless of DWN queried.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Cursor {
-    /// Message CID from the last entry in the previous page of results.
-    pub message_cid: String,
-
-    /// The value (from sort field) of the last entry in the previous page of
-    /// results.
-    pub value: String,
 }

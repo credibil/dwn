@@ -4,15 +4,14 @@
 //! to query the [`EventLog`] for matching persisted messages (of any type).
 
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
-use super::MessagesFilter;
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::interfaces::Descriptor;
+use crate::interfaces::messages::{Query, QueryReply};
 use crate::provider::{EventLog, Provider};
-use crate::store::{self, Cursor};
 use crate::utils::cid;
-use crate::{Descriptor, Result, forbidden, grants};
+use crate::{Result, forbidden, grants, store};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -38,16 +37,6 @@ pub async fn handle(
         },
         body: Some(QueryReply { entries, cursor }),
     })
-}
-
-/// The [`Query`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Query {
-    /// The `Query` descriptor.
-    pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
 }
 
 impl Message for Query {
@@ -100,32 +89,4 @@ impl Query {
 
         Ok(())
     }
-}
-
-/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct QueryReply {
-    /// Entries matching the message's query.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<String>>,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
-}
-
-/// The [`Query`] message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filters to apply when querying for messages.
-    pub filters: Vec<MessagesFilter>,
-
-    /// The pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
 }

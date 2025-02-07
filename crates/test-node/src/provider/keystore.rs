@@ -2,11 +2,11 @@
 
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
 use multibase::Base;
 use rand::rngs::OsRng;
 use sha2::Digest;
-use credibil_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 
 const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
 // const X25519_CODEC: [u8; 2] = [0xec, 0x01];

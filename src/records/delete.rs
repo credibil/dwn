@@ -13,16 +13,17 @@ use std::collections::HashMap;
 use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::interfaces::records::{Delete, DeleteReply, RecordsFilter, Write};
+use crate::interfaces::{Descriptor, MessageType};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{RecordsFilter, Write, protocol};
-use crate::store::{Entry, EntryType, RecordsQueryBuilder};
+use crate::records::protocol;
+use crate::store::{Entry, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
 use crate::utils::cid;
-use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
+use crate::{Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Delete`] message.
 ///
@@ -83,17 +84,6 @@ pub async fn handle(
     })
 }
 
-/// The [`Delete`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Delete {
-    /// Delete descriptor.
-    pub descriptor: DeleteDescriptor,
-
-    /// Message authorization.
-    pub authorization: Authorization,
-}
-
 impl Message for Delete {
     type Reply = DeleteReply;
 
@@ -114,16 +104,12 @@ impl Message for Delete {
     }
 }
 
-/// [`DeleteReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Debug)]
-pub struct DeleteReply;
-
 impl TryFrom<Entry> for Delete {
     type Error = crate::Error;
 
     fn try_from(record: Entry) -> Result<Self> {
         match record.message {
-            EntryType::Delete(delete) => Ok(delete),
+            MessageType::Delete(delete) => Ok(delete),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }
@@ -134,7 +120,7 @@ impl TryFrom<&Entry> for Delete {
 
     fn try_from(record: &Entry) -> Result<Self> {
         match &record.message {
-            EntryType::Delete(delete) => Ok(delete.clone()),
+            MessageType::Delete(delete) => Ok(delete.clone()),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }
@@ -187,21 +173,6 @@ impl Delete {
 
         Err(forbidden!("delete request failed authorization"))
     }
-}
-
-/// The [`Delete`] message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// The ID of the record to delete.
-    pub record_id: String,
-
-    /// Specifies whether descendent records should be pruned or not.
-    pub prune: bool,
 }
 
 async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {

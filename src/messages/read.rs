@@ -12,17 +12,18 @@ use std::str::FromStr;
 use ::cid::Cid;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::{self, Scope};
+use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
+use crate::interfaces::{Descriptor, MessageType};
 use crate::protocols::PROTOCOL_URI;
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::records::write;
-use crate::store::{Entry, EntryType};
+use crate::store::Entry;
 use crate::utils::cid;
-use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
+use crate::{Error, Interface, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -46,7 +47,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let mut message = entry.message;
 
     // include data with RecordsWrite messages
-    let data = if let EntryType::Write(ref mut write) = message {
+    let data = if let MessageType::Write(ref mut write) = message {
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
@@ -81,16 +82,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             }),
         }),
     })
-}
-
-/// The [`Read`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Read {
-    /// The `Read` descriptor.
-    pub descriptor: ReadDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
 }
 
 impl Message for Read {
@@ -155,8 +146,8 @@ async fn verify_scope(
 
     if requested.descriptor().interface == Interface::Records {
         let write = match &requested.message {
-            EntryType::Write(write) => write.clone(),
-            EntryType::Delete(delete) => {
+            MessageType::Write(write) => write.clone(),
+            MessageType::Delete(delete) => {
                 let entry =
                     write::initial_write(owner, &delete.descriptor.record_id, store).await?;
                 let Some(write) = entry else {
@@ -164,7 +155,7 @@ async fn verify_scope(
                 };
                 write.clone()
             }
-            EntryType::Configure(_) => {
+            MessageType::Configure(_) => {
                 return Err(forbidden!("message failed scope authorization"));
             }
         };
@@ -184,38 +175,4 @@ async fn verify_scope(
     }
 
     Err(forbidden!("message failed scope authorization"))
-}
-
-/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ReadReply {
-    /// The `Read` descriptor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entry: Option<ReadReplyEntry>,
-}
-
-/// `Read` reply entry
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ReadReplyEntry {
-    /// The CID of the message.
-    pub message_cid: String,
-
-    /// The message.
-    pub message: EntryType,
-
-    /// The data associated with the message.
-    #[serde(skip)]
-    pub data: Option<Cursor<Vec<u8>>>,
-}
-
-/// The [`Read`]  message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// The CID of the message to read.
-    pub message_cid: String,
 }

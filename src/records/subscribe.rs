@@ -5,16 +5,17 @@
 
 use futures::{StreamExt, future};
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::event::{SubscribeFilter, Subscriber};
+use crate::event::SubscribeFilter;
 use crate::grants::Grant;
+use crate::interfaces::Descriptor;
+use crate::interfaces::records::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, Provider};
-use crate::records::{RecordsFilter, protocol};
+use crate::records::protocol;
 use crate::utils::cid;
-use crate::{Descriptor, OneOrMany, Result, forbidden};
+use crate::{OneOrMany, Result, forbidden};
 
 /// Handle — or process — a [`Subscribe`] message.
 ///
@@ -59,18 +60,6 @@ pub async fn handle(
     })
 }
 
-/// The [`Subscribe`] message expected by the handler.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Subscribe {
-    /// The Subscribe descriptor.
-    pub descriptor: SubscribeDescriptor,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
-}
-
 impl Message for Subscribe {
     type Reply = SubscribeReply;
 
@@ -89,17 +78,6 @@ impl Message for Subscribe {
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(owner, self, provider).await
     }
-}
-
-/// [`SubscribeReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubscribeReply {
-    /// The subscription to the requested events.
-    /// N.B. serialization/deserialization is skipped because the subscriber
-    /// `Stream` is not serializable.
-    #[serde(skip)]
-    pub subscription: Subscriber,
 }
 
 impl Subscribe {
@@ -138,16 +116,4 @@ impl Subscribe {
 
         Ok(())
     }
-}
-
-/// The [`Subscribe`]  message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SubscribeDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filter Records for subscribe.
-    pub filter: RecordsFilter,
 }

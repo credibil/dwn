@@ -10,11 +10,10 @@ use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
 
-pub use self::configure::{
-    Action, ActionRule, Actor, Configure, ConfigureDescriptor, Definition, ProtocolType, RuleSet,
-    Size, validate_structure,
+pub use self::configure::validate_structure;
+use crate::interfaces::protocols::{
+    Action, ActionRule, Actor, Configure, Definition, ProtocolType, RuleSet, Size,
 };
-pub use self::query::{Query, QueryDescriptor};
 use crate::provider::MessageStore;
 use crate::{Result, forbidden, store, utils};
 
