@@ -22,7 +22,7 @@ mod error;
 pub mod event;
 mod grants;
 pub mod hd_key;
-pub mod interfaces;
+mod interfaces;
 mod messages;
 mod protocols;
 pub mod provider;

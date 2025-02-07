@@ -1,15 +1,8 @@
-//! # Interfaces
+//! # Client
 //!
-//! Interfaces are the main building blocks of the system. They define the
-//! structure of the data that is exchanged between users and the DWN.
-//!
-//! The three primary interfaces are `Records`, `Protocols`, and `Messages`
-//! with each having a subset of `Methods` that define the operations that can
-//! be performed on the data.
-//!
-//! Interface methods are executed by sending JSON messages to the DWN which,
-//! in turn, will respond with a JSON reply. This library provides the tools
-//! to easily create and parse these messages.
+//! The `client` module exposes data structures and functions for use by DWN
+//! clients. Primarily, this means builders for creating and signing messages
+//! to be sent to a DWN node.
 //!
 //! ## Example Usage
 //!
@@ -62,3 +55,5 @@ pub mod grants;
 pub mod messages;
 pub mod protocols;
 pub mod records;
+
+pub use crate::interfaces::{DateRange, Pagination, Range};

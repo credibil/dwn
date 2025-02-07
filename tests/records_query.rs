@@ -8,7 +8,7 @@ use dwn_node::client::protocols::{ConfigureBuilder, Definition};
 use dwn_node::client::records::{
     Data, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, WriteBuilder,
 };
-use dwn_node::interfaces::{DateRange, Pagination, Range};
+use dwn_node::client::{DateRange, Pagination, Range};
 use dwn_node::store::MAX_ENCODED_SIZE;
 use dwn_node::{Error, Message, StatusCode, endpoint};
 use rand::RngCore;
