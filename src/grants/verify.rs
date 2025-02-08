@@ -13,6 +13,7 @@ use crate::interfaces::records::{Delete, Query, Read, RecordsFilter, Subscribe, 
 use crate::provider::MessageStore;
 use crate::store::RecordsQueryBuilder;
 use crate::{Result, forbidden};
+
 impl Grant {
     /// Verify the `grantee` is sufficiently authorized to undertake the
     /// action reference by the [`Descriptor`].

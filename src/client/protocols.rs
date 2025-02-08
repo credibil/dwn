@@ -18,6 +18,7 @@
 //! building Protocol-related messages (Configure and Query).
 
 use chrono::{DateTime, Utc};
+use credibil_infosec::Signer;
 
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;
@@ -26,7 +27,6 @@ pub use crate::interfaces::protocols::{
     ProtocolsFilter, Query, QueryDescriptor, RuleSet, Size,
 };
 use crate::interfaces::records::DelegatedGrant;
-use crate::provider::Signer;
 use crate::utils::cid;
 use crate::{Interface, Method, Result, utils};
 

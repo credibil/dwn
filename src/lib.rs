@@ -23,6 +23,7 @@ pub mod event;
 mod grants;
 pub mod hd_key;
 pub mod interfaces;
+// #[cfg(feature = "server")]
 pub mod provider;
 // #[cfg(feature = "server")]
 mod schema;
@@ -49,10 +50,12 @@ pub mod store;
 mod tasks;
 
 // Server re-exports
+
 use ::serde::{Deserialize, Serialize};
+pub use credibil_infosec::{Receiver, Signer};
 use derive_more::Display;
 
-// #[cfg(feature = "server")]
+#[cfg(feature = "server")]
 pub use crate::endpoint::Message;
 
 /// Result type for `DWN` handlers.

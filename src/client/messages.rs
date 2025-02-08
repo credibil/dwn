@@ -8,13 +8,13 @@ use std::str::FromStr;
 use ::cid::Cid;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
+use credibil_infosec::Signer;
 
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;
 pub use crate::interfaces::messages::{
     MessagesFilter, Query, QueryDescriptor, Read, ReadDescriptor, Subscribe, SubscribeDescriptor,
 };
-use crate::provider::Signer;
 use crate::utils::cid;
 use crate::{Interface, Method};
 

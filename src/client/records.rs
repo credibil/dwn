@@ -12,6 +12,7 @@ use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
+use credibil_infosec::Signer;
 use credibil_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{Authorization, AuthorizationBuilder, JwsPayload};
@@ -26,7 +27,6 @@ use crate::interfaces::records::{
     SubscribeDescriptor, Tag, Write, WriteDescriptor,
 };
 use crate::interfaces::{Descriptor, Pagination};
-use crate::provider::Signer;
 use crate::utils::cid;
 use crate::{Interface, Method, utils};
 

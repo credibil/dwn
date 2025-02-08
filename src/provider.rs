@@ -7,7 +7,7 @@ use std::io::Read;
 
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document};
-pub use credibil_infosec::{Receiver, Signer};
+
 
 use crate::event::{Event, Subscriber};
 use crate::interfaces::Cursor;
