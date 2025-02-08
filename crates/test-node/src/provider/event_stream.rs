@@ -11,8 +11,8 @@ impl EventStream for ProviderImpl {
     /// Subscribe to a owner's event stream.
     async fn subscribe(&self, owner: &str) -> Result<Subscriber> {
         let subscriber = self.nats_client.subscribe(format!("{SUBJECT}.{owner}")).await?;
-        let stream = subscriber.map(|m| serde_json::from_slice::<Event>(&m.payload).unwrap());
-        Ok(Subscriber::new(stream))
+        let mapped = subscriber.map(|m| serde_json::from_slice::<Event>(&m.payload).unwrap());
+        Ok(Subscriber::new(mapped))
     }
 
     /// Emits an event to a owner's event stream.
