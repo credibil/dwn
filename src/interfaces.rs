@@ -39,10 +39,10 @@ pub struct Descriptor {
     pub message_timestamp: DateTime<Utc>,
 }
 
-/// `MessageType` wraps the message payload.
+/// `Document` is used to store and retrieve messages in a type-independent manner.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
-pub enum MessageType {
+pub enum Document {
     /// `RecordsWrite` message.
     Write(Write),
 
@@ -53,13 +53,13 @@ pub enum MessageType {
     Configure(Configure),
 }
 
-impl Default for MessageType {
+impl Default for Document {
     fn default() -> Self {
         Self::Write(Write::default())
     }
 }
 
-impl MessageType {
+impl Document {
     /// The message's CID.
     ///
     /// # Errors
@@ -68,9 +68,9 @@ impl MessageType {
     /// message cannot be serialized to CBOR.
     pub fn cid(&self) -> Result<String> {
         match self {
-            MessageType::Write(write) => write.cid(),
-            MessageType::Delete(delete) => delete.cid(),
-            MessageType::Configure(configure) => configure.cid(),
+            Self::Write(write) => write.cid(),
+            Self::Delete(delete) => delete.cid(),
+            Self::Configure(configure) => configure.cid(),
         }
     }
 
@@ -78,9 +78,9 @@ impl MessageType {
     #[must_use]
     pub fn descriptor(&self) -> &Descriptor {
         match self {
-            MessageType::Write(write) => write.descriptor(),
-            MessageType::Delete(delete) => delete.descriptor(),
-            MessageType::Configure(configure) => configure.descriptor(),
+            Self::Write(write) => write.descriptor(),
+            Self::Delete(delete) => delete.descriptor(),
+            Self::Configure(configure) => configure.descriptor(),
         }
     }
 
@@ -88,7 +88,7 @@ impl MessageType {
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
         match &self {
-            MessageType::Write(write) => Some(write),
+            Self::Write(write) => Some(write),
             _ => None,
         }
     }
@@ -97,7 +97,7 @@ impl MessageType {
     #[must_use]
     pub const fn as_delete(&self) -> Option<&records::Delete> {
         match &self {
-            MessageType::Delete(delete) => Some(delete),
+            Self::Delete(delete) => Some(delete),
             _ => None,
         }
     }
@@ -106,7 +106,7 @@ impl MessageType {
     #[must_use]
     pub const fn as_configure(&self) -> Option<&Configure> {
         match &self {
-            MessageType::Configure(configure) => Some(configure),
+            Self::Configure(configure) => Some(configure),
             _ => None,
         }
     }

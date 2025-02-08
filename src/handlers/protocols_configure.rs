@@ -16,7 +16,7 @@ use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
     ProtocolType, RuleSet, Size,
 };
-use crate::interfaces::{Descriptor, MessageType};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::Entry;
 use crate::utils::cid;
@@ -172,7 +172,7 @@ impl TryFrom<Entry> for Configure {
 
     fn try_from(record: Entry) -> Result<Self> {
         match record.message {
-            MessageType::Configure(configure) => Ok(configure),
+            Document::Configure(configure) => Ok(configure),
             _ => Err(unexpected!("expected `ProtocolsConfigure` message")),
         }
     }

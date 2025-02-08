@@ -7,7 +7,7 @@ use std::io;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Cursor, DateRange, Descriptor, MessageType};
+use super::{Cursor, DateRange, Descriptor, Document};
 use crate::authorization::Authorization;
 use crate::event::Subscriber;
 use crate::{Interface, Method};
@@ -87,7 +87,7 @@ pub struct ReadReplyEntry {
     pub message_cid: String,
 
     /// The message.
-    pub message: MessageType,
+    pub message: Document,
 
     /// The data associated with the message.
     #[serde(skip)]

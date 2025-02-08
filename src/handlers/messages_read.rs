@@ -19,7 +19,7 @@ use crate::grants::Scope;
 use crate::handlers::{records_write, verify_grant};
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
-use crate::interfaces::{Descriptor, MessageType};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::Entry;
 use crate::{Error, Interface, Result, forbidden, unexpected};
@@ -46,7 +46,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let mut message = entry.message;
 
     // include data with RecordsWrite messages
-    let data = if let MessageType::Write(ref mut write) = message {
+    let data = if let Document::Write(ref mut write) = message {
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
@@ -141,8 +141,8 @@ async fn verify_scope(
 
     if requested.descriptor().interface == Interface::Records {
         let write = match &requested.message {
-            MessageType::Write(write) => write.clone(),
-            MessageType::Delete(delete) => {
+            Document::Write(write) => write.clone(),
+            Document::Delete(delete) => {
                 let entry =
                     records_write::initial_write(owner, &delete.descriptor.record_id, store)
                         .await?;
@@ -151,7 +151,7 @@ async fn verify_scope(
                 };
                 write.clone()
             }
-            MessageType::Configure(_) => {
+            Document::Configure(_) => {
                 return Err(forbidden!("message failed scope authorization"));
             }
         };

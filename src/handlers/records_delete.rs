@@ -18,7 +18,7 @@ use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::handlers::verify_protocol;
 use crate::interfaces::records::{Delete, DeleteReply, RecordsFilter, Write};
-use crate::interfaces::{Descriptor, MessageType};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
@@ -104,7 +104,7 @@ impl TryFrom<Entry> for Delete {
 
     fn try_from(record: Entry) -> Result<Self> {
         match record.message {
-            MessageType::Delete(delete) => Ok(delete),
+            Document::Delete(delete) => Ok(delete),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }
@@ -115,7 +115,7 @@ impl TryFrom<&Entry> for Delete {
 
     fn try_from(record: &Entry) -> Result<Self> {
         match &record.message {
-            MessageType::Delete(delete) => Ok(delete.clone()),
+            Document::Delete(delete) => Ok(delete.clone()),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }

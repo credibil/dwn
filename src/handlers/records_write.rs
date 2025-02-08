@@ -21,7 +21,7 @@ use crate::interfaces::protocols::{
 use crate::interfaces::records::{
     DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteReply,
 };
-use crate::interfaces::{DateRange, Descriptor, MessageType};
+use crate::interfaces::{DateRange, Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{Entry, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
@@ -177,7 +177,7 @@ impl TryFrom<Entry> for Write {
 
     fn try_from(entry: Entry) -> Result<Self> {
         match entry.message {
-            MessageType::Write(write) => Ok(write),
+            Document::Write(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
@@ -188,7 +188,7 @@ impl TryFrom<&Entry> for Write {
 
     fn try_from(entry: &Entry) -> Result<Self> {
         match &entry.message {
-            MessageType::Write(write) => Ok(write.clone()),
+            Document::Write(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }

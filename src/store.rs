@@ -28,7 +28,7 @@ pub use self::data::MAX_ENCODED_SIZE;
 use crate::endpoint::Message;
 use crate::interfaces::protocols::Configure;
 use crate::interfaces::records::{self, Delete, RecordsFilter, Sort, TagFilter, Write};
-use crate::interfaces::{DateRange, Descriptor, MessageType, Pagination, Range, messages};
+use crate::interfaces::{DateRange, Descriptor, Document, Pagination, Range, messages};
 use crate::{Interface, Method, Result, unexpected};
 
 /// Entry wraps each message with a unifying type used for all stored messages
@@ -45,7 +45,7 @@ pub struct Entry {
     /// `Records` query may return both `RecordsWrite` and `RecordsDelete`
     /// messages.
     #[serde(flatten)]
-    pub message: MessageType,
+    pub message: Document,
 
     /// Indexable fields derived from the associated message object.
     ///
@@ -79,9 +79,9 @@ impl Entry {
     /// message cannot be serialized to CBOR.
     pub fn cid(&self) -> Result<String> {
         match self.message {
-            MessageType::Write(ref write) => write.cid(),
-            MessageType::Delete(ref delete) => delete.cid(),
-            MessageType::Configure(ref configure) => configure.cid(),
+            Document::Write(ref write) => write.cid(),
+            Document::Delete(ref delete) => delete.cid(),
+            Document::Configure(ref configure) => configure.cid(),
         }
     }
 
@@ -89,9 +89,9 @@ impl Entry {
     #[must_use]
     pub fn descriptor(&self) -> &Descriptor {
         match self.message {
-            MessageType::Write(ref write) => write.descriptor(),
-            MessageType::Delete(ref delete) => delete.descriptor(),
-            MessageType::Configure(ref configure) => configure.descriptor(),
+            Document::Write(ref write) => write.descriptor(),
+            Document::Delete(ref delete) => delete.descriptor(),
+            Document::Configure(ref configure) => configure.descriptor(),
         }
     }
 
@@ -99,7 +99,7 @@ impl Entry {
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
         match &self.message {
-            MessageType::Write(write) => Some(write),
+            Document::Write(write) => Some(write),
             _ => None,
         }
     }
@@ -108,7 +108,7 @@ impl Entry {
     #[must_use]
     pub const fn as_delete(&self) -> Option<&records::Delete> {
         match &self.message {
-            MessageType::Delete(delete) => Some(delete),
+            Document::Delete(delete) => Some(delete),
             _ => None,
         }
     }
@@ -117,7 +117,7 @@ impl Entry {
     #[must_use]
     pub const fn as_configure(&self) -> Option<&Configure> {
         match &self.message {
-            MessageType::Configure(configure) => Some(configure),
+            Document::Configure(configure) => Some(configure),
             _ => None,
         }
     }
@@ -126,7 +126,7 @@ impl Entry {
 impl From<&Write> for Entry {
     fn from(write: &Write) -> Self {
         Self {
-            message: MessageType::Write(write.clone()),
+            message: Document::Write(write.clone()),
             indexes: write.build_indexes(),
         }
     }
@@ -135,7 +135,7 @@ impl From<&Write> for Entry {
 impl From<&Delete> for Entry {
     fn from(delete: &Delete) -> Self {
         Self {
-            message: MessageType::Delete(delete.clone()),
+            message: Document::Delete(delete.clone()),
             indexes: delete.build_indexes(),
         }
     }
@@ -144,7 +144,7 @@ impl From<&Delete> for Entry {
 impl From<&Configure> for Entry {
     fn from(configure: &Configure) -> Self {
         Self {
-            message: MessageType::Configure(configure.clone()),
+            message: Document::Configure(configure.clone()),
             indexes: configure.build_indexes(),
         }
     }

@@ -10,16 +10,16 @@ use std::task::{Context, Poll};
 use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 
-use crate::interfaces::MessageType;
+use crate::interfaces::Document;
 use crate::interfaces::messages::MessagesFilter;
 use crate::interfaces::records::{RecordsFilter, Tag, TagFilter};
 
 /// `Event` aliases `store::Event` to provide a common type to use when
 /// interacting with events for any message type.
-pub type Event = MessageType;
+pub type Event = Document;
 
-// /// `EventType` aliases `store::MessageType` to wrap the event message.
-// pub type EventType = MessageType;
+// /// `EventType` aliases `store::Document` to wrap the event message.
+// pub type EventType = Document;
 
 /// Filter to use when subscribing to events.
 #[derive(Debug, Deserialize, Serialize)]
@@ -91,7 +91,7 @@ impl SubscribeFilter {
                 false
             }
             Self::Records(filter) => {
-                if let MessageType::Configure(_) = event {
+                if let Document::Configure(_) = event {
                     return false;
                 }
                 filter.is_match(event)
@@ -105,7 +105,7 @@ impl RecordsFilter {
     #[allow(clippy::cognitive_complexity)]
     #[must_use]
     pub fn is_match(&self, event: &Event) -> bool {
-        let MessageType::Write(write) = &event else {
+        let Document::Write(write) = &event else {
             return false;
         };
         let descriptor = &write.descriptor;
@@ -116,7 +116,7 @@ impl RecordsFilter {
             }
         }
         if let Some(attester) = self.attester.clone() {
-            let  Some(attestation) = &write.attestation else {
+            let Some(attestation) = &write.attestation else {
                 return false;
             };
             if attester != attestation.did().unwrap_or_default() {
@@ -240,15 +240,15 @@ impl MessagesFilter {
         }
         if let Some(protocol) = &self.protocol {
             match event {
-                MessageType::Write( write) => {
+                Document::Write(write) => {
                     if Some(protocol) != write.descriptor.protocol.as_ref() {
                         return false;
                     }
                 }
-                MessageType::Delete(_) => {
+                Document::Delete(_) => {
                     return false;
                 }
-                MessageType::Configure( configure) => {
+                Document::Configure(configure) => {
                     if protocol != &configure.descriptor.definition.protocol {
                         return false;
                     }
