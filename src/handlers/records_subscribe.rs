@@ -10,11 +10,10 @@ use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::event::SubscribeFilter;
 use crate::grants::Grant;
+use crate::handlers::authorize;
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, Provider};
-use crate::records::protocol;
-use crate::utils::cid;
 use crate::{OneOrMany, Result, forbidden};
 
 /// Handle — or process — a [`Subscribe`] message.
@@ -63,10 +62,6 @@ pub async fn handle(
 impl Message for Subscribe {
     type Reply = SubscribeReply;
 
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
-
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }
@@ -100,7 +95,7 @@ impl Subscribe {
 
         // verify protocol when request invokes a protocol role
         if let Some(protocol) = &authzn.payload()?.protocol_role {
-            let protocol = protocol::Authorizer::new(protocol)
+            let protocol = authorize::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
             return protocol.permit_subscribe(owner, self, provider).await;
         }

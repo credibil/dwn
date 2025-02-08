@@ -3,6 +3,8 @@
 //! This test demonstrates how a web node owner create differnt types of
 //! messages and subsequently query for them.
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::sync::LazyLock;
 use std::time::Duration;
 

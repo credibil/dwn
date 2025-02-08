@@ -1,5 +1,7 @@
 //! Records Query
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::Cursor;
 use std::sync::LazyLock;
 

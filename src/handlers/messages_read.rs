@@ -16,13 +16,12 @@ use http::StatusCode;
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::{self, Scope};
+use crate::handlers::records_write;
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
+use crate::interfaces::protocols::PROTOCOL_URI;
 use crate::interfaces::{Descriptor, MessageType};
-use crate::protocols::PROTOCOL_URI;
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::write;
 use crate::store::Entry;
-use crate::utils::cid;
 use crate::{Error, Interface, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Read`] message.
@@ -87,10 +86,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 impl Message for Read {
     type Reply = ReadReply;
 
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
-
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }
@@ -149,7 +144,8 @@ async fn verify_scope(
             MessageType::Write(write) => write.clone(),
             MessageType::Delete(delete) => {
                 let entry =
-                    write::initial_write(owner, &delete.descriptor.record_id, store).await?;
+                    records_write::initial_write(owner, &delete.descriptor.record_id, store)
+                        .await?;
                 let Some(write) = entry else {
                     return Err(forbidden!("message failed scope authorization"));
                 };

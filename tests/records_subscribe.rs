@@ -1,5 +1,7 @@
 //! Messages Subscribe
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::sync::LazyLock;
 use std::time::Duration;
 

@@ -1,5 +1,7 @@
 //! Records Read
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 

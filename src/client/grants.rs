@@ -7,8 +7,8 @@ use chrono::{DateTime, Duration, Utc};
 use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
 pub use crate::grants::{Conditions, Publication, RecordsScope, Scope};
 use crate::grants::{GrantData, RequestData, RevocationData};
+use crate::interfaces::protocols;
 use crate::interfaces::records::{self, Tag, Write};
-use crate::protocols::{self};
 use crate::provider::Signer;
 use crate::{Interface, utils};
 

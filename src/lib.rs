@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 //! # Decentralized Web Node (DWN)
 //!
 //! A [Decentralized Web Node (DWN)] is a data storage and message relay
@@ -14,32 +12,48 @@
 //!
 //! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![feature(let_chains)]
+
 pub mod authorization;
-#[cfg(feature = "client")]
-pub mod client;
-pub mod endpoint;
 mod error;
+// #[cfg(feature = "server")]
 pub mod event;
+// #[cfg(feature = "server")]
 mod grants;
 pub mod hd_key;
-mod interfaces;
-mod messages;
-mod protocols;
+pub mod interfaces;
 pub mod provider;
-mod records;
+// #[cfg(feature = "server")]
 mod schema;
-pub mod store;
-mod tasks;
 mod utils;
 
-use ::serde::{Deserialize, Serialize};
-use derive_more::Display;
 pub use http::StatusCode;
 
-pub use crate::endpoint::Message;
 pub use crate::error::Error;
 pub use crate::provider::Provider;
 pub use crate::utils::cid;
+
+// Client features.
+#[cfg(feature = "client")]
+pub mod client;
+
+// Server features.
+// #[cfg(feature = "server")]
+pub mod endpoint;
+// #[cfg(feature = "server")]
+mod handlers;
+// #[cfg(feature = "server")]
+pub mod store;
+// #[cfg(feature = "server")]
+mod tasks;
+
+// Server re-exports
+use ::serde::{Deserialize, Serialize};
+use derive_more::Display;
+
+// #[cfg(feature = "server")]
+pub use crate::endpoint::Message;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;

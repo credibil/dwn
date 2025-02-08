@@ -10,7 +10,6 @@ use crate::endpoint::{Message, Reply, Status};
 use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Query, QueryReply};
 use crate::provider::{EventLog, Provider};
-use crate::utils::cid;
 use crate::{Result, forbidden, grants, store};
 
 /// Handle — or process — a [`Query`] message.
@@ -41,10 +40,6 @@ pub async fn handle(
 
 impl Message for Query {
     type Reply = QueryReply;
-
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
 
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base

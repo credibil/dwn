@@ -9,12 +9,11 @@ use http::StatusCode;
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::Grant;
+use crate::handlers::authorize;
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
-use crate::records::protocol;
 use crate::store::{self, RecordsQueryBuilder};
-use crate::utils::cid;
 use crate::{Result, forbidden, unexpected, utils};
 
 /// Handle — or process — a [`Query`] message.
@@ -105,10 +104,6 @@ pub async fn handle(
 impl Message for Query {
     type Reply = QueryReply;
 
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
-
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }
@@ -147,7 +142,7 @@ impl Query {
             }
 
             // verify protocol role is authorized
-            let verifier = protocol::Authorizer::new(protocol)
+            let verifier = authorize::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
             return verifier.permit_query(owner, self, provider).await;
         }

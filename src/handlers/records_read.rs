@@ -10,12 +10,11 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::handlers::{authorize, records_write};
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::{protocol, write};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::utils::cid;
 use crate::{Error, Method, Result, forbidden, grants, unexpected};
 
 /// Handle — or process — a [`Read`] message.
@@ -44,7 +43,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         };
 
         let Ok(Some(write)) =
-            write::initial_write(owner, &delete.descriptor.record_id, provider).await
+            records_write::initial_write(owner, &delete.descriptor.record_id, provider).await
         else {
             return Err(unexpected!("initial write for deleted record not found"));
         };
@@ -135,10 +134,6 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 impl Message for Read {
     type Reply = ReadReply;
 
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
-
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }
@@ -195,7 +190,7 @@ impl Read {
 
         // verify protocol role and action
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = protocol::Authorizer::new(protocol)
+            let protocol = authorize::Authorizer::new(protocol)
                 .context_id(write.context_id.as_ref())
                 .initial_write(write);
             protocol.permit_read(owner, self, store).await?;

@@ -3,29 +3,29 @@
 //! The records write endpoint handles `RecordsWrite` messages —
 //! requests to write to records to the DWN's [`MessageStore`].
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat::Micros;
-use credibil_infosec::Signer;
-use credibil_infosec::jose::JwsBuilder;
 use http::StatusCode;
-use serde::Serialize;
+use serde_json::json;
 
-use crate::authorization::{Authorization, JwsPayload};
+use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::grants::{self, Grant};
+use crate::grants::{self, Grant, GrantData, RequestData, RevocationData, Scope};
+use crate::handlers::{authorize, protocols_configure};
+use crate::interfaces::protocols::{
+    self, GRANT_PATH, PROTOCOL_URI, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
+};
 use crate::interfaces::records::{
-    DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteDescriptor, WriteReply,
+    DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteReply,
 };
 use crate::interfaces::{DateRange, Descriptor, MessageType};
-use crate::protocols::{PROTOCOL_URI, REVOCATION_PATH};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::protocol;
 use crate::store::{Entry, GrantedQueryBuilder, RecordsQueryBuilder, data};
 use crate::utils::cid;
-use crate::{Error, Method, Result, forbidden, unexpected};
+use crate::{Error, Method, Result, forbidden, schema, unexpected};
 
 /// Handle — or process — a [`Write`] message.
 ///
@@ -195,6 +195,283 @@ impl TryFrom<&Entry> for Write {
 }
 
 impl Write {
+    /// Verify the integrity of `RecordsWrite` messages using a protocol.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if the message does not pass the integrity checks.
+    pub async fn verify(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let Some(protocol) = &self.descriptor.protocol else {
+            return Err(forbidden!("missing protocol"));
+        };
+        let definition = protocols_configure::definition(owner, protocol, store).await?;
+        let Some(protocol_path) = &self.descriptor.protocol_path else {
+            return Err(forbidden!("missing protocol"));
+        };
+        let Some(rule_set) = protocols_configure::rule_set(protocol_path, &definition.structure)
+        else {
+            return Err(forbidden!("invalid protocol path"));
+        };
+
+        self.verify_protocol_path(owner, store).await?;
+        self.verify_type(&definition.types)?;
+        if rule_set.role.is_some() {
+            self.verify_role_record(owner, store).await?;
+        }
+        self.verify_size_limit(&rule_set)?;
+        self.verify_tags(&rule_set)?;
+        self.verify_revoke(owner, store).await?;
+
+        Ok(())
+    }
+
+    /// Verifies the given `RecordsWrite` grant.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if the Grant schema is not valid or the scope cannot be
+    /// verified.
+    pub fn verify_schema(&self, data: &[u8]) -> Result<()> {
+        let Some(protocol_path) = &self.descriptor.protocol_path else {
+            return Err(forbidden!("missing protocol path"));
+        };
+
+        match protocol_path.as_str() {
+            REQUEST_PATH => {
+                let request_data: RequestData = serde_json::from_slice(data)?;
+                schema::validate_value("PermissionRequestData", &request_data)?;
+                self.verify_grant_scope(&request_data.scope)
+            }
+            GRANT_PATH => {
+                let grant_data: GrantData = serde_json::from_slice(data)?;
+                schema::validate_value("PermissionGrantData", &grant_data)?;
+                self.verify_grant_scope(&grant_data.scope)
+            }
+            REVOCATION_PATH => {
+                let revocation_data: RevocationData = serde_json::from_slice(data)?;
+                schema::validate_value("PermissionRevocationData", &revocation_data)
+            }
+            _ => Err(forbidden!("unexpected permission record: {protocol_path}")),
+        }
+    }
+
+    /// Verifies the `data_format` and `schema` parameters .
+    fn verify_type(&self, types: &BTreeMap<String, ProtocolType>) -> Result<()> {
+        let Some(protocol_path) = &self.descriptor.protocol_path else {
+            return Err(forbidden!("missing protocol path"));
+        };
+        let Some(type_name) = protocol_path.split('/').next_back() else {
+            return Err(forbidden!("missing type name"));
+        };
+        let Some(protocol_type) = types.get(type_name) else {
+            return Err(forbidden!("record not allowed in protocol"));
+        };
+
+        if protocol_type.schema.is_some() && protocol_type.schema != self.descriptor.schema {
+            return Err(forbidden!("invalid schema"));
+        }
+
+        if let Some(data_formats) = &protocol_type.data_formats {
+            if !data_formats.contains(&self.descriptor.data_format) {
+                return Err(forbidden!("invalid data format"));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate tags include a protocol tag matching the scoped protocol.
+    fn verify_grant_scope(&self, scope: &Scope) -> Result<()> {
+        let Some(protocol) = scope.protocol() else {
+            return Ok(());
+        };
+        let Some(tags) = &self.descriptor.tags else {
+            return Err(forbidden!("grants require a `tags` property"));
+        };
+        let Some(tag_protocol) = tags.get("protocol") else {
+            return Err(forbidden!("grant tags must contain a \"protocol\" tag",));
+        };
+        if tag_protocol.as_str() != Some(protocol) {
+            return Err(forbidden!("grant scope protocol does not match protocol"));
+        }
+        Ok(())
+    }
+
+    // Verify the `protocol_path` matches the path of actual record chain.
+    async fn verify_protocol_path(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let Some(protocol_path) = &self.descriptor.protocol_path else {
+            return Err(forbidden!("missing protocol path"));
+        };
+        let Some(type_name) = protocol_path.split('/').next_back() else {
+            return Err(forbidden!("missing type name"));
+        };
+
+        // fetch the parent message
+        let Some(parent_id) = &self.descriptor.parent_id else {
+            if protocol_path != type_name {
+                return Err(forbidden!("invalid protocol path for parentless record",));
+            }
+            return Ok(());
+        };
+        let Some(protocol) = &self.descriptor.protocol else {
+            return Err(forbidden!("missing protocol"));
+        };
+
+        // fetch the parent record
+        let query = RecordsQueryBuilder::new()
+            .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol))
+            .build();
+        let (entries, _) = store.query(owner, &query).await?;
+        if entries.is_empty() {
+            return Err(forbidden!("unable to find parent record"));
+        }
+        let Some(record) = &entries.first() else {
+            return Err(forbidden!("expected to find parent message"));
+        };
+        let Some(parent) = record.as_write() else {
+            return Err(forbidden!("expected parent to be a `RecordsWrite` message"));
+        };
+
+        // verify protocol_path is a child of the parent message's protocol_path
+        let Some(parent_path) = &parent.descriptor.protocol_path else {
+            return Err(forbidden!("missing protocol path"));
+        };
+        if &format!("{parent_path}/{type_name}") != protocol_path {
+            return Err(forbidden!("invalid `protocol_path`"));
+        }
+
+        // verifying `context_id` is a child of the parent's `context_id`
+        // e.g. 'bafkreicx24'
+        let Some(parent_context_id) = &parent.context_id else {
+            return Err(forbidden!("missing parent `context_id`"));
+        };
+        // e.g. 'bafkreicx24/bafkreibejby'
+        let Some(context_id) = &self.context_id else {
+            return Err(forbidden!("missing `context_id`"));
+        };
+        // compare the parent segment of `context_id` with `parent_context_id`
+        if context_id[..parent_context_id.len()] != *parent_context_id {
+            return Err(forbidden!("incorrect parent `context_id`"));
+        }
+
+        Ok(())
+    }
+
+    /// Verify the integrity of the `records::Write` as a role record.
+    async fn verify_role_record(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        let Some(recipient) = &self.descriptor.recipient else {
+            return Err(unexpected!("role record is missing recipient"));
+        };
+        let Some(protocol) = &self.descriptor.protocol else {
+            return Err(unexpected!("missing protocol"));
+        };
+        let Some(protocol_path) = &self.descriptor.protocol_path else {
+            return Err(unexpected!("missing protocol_path"));
+        };
+
+        // if this is not the root record, add a prefix filter to the query
+        let mut filter = RecordsFilter::new()
+            .protocol(protocol)
+            .protocol_path(protocol_path)
+            .add_recipient(recipient);
+
+        if let Some(parent_context) =
+            self.context_id.as_ref().and_then(|id| id.rsplit_once('/').map(|x| x.0))
+        {
+            filter = filter.context_id(parent_context);
+        }
+
+        let query = RecordsQueryBuilder::new().add_filter(filter).build();
+        let (entries, _) = store.query(owner, &query).await?;
+        for entry in entries {
+            let Some(w) = entry.as_write() else {
+                return Err(unexpected!("expected `RecordsWrite` message"));
+            };
+            if w.record_id != self.record_id {
+                return Err(unexpected!("recipient already has this role record",));
+            }
+        }
+
+        Ok(())
+    }
+
+    // Verify write record adheres to the $size constraints.
+    fn verify_size_limit(&self, rule_set: &RuleSet) -> Result<()> {
+        let data_size = self.descriptor.data_size;
+
+        let Some(range) = &rule_set.size else {
+            return Ok(());
+        };
+        if let Some(start) = range.min {
+            if data_size < start {
+                return Err(forbidden!("data size is less than allowed"));
+            }
+        }
+        if let Some(end) = range.max {
+            if data_size > end {
+                return Err(forbidden!("data size is greater than allowed"));
+            }
+        }
+        Ok(())
+    }
+
+    fn verify_tags(&self, rule_set: &RuleSet) -> Result<()> {
+        let Some(rule_tags) = &rule_set.tags else {
+            return Ok(());
+        };
+
+        // build schema from rule set tags
+        let schema = json!({
+            "type": "object",
+            "properties": rule_tags.undefined,
+            "required": rule_tags.required.clone().unwrap_or_default(),
+            "additionalProperties": rule_tags.allow_undefined.unwrap_or_default(),
+        });
+
+        // validate tags against schema
+        if !jsonschema::is_valid(&schema, &serde_json::to_value(&self.descriptor.tags)?) {
+            return Err(forbidden!("tags do not match schema"));
+        }
+
+        Ok(())
+    }
+
+    // Performs additional validation before storing the RecordsWrite if it is
+    // a core RecordsWrite that needs additional processing.
+    async fn verify_revoke(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
+        // Ensure the protocol tag of a permission revocation RecordsWrite and
+        // the parent grant's scoped protocol match.
+        if self.descriptor.protocol == Some(protocols::PROTOCOL_URI.to_owned())
+            && self.descriptor.protocol_path == Some(protocols::REVOCATION_PATH.to_owned())
+        {
+            // get grant from revocation message `parent_id`
+            let Some(parent_id) = &self.descriptor.parent_id else {
+                return Err(forbidden!("missing `parent_id`"));
+            };
+            let grant = grants::fetch_grant(owner, parent_id, store).await?;
+
+            // compare revocation message protocol and grant scope protocol
+            if let Some(tags) = &self.descriptor.tags {
+                let revoke_protocol =
+                    tags.get("protocol").map_or("", |p| p.as_str().unwrap_or_default());
+
+                let Some(protocol) = grant.data.scope.protocol() else {
+                    return Err(forbidden!("missing protocol in grant scope"));
+                };
+
+                if protocol != revoke_protocol {
+                    return Err(forbidden!(
+                        "revocation protocol {revoke_protocol} does not match grant protocol {protocol}"
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Write {
     /// Build flattened indexes for the write message.
     #[must_use]
     pub(crate) fn build_indexes(&self) -> HashMap<String, String> {
@@ -269,24 +546,6 @@ impl Write {
         self.data_stream = Some(data_stream);
     }
 
-    /// Computes the deterministic Entry ID (Record ID) of the message.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the Entry ID cannot be serialized to CBOR.
-    pub fn entry_id(&self, author: &str) -> Result<String> {
-        #[derive(Serialize)]
-        struct EntryId<'a> {
-            #[serde(flatten)]
-            descriptor: &'a WriteDescriptor,
-            author: &'a str,
-        }
-        cid::from_value(&EntryId {
-            descriptor: &self.descriptor,
-            author,
-        })
-    }
-
     async fn authorize(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let authzn = &self.authorization;
         let record_owner = authzn.owner()?;
@@ -336,7 +595,8 @@ impl Write {
 
         // protocol-specific authorization
         if let Some(protocol) = &self.descriptor.protocol {
-            let protocol = protocol::Authorizer::new(protocol).context_id(self.context_id.as_ref());
+            let protocol =
+                authorize::Authorizer::new(protocol).context_id(self.context_id.as_ref());
             return protocol.permit_write(owner, self, store).await;
         }
 
@@ -528,113 +788,6 @@ impl Write {
             MessageStore::delete(provider, owner, &message_cid).await?;
             EventLog::delete(provider, owner, &message_cid).await?;
         }
-
-        Ok(())
-    }
-}
-
-// Signing
-impl Write {
-    /// Signs the Write message body. The signer is either the author or a delegate.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail when there is an issue serializing the message
-    /// to CBOR or when there is an issue signing message. The returned
-    /// [`Error`] will contain a brief clarifying description of the error.
-    pub async fn sign_as_author(
-        &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
-        signer: &impl Signer,
-    ) -> Result<()> {
-        let delegated_grant_id = if let Some(grant) = &self.authorization.author_delegated_grant {
-            Some(cid::from_value(&grant)?)
-        } else {
-            None
-        };
-
-        // compute CIDs for attestation and encryption
-        let attestation_cid = self.attestation.as_ref().map(cid::from_value).transpose()?;
-        let encryption_cid = self.encryption.as_ref().map(cid::from_value).transpose()?;
-
-        let payload = SignaturePayload {
-            base: JwsPayload {
-                descriptor_cid: cid::from_value(&self.descriptor)?,
-                permission_grant_id,
-                delegated_grant_id,
-                protocol_role,
-            },
-            record_id: self.record_id.clone(),
-            context_id: self.context_id.clone(),
-            attestation_cid,
-            encryption_cid,
-        };
-
-        self.authorization.signature =
-            JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
-
-        Ok(())
-    }
-
-    /// Signs the [`Write`] message as the DWN owner.
-    ///
-    /// This is used when the web node owner wants to retain a copy of a message that
-    /// the owner did not author.
-    /// N.B.: requires the `RecordsWrite` to already have the author's signature.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail when the message has not been previously signed
-    /// by the author or there is an issue issue signing the message.
-    /// The returned [`Error`] will contain a brief clarifying description of the
-    /// error.
-    pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
-        if self.authorization.author().is_err() {
-            return Err(unexpected!("message signature is required in order to sign as owner"));
-        }
-
-        let payload = JwsPayload {
-            descriptor_cid: cid::from_value(&self.descriptor)?,
-            ..JwsPayload::default()
-        };
-        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
-        self.authorization.owner_signature = Some(owner_jws);
-
-        Ok(())
-    }
-
-    /// Signs the `Write` record as a delegate of the web node owner. This is
-    /// used when a web node owner-delegate wants to retain a copy of a
-    /// message that the owner did not author.
-    ///
-    /// N.B. requires `Write` to have previously beeen signed by the author.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail when the message has not been previously signed
-    /// by the author or there is an issue issue signing the message.
-    /// The returned [`Error`] will contain a brief clarifying description of the
-    /// error.
-    pub async fn sign_as_delegate(
-        &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
-    ) -> Result<()> {
-        if self.authorization.author().is_err() {
-            return Err(unexpected!("signature is required in order to sign as owner delegate"));
-        }
-
-        //  descriptorCid, delegatedGrantId, permissionGrantId, protocolRole
-
-        let delegated_grant_id = cid::from_value(&delegated_grant)?;
-        let descriptor_cid = cid::from_value(&self.descriptor)?;
-
-        let payload = JwsPayload {
-            descriptor_cid,
-            delegated_grant_id: Some(delegated_grant_id),
-            ..JwsPayload::default()
-        };
-        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
-
-        self.authorization.owner_signature = Some(owner_jws);
-        self.authorization.owner_delegated_grant = Some(delegated_grant);
 
         Ok(())
     }

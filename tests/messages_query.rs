@@ -3,6 +3,8 @@
 //! This test demonstrates how a web node owner create messages and
 //! subsequently query for them.
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::Cursor;
 use std::sync::LazyLock;
 

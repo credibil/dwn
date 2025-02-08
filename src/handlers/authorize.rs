@@ -6,12 +6,12 @@
 //! This module provides the logic to enforce these permissions.
 
 use crate::authorization::Authorization;
+use crate::handlers::{protocols_configure, records_write};
 use crate::interfaces::protocols::{Action, ActionRule, Actor, RuleSet};
 use crate::interfaces::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write};
 use crate::provider::MessageStore;
-use crate::records::write;
 use crate::store::RecordsQueryBuilder;
-use crate::{Result, forbidden, protocols};
+use crate::{Result, forbidden};
 
 /// [`Authorizer`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.
@@ -109,8 +109,10 @@ impl Authorizer<'_> {
             return Ok(());
         };
 
-        let definition = protocols::definition(owner, self.protocol, store).await?;
-        let Some(role_rule_set) = protocols::rule_set(&protocol_role, &definition.structure) else {
+        let definition = protocols_configure::definition(owner, self.protocol, store).await?;
+        let Some(role_rule_set) =
+            protocols_configure::rule_set(&protocol_role, &definition.structure)
+        else {
             return Err(forbidden!("no rule set defined for invoked role"));
         };
         if !role_rule_set.role.unwrap_or_default() {
@@ -241,7 +243,7 @@ impl Authorizer<'_> {
 
         // walk up the ancestor tree until no parent
         while let Some(record_id) = &current_id {
-            let Some(initial) = write::initial_write(owner, record_id, store).await? else {
+            let Some(initial) = records_write::initial_write(owner, record_id, store).await? else {
                 return Err(forbidden!("no parent record found"));
             };
             ancestors.push(initial.clone());
@@ -263,7 +265,8 @@ impl Authorizer<'_> {
                 if write.is_initial()? {
                     return Ok(vec![Action::Create]);
                 }
-                let Some(initial) = write::initial_write(owner, &write.record_id, store).await?
+                let Some(initial) =
+                    records_write::initial_write(owner, &write.record_id, store).await?
                 else {
                     return Ok(Vec::new());
                 };
@@ -277,7 +280,8 @@ impl Authorizer<'_> {
             Record::Subscribe(_) => Ok(vec![Action::Subscribe]),
             Record::Delete(delete) => {
                 let Some(initial) =
-                    write::initial_write(owner, &delete.descriptor.record_id, store).await?
+                    records_write::initial_write(owner, &delete.descriptor.record_id, store)
+                        .await?
                 else {
                     return Ok(Vec::new());
                 };
@@ -402,8 +406,9 @@ impl Record {
             return Err(forbidden!("missing protocol"));
         };
         let protocol = self.protocol()?;
-        let definition = protocols::definition(owner, protocol, store).await?;
-        let Some(rule_set) = protocols::rule_set(protocol_path, &definition.structure) else {
+        let definition = protocols_configure::definition(owner, protocol, store).await?;
+        let Some(rule_set) = protocols_configure::rule_set(protocol_path, &definition.structure)
+        else {
             return Err(forbidden!("invalid protocol path"));
         };
         Ok(rule_set)

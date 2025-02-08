@@ -16,13 +16,12 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::handlers::authorize;
 use crate::interfaces::records::{Delete, DeleteReply, RecordsFilter, Write};
 use crate::interfaces::{Descriptor, MessageType};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::protocol;
 use crate::store::{Entry, RecordsQueryBuilder};
 use crate::tasks::{self, Task, TaskType};
-use crate::utils::cid;
 use crate::{Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Delete`] message.
@@ -86,10 +85,6 @@ pub async fn handle(
 
 impl Message for Delete {
     type Reply = DeleteReply;
-
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
 
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
@@ -165,7 +160,7 @@ impl Delete {
         }
 
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = protocol::Authorizer::new(protocol)
+            let protocol = authorize::Authorizer::new(protocol)
                 .context_id(write.context_id.as_ref())
                 .initial_write(write);
             return protocol.permit_delete(owner, self, store).await;

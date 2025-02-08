@@ -282,3 +282,4 @@ pub struct Cursor {
     /// results.
     pub value: String,
 }
+

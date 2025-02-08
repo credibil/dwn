@@ -3,6 +3,8 @@
 //! This test demonstrates how a web node owner create a message and
 //! subsequently read it.
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 

@@ -1,5 +1,7 @@
 //! Records Delete
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::Read;
 use std::sync::LazyLock;
 

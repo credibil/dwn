@@ -583,6 +583,26 @@ pub struct Write {
     pub data_stream: Option<io::Cursor<Vec<u8>>>,
 }
 
+impl Write {
+    /// Computes the deterministic Entry ID (Record ID) of the message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Entry ID cannot be serialized to CBOR.
+    pub fn entry_id(&self, author: &str) -> Result<String> {
+        #[derive(Serialize)]
+        struct EntryId<'a> {
+            #[serde(flatten)]
+            descriptor: &'a WriteDescriptor,
+            author: &'a str,
+        }
+        utils::cid::from_value(&EntryId {
+            descriptor: &self.descriptor,
+            author,
+        })
+    }
+}
+
 /// Signature payload.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -899,7 +919,7 @@ impl Encrypted {
     ///
     /// # Errors
     ///
-    /// Will fail if the CEK cannot be encrypted. 
+    /// Will fail if the CEK cannot be encrypted.
     pub fn finalize(self) -> Result<EncryptionProperty> {
         // encryption property
         let mut encryption = EncryptionProperty {

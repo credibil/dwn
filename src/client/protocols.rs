@@ -22,13 +22,13 @@ use chrono::{DateTime, Utc};
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;
 pub use crate::interfaces::protocols::{
-    Action, ActionRule, Actor, Configure, ConfigureDescriptor, Definition, ProtocolType,
+    self, Action, ActionRule, Actor, Configure, ConfigureDescriptor, Definition, ProtocolType,
     ProtocolsFilter, Query, QueryDescriptor, RuleSet, Size,
 };
 use crate::interfaces::records::DelegatedGrant;
 use crate::provider::Signer;
 use crate::utils::cid;
-use crate::{Interface, Method, Result, protocols, utils};
+use crate::{Interface, Method, Result, utils};
 
 /// Options to use when creating a permission grant.
 pub struct ConfigureBuilder<D, S> {

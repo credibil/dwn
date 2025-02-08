@@ -14,7 +14,7 @@ use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use credibil_infosec::jose::{Jws, JwsBuilder};
 
-use crate::authorization::{Authorization, AuthorizationBuilder};
+use crate::authorization::{Authorization, AuthorizationBuilder, JwsPayload};
 pub use crate::client::encryption::decrypt;
 use crate::hd_key::DerivationScheme;
 pub use crate::interfaces::records::{
@@ -1177,4 +1177,111 @@ fn did_from_kid(kid: &str) -> Result<String> {
         return Err(anyhow!("Invalid key ID"));
     }
     Ok(parts[0].to_string())
+}
+
+// Signing
+impl Write {
+    /// Signs the Write message body. The signer is either the author or a delegate.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail when there is an issue serializing the message
+    /// to CBOR or when there is an issue signing message. The returned
+    /// [`Error`] will contain a brief clarifying description of the error.
+    pub async fn sign_as_author(
+        &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
+        signer: &impl Signer,
+    ) -> Result<()> {
+        let delegated_grant_id = if let Some(grant) = &self.authorization.author_delegated_grant {
+            Some(cid::from_value(&grant)?)
+        } else {
+            None
+        };
+
+        // compute CIDs for attestation and encryption
+        let attestation_cid = self.attestation.as_ref().map(cid::from_value).transpose()?;
+        let encryption_cid = self.encryption.as_ref().map(cid::from_value).transpose()?;
+
+        let payload = SignaturePayload {
+            base: JwsPayload {
+                descriptor_cid: cid::from_value(&self.descriptor)?,
+                permission_grant_id,
+                delegated_grant_id,
+                protocol_role,
+            },
+            record_id: self.record_id.clone(),
+            context_id: self.context_id.clone(),
+            attestation_cid,
+            encryption_cid,
+        };
+
+        self.authorization.signature =
+            JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+
+        Ok(())
+    }
+
+    /// Signs the [`Write`] message as the DWN owner.
+    ///
+    /// This is used when the web node owner wants to retain a copy of a message that
+    /// the owner did not author.
+    /// N.B.: requires the `RecordsWrite` to already have the author's signature.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail when the message has not been previously signed
+    /// by the author or there is an issue issue signing the message.
+    /// The returned [`Error`] will contain a brief clarifying description of the
+    /// error.
+    pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
+        if self.authorization.author().is_err() {
+            return Err(anyhow!("message signature is required in order to sign as owner"));
+        }
+
+        let payload = JwsPayload {
+            descriptor_cid: cid::from_value(&self.descriptor)?,
+            ..JwsPayload::default()
+        };
+        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+        self.authorization.owner_signature = Some(owner_jws);
+
+        Ok(())
+    }
+
+    /// Signs the `Write` record as a delegate of the web node owner. This is
+    /// used when a web node owner-delegate wants to retain a copy of a
+    /// message that the owner did not author.
+    ///
+    /// N.B. requires `Write` to have previously beeen signed by the author.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail when the message has not been previously signed
+    /// by the author or there is an issue issue signing the message.
+    /// The returned [`Error`] will contain a brief clarifying description of the
+    /// error.
+    pub async fn sign_as_delegate(
+        &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
+    ) -> Result<()> {
+        if self.authorization.author().is_err() {
+            return Err(anyhow!("signature is required in order to sign as owner delegate"));
+        }
+
+        //  descriptorCid, delegatedGrantId, permissionGrantId, protocolRole
+
+        let delegated_grant_id = cid::from_value(&delegated_grant)?;
+        let descriptor_cid = cid::from_value(&self.descriptor)?;
+
+        let payload = JwsPayload {
+            descriptor_cid,
+            delegated_grant_id: Some(delegated_grant_id),
+            ..JwsPayload::default()
+        };
+        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+
+        self.authorization.owner_signature = Some(owner_jws);
+        self.authorization.owner_delegated_grant = Some(delegated_grant);
+
+        Ok(())
+    }
 }

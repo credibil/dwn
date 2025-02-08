@@ -378,6 +378,8 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
 
 #[cfg(test)]
 mod tests {
+    #![cfg(feature = "client")]
+
     use std::io::Cursor;
     use std::str::FromStr;
 

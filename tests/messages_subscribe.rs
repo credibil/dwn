@@ -1,5 +1,7 @@
 //! Messages Subscribe
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use core::panic;
 use std::io::Cursor;
 use std::sync::LazyLock;
