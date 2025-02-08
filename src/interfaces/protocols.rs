@@ -168,7 +168,7 @@ pub struct RuleSet {
     #[serde(rename = "$actions")]
     pub actions: Option<Vec<ActionRule>>,
 
-    /// Entry is a role record.
+    /// Storable is a role record.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "$role")]
     pub role: Option<bool>,
@@ -529,7 +529,7 @@ fn role_paths(
 ) -> Result<Vec<String>> {
     // restrict to max depth of 10 levels
     if protocol_path.split('/').count() > 10 {
-        return Err(unexpected!("Entry nesting depth exceeded 10 levels."));
+        return Err(unexpected!("Storable nesting depth exceeded 10 levels."));
     }
 
     let mut roles = roles.to_owned();

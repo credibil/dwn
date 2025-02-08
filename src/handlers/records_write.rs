@@ -23,7 +23,7 @@ use crate::interfaces::records::{
 };
 use crate::interfaces::{DateRange, Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::store::{Entry, GrantedQueryBuilder, RecordsQueryBuilder, data};
+use crate::store::{GrantedQueryBuilder, RecordsQueryBuilder, Storable, data};
 use crate::utils::cid;
 use crate::{Error, Method, Result, forbidden, schema, unexpected};
 
@@ -41,11 +41,11 @@ pub async fn handle(
 
     let is_initial = write.is_initial()?;
 
-    // find any existing entries for the `record_id`
+    // find any existing documents for the `record_id`
     let existing = existing_entries(owner, &write.record_id, provider).await?;
     let (initial_entry, latest_entry) = earliest_and_latest(&existing);
 
-    // when no existing entries, verify this write is the initial write
+    // when no existing documents, verify this write is the initial write
     if initial_entry.is_none() && !is_initial {
         return Err(unexpected!("initial write not found"));
     }
@@ -97,24 +97,24 @@ pub async fn handle(
 
     // set `archive` flag is set when the intial write has no data
     // N.B. this is used to prevent malicious access to another record's data
-    let mut entry = Entry::from(&write);
-    entry.add_index("initial", (code == StatusCode::NO_CONTENT).to_string());
+    let mut document = Storable::from(&write);
+    document.add_index("initial", (code == StatusCode::NO_CONTENT).to_string());
 
     // save the message and log the event
-    MessageStore::put(provider, owner, &entry).await?;
-    EventLog::append(provider, owner, &entry).await?;
-    EventStream::emit(provider, owner, &entry.message).await?;
+    MessageStore::put(provider, owner, &document).await?;
+    EventLog::append(provider, owner, &document).await?;
+    EventStream::emit(provider, owner, &document.document).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
-    if let Some(entry) = initial_entry {
-        let initial = Write::try_from(&entry)?;
+    if let Some(document) = initial_entry {
+        let initial = Write::try_from(&document)?;
 
-        // HACK: rebuild entry's indexes
-        let mut entry = Entry::from(&initial);
-        entry.add_index("initial", true.to_string());
+        // HACK: rebuild document's indexes
+        let mut document = Storable::from(&initial);
+        document.add_index("initial", true.to_string());
 
-        MessageStore::put(provider, owner, &entry).await?;
-        EventLog::append(provider, owner, &entry).await?;
+        MessageStore::put(provider, owner, &document).await?;
+        EventLog::append(provider, owner, &document).await?;
 
         if !initial.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
             DataStore::delete(provider, owner, &initial.record_id, &initial.descriptor.data_cid)
@@ -124,9 +124,9 @@ pub async fn handle(
 
     // delete any previous messages with the same `record_id` EXCEPT initial write
     let mut deletable = VecDeque::from(existing);
-    let _ = deletable.pop_front(); // retain initial write (first entry)
-    for entry in deletable {
-        let write = Write::try_from(entry)?;
+    let _ = deletable.pop_front(); // retain initial write (first document)
+    for document in deletable {
+        let write = Write::try_from(document)?;
         let cid = write.cid()?;
         MessageStore::delete(provider, owner, &cid).await?;
         DataStore::delete(provider, owner, &write.record_id, &write.descriptor.data_cid).await?;
@@ -172,22 +172,22 @@ impl Message for Write {
     }
 }
 
-impl TryFrom<Entry> for Write {
+impl TryFrom<Document> for Write {
     type Error = crate::Error;
 
-    fn try_from(entry: Entry) -> Result<Self> {
-        match entry.message {
+    fn try_from(document: Document) -> Result<Self> {
+        match document {
             Document::Write(write) => Ok(write),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
     }
 }
 
-impl TryFrom<&Entry> for Write {
+impl TryFrom<&Document> for Write {
     type Error = crate::Error;
 
-    fn try_from(entry: &Entry) -> Result<Self> {
-        match &entry.message {
+    fn try_from(document: &Document) -> Result<Self> {
+        match &document {
             Document::Write(write) => Ok(write.clone()),
             _ => Err(unexpected!("expected `RecordsWrite` message")),
         }
@@ -321,11 +321,11 @@ impl Write {
         let query = RecordsQueryBuilder::new()
             .add_filter(RecordsFilter::new().record_id(parent_id).protocol(protocol))
             .build();
-        let (entries, _) = store.query(owner, &query).await?;
-        if entries.is_empty() {
+        let (documents, _) = store.query(owner, &query).await?;
+        if documents.is_empty() {
             return Err(forbidden!("unable to find parent record"));
         }
-        let Some(record) = &entries.first() else {
+        let Some(record) = &documents.first() else {
             return Err(forbidden!("expected to find parent message"));
         };
         let Some(parent) = record.as_write() else {
@@ -382,9 +382,9 @@ impl Write {
         }
 
         let query = RecordsQueryBuilder::new().add_filter(filter).build();
-        let (entries, _) = store.query(owner, &query).await?;
-        for entry in entries {
-            let Some(w) = entry.as_write() else {
+        let (documents, _) = store.query(owner, &query).await?;
+        for document in documents {
+            let Some(w) = document.as_write() else {
                 return Err(unexpected!("expected `RecordsWrite` message"));
             };
             if w.record_id != self.record_id {
@@ -725,7 +725,7 @@ impl Write {
     //  1. verify the new message's data integrity
     //  2. copy stored `encoded_data` to the new  message.
     async fn clone_data(
-        &mut self, owner: &str, existing: &Entry, store: &impl DataStore,
+        &mut self, owner: &str, existing: &Document, store: &impl DataStore,
     ) -> Result<()> {
         let latest = Self::try_from(existing)?;
 
@@ -780,11 +780,11 @@ impl Write {
             .date_created(DateRange::new().gt(self.descriptor.base.message_timestamp))
             .build();
 
-        let (entries, _) = MessageStore::query(provider, owner, &query).await?;
+        let (documents, _) = MessageStore::query(provider, owner, &query).await?;
 
         // delete the records
-        for entry in entries {
-            let message_cid = entry.cid()?;
+        for document in documents {
+            let message_cid = document.cid()?;
             MessageStore::delete(provider, owner, &message_cid).await?;
             EventLog::delete(provider, owner, &message_cid).await?;
         }
@@ -812,28 +812,28 @@ impl From<Write> for DelegatedGrant {
     }
 }
 
-// Fetch previous entries for this record, ordered from earliest to latest.
+// Fetch previous documents for this record, ordered from earliest to latest.
 async fn existing_entries(
     owner: &str, record_id: &str, store: &impl MessageStore,
-) -> Result<Vec<Entry>> {
+) -> Result<Vec<Document>> {
     let query = RecordsQueryBuilder::new()
         .add_filter(RecordsFilter::new().record_id(record_id))
         .include_archived(true)
         .method(None)
         .build(); // both Write and Delete messages
-    let (entries, _) = store.query(owner, &query).await?;
-    Ok(entries)
+    let (documents, _) = store.query(owner, &query).await?;
+    Ok(documents)
 }
 
 // Fetches the initial_write record associated for `record_id`.
 pub async fn initial_write(
     owner: &str, record_id: &str, store: &impl MessageStore,
 ) -> Result<Option<Write>> {
-    let entries = existing_entries(owner, record_id, store).await?;
+    let documents = existing_entries(owner, record_id, store).await?;
 
     // check initial write is found
-    if let Some(entry) = entries.first() {
-        let write = Write::try_from(entry)?;
+    if let Some(document) = documents.first() {
+        let write = Write::try_from(document)?;
         if !write.is_initial()? {
             return Err(unexpected!("initial write is not earliest message"));
         }
@@ -845,6 +845,6 @@ pub async fn initial_write(
 
 // Fetches the first and last `records::Write` messages associated for the
 // `record_id`.
-fn earliest_and_latest(entries: &[Entry]) -> (Option<Entry>, Option<Entry>) {
-    entries.first().map_or((None, None), |first| (Some(first.clone()), entries.last().cloned()))
+fn earliest_and_latest(documents: &[Document]) -> (Option<Document>, Option<Document>) {
+    documents.first().map_or((None, None), |first| (Some(first.clone()), documents.last().cloned()))
 }

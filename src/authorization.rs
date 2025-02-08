@@ -55,12 +55,12 @@ pub struct JwsPayload {
     /// The CID (CBOR hash) of the message descriptor.
     pub descriptor_cid: String,
 
-    /// The Entry ID (`record_id`) of the permission grant `RecordsWrite`
+    /// The Storable ID (`record_id`) of the permission grant `RecordsWrite`
     /// message used to authorize the message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permission_grant_id: Option<String>,
 
-    /// The Entry ID (`record_id`) of the delegated permission grant
+    /// The Storable ID (`record_id`) of the delegated permission grant
     /// `RecordsWrite` message used to authorize the message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delegated_grant_id: Option<String>,

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Result;
 use crate::provider::BlockStore;
-use crate::store::{Entry, Query, block};
+use crate::store::{Query, Storable, block};
 use crate::utils::cid;
 
 // const NULL: u8 = 0x00;
@@ -23,7 +23,7 @@ const MAX: char = '\u{10ffff}';
 
 /// Insert an entry's queryable fields into indexes.
 pub async fn insert(
-    owner: &str, partition: &str, entry: &Entry, store: &impl BlockStore,
+    owner: &str, partition: &str, entry: &Storable, store: &impl BlockStore,
 ) -> Result<()> {
     let message_cid = entry.cid()?;
 
@@ -411,7 +411,7 @@ mod tests {
             .build()
             .await
             .unwrap();
-        let entry = Entry::from(&write);
+        let entry = Storable::from(&write);
 
         // add message
         let message_cid = entry.cid().unwrap();
@@ -446,7 +446,7 @@ mod tests {
             .await
             .expect("should build");
 
-        let entry = Entry::from(&configure);
+        let entry = Storable::from(&configure);
 
         // add message
         let message_cid = entry.cid().unwrap();

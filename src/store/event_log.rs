@@ -3,13 +3,13 @@
 use crate::event::Event;
 use crate::interfaces::{Cursor, Pagination};
 use crate::provider::BlockStore;
-use crate::store::{Entry, Query, Sort, block, index};
+use crate::store::{Query, Sort, Storable, block, index};
 use crate::{Result, unexpected};
 
 const PARTITION: &str = "EVENTLOG";
 
 /// Adds a message event to a owner's event log.
-pub async fn append(owner: &str, event: &Entry, store: &impl BlockStore) -> Result<()> {
+pub async fn append(owner: &str, event: &Storable, store: &impl BlockStore) -> Result<()> {
     // store entry block
     let message_cid = event.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;

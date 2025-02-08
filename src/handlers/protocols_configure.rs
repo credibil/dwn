@@ -18,7 +18,7 @@ use crate::interfaces::protocols::{
 };
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
-use crate::store::Entry;
+use crate::store::Storable;
 use crate::utils::cid;
 use crate::{Error, Result, forbidden, store, unexpected, utils};
 
@@ -137,10 +137,10 @@ pub async fn handle(
     }
 
     // save the incoming message
-    let entry = Entry::from(&configure);
+    let entry = Storable::from(&configure);
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
-    EventStream::emit(provider, owner, &entry.message).await?;
+    EventStream::emit(provider, owner, &entry.document).await?;
 
     Ok(Reply {
         status: Status {
@@ -167,11 +167,11 @@ impl Message for Configure {
     }
 }
 
-impl TryFrom<Entry> for Configure {
+impl TryFrom<Document> for Configure {
     type Error = crate::Error;
 
-    fn try_from(record: Entry) -> Result<Self> {
-        match record.message {
+    fn try_from(document: Document) -> Result<Self> {
+        match document {
             Document::Configure(configure) => Ok(configure),
             _ => Err(unexpected!("expected `ProtocolsConfigure` message")),
         }
@@ -249,18 +249,18 @@ pub async fn fetch_config(
     }
 
     // execute query
-    let (messages, _) = store.query(owner, &builder.build()).await?;
-    if messages.is_empty() {
+    let (documents, _) = store.query(owner, &builder.build()).await?;
+    if documents.is_empty() {
         return Ok(None);
     }
 
     // unpack messages
-    let mut entries = vec![];
-    for message in messages {
-        entries.push(Configure::try_from(message)?);
+    let mut configs = vec![];
+    for doc in documents {
+        configs.push(Configure::try_from(doc)?);
     }
 
-    Ok(Some(entries))
+    Ok(Some(configs))
 }
 
 // Fetches the protocol definition for the the protocol specified in the message.

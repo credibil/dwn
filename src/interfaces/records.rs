@@ -144,11 +144,11 @@ pub struct RecordsFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
 
-    /// Entry matching the specified protocol.
+    /// Storable matching the specified protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
 
-    /// Entry protocol path.
+    /// Storable protocol path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol_path: Option<String>,
 
@@ -558,18 +558,18 @@ pub struct Write {
     /// The message authorization.
     pub authorization: Authorization,
 
-    /// The Entry CID for the record.
+    /// The Storable CID for the record.
     pub record_id: String,
 
-    /// Entry context.
+    /// Storable context.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_id: Option<String>,
 
-    /// Entry attestation.
+    /// Storable attestation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attestation: Option<Jws>,
 
-    /// Entry encryption.
+    /// Storable encryption.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encryption: Option<EncryptionProperty>,
 
@@ -584,11 +584,11 @@ pub struct Write {
 }
 
 impl Write {
-    /// Computes the deterministic Entry ID (Record ID) of the message.
+    /// Computes the deterministic Storable ID (Record ID) of the message.
     ///
     /// # Errors
     ///
-    /// Returns an error if the Entry ID cannot be serialized to CBOR.
+    /// Returns an error if the Storable ID cannot be serialized to CBOR.
     pub fn entry_id(&self, author: &str) -> Result<String> {
         #[derive(Serialize)]
         struct EntryId<'a> {
@@ -667,7 +667,7 @@ pub struct WriteDescriptor {
     #[serde(flatten)]
     pub base: Descriptor,
 
-    /// Entry's protocol.
+    /// Storable's protocol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
 

@@ -3,9 +3,9 @@
 //! The `store` module provides utilities for storing and retrieving messages
 //! and associated data.
 //!
-//! The two primary types exposed by this module are [`Entry`] and [`Query`].
+//! The two primary types exposed by this module are [`Storable`] and [`Query`].
 //!
-//! [`Entry`] wraps each message with a unifying type used to simplify storage
+//! [`Storable`] wraps each message with a unifying type used to simplify storage
 //! and retrieval as well as providing a vehicle for attaching addtional data
 //! alongside the message (i.e. indexes).
 //!
@@ -31,21 +31,21 @@ use crate::interfaces::records::{self, Delete, RecordsFilter, Sort, TagFilter, W
 use crate::interfaces::{DateRange, Descriptor, Document, Pagination, Range, messages};
 use crate::{Interface, Method, Result, unexpected};
 
-/// Entry wraps each message with a unifying type used for all stored messages
+/// Storable wraps each message with a unifying type used for all stored messages
 /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
 ///
-/// The `Entry` type simplifies storage and retrieval aas well as providing a
+/// The `Storable` type simplifies storage and retrieval aas well as providing a
 /// a vehicle for persisting addtional data alongside the message (using the
 /// `indexes` property).
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Entry {
+pub struct Storable {
     /// The message to store.
     ///
     /// N.B. It is necessary to use an enum rather than generics because a
     /// `Records` query may return both `RecordsWrite` and `RecordsDelete`
     /// messages.
     #[serde(flatten)]
-    pub message: Document,
+    pub document: Document,
 
     /// Indexable fields derived from the associated message object.
     ///
@@ -55,7 +55,7 @@ pub struct Entry {
     indexes: HashMap<String, String>,
 }
 
-impl Entry {
+impl Storable {
     /// Adds a index item to the entry's indexes.
     pub fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
         let key = key.into();
@@ -78,7 +78,7 @@ impl Entry {
     /// The underlying CID computation is not infallible and may fail if the
     /// message cannot be serialized to CBOR.
     pub fn cid(&self) -> Result<String> {
-        match self.message {
+        match self.document {
             Document::Write(ref write) => write.cid(),
             Document::Delete(ref delete) => delete.cid(),
             Document::Configure(ref configure) => configure.cid(),
@@ -88,7 +88,7 @@ impl Entry {
     /// The message's CID.
     #[must_use]
     pub fn descriptor(&self) -> &Descriptor {
-        match self.message {
+        match self.document {
             Document::Write(ref write) => write.descriptor(),
             Document::Delete(ref delete) => delete.descriptor(),
             Document::Configure(ref configure) => configure.descriptor(),
@@ -98,7 +98,7 @@ impl Entry {
     /// Returns the `RecordsWrite` message, when set.
     #[must_use]
     pub const fn as_write(&self) -> Option<&records::Write> {
-        match &self.message {
+        match &self.document {
             Document::Write(write) => Some(write),
             _ => None,
         }
@@ -107,7 +107,7 @@ impl Entry {
     /// Returns the `RecordsDelete` message, when set.
     #[must_use]
     pub const fn as_delete(&self) -> Option<&records::Delete> {
-        match &self.message {
+        match &self.document {
             Document::Delete(delete) => Some(delete),
             _ => None,
         }
@@ -116,35 +116,35 @@ impl Entry {
     /// Returns the `ProtocolsConfigure` message, when set.
     #[must_use]
     pub const fn as_configure(&self) -> Option<&Configure> {
-        match &self.message {
+        match &self.document {
             Document::Configure(configure) => Some(configure),
             _ => None,
         }
     }
 }
 
-impl From<&Write> for Entry {
+impl From<&Write> for Storable {
     fn from(write: &Write) -> Self {
         Self {
-            message: Document::Write(write.clone()),
+            document: Document::Write(write.clone()),
             indexes: write.build_indexes(),
         }
     }
 }
 
-impl From<&Delete> for Entry {
+impl From<&Delete> for Storable {
     fn from(delete: &Delete) -> Self {
         Self {
-            message: Document::Delete(delete.clone()),
+            document: Document::Delete(delete.clone()),
             indexes: delete.build_indexes(),
         }
     }
 }
 
-impl From<&Configure> for Entry {
+impl From<&Configure> for Storable {
     fn from(configure: &Configure) -> Self {
         Self {
-            message: Document::Configure(configure.clone()),
+            document: Document::Configure(configure.clone()),
             indexes: configure.build_indexes(),
         }
     }

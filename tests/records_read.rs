@@ -16,7 +16,7 @@ use dwn_node::client::records::{
 };
 use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::provider::{DataStore, MessageStore};
-use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
+use dwn_node::store::{MAX_ENCODED_SIZE, Storable};
 use dwn_node::{Error, Method, StatusCode, cid, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
@@ -213,9 +213,9 @@ async fn deleted_write() {
         .await
         .expect("should create delete");
 
-    let initial = Entry::from(&write);
+    let initial = Storable::from(&write);
 
-    let mut entry = Entry::from(&delete);
+    let mut entry = Storable::from(&delete);
     for (key, value) in initial.indexes() {
         entry.add_index(key, value);
     }

@@ -6,11 +6,11 @@
 use std::io::Read;
 
 use anyhow::Result;
-pub use credibil_did::{DidResolver, Document};
+pub use credibil_did::{DidResolver, Document as DidDocument};
 
 use crate::event::{Event, Subscriber};
-use crate::interfaces::Cursor;
-use crate::store::{Entry, Query, data, event_log, message, task};
+use crate::interfaces::{Cursor, Document};
+use crate::store::{Query, Storable, data, event_log, message, task};
 use crate::tasks::ResumableTask;
 
 /// Provider trait.
@@ -46,15 +46,14 @@ pub trait BlockStore: Send + Sync {
 /// storage capability.
 pub trait MessageStore: BlockStore + Sized + Send + Sync {
     /// Store a message in the underlying store.
-    fn put(&self, owner: &str, entry: &Entry) -> impl Future<Output = Result<()>> + Send {
+    fn put(&self, owner: &str, entry: &Storable) -> impl Future<Output = Result<()>> + Send {
         async move { message::put(owner, entry, self).await.map_err(Into::into) }
     }
 
     /// Queries the underlying store for matches to the provided query.
-    // fn query(&self, owner: &str, query: &Query) -> impl Future<Output = Result<Vec<Entry>>> + Send;
     fn query(
         &self, owner: &str, query: &Query,
-    ) -> impl Future<Output = Result<(Vec<Entry>, Option<Cursor>)>> + Send {
+    ) -> impl Future<Output = Result<(Vec<Document>, Option<Cursor>)>> + Send {
         async move { message::query(owner, query, self).await.map_err(Into::into) }
     }
 
@@ -62,7 +61,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     /// `None` if no message was found.
     fn get(
         &self, owner: &str, message_cid: &str,
-    ) -> impl Future<Output = Result<Option<Entry>>> + Send {
+    ) -> impl Future<Output = Result<Option<Document>>> + Send {
         async move { message::get(owner, message_cid, self).await.map_err(Into::into) }
     }
 
@@ -181,7 +180,7 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
 /// and `Server` metadata to the library.
 pub trait EventLog: BlockStore + Sized + Send + Sync {
     /// Adds a message event to a owner's event log.
-    fn append(&self, owner: &str, event: &Entry) -> impl Future<Output = Result<()>> + Send {
+    fn append(&self, owner: &str, event: &Storable) -> impl Future<Output = Result<()>> + Send {
         async move { event_log::append(owner, event, self).await.map_err(Into::into) }
     }
 

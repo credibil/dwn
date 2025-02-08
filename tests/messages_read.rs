@@ -1019,7 +1019,7 @@ async fn delete_with_no_write() {
         .await
         .expect("should create write");
 
-    let entry = store::Entry::from(&delete);
+    let entry = store::Storable::from(&delete);
     MessageStore::put(&provider, &ALICE.did, &entry).await.expect("should put message");
 
     // --------------------------------------------------

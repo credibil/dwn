@@ -21,7 +21,6 @@ use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::store::Entry;
 use crate::{Error, Interface, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Read`] message.
@@ -36,17 +35,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let cid =
         Cid::from_str(&read.descriptor.message_cid).map_err(|e| unexpected!("invalid CID: {e}"))?;
 
-    let Some(entry) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
+    let Some(mut document) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
         return Err(Error::NotFound("message not found".to_string()));
     };
 
     // verify the fetched message can be safely returned to the requestor
-    read.authorize(owner, &entry, provider).await?;
-
-    let mut message = entry.message;
+    read.authorize(owner, &document, provider).await?;
 
     // include data with RecordsWrite messages
-    let data = if let Document::Write(ref mut write) = message {
+    let data = if let Document::Write(ref mut write) = document {
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
@@ -76,7 +73,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         body: Some(ReadReply {
             entry: Some(ReadReplyEntry {
                 message_cid: read.descriptor.message_cid,
-                message,
+                message: document,
                 data,
             }),
         }),
@@ -100,7 +97,9 @@ impl Message for Read {
 }
 
 impl Read {
-    async fn authorize(&self, owner: &str, entry: &Entry, provider: &impl Provider) -> Result<()> {
+    async fn authorize(
+        &self, owner: &str, entry: &Document, provider: &impl Provider,
+    ) -> Result<()> {
         let authzn = &self.authorization;
 
         // owner can read messages they authored
@@ -123,7 +122,7 @@ impl Read {
 
 // Verify message scope against grant scope.
 async fn verify_scope(
-    owner: &str, requested: &Entry, scope: Scope, store: &impl MessageStore,
+    owner: &str, requested: &Document, scope: Scope, store: &impl MessageStore,
 ) -> Result<()> {
     // ensure read filters include scoped protocol
     let Some(protocol) = scope.protocol() else {
@@ -140,7 +139,7 @@ async fn verify_scope(
     }
 
     if requested.descriptor().interface == Interface::Records {
-        let write = match &requested.message {
+        let write = match &requested {
             Document::Write(write) => write.clone(),
             Document::Delete(delete) => {
                 let entry =

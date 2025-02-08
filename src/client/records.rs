@@ -660,7 +660,7 @@ impl Default for WriteBuilder<'_, New, Unattested, Unsigned> {
 /// The protocol to use for the Write message.
 #[derive(Clone, Debug, Default)]
 pub struct ProtocolBuilder<'a> {
-    /// Entry protocol.
+    /// Storable protocol.
     pub protocol: &'a str,
 
     /// Protocol path.
@@ -670,7 +670,7 @@ pub struct ProtocolBuilder<'a> {
     pub parent_context_id: Option<String>,
 }
 
-/// Entry data can be raw bytes or CID.
+/// Storable data can be raw bytes or CID.
 pub enum Data {
     /// Data is a `Cursor`.
     Stream(Cursor<Vec<u8>>),
@@ -822,7 +822,7 @@ impl<'a> WriteBuilder<'a, New, Unattested, Unsigned> {
 ///  Mutable properties properties are able to be set for both new and existing
 /// `Write` records.
 impl<O> WriteBuilder<'_, O, Unattested, Unsigned> {
-    /// Entry data as a CID or raw bytes.
+    /// Storable data as a CID or raw bytes.
     #[must_use]
     pub fn data(mut self, data: Data) -> Self {
         self.data = Some(data);
