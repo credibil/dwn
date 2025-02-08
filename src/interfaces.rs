@@ -1,7 +1,15 @@
-//! # Core Types
+//! # Interfaces
 //!
-//! This module contains the core DWN data structures of the library. These
-//! types are used by both client and server implementations.
+//! Interfaces are the main building blocks of a DWN. They define the
+//! structure of the data that is exchanged between users and the DWN.
+//!
+//! The three primary interfaces are `Records`, `Protocols`, and `Messages`
+//! with each having a subset of `Methods` that define the operations that can
+//! be performed on the data.
+//!
+//! Interface methods are executed by sending JSON messages to the DWN which,
+//! in turn, will respond with a JSON reply. This library provides the tools
+//! to easily create and parse these messages.
 
 pub mod messages;
 pub mod protocols;
