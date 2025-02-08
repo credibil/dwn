@@ -3,7 +3,6 @@
 //! This module contains the DWN message handlers — one for each
 //! interface/method message.
 
-mod authorize;
 mod messages_query;
 mod messages_read;
 mod messages_subscribe;
@@ -14,3 +13,5 @@ mod records_query;
 mod records_read;
 mod records_subscribe;
 mod records_write;
+mod verify_grant;
+mod verify_protocol;

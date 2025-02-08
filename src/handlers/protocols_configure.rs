@@ -11,6 +11,7 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::handlers::verify_grant;
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
     ProtocolType, RuleSet, Size,
@@ -19,7 +20,7 @@ use crate::interfaces::{Descriptor, MessageType};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::Entry;
 use crate::utils::cid;
-use crate::{Error, Result, forbidden, grants, store, unexpected, utils};
+use crate::{Error, Result, forbidden, store, unexpected, utils};
 
 /// Define a default protocol definition.
 pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
@@ -205,7 +206,7 @@ impl Configure {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("author has no grant"));
         };
-        let grant = grants::fetch_grant(owner, grant_id, store).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.author()?, self.descriptor(), store).await?;
 
         // when the grant scope does not specify a protocol, it is an unrestricted grant

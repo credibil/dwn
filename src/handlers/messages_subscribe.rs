@@ -9,10 +9,11 @@ use http::StatusCode;
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::event::SubscribeFilter;
+use crate::handlers::verify_grant;
 use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, MessageStore, Provider};
-use crate::{Result, forbidden, grants};
+use crate::{Result, forbidden};
 
 /// Handle — or process — a [`Subscribe`] message.
 ///
@@ -77,7 +78,7 @@ impl Subscribe {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("missing permission grant"));
         };
-        let grant = grants::fetch_grant(owner, grant_id, store).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // ensure subscribe filters include scoped protocol

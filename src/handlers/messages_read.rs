@@ -15,8 +15,8 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::grants::{self, Scope};
-use crate::handlers::records_write;
+use crate::grants::Scope;
+use crate::handlers::{records_write, verify_grant};
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
 use crate::interfaces::{Descriptor, MessageType};
@@ -113,7 +113,7 @@ impl Read {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("missing grant ID"));
         };
-        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &author, self.descriptor(), provider).await?;
         verify_scope(owner, entry, grant.data.scope, provider).await?;
 
@@ -163,7 +163,7 @@ async fn verify_scope(
 
         // check if the protocol is the internal permissions protocol
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            let permission_scope = grants::fetch_scope(owner, &write, store).await?;
+            let permission_scope = verify_grant::fetch_scope(owner, &write, store).await?;
             if permission_scope.protocol() == Some(protocol) {
                 return Ok(());
             }

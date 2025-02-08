@@ -10,7 +10,7 @@ use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::event::SubscribeFilter;
 use crate::grants::Grant;
-use crate::handlers::authorize;
+use crate::handlers::verify_protocol;
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, Provider};
@@ -95,7 +95,7 @@ impl Subscribe {
 
         // verify protocol when request invokes a protocol role
         if let Some(protocol) = &authzn.payload()?.protocol_role {
-            let protocol = authorize::Authorizer::new(protocol)
+            let protocol = verify_protocol::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
             return protocol.permit_subscribe(owner, self, provider).await;
         }

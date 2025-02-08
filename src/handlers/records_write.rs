@@ -13,8 +13,8 @@ use serde_json::json;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::grants::{self, Grant, GrantData, RequestData, RevocationData, Scope};
-use crate::handlers::{authorize, protocols_configure};
+use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
+use crate::handlers::{protocols_configure, verify_grant, verify_protocol};
 use crate::interfaces::protocols::{
     self, GRANT_PATH, PROTOCOL_URI, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
@@ -448,7 +448,7 @@ impl Write {
             let Some(parent_id) = &self.descriptor.parent_id else {
                 return Err(forbidden!("missing `parent_id`"));
             };
-            let grant = grants::fetch_grant(owner, parent_id, store).await?;
+            let grant = verify_grant::fetch_grant(owner, parent_id, store).await?;
 
             // compare revocation message protocol and grant scope protocol
             if let Some(tags) = &self.descriptor.tags {
@@ -589,14 +589,14 @@ impl Write {
         let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
         let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
-            let grant = grants::fetch_grant(owner, permission_grant_id, store).await?;
+            let grant = verify_grant::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
         }
 
         // protocol-specific authorization
         if let Some(protocol) = &self.descriptor.protocol {
             let protocol =
-                authorize::Authorizer::new(protocol).context_id(self.context_id.as_ref());
+                verify_protocol::Authorizer::new(protocol).context_id(self.context_id.as_ref());
             return protocol.permit_write(owner, self, store).await;
         }
 
@@ -763,7 +763,7 @@ impl Write {
         let Some(grant_id) = &self.descriptor.parent_id else {
             return Err(unexpected!("missing `parent_id`"));
         };
-        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
 
         // verify protocols match
         if let Some(tags) = &self.descriptor.tags {

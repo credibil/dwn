@@ -8,7 +8,6 @@ use std::io::Read;
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document};
 
-
 use crate::event::{Event, Subscriber};
 use crate::interfaces::Cursor;
 use crate::store::{Entry, Query, data, event_log, message, task};

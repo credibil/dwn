@@ -16,7 +16,7 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::handlers::authorize;
+use crate::handlers::verify_protocol;
 use crate::interfaces::records::{Delete, DeleteReply, RecordsFilter, Write};
 use crate::interfaces::{Descriptor, MessageType};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
@@ -160,7 +160,7 @@ impl Delete {
         }
 
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = authorize::Authorizer::new(protocol)
+            let protocol = verify_protocol::Authorizer::new(protocol)
                 .context_id(write.context_id.as_ref())
                 .initial_write(write);
             return protocol.permit_delete(owner, self, store).await;

@@ -9,7 +9,7 @@ use http::StatusCode;
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::Grant;
-use crate::handlers::authorize;
+use crate::handlers::verify_protocol;
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
@@ -142,7 +142,7 @@ impl Query {
             }
 
             // verify protocol role is authorized
-            let verifier = authorize::Authorizer::new(protocol)
+            let verifier = verify_protocol::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
             return verifier.permit_query(owner, self, provider).await;
         }

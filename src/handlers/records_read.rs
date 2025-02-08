@@ -10,12 +10,12 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::handlers::{authorize, records_write};
+use crate::handlers::{records_write, verify_grant, verify_protocol};
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Error, Method, Result, forbidden, grants, unexpected};
+use crate::{Error, Method, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -183,14 +183,14 @@ impl Read {
 
         // verify grant
         if let Some(grant_id) = &authzn.payload()?.permission_grant_id {
-            let grant = grants::fetch_grant(owner, grant_id, store).await?;
+            let grant = verify_grant::fetch_grant(owner, grant_id, store).await?;
             grant.permit_read(owner, &author, self, write, store).await?;
             return Ok(());
         }
 
         // verify protocol role and action
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = authorize::Authorizer::new(protocol)
+            let protocol = verify_protocol::Authorizer::new(protocol)
                 .context_id(write.context_id.as_ref())
                 .initial_write(write);
             protocol.permit_read(owner, self, store).await?;

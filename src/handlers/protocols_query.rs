@@ -5,11 +5,12 @@
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::handlers::verify_grant;
 use crate::interfaces::Descriptor;
 use crate::interfaces::protocols::{Access, Configure, Query, QueryReply};
 use crate::provider::{MessageStore, Provider};
 use crate::store::ProtocolsQueryBuilder;
-use crate::{Result, grants, utils};
+use crate::{Result, utils};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -89,7 +90,7 @@ impl Query {
         };
 
         // verify permission grant
-        let grant = grants::fetch_grant(owner, grant_id, store).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, store).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
 
         // if set, query and grant protocols need to match

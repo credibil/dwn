@@ -7,10 +7,11 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::handlers::verify_grant;
 use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Query, QueryReply};
 use crate::provider::{EventLog, Provider};
-use crate::{Result, forbidden, grants, store};
+use crate::{Result, forbidden, store};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -67,7 +68,7 @@ impl Query {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("author has no grant"));
         };
-        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &authzn.signer()?, self.descriptor(), provider).await?;
 
         // verify filter protocol
