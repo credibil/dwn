@@ -13,14 +13,13 @@ use serde::{Deserialize, Serialize};
 use crate::interfaces::MessageType;
 use crate::interfaces::messages::MessagesFilter;
 use crate::interfaces::records::{RecordsFilter, Tag, TagFilter};
-use crate::store::Entry;
 
-/// `Event` aliases `store::Entry` to provide a common type to use when
+/// `Event` aliases `store::Event` to provide a common type to use when
 /// interacting with events for any message type.
-pub type Event = Entry;
+pub type Event = MessageType;
 
-/// `EventType` aliases `store::MessageType` to wrap the event message.
-pub type EventType = MessageType;
+// /// `EventType` aliases `store::MessageType` to wrap the event message.
+// pub type EventType = MessageType;
 
 /// Filter to use when subscribing to events.
 #[derive(Debug, Deserialize, Serialize)]
@@ -92,7 +91,7 @@ impl SubscribeFilter {
                 false
             }
             Self::Records(filter) => {
-                if let EventType::Configure(_) = event.message {
+                if let MessageType::Configure(_) = event {
                     return false;
                 }
                 filter.is_match(event)
@@ -102,11 +101,11 @@ impl SubscribeFilter {
 }
 
 impl RecordsFilter {
-    /// Determine whether the specified `Entry` matches the filter.
+    /// Determine whether the specified `Event` matches the filter.
     #[allow(clippy::cognitive_complexity)]
     #[must_use]
-    pub fn is_match(&self, event: &Entry) -> bool {
-        let EventType::Write(write) = &event.message else {
+    pub fn is_match(&self, event: &Event) -> bool {
+        let MessageType::Write(write) = &event else {
             return false;
         };
         let descriptor = &write.descriptor;
@@ -117,7 +116,10 @@ impl RecordsFilter {
             }
         }
         if let Some(attester) = self.attester.clone() {
-            if Some(&attester) != event.indexes().get("attester") {
+            let  Some(attestation) = &write.attestation else {
+                return false;
+            };
+            if attester != attestation.did().unwrap_or_default() {
                 return false;
             }
         }
@@ -223,7 +225,7 @@ impl TagFilter {
 }
 
 impl MessagesFilter {
-    fn is_match(&self, event: &Entry) -> bool {
+    fn is_match(&self, event: &Event) -> bool {
         let descriptor = &event.descriptor();
 
         if let Some(interface) = &self.interface {
@@ -237,16 +239,16 @@ impl MessagesFilter {
             }
         }
         if let Some(protocol) = &self.protocol {
-            match event.message {
-                EventType::Write(ref write) => {
+            match event {
+                MessageType::Write( write) => {
                     if Some(protocol) != write.descriptor.protocol.as_ref() {
                         return false;
                     }
                 }
-                EventType::Delete(_) => {
+                MessageType::Delete(_) => {
                     return false;
                 }
-                EventType::Configure(ref configure) => {
+                MessageType::Configure( configure) => {
                     if protocol != &configure.descriptor.definition.protocol {
                         return false;
                     }

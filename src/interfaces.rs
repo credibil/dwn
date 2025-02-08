@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::interfaces::protocols::Configure;
 use crate::interfaces::records::{Delete, Write};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::{Interface, Method};
+use crate::{Interface, Message, Method, Result};
 
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -56,6 +56,59 @@ pub enum MessageType {
 impl Default for MessageType {
     fn default() -> Self {
         Self::Write(Write::default())
+    }
+}
+
+impl MessageType {
+    /// The message's CID.
+    ///
+    /// # Errors
+    ///
+    /// The underlying CID computation is not infallible and may fail if the
+    /// message cannot be serialized to CBOR.
+    pub fn cid(&self) -> Result<String> {
+        match self {
+            MessageType::Write(write) => write.cid(),
+            MessageType::Delete(delete) => delete.cid(),
+            MessageType::Configure(configure) => configure.cid(),
+        }
+    }
+
+    /// The message's CID.
+    #[must_use]
+    pub fn descriptor(&self) -> &Descriptor {
+        match self {
+            MessageType::Write(write) => write.descriptor(),
+            MessageType::Delete(delete) => delete.descriptor(),
+            MessageType::Configure(configure) => configure.descriptor(),
+        }
+    }
+
+    /// Returns the `RecordsWrite` message, when set.
+    #[must_use]
+    pub const fn as_write(&self) -> Option<&records::Write> {
+        match &self {
+            MessageType::Write(write) => Some(write),
+            _ => None,
+        }
+    }
+
+    /// Returns the `RecordsDelete` message, when set.
+    #[must_use]
+    pub const fn as_delete(&self) -> Option<&records::Delete> {
+        match &self {
+            MessageType::Delete(delete) => Some(delete),
+            _ => None,
+        }
+    }
+
+    /// Returns the `ProtocolsConfigure` message, when set.
+    #[must_use]
+    pub const fn as_configure(&self) -> Option<&Configure> {
+        match &self {
+            MessageType::Configure(configure) => Some(configure),
+            _ => None,
+        }
     }
 }
 

@@ -103,7 +103,7 @@ pub async fn handle(
     // save the message and log the event
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
-    EventStream::emit(provider, owner, &entry).await?;
+    EventStream::emit(provider, owner, &entry.message).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
     if let Some(entry) = initial_entry {

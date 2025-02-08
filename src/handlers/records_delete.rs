@@ -206,7 +206,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 
     MessageStore::put(provider, owner, &delete_entry).await?;
     EventLog::append(provider, owner, &delete_entry).await?;
-    EventStream::emit(provider, owner, &delete_entry).await?;
+    EventStream::emit(provider, owner, &delete_entry.message).await?;
 
     // purge/hard-delete all descendent records
     if delete.descriptor.prune {

@@ -9,7 +9,7 @@ use crate::{Result, unexpected};
 const PARTITION: &str = "EVENTLOG";
 
 /// Adds a message event to a owner's event log.
-pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Result<()> {
+pub async fn append(owner: &str, event: &Entry, store: &impl BlockStore) -> Result<()> {
     // store entry block
     let message_cid = event.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;
@@ -25,7 +25,7 @@ pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Resu
 
 pub async fn events(
     owner: &str, cursor: Option<Cursor>, store: &impl BlockStore,
-) -> Result<(Vec<Entry>, Option<Cursor>)> {
+) -> Result<(Vec<Event>, Option<Cursor>)> {
     let q = Query {
         match_sets: vec![],
         pagination: Some(Pagination {
@@ -46,7 +46,7 @@ pub async fn events(
 /// Returns an array of `message_cid`s that represent the events.
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
-) -> Result<(Vec<Entry>, Option<Cursor>)> {
+) -> Result<(Vec<Event>, Option<Cursor>)> {
     let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used

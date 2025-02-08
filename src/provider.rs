@@ -181,7 +181,7 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
 /// and `Server` metadata to the library.
 pub trait EventLog: BlockStore + Sized + Send + Sync {
     /// Adds a message event to a owner's event log.
-    fn append(&self, owner: &str, event: &Event) -> impl Future<Output = Result<()>> + Send {
+    fn append(&self, owner: &str, event: &Entry) -> impl Future<Output = Result<()>> + Send {
         async move { event_log::append(owner, event, self).await.map_err(Into::into) }
     }
 

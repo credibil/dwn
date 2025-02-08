@@ -140,7 +140,7 @@ pub async fn handle(
     let entry = Entry::from(&configure);
     MessageStore::put(provider, owner, &entry).await?;
     EventLog::append(provider, owner, &entry).await?;
-    EventStream::emit(provider, owner, &entry).await?;
+    EventStream::emit(provider, owner, &entry.message).await?;
 
     Ok(Reply {
         status: Status {
