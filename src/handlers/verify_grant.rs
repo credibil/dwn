@@ -22,12 +22,12 @@ use crate::{Result, forbidden};
 pub async fn fetch_grant(owner: &str, grant_id: &str, store: &impl MessageStore) -> Result<Grant> {
     let query =
         RecordsQueryBuilder::new().add_filter(RecordsFilter::new().record_id(grant_id)).build();
-    let (entries, _) = store.query(owner, &query).await?;
+    let (documents, _) = store.query(owner, &query).await?;
 
-    let Some(entry) = entries.first() else {
+    let Some(document) = documents.first() else {
         return Err(forbidden!("no grant found"));
     };
-    let Some(write) = entry.as_write() else {
+    let Some(write) = document.as_write() else {
         return Err(forbidden!("not a valid grant"));
     };
 

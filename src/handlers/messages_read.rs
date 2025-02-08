@@ -98,7 +98,7 @@ impl Message for Read {
 
 impl Read {
     async fn authorize(
-        &self, owner: &str, entry: &Document, provider: &impl Provider,
+        &self, owner: &str, document: &Document, provider: &impl Provider,
     ) -> Result<()> {
         let authzn = &self.authorization;
 
@@ -114,7 +114,7 @@ impl Read {
         };
         let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
         grant.verify(owner, &author, self.descriptor(), provider).await?;
-        verify_scope(owner, entry, grant.data.scope, provider).await?;
+        verify_scope(owner, document, grant.data.scope, provider).await?;
 
         Ok(())
     }
@@ -142,10 +142,10 @@ async fn verify_scope(
         let write = match &requested {
             Document::Write(write) => write.clone(),
             Document::Delete(delete) => {
-                let entry =
+                let result =
                     records_write::initial_write(owner, &delete.descriptor.record_id, store)
                         .await?;
-                let Some(write) = entry else {
+                let Some(write) = result else {
                     return Err(forbidden!("message failed scope authorization"));
                 };
                 write.clone()

@@ -232,11 +232,11 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
 
     // group by `record_id` (a record can have multiple children)
     let mut record_id_map = HashMap::<&str, Vec<Document>>::new();
-    for entry in children {
-        let record_id = if let Some(write) = entry.as_write() {
+    for document in children {
+        let record_id = if let Some(write) = document.as_write() {
             &write.record_id
         } else {
-            let Some(delete) = entry.as_delete() else {
+            let Some(delete) = document.as_delete() else {
                 return Err(unexpected!("unexpected message type"));
             };
             &delete.descriptor.record_id
@@ -245,7 +245,7 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
         record_id_map
             .get_mut(record_id.as_str())
             .unwrap_or(&mut Vec::<Document>::new())
-            .push(entry.clone());
+            .push(document.clone());
     }
 
     for (record_id, entries) in record_id_map {
@@ -296,19 +296,19 @@ async fn delete_earlier(
 ) -> Result<()> {
     // N.B. typically there will only be, at most, two existing documents per
     // `record_id` (initial + a potential subsequent write/delete),
-    for entry in existing {
-        if entry.descriptor().message_timestamp < latest.descriptor().message_timestamp {
-            delete_data(owner, entry, latest, provider).await?;
+    for document in existing {
+        if document.descriptor().message_timestamp < latest.descriptor().message_timestamp {
+            delete_data(owner, document, latest, provider).await?;
 
             // when the existing message is the initial write, retain it BUT,
             // ensure the message is marked as `archived`
-            let write = Write::try_from(entry)?;
+            let write = Write::try_from(document)?;
             if write.is_initial()? {
-                let mut entry = Storable::from(&write);
-                entry.add_index("initial", true.to_string());
-                MessageStore::put(provider, owner, &entry).await?;
+                let mut document = Storable::from(&write);
+                document.add_index("initial", true.to_string());
+                MessageStore::put(provider, owner, &document).await?;
             } else {
-                let cid = entry.cid()?;
+                let cid = document.cid()?;
                 MessageStore::delete(provider, owner, &cid).await?;
                 EventLog::delete(provider, owner, &cid).await?;
             }

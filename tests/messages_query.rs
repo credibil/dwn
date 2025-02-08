@@ -82,11 +82,11 @@ async fn owner_messages() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
-    let entries = query_reply.entries.expect("should have entries");
-    assert_eq!(entries.len(), 6);
+    let cids = query_reply.entries.expect("should have entries");
+    assert_eq!(cids.len(), 6);
 
-    for entry in entries {
-        assert!(expected_cids.contains(&entry));
+    for cid in cids {
+        assert!(expected_cids.contains(&cid));
     }
 
     // --------------------------------------------------
@@ -301,8 +301,8 @@ async fn match_grant_scope() {
     ];
     bob_grant.cid().expect("should have cid");
 
-    for entry in entries {
-        assert!(expected_cids.contains(&entry));
+    for cid in entries {
+        assert!(expected_cids.contains(&cid));
     }
 }
 
