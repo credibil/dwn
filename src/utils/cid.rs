@@ -7,9 +7,8 @@ use futures::executor::block_on;
 use multihash_codetable::MultihashDigest;
 use serde::Serialize;
 
-use crate::Result;
 use crate::utils::ipfs;
-use crate::BlockStore;
+use crate::{BlockStore, Result};
 
 const RAW: u64 = 0x55;
 // const DAG_CBOR: u64 = 0x71;

@@ -8,19 +8,17 @@ use std::io::Read;
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document as DidDocument};
 
+pub use crate::BlockStore;
 use crate::event::{Event, Subscriber};
 use crate::interfaces::{Cursor, Document};
 use crate::store::{Query, Storable, data, event_log, message, task};
 use crate::tasks::ResumableTask;
-pub use crate::BlockStore;
 
 /// Provider trait.
 pub trait Provider:
     MessageStore + DataStore + TaskStore + EventLog + BlockStore + EventStream + DidResolver
 {
 }
-
-
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.

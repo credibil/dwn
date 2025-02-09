@@ -10,9 +10,8 @@ use ipld_core::ipld::Ipld;
 use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
-use crate::BlockStore;
 use crate::utils::cid;
-use crate::{Result, unexpected};
+use crate::{BlockStore, Result, unexpected};
 
 /// The maximum size of a message.
 // pub const MAX_ENCODED_SIZE: usize = 30000;
