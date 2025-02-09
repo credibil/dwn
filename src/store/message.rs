@@ -2,7 +2,8 @@
 
 use crate::interfaces::{Cursor, Document};
 use crate::provider::BlockStore;
-use crate::store::{Query, Storable, block, index};
+use crate::store::{Query, Storable, index};
+use crate::utils::ipfs;
 use crate::{Result, unexpected};
 
 const PARTITION: &str = "MESSAGE";
@@ -14,7 +15,7 @@ pub async fn put(owner: &str, entry: &impl Storable, store: &impl BlockStore) ->
     // store entry block
     let message_cid = document.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;
-    store.put(owner, PARTITION, &message_cid, &block::encode(&document)?).await?;
+    store.put(owner, PARTITION, &message_cid, &ipfs::encode_block(&document)?).await?;
 
     // index entry
     index::insert(owner, PARTITION, entry, store).await
@@ -45,7 +46,7 @@ pub async fn query(
         let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
             return Err(unexpected!("missing block for message cid"));
         };
-        entries.push(block::decode(&bytes)?);
+        entries.push(ipfs::decode_block(&bytes)?);
     }
 
     Ok((entries, cursor))
@@ -59,7 +60,7 @@ pub async fn get(
     let Some(bytes) = store.get(owner, PARTITION, message_cid).await? else {
         return Ok(None);
     };
-    Ok(Some(block::decode(&bytes)?))
+    Ok(Some(ipfs::decode_block(&bytes)?))
 }
 
 /// Delete message associated with the specified id.

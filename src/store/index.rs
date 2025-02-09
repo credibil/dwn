@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Result;
 use crate::provider::BlockStore;
-use crate::store::{Query, Storable, block};
-use crate::utils::cid;
+use crate::store::{Query, Storable};
+use crate::utils::{cid, ipfs};
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;
@@ -109,7 +109,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         let Some(data) = self.store.get(self.owner, self.partition, &index_cid).await? else {
             return Ok(Index::new(field));
         };
-        block::decode(&data).map_err(Into::into)
+        ipfs::decode_block(&data).map_err(Into::into)
     }
 
     /// Update an index.
@@ -119,7 +119,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         // update the index block
         self.store.delete(self.owner, self.partition, &index_cid).await?;
         self.store
-            .put(self.owner, self.partition, &index_cid, &block::encode(&index)?)
+            .put(self.owner, self.partition, &index_cid, &ipfs::encode_block(&index)?)
             .await
             .map_err(Into::into)
     }
@@ -414,7 +414,7 @@ mod tests {
 
         // add message
         let message_cid = write.cid().unwrap();
-        let block = block::encode(&write).unwrap();
+        let block = ipfs::encode_block(&write).unwrap();
         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
@@ -447,7 +447,7 @@ mod tests {
 
         // add message
         let message_cid = configure.cid().unwrap();
-        let block = block::encode(&configure).unwrap();
+        let block = ipfs::encode_block(&configure).unwrap();
         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes

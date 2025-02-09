@@ -12,7 +12,6 @@
 //! [`Query`] wraps store-specific query options for querying the underlying
 //! store.
 
-mod block;
 pub mod data;
 pub(crate) mod event_log;
 pub(crate) mod index;

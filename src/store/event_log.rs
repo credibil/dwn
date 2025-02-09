@@ -3,7 +3,8 @@
 use crate::event::Event;
 use crate::interfaces::{Cursor, Pagination};
 use crate::provider::BlockStore;
-use crate::store::{Query, Sort, Storable, block, index};
+use crate::store::{Query, Sort, Storable, index};
+use crate::utils::ipfs;
 use crate::{Result, unexpected};
 
 const PARTITION: &str = "EVENTLOG";
@@ -15,7 +16,7 @@ pub async fn append(owner: &str, event: &impl Storable, store: &impl BlockStore)
     // store entry block
     let message_cid = document.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;
-    store.put(owner, PARTITION, &message_cid, &block::encode(&document)?).await?;
+    store.put(owner, PARTITION, &message_cid, &ipfs::encode_block(&document)?).await?;
 
     // add a 'watermark' index entry for sorting and pagination
     let mut event = event.clone();
@@ -68,7 +69,7 @@ pub async fn query(
         let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
             return Err(unexpected!("missing block for message cid"));
         };
-        entries.push(block::decode(&bytes)?);
+        entries.push(ipfs::decode_block(&bytes)?);
     }
 
     Ok((entries, cursor))

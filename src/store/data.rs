@@ -8,7 +8,7 @@ use cid::Cid;
 use ipld_core::ipld::Ipld;
 
 use crate::provider::BlockStore;
-use crate::store::block::{self, Block};
+use crate::utils::ipfs::{self, Block};
 use crate::{Result, unexpected};
 
 /// The maximum size of a message.
@@ -73,7 +73,7 @@ pub(crate) async fn get(
     };
 
     // the root blook contains a list of links to data blocks
-    let Ipld::List(links) = block::decode(&bytes)? else {
+    let Ipld::List(links) = ipfs::decode_block(&bytes)? else {
         return Ok(None);
     };
 
@@ -91,7 +91,7 @@ pub(crate) async fn get(
         };
 
         // get data block's payload
-        let ipld_bytes = block::decode(&bytes)?;
+        let ipld_bytes = ipfs::decode_block(&bytes)?;
         let Ipld::Bytes(bytes) = ipld_bytes else {
             return Ok(None);
         };
