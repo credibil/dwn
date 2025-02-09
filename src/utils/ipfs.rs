@@ -20,7 +20,9 @@ const CHUNK_SIZE: usize = 64;
 const MAX_BLOCK_SIZE: usize = 1_048_576; // 1 MiB
 const PARTITION: &str = "DATA";
 
-#[allow(dead_code)]
+// TODO: simplify import to only use `reader` and `store` args
+// see: https://www.npmjs.com/package/ipfs-unixfs-importer
+
 pub async fn import(
     owner: &str, record_id: &str, data_cid: &str, reader: impl Read, store: &impl BlockStore,
 ) -> Result<(String, usize)> {
