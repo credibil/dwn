@@ -160,6 +160,7 @@ impl<S: Signer> ConfigureBuilder<Defined, Signed<'_, S>> {
         Ok(Configure {
             descriptor,
             authorization,
+            ..Configure::default()
         })
     }
 }

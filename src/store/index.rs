@@ -23,38 +23,38 @@ const MAX: char = '\u{10ffff}';
 
 /// Insert an entry's queryable fields into indexes.
 pub async fn insert(
-    owner: &str, partition: &str, entry: &Storable, store: &impl BlockStore,
+    owner: &str, partition: &str, entry: &impl Storable, store: &impl BlockStore,
 ) -> Result<()> {
-    let message_cid = entry.cid()?;
+    let message_cid = entry.document().cid()?;
 
-    let fields = &entry.indexes;
-    let indexes = IndexesBuilder::new().owner(owner).partition(partition).store(store).build();
+    let fields = &entry.indexes();
+    let all_indexes = IndexesBuilder::new().owner(owner).partition(partition).store(store).build();
 
     // remove the previous index entries for message
     delete(owner, partition, &message_cid, store).await?;
 
-    for (field, value) in &entry.indexes {
-        let mut index = indexes.get(field).await?;
+    for (field, value) in fields {
+        let mut index = all_indexes.get(field).await?;
         index.insert(
             value,
             IndexItem {
-                fields: entry.indexes.clone(),
+                fields: fields.clone(),
                 message_cid: message_cid.clone(),
             },
         );
-        indexes.put(index).await?;
+        all_indexes.put(index).await?;
     }
 
     // add reverse lookup to use when message is updated or deleted
-    let mut index = indexes.get("message_cid").await?;
+    let mut index = all_indexes.get("message_cid").await?;
     index.items.insert(
         message_cid.clone(),
         IndexItem {
-            fields: entry.indexes.clone(),
+            fields: fields.clone(),
             message_cid,
         },
     );
-    indexes.put(index).await?;
+    all_indexes.put(index).await?;
 
     Ok(())
 }
@@ -389,6 +389,7 @@ mod tests {
     use test_node::keystore;
 
     use super::*;
+    use crate::Message;
     use crate::client::protocols::{ConfigureBuilder, Definition};
     use crate::client::records::{Data, WriteBuilder};
     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
@@ -411,15 +412,14 @@ mod tests {
             .build()
             .await
             .unwrap();
-        let entry = Storable::from(&write);
 
         // add message
-        let message_cid = entry.cid().unwrap();
-        let block = block::encode(&entry).unwrap();
+        let message_cid = write.cid().unwrap();
+        let block = block::encode(&write).unwrap();
         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(&alice.did, PARTITION, &entry, &block_store).await.unwrap();
+        super::insert(&alice.did, PARTITION, &write, &block_store).await.unwrap();
 
         // execute query
         let query = RecordsQueryBuilder::new()
@@ -446,15 +446,13 @@ mod tests {
             .await
             .expect("should build");
 
-        let entry = Storable::from(&configure);
-
         // add message
-        let message_cid = entry.cid().unwrap();
-        let block = block::encode(&entry).unwrap();
+        let message_cid = configure.cid().unwrap();
+        let block = block::encode(&configure).unwrap();
         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(&alice.did, PARTITION, &entry, &block_store).await.unwrap();
+        super::insert(&alice.did, PARTITION, &configure, &block_store).await.unwrap();
 
         // execute query
         let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();

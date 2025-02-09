@@ -99,6 +99,22 @@ impl Message for Delete {
     }
 }
 
+impl Storable for Delete {
+    fn document(&self) -> Document {
+        Document::Delete(self.clone())
+    }
+
+    fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = self.indexes.clone();
+        indexes.extend(self.build_indexes());
+        indexes
+    }
+
+    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.indexes.insert(key.into(), value.into());
+    }
+}
+
 impl TryFrom<Document> for Delete {
     type Error = crate::Error;
 
@@ -199,14 +215,14 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     }
 
     // ensure the `RecordsDelete` message is searchable
-    let mut delete_entry = Storable::from(delete);
+    let mut delete = delete.clone();
     for (key, value) in write.build_indexes() {
-        delete_entry.add_index(key, value);
+        delete.add_index(key, value);
     }
 
-    MessageStore::put(provider, owner, &delete_entry).await?;
-    EventLog::append(provider, owner, &delete_entry).await?;
-    EventStream::emit(provider, owner, &delete_entry.document).await?;
+    MessageStore::put(provider, owner, &delete).await?;
+    EventLog::append(provider, owner, &delete).await?;
+    EventStream::emit(provider, owner, &delete.document()).await?;
 
     // purge/hard-delete all descendent documents
     if delete.descriptor.prune {
@@ -302,11 +318,10 @@ async fn delete_earlier(
 
             // when the existing message is the initial write, retain it BUT,
             // ensure the message is marked as `archived`
-            let write = Write::try_from(document)?;
+            let mut write = Write::try_from(document)?;
             if write.is_initial()? {
-                let mut document = Storable::from(&write);
-                document.add_index("initial", true.to_string());
-                MessageStore::put(provider, owner, &document).await?;
+                write.add_index("initial", true.to_string());
+                MessageStore::put(provider, owner, &write).await?;
             } else {
                 let cid = document.cid()?;
                 MessageStore::delete(provider, owner, &cid).await?;

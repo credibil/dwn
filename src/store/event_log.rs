@@ -9,18 +9,20 @@ use crate::{Result, unexpected};
 const PARTITION: &str = "EVENTLOG";
 
 /// Adds a message event to a owner's event log.
-pub async fn append(owner: &str, event: &Storable, store: &impl BlockStore) -> Result<()> {
+pub async fn append(owner: &str, event: &impl Storable, store: &impl BlockStore) -> Result<()> {
+    let document = event.document();
+
     // store entry block
-    let message_cid = event.cid()?;
+    let message_cid = document.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;
-    store.put(owner, PARTITION, &message_cid, &block::encode(event)?).await?;
+    store.put(owner, PARTITION, &message_cid, &block::encode(&document)?).await?;
 
     // add a 'watermark' index entry for sorting and pagination
-    let mut event = event.clone();
-    let watermark = ulid::Ulid::new().to_string();
-    event.indexes.insert("watermark".to_string(), watermark);
+    // let mut event = event;
+    // let watermark = ulid::Ulid::new().to_string();
+    // // Storable::add_index(&mut event, "watermark".to_string(), watermark);
 
-    index::insert(owner, PARTITION, &event, store).await
+    index::insert(owner, PARTITION, event, store).await
 }
 
 pub async fn events(

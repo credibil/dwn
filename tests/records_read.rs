@@ -206,20 +206,17 @@ async fn deleted_write() {
         .await
         .expect("should create write");
 
-    let delete = DeleteBuilder::new()
+    let mut delete = DeleteBuilder::new()
         .record_id(&write.record_id)
         .sign(&*ALICE)
         .build()
         .await
         .expect("should create delete");
 
-    let initial = Storable::from(&write);
-
-    let mut entry = Storable::from(&delete);
-    for (key, value) in initial.indexes() {
-        entry.add_index(key, value);
+    for (key, value) in write.indexes() {
+        delete.add_index(key, value);
     }
-    MessageStore::put(&provider, &ALICE.did, &entry).await.expect("should save");
+    MessageStore::put(&provider, &ALICE.did, &delete).await.expect("should save");
 
     // --------------------------------------------------
     // Alice attempts to read the record and gets an error.

@@ -137,10 +137,9 @@ pub async fn handle(
     }
 
     // save the incoming message
-    let entry = Storable::from(&configure);
-    MessageStore::put(provider, owner, &entry).await?;
-    EventLog::append(provider, owner, &entry).await?;
-    EventStream::emit(provider, owner, &entry.document).await?;
+    MessageStore::put(provider, owner, &configure).await?;
+    EventLog::append(provider, owner, &configure).await?;
+    EventStream::emit(provider, owner, &Document::Configure(configure.clone())).await?;
 
     Ok(Reply {
         status: Status {
@@ -164,6 +163,22 @@ impl Message for Configure {
 
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(owner, self, provider).await
+    }
+}
+
+impl Storable for Configure {
+    fn document(&self) -> Document {
+        Document::Configure(self.clone())
+    }
+
+    fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = self.build_indexes();
+        indexes.extend(self.indexes.clone());
+        indexes
+    }
+
+    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.indexes.insert(key.into(), value.into());
     }
 }
 

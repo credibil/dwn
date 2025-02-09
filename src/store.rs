@@ -22,133 +22,148 @@ pub(crate) mod task;
 use std::collections::HashMap;
 
 use chrono::DateTime;
-use serde::{Deserialize, Serialize};
 
 pub use self::data::MAX_ENCODED_SIZE;
-use crate::endpoint::Message;
-use crate::interfaces::protocols::Configure;
-use crate::interfaces::records::{self, Delete, RecordsFilter, Sort, TagFilter, Write};
-use crate::interfaces::{DateRange, Descriptor, Document, Pagination, Range, messages};
+use crate::interfaces::records::{self, RecordsFilter, Sort, TagFilter};
+use crate::interfaces::{DateRange, Document, Pagination, Range, messages};
 use crate::{Interface, Method, Result, unexpected};
 
-/// Storable wraps each message with a unifying type used for all stored messages
-/// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
-///
-/// The `Storable` type simplifies storage and retrieval aas well as providing a
-/// a vehicle for persisting addtional data alongside the message (using the
-/// `indexes` property).
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Storable {
-    /// The message to store.
-    ///
-    /// N.B. It is necessary to use an enum rather than generics because a
-    /// `Records` query may return both `RecordsWrite` and `RecordsDelete`
-    /// messages.
-    #[serde(flatten)]
-    pub document: Document,
-
-    /// Indexable fields derived from the associated message object.
-    ///
-    /// N.B. These are not stored with the message, rather as separate indexes
-    /// in the underlying store.
-    #[serde(skip)]
-    indexes: HashMap<String, String>,
-}
-
-impl Storable {
-    /// Adds a index item to the entry's indexes.
-    pub fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        let key = key.into();
-        if self.indexes.contains_key(&key) {
-            return;
-        }
-        self.indexes.insert(key, value.into());
-    }
-
-    /// Indexes for this entry.
-    #[must_use]
-    pub const fn indexes(&self) -> &HashMap<String, String> {
-        &self.indexes
-    }
-
-    /// The message's CID.
+/// The `Storable` trait is used to wrap each message with a unifying type used
+/// for all stored messages (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
+pub trait Storable: Sync {
+    /// The message to store as a `Document`.
     ///
     /// # Errors
     ///
     /// The underlying CID computation is not infallible and may fail if the
     /// message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
-        match self.document {
-            Document::Write(ref write) => write.cid(),
-            Document::Delete(ref delete) => delete.cid(),
-            Document::Configure(ref configure) => configure.cid(),
-        }
-    }
+    fn document(&self) -> Document;
 
-    /// The message's CID.
-    #[must_use]
-    pub fn descriptor(&self) -> &Descriptor {
-        match self.document {
-            Document::Write(ref write) => write.descriptor(),
-            Document::Delete(ref delete) => delete.descriptor(),
-            Document::Configure(ref configure) => configure.descriptor(),
-        }
-    }
+    /// Indexes for this entry.
+    fn indexes(&self) -> HashMap<String, String>;
 
-    /// Returns the `RecordsWrite` message, when set.
-    #[must_use]
-    pub const fn as_write(&self) -> Option<&records::Write> {
-        match &self.document {
-            Document::Write(write) => Some(write),
-            _ => None,
-        }
-    }
-
-    /// Returns the `RecordsDelete` message, when set.
-    #[must_use]
-    pub const fn as_delete(&self) -> Option<&records::Delete> {
-        match &self.document {
-            Document::Delete(delete) => Some(delete),
-            _ => None,
-        }
-    }
-
-    /// Returns the `ProtocolsConfigure` message, when set.
-    #[must_use]
-    pub const fn as_configure(&self) -> Option<&Configure> {
-        match &self.document {
-            Document::Configure(configure) => Some(configure),
-            _ => None,
-        }
-    }
+    /// Adds a index item to the entry's indexes.
+    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>);
 }
 
-impl From<&Write> for Storable {
-    fn from(write: &Write) -> Self {
-        Self {
-            document: Document::Write(write.clone()),
-            indexes: write.build_indexes(),
-        }
-    }
-}
+// /// Storable wraps each message with a unifying type used for all stored messages
+// /// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
+// ///
+// /// The `Storable` type simplifies storage and retrieval aas well as providing a
+// /// a vehicle for persisting addtional data alongside the message (using the
+// /// `indexes` property).
+// #[derive(Clone, Debug, Deserialize, Serialize)]
+// pub struct Storable {
+//     /// The message to store.
+//     ///
+//     /// N.B. It is necessary to use an enum rather than generics because a
+//     /// `Records` query may return both `RecordsWrite` and `RecordsDelete`
+//     /// messages.
+//     #[serde(flatten)]
+//     pub document: Document,
 
-impl From<&Delete> for Storable {
-    fn from(delete: &Delete) -> Self {
-        Self {
-            document: Document::Delete(delete.clone()),
-            indexes: delete.build_indexes(),
-        }
-    }
-}
+//     /// Indexable fields derived from the associated message object.
+//     ///
+//     /// N.B. These are not stored with the message, rather as separate indexes
+//     /// in the underlying store.
+//     #[serde(skip)]
+//     indexes: HashMap<String, String>,
+// }
 
-impl From<&Configure> for Storable {
-    fn from(configure: &Configure) -> Self {
-        Self {
-            document: Document::Configure(configure.clone()),
-            indexes: configure.build_indexes(),
-        }
-    }
-}
+// impl Storable {
+//     /// Adds a index item to the entry's indexes.
+//     pub fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
+//         let key = key.into();
+//         if self.indexes.contains_key(&key) {
+//             return;
+//         }
+//         self.indexes.insert(key, value.into());
+//     }
+
+//     /// Indexes for this entry.
+//     #[must_use]
+//     pub const fn indexes(&self) -> &HashMap<String, String> {
+//         &self.indexes
+//     }
+
+//     /// The message's CID.
+//     ///
+//     /// # Errors
+//     ///
+//     /// The underlying CID computation is not infallible and may fail if the
+//     /// message cannot be serialized to CBOR.
+//     pub fn cid(&self) -> Result<String> {
+//         match self.document {
+//             Document::Write(ref write) => write.cid(),
+//             Document::Delete(ref delete) => delete.cid(),
+//             Document::Configure(ref configure) => configure.cid(),
+//         }
+//     }
+
+//     /// The message's CID.
+//     #[must_use]
+//     pub fn descriptor(&self) -> &Descriptor {
+//         match self.document {
+//             Document::Write(ref write) => write.descriptor(),
+//             Document::Delete(ref delete) => delete.descriptor(),
+//             Document::Configure(ref configure) => configure.descriptor(),
+//         }
+//     }
+
+//     /// Returns the `RecordsWrite` message, when set.
+//     #[must_use]
+//     pub const fn as_write(&self) -> Option<&records::Write> {
+//         match &self.document {
+//             Document::Write(write) => Some(write),
+//             _ => None,
+//         }
+//     }
+
+//     /// Returns the `RecordsDelete` message, when set.
+//     #[must_use]
+//     pub const fn as_delete(&self) -> Option<&records::Delete> {
+//         match &self.document {
+//             Document::Delete(delete) => Some(delete),
+//             _ => None,
+//         }
+//     }
+
+//     /// Returns the `ProtocolsConfigure` message, when set.
+//     #[must_use]
+//     pub const fn as_configure(&self) -> Option<&Configure> {
+//         match &self.document {
+//             Document::Configure(configure) => Some(configure),
+//             _ => None,
+//         }
+//     }
+// }
+
+// impl From<&Write> for Storable {
+//     fn from(write: &Write) -> Self {
+//         Self {
+//             document: Document::Write(write.clone()),
+//             indexes: write.build_indexes(),
+//         }
+//     }
+// }
+
+// impl From<&Delete> for Storable {
+//     fn from(delete: &Delete) -> Self {
+//         Self {
+//             document: Document::Delete(delete.clone()),
+//             indexes: delete.build_indexes(),
+//         }
+//     }
+// }
+
+// impl From<&Configure> for Storable {
+//     fn from(configure: &Configure) -> Self {
+//         Self {
+//             document: Document::Configure(configure.clone()),
+//             indexes: configure.build_indexes(),
+//         }
+//     }
+// }
 
 /// The top-level query data structure used for both [`MessageStore`] and
 /// `EventLog` queries.

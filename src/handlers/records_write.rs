@@ -97,24 +97,24 @@ pub async fn handle(
 
     // set `archive` flag is set when the intial write has no data
     // N.B. this is used to prevent malicious access to another record's data
-    let mut document = Storable::from(&write);
-    document.add_index("initial", (code == StatusCode::NO_CONTENT).to_string());
+    let mut storable = write.clone();
+    storable.add_index("initial", (code == StatusCode::NO_CONTENT).to_string());
 
     // save the message and log the event
-    MessageStore::put(provider, owner, &document).await?;
-    EventLog::append(provider, owner, &document).await?;
-    EventStream::emit(provider, owner, &document.document).await?;
+    MessageStore::put(provider, owner, &storable).await?;
+    EventLog::append(provider, owner, &storable).await?;
+    EventStream::emit(provider, owner, &storable.document()).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
     if let Some(document) = initial_entry {
         let initial = Write::try_from(&document)?;
 
         // HACK: rebuild document's indexes
-        let mut document = Storable::from(&initial);
-        document.add_index("initial", true.to_string());
+        let mut storable = Write::try_from(&document)?;
+        storable.add_index("initial", true.to_string());
 
-        MessageStore::put(provider, owner, &document).await?;
-        EventLog::append(provider, owner, &document).await?;
+        MessageStore::put(provider, owner, &storable).await?;
+        EventLog::append(provider, owner, &storable).await?;
 
         if !initial.descriptor.data_cid.is_empty() && write.data_stream.is_some() {
             DataStore::delete(provider, owner, &initial.record_id, &initial.descriptor.data_cid)
@@ -169,6 +169,22 @@ impl Message for Write {
 
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(owner, self, provider).await
+    }
+}
+
+impl Storable for Write {
+    fn document(&self) -> Document {
+        Document::Write(self.clone())
+    }
+
+    fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = self.build_indexes();
+        indexes.extend(self.indexes.clone());
+        indexes
+    }
+
+    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.indexes.insert(key.into(), value.into());
     }
 }
 

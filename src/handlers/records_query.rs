@@ -1,6 +1,6 @@
 //! # Records Query
 //!
-//! The records query endpoint handles `RecordsQuery` messages — requests
+//! The documents query endpoint handles `RecordsQuery` messages — requests
 //! to query the [`MessageStore`] for matching [`Write`] (and possibly
 //! [`Delete`]) messages.
 
@@ -28,7 +28,7 @@ pub async fn handle(
     query.validate()?;
 
     let store_query = if query.only_published() {
-        // correct filter when querying soley for published records
+        // correct filter when querying soley for published documents
         let mut query = query;
         query.descriptor.filter.published = Some(true);
         store::Query::from(query)
@@ -45,11 +45,11 @@ pub async fn handle(
         }
     };
 
-    // fetch records matching query criteria
-    let (records, cursor) = MessageStore::query(provider, owner, &store_query).await?;
+    // fetch documents matching query criteria
+    let (documents, cursor) = MessageStore::query(provider, owner, &store_query).await?;
 
-    // short-circuit when no records found
-    if records.is_empty() {
+    // short-circuit when no documents found
+    if documents.is_empty() {
         return Ok(Reply {
             status: Status {
                 code: StatusCode::OK.as_u16(),
@@ -61,9 +61,8 @@ pub async fn handle(
 
     // build reply
     let mut entries = vec![];
-
-    for record in records {
-        let write: Write = record.try_into()?;
+    for document in documents {
+        let write: Write = document.try_into()?;
 
         // short-circuit when the record is an initial write
         if write.is_initial()? {

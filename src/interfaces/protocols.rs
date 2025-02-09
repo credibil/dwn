@@ -3,7 +3,7 @@
 //! The protocols configure endpoint handles `ProtocolsConfigure` messages —
 //! requests to write to [`Configure`] records to the DWN's [`MessageStore`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use credibil_infosec::jose::jwk::PublicKeyJwk;
 use serde::{Deserialize, Serialize};
@@ -34,6 +34,10 @@ pub struct Configure {
 
     /// The message authorization.
     pub authorization: Authorization,
+
+    /// Flattened fields as key/value pairs to use for indexing stored records.
+    #[serde(skip)]
+    pub(crate) indexes: HashMap<String, String>,
 }
 
 /// The [`Configure`] message descriptor.

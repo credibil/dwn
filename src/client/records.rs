@@ -154,6 +154,7 @@ impl<S: Signer> DeleteBuilder<RecordId, Signed<'_, S>> {
         Ok(Delete {
             descriptor,
             authorization,
+            ..Delete::default()
         })
     }
 }

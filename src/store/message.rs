@@ -8,11 +8,13 @@ use crate::{Result, unexpected};
 const PARTITION: &str = "MESSAGE";
 
 /// Store a message in the underlying store.
-pub async fn put(owner: &str, entry: &Storable, store: &impl BlockStore) -> Result<()> {
+pub async fn put(owner: &str, entry: &impl Storable, store: &impl BlockStore) -> Result<()> {
+    let document = entry.document();
+
     // store entry block
-    let message_cid = entry.cid()?;
+    let message_cid = document.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;
-    store.put(owner, PARTITION, &message_cid, &block::encode(entry)?).await?;
+    store.put(owner, PARTITION, &message_cid, &block::encode(&document)?).await?;
 
     // index entry
     index::insert(owner, PARTITION, entry, store).await

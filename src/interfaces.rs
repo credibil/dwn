@@ -41,7 +41,6 @@ pub struct Descriptor {
 
 /// `Document` is used to store and retrieve messages in a type-independent manner.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "type")]
 pub enum Document {
     /// `RecordsWrite` message.
     Write(Write),

@@ -46,7 +46,7 @@ pub trait BlockStore: Send + Sync {
 /// storage capability.
 pub trait MessageStore: BlockStore + Sized + Send + Sync {
     /// Store a message in the underlying store.
-    fn put(&self, owner: &str, entry: &Storable) -> impl Future<Output = Result<()>> + Send {
+    fn put(&self, owner: &str, entry: &impl Storable) -> impl Future<Output = Result<()>> + Send {
         async move { message::put(owner, entry, self).await.map_err(Into::into) }
     }
 
@@ -180,7 +180,9 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
 /// and `Server` metadata to the library.
 pub trait EventLog: BlockStore + Sized + Send + Sync {
     /// Adds a message event to a owner's event log.
-    fn append(&self, owner: &str, event: &Storable) -> impl Future<Output = Result<()>> + Send {
+    fn append(
+        &self, owner: &str, event: &impl Storable,
+    ) -> impl Future<Output = Result<()>> + Send {
         async move { event_log::append(owner, event, self).await.map_err(Into::into) }
     }
 

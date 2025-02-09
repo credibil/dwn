@@ -35,6 +35,10 @@ pub struct Delete {
 
     /// Message authorization.
     pub authorization: Authorization,
+
+    /// Flattened fields as key/value pairs to use for indexing stored records.
+    #[serde(skip)]
+    pub(crate) indexes: HashMap<String, String>,
 }
 
 /// The [`Delete`] message descriptor.
@@ -581,6 +585,10 @@ pub struct Write {
     /// The data stream of the record if the data associated with the record
     #[serde(skip)]
     pub data_stream: Option<io::Cursor<Vec<u8>>>,
+
+    /// Flattened fields as key/value pairs to use for indexing stored records.
+    #[serde(skip)]
+    pub(crate) indexes: HashMap<String, String>,
 }
 
 impl Write {
