@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::Result;
 use crate::provider::BlockStore;
-use crate::store::data;
+use crate::utils::ipfs;
 
 const RAW: u64 = 0x55;
 // const DAG_CBOR: u64 = 0x71;
@@ -34,7 +34,7 @@ pub fn from_value<T: Serialize>(payload: &T) -> Result<String> {
 /// mock [`BlockStore`].
 pub fn from_reader(reader: impl Read) -> Result<(String, usize)> {
     // use the default storage algorithm to compute CID and size
-    block_on(async { data::put("owner", "record_id", "data_cid", reader, &MockStore).await })
+    block_on(async { ipfs::import("owner", "record_id", "data_cid", reader, &MockStore).await })
 }
 
 struct MockStore;
