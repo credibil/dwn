@@ -1,31 +1,34 @@
 //! # Event Log
 
-use super::Pagination;
 use crate::event::Event;
+use crate::interfaces::{Cursor, Pagination};
 use crate::provider::BlockStore;
-use crate::store::{Cursor, Entry, Query, Sort, block, index};
+use crate::store::{Query, Sort, Storable, index};
+use crate::utils::ipfs;
 use crate::{Result, unexpected};
 
 const PARTITION: &str = "EVENTLOG";
 
 /// Adds a message event to a owner's event log.
-pub async fn append(owner: &str, event: &Event, store: &impl BlockStore) -> Result<()> {
+pub async fn append(owner: &str, event: &impl Storable, store: &impl BlockStore) -> Result<()> {
+    let document = event.document();
+
     // store entry block
-    let message_cid = event.cid()?;
+    let message_cid = document.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;
-    store.put(owner, PARTITION, &message_cid, &block::encode(event)?).await?;
+    store.put(owner, PARTITION, &message_cid, &ipfs::encode_block(&document)?).await?;
 
     // add a 'watermark' index entry for sorting and pagination
     let mut event = event.clone();
     let watermark = ulid::Ulid::new().to_string();
-    event.indexes.insert("watermark".to_string(), watermark);
+    event.add_index("watermark".to_string(), watermark);
 
     index::insert(owner, PARTITION, &event, store).await
 }
 
 pub async fn events(
     owner: &str, cursor: Option<Cursor>, store: &impl BlockStore,
-) -> Result<(Vec<Entry>, Option<Cursor>)> {
+) -> Result<(Vec<Event>, Option<Cursor>)> {
     let q = Query {
         match_sets: vec![],
         pagination: Some(Pagination {
@@ -46,7 +49,7 @@ pub async fn events(
 /// Returns an array of `message_cid`s that represent the events.
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
-) -> Result<(Vec<Entry>, Option<Cursor>)> {
+) -> Result<(Vec<Event>, Option<Cursor>)> {
     let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used
@@ -66,7 +69,7 @@ pub async fn query(
         let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
             return Err(unexpected!("missing block for message cid"));
         };
-        entries.push(block::decode(&bytes)?);
+        entries.push(ipfs::decode_block(&bytes)?);
     }
 
     Ok((entries, cursor))

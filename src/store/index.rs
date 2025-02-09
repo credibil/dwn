@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Result;
 use crate::provider::BlockStore;
-use crate::store::{Entry, Query, block};
-use crate::utils::cid;
+use crate::store::{Query, Storable};
+use crate::utils::{cid, ipfs};
 
 // const NULL: u8 = 0x00;
 // const MAX: u8 = 0x7E;
@@ -23,38 +23,38 @@ const MAX: char = '\u{10ffff}';
 
 /// Insert an entry's queryable fields into indexes.
 pub async fn insert(
-    owner: &str, partition: &str, entry: &Entry, store: &impl BlockStore,
+    owner: &str, partition: &str, entry: &impl Storable, store: &impl BlockStore,
 ) -> Result<()> {
-    let message_cid = entry.cid()?;
+    let message_cid = entry.document().cid()?;
 
-    let fields = &entry.indexes;
-    let indexes = IndexesBuilder::new().owner(owner).partition(partition).store(store).build();
+    let fields = &entry.indexes();
+    let all_indexes = IndexesBuilder::new().owner(owner).partition(partition).store(store).build();
 
     // remove the previous index entries for message
     delete(owner, partition, &message_cid, store).await?;
 
-    for (field, value) in &entry.indexes {
-        let mut index = indexes.get(field).await?;
+    for (field, value) in fields {
+        let mut index = all_indexes.get(field).await?;
         index.insert(
             value,
             IndexItem {
-                fields: entry.indexes.clone(),
+                fields: fields.clone(),
                 message_cid: message_cid.clone(),
             },
         );
-        indexes.put(index).await?;
+        all_indexes.put(index).await?;
     }
 
     // add reverse lookup to use when message is updated or deleted
-    let mut index = indexes.get("message_cid").await?;
+    let mut index = all_indexes.get("message_cid").await?;
     index.items.insert(
         message_cid.clone(),
         IndexItem {
-            fields: entry.indexes.clone(),
+            fields: fields.clone(),
             message_cid,
         },
     );
-    indexes.put(index).await?;
+    all_indexes.put(index).await?;
 
     Ok(())
 }
@@ -109,7 +109,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         let Some(data) = self.store.get(self.owner, self.partition, &index_cid).await? else {
             return Ok(Index::new(field));
         };
-        block::decode(&data).map_err(Into::into)
+        ipfs::decode_block(&data)
     }
 
     /// Update an index.
@@ -119,7 +119,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         // update the index block
         self.store.delete(self.owner, self.partition, &index_cid).await?;
         self.store
-            .put(self.owner, self.partition, &index_cid, &block::encode(&index)?)
+            .put(self.owner, self.partition, &index_cid, &ipfs::encode_block(&index)?)
             .await
             .map_err(Into::into)
     }
@@ -378,6 +378,8 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
 
 #[cfg(test)]
 mod tests {
+    #![cfg(feature = "client")]
+
     use std::io::Cursor;
     use std::str::FromStr;
 
@@ -387,8 +389,8 @@ mod tests {
     use test_node::keystore;
 
     use super::*;
-    use crate::interfaces::protocols::{ConfigureBuilder, Definition};
-    use crate::interfaces::records::{Data, WriteBuilder};
+    use crate::client::protocols::{ConfigureBuilder, Definition};
+    use crate::client::records::{Data, WriteBuilder};
     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 
     const PARTITION: &str = "TEST";
@@ -409,15 +411,14 @@ mod tests {
             .build()
             .await
             .unwrap();
-        let entry = Entry::from(&write);
 
         // add message
-        let message_cid = entry.cid().unwrap();
-        let block = block::encode(&entry).unwrap();
+        let message_cid = write.cid().unwrap();
+        let block = ipfs::encode_block(&write).unwrap();
         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(&alice.did, PARTITION, &entry, &block_store).await.unwrap();
+        super::insert(&alice.did, PARTITION, &write, &block_store).await.unwrap();
 
         // execute query
         let query = RecordsQueryBuilder::new()
@@ -444,15 +445,13 @@ mod tests {
             .await
             .expect("should build");
 
-        let entry = Entry::from(&configure);
-
         // add message
-        let message_cid = entry.cid().unwrap();
-        let block = block::encode(&entry).unwrap();
+        let message_cid = configure.cid().unwrap();
+        let block = ipfs::encode_block(&configure).unwrap();
         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
         // update indexes
-        super::insert(&alice.did, PARTITION, &entry, &block_store).await.unwrap();
+        super::insert(&alice.did, PARTITION, &configure, &block_store).await.unwrap();
 
         // execute query
         let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();

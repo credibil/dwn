@@ -1,5 +1,7 @@
 //! Records Write
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::Cursor;
 use std::sync::LazyLock;
 
@@ -8,17 +10,17 @@ use chrono::{DateTime, Duration, Utc};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 use dwn_node::authorization::JwsPayload;
-use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
-use dwn_node::interfaces::grants::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
-use dwn_node::interfaces::messages::MessagesFilter;
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet, Size};
-use dwn_node::interfaces::records::{
+use dwn_node::client::grants::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
+use dwn_node::client::messages::MessagesFilter;
+use dwn_node::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet, Size};
+use dwn_node::client::records::{
     Attestation, Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, QueryBuilder, ReadBuilder,
     Recipient, RecordsFilter, SignaturePayload, WriteBuilder,
 };
+use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::provider::EventLog;
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint, interfaces, store};
+use dwn_node::{Error, Interface, Method, StatusCode, client, endpoint, store};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
@@ -1187,7 +1189,7 @@ async fn log_initial_write() {
     // --------------------------------------------------
     // Verify an event was logged.
     // --------------------------------------------------
-    let query = interfaces::messages::QueryBuilder::new()
+    let query = client::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .sign(&*ALICE)
         .build()
@@ -1241,7 +1243,7 @@ async fn retain_two_writes() {
     // --------------------------------------------------
     // Verify only the initial write and latest update remain.
     // --------------------------------------------------
-    let query = interfaces::messages::QueryBuilder::new()
+    let query = client::messages::QueryBuilder::new()
         .add_filter(MessagesFilter::new().interface(Interface::Records))
         .sign(&*ALICE)
         .build()

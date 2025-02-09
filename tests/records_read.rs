@@ -1,20 +1,22 @@
 //! Records Read
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
-use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
-use dwn_node::interfaces::grants::{GrantBuilder, RecordsScope, Scope};
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, QueryBuilder};
-use dwn_node::interfaces::records::{
+use dwn_node::client::grants::{GrantBuilder, RecordsScope, Scope};
+use dwn_node::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use dwn_node::client::records::{
     Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
     WriteBuilder, decrypt,
 };
+use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use dwn_node::provider::{DataStore, MessageStore};
-use dwn_node::store::{Entry, MAX_ENCODED_SIZE};
+use dwn_node::store::{MAX_ENCODED_SIZE, Storable};
 use dwn_node::{Error, Method, StatusCode, cid, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
@@ -204,20 +206,17 @@ async fn deleted_write() {
         .await
         .expect("should create write");
 
-    let delete = DeleteBuilder::new()
+    let mut delete = DeleteBuilder::new()
         .record_id(&write.record_id)
         .sign(&*ALICE)
         .build()
         .await
         .expect("should create delete");
 
-    let initial = Entry::from(&write);
-
-    let mut entry = Entry::from(&delete);
-    for (key, value) in initial.indexes() {
-        entry.add_index(key, value);
+    for (key, value) in write.indexes() {
+        delete.add_index(key, value);
     }
-    MessageStore::put(&provider, &ALICE.did, &entry).await.expect("should save");
+    MessageStore::put(&provider, &ALICE.did, &delete).await.expect("should save");
 
     // --------------------------------------------------
     // Alice attempts to read the record and gets an error.

@@ -3,16 +3,15 @@
 //! The `store` module provides utilities for storing and retrieving messages
 //! and associated data.
 //!
-//! The two primary types exposed by this module are [`Entry`] and [`Query`].
+//! The two primary types exposed by this module are [`Storable`] and [`Query`].
 //!
-//! [`Entry`] wraps each message with a unifying type used to simplify storage
+//! [`Storable`] wraps each message with a unifying type used to simplify storage
 //! and retrieval as well as providing a vehicle for attaching addtional data
 //! alongside the message (i.e. indexes).
 //!
 //! [`Query`] wraps store-specific query options for querying the underlying
 //! store.
 
-mod block;
 pub mod data;
 pub(crate) mod event_log;
 pub(crate) mod index;
@@ -22,154 +21,28 @@ pub(crate) mod task;
 use std::collections::HashMap;
 
 use chrono::DateTime;
-use serde::{Deserialize, Serialize};
 
 pub use self::data::MAX_ENCODED_SIZE;
-use crate::endpoint::Message;
-use crate::protocols::Configure;
-pub use crate::records::Sort;
-use crate::records::{self, Delete, RecordsFilter, TagFilter, Write};
-use crate::{
-    DateRange, Descriptor, Interface, Method, Range, Result, messages, protocols, unexpected,
-};
+use crate::interfaces::records::{self, RecordsFilter, Sort, TagFilter};
+use crate::interfaces::{DateRange, Document, Pagination, Range, messages};
+use crate::{Interface, Method, Result, unexpected};
 
-/// Entry wraps each message with a unifying type used for all stored messages
-/// (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
-///
-/// The `Entry` type simplifies storage and retrieval aas well as providing a
-/// a vehicle for persisting addtional data alongside the message (using the
-/// `indexes` property).
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Entry {
-    /// The message to store.
-    ///
-    /// N.B. It is necessary to use an enum rather than generics because a
-    /// `Records` query may return both `RecordsWrite` and `RecordsDelete`
-    /// messages.
-    #[serde(flatten)]
-    pub message: EntryType,
-
-    /// Indexable fields derived from the associated message object.
-    ///
-    /// N.B. These are not stored with the message, rather as separate indexes
-    /// in the underlying store.
-    #[serde(skip)]
-    indexes: HashMap<String, String>,
-}
-
-impl Entry {
-    /// Adds a index item to the entry's indexes.
-    pub fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        let key = key.into();
-        if self.indexes.contains_key(&key) {
-            return;
-        }
-        self.indexes.insert(key, value.into());
-    }
-
-    /// Indexes for this entry.
-    #[must_use]
-    pub const fn indexes(&self) -> &HashMap<String, String> {
-        &self.indexes
-    }
-
-    /// The message's CID.
+/// The `Storable` trait is used to wrap each message with a unifying type used
+/// for all stored messages (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
+pub trait Storable: Clone + Send + Sync {
+    /// The message to store as a `Document`.
     ///
     /// # Errors
     ///
     /// The underlying CID computation is not infallible and may fail if the
     /// message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
-        match self.message {
-            EntryType::Write(ref write) => write.cid(),
-            EntryType::Delete(ref delete) => delete.cid(),
-            EntryType::Configure(ref configure) => configure.cid(),
-        }
-    }
+    fn document(&self) -> Document;
 
-    /// The message's CID.
-    #[must_use]
-    pub fn descriptor(&self) -> &Descriptor {
-        match self.message {
-            EntryType::Write(ref write) => write.descriptor(),
-            EntryType::Delete(ref delete) => delete.descriptor(),
-            EntryType::Configure(ref configure) => configure.descriptor(),
-        }
-    }
+    /// Indexes for this entry.
+    fn indexes(&self) -> HashMap<String, String>;
 
-    /// Returns the `RecordsWrite` message, when set.
-    #[must_use]
-    pub const fn as_write(&self) -> Option<&records::Write> {
-        match &self.message {
-            EntryType::Write(write) => Some(write),
-            _ => None,
-        }
-    }
-
-    /// Returns the `RecordsDelete` message, when set.
-    #[must_use]
-    pub const fn as_delete(&self) -> Option<&records::Delete> {
-        match &self.message {
-            EntryType::Delete(delete) => Some(delete),
-            _ => None,
-        }
-    }
-
-    /// Returns the `ProtocolsConfigure` message, when set.
-    #[must_use]
-    pub const fn as_configure(&self) -> Option<&protocols::Configure> {
-        match &self.message {
-            EntryType::Configure(configure) => Some(configure),
-            _ => None,
-        }
-    }
-}
-
-impl From<&Write> for Entry {
-    fn from(write: &Write) -> Self {
-        Self {
-            message: EntryType::Write(write.clone()),
-            indexes: write.build_indexes(),
-        }
-    }
-}
-
-impl From<&Delete> for Entry {
-    fn from(delete: &Delete) -> Self {
-        Self {
-            message: EntryType::Delete(delete.clone()),
-            indexes: delete.build_indexes(),
-        }
-    }
-}
-
-impl From<&Configure> for Entry {
-    fn from(configure: &Configure) -> Self {
-        Self {
-            message: EntryType::Configure(configure.clone()),
-            indexes: configure.build_indexes(),
-        }
-    }
-}
-
-/// `EntryType` wraps the message payload.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "type")]
-pub enum EntryType {
-    /// `RecordsWrite` message.
-    Write(records::Write),
-
-    /// `RecordsDelete` message.
-    Delete(records::Delete),
-
-    /// `ProtocolsConfigure` message.
-    Configure(protocols::Configure),
-}
-
-impl Default for EntryType {
-    fn default() -> Self {
-        Self::Write(records::Write::default())
-    }
+    /// Adds a index item to the entry's indexes.
+    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>);
 }
 
 /// The top-level query data structure used for both [`MessageStore`] and
@@ -739,60 +612,4 @@ impl GrantedQueryBuilder {
             ..Query::default()
         }
     }
-}
-
-/// Pagination cursor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Pagination {
-    /// The number of messages to return.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<usize>,
-
-    /// Cursor created form the previous page of results.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
-}
-
-impl Pagination {
-    /// Create a new `Pagination` instance.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            limit: None,
-            cursor: None,
-            // offinner: None,
-        }
-    }
-
-    /// Set the limit.
-    #[must_use]
-    pub const fn limit(mut self, limit: usize) -> Self {
-        self.limit = Some(limit);
-        self
-    }
-
-    /// Set the cursor.
-    #[must_use]
-    pub fn cursor(mut self, cursor: Cursor) -> Self {
-        self.cursor = Some(cursor);
-        self
-    }
-}
-
-/// Pagination cursor containing data from the last entry returned in the
-/// previous page of results.
-///
-/// Message CID ensures result cursor compatibility irrespective of DWN
-/// implementation. Meaning querying with the same cursor yields identical
-/// results regardless of DWN queried.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Cursor {
-    /// Message CID from the last entry in the previous page of results.
-    pub message_cid: String,
-
-    /// The value (from sort field) of the last entry in the previous page of
-    /// results.
-    pub value: String,
 }

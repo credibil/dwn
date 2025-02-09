@@ -12,17 +12,16 @@ use std::str::FromStr;
 use ::cid::Cid;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::grants::{self, Scope};
-use crate::protocols::PROTOCOL_URI;
+use crate::grants::Scope;
+use crate::handlers::{records_write, verify_grant};
+use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
+use crate::interfaces::protocols::PROTOCOL_URI;
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::records::write;
-use crate::store::{Entry, EntryType};
-use crate::utils::cid;
-use crate::{Descriptor, Error, Interface, Result, forbidden, unexpected};
+use crate::{Error, Interface, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -36,17 +35,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let cid =
         Cid::from_str(&read.descriptor.message_cid).map_err(|e| unexpected!("invalid CID: {e}"))?;
 
-    let Some(entry) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
+    let Some(mut document) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
         return Err(Error::NotFound("message not found".to_string()));
     };
 
     // verify the fetched message can be safely returned to the requestor
-    read.authorize(owner, &entry, provider).await?;
-
-    let mut message = entry.message;
+    read.authorize(owner, &document, provider).await?;
 
     // include data with RecordsWrite messages
-    let data = if let EntryType::Write(ref mut write) = message {
+    let data = if let Document::Write(ref mut write) = document {
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
             let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
@@ -76,29 +73,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         body: Some(ReadReply {
             entry: Some(ReadReplyEntry {
                 message_cid: read.descriptor.message_cid,
-                message,
+                message: document,
                 data,
             }),
         }),
     })
 }
 
-/// The [`Read`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Read {
-    /// The `Read` descriptor.
-    pub descriptor: ReadDescriptor,
-
-    /// The message authorization.
-    pub authorization: Authorization,
-}
-
 impl Message for Read {
     type Reply = ReadReply;
-
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
 
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
@@ -114,7 +97,9 @@ impl Message for Read {
 }
 
 impl Read {
-    async fn authorize(&self, owner: &str, entry: &Entry, provider: &impl Provider) -> Result<()> {
+    async fn authorize(
+        &self, owner: &str, document: &Document, provider: &impl Provider,
+    ) -> Result<()> {
         let authzn = &self.authorization;
 
         // owner can read messages they authored
@@ -127,9 +112,9 @@ impl Read {
         let Some(grant_id) = &authzn.payload()?.permission_grant_id else {
             return Err(forbidden!("missing grant ID"));
         };
-        let grant = grants::fetch_grant(owner, grant_id, provider).await?;
-        grant.verify(owner, &author, self.descriptor(), provider).await?;
-        verify_scope(owner, entry, grant.data.scope, provider).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
+        grant.verify(owner, &author, &self.descriptor.base, provider).await?;
+        verify_scope(owner, document, grant.data.scope, provider).await?;
 
         Ok(())
     }
@@ -137,7 +122,7 @@ impl Read {
 
 // Verify message scope against grant scope.
 async fn verify_scope(
-    owner: &str, requested: &Entry, scope: Scope, store: &impl MessageStore,
+    owner: &str, requested: &Document, scope: Scope, store: &impl MessageStore,
 ) -> Result<()> {
     // ensure read filters include scoped protocol
     let Some(protocol) = scope.protocol() else {
@@ -154,17 +139,18 @@ async fn verify_scope(
     }
 
     if requested.descriptor().interface == Interface::Records {
-        let write = match &requested.message {
-            EntryType::Write(write) => write.clone(),
-            EntryType::Delete(delete) => {
-                let entry =
-                    write::initial_write(owner, &delete.descriptor.record_id, store).await?;
-                let Some(write) = entry else {
+        let write = match &requested {
+            Document::Write(write) => write.clone(),
+            Document::Delete(delete) => {
+                let result =
+                    records_write::initial_write(owner, &delete.descriptor.record_id, store)
+                        .await?;
+                let Some(write) = result else {
                     return Err(forbidden!("message failed scope authorization"));
                 };
                 write.clone()
             }
-            EntryType::Configure(_) => {
+            Document::Configure(_) => {
                 return Err(forbidden!("message failed scope authorization"));
             }
         };
@@ -176,7 +162,7 @@ async fn verify_scope(
 
         // check if the protocol is the internal permissions protocol
         if write.descriptor.protocol == Some(PROTOCOL_URI.to_string()) {
-            let permission_scope = grants::fetch_scope(owner, &write, store).await?;
+            let permission_scope = verify_grant::fetch_scope(owner, &write, store).await?;
             if permission_scope.protocol() == Some(protocol) {
                 return Ok(());
             }
@@ -184,38 +170,4 @@ async fn verify_scope(
     }
 
     Err(forbidden!("message failed scope authorization"))
-}
-
-/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ReadReply {
-    /// The `Read` descriptor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entry: Option<ReadReplyEntry>,
-}
-
-/// `Read` reply entry
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ReadReplyEntry {
-    /// The CID of the message.
-    pub message_cid: String,
-
-    /// The message.
-    pub message: EntryType,
-
-    /// The data associated with the message.
-    #[serde(skip)]
-    pub data: Option<Cursor<Vec<u8>>>,
-}
-
-/// The [`Read`]  message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReadDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// The CID of the message to read.
-    pub message_cid: String,
 }

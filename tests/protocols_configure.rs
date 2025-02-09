@@ -3,11 +3,13 @@
 //! This test demonstrates how a web node owner create differnt types of
 //! messages and subsequently query for them.
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder, Scope};
-use dwn_node::interfaces::protocols::{
+use dwn_node::client::grants::{GrantBuilder, RevocationBuilder, Scope};
+use dwn_node::client::protocols::{
     Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
 };
 use dwn_node::provider::MessageStore;

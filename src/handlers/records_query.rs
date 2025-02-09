@@ -1,20 +1,20 @@
 //! # Records Query
 //!
-//! The records query endpoint handles `RecordsQuery` messages — requests
+//! The documents query endpoint handles `RecordsQuery` messages — requests
 //! to query the [`MessageStore`] for matching [`Write`] (and possibly
 //! [`Delete`]) messages.
 
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::Grant;
+use crate::handlers::verify_protocol;
+use crate::interfaces::Descriptor;
+use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
-use crate::records::{RecordsFilter, Write, protocol};
-use crate::store::{self, Cursor, Pagination, RecordsQueryBuilder, Sort};
-use crate::utils::cid;
-use crate::{Descriptor, Result, forbidden, unexpected, utils};
+use crate::store::{self, RecordsQueryBuilder};
+use crate::{Result, forbidden, unexpected, utils};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -28,7 +28,7 @@ pub async fn handle(
     query.validate()?;
 
     let store_query = if query.only_published() {
-        // correct filter when querying soley for published records
+        // correct filter when querying soley for published documents
         let mut query = query;
         query.descriptor.filter.published = Some(true);
         store::Query::from(query)
@@ -45,11 +45,11 @@ pub async fn handle(
         }
     };
 
-    // fetch records matching query criteria
-    let (records, cursor) = MessageStore::query(provider, owner, &store_query).await?;
+    // fetch documents matching query criteria
+    let (documents, cursor) = MessageStore::query(provider, owner, &store_query).await?;
 
-    // short-circuit when no records found
-    if records.is_empty() {
+    // short-circuit when no documents found
+    if documents.is_empty() {
         return Ok(Reply {
             status: Status {
                 code: StatusCode::OK.as_u16(),
@@ -61,9 +61,8 @@ pub async fn handle(
 
     // build reply
     let mut entries = vec![];
-
-    for record in records {
-        let write: Write = record.try_into()?;
+    for document in documents {
+        let write: Write = document.try_into()?;
 
         // short-circuit when the record is an initial write
         if write.is_initial()? {
@@ -101,24 +100,8 @@ pub async fn handle(
     })
 }
 
-/// The [`Query`] message expected by the handler.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Query {
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
-}
-
 impl Message for Query {
     type Reply = QueryReply;
-
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
 
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
@@ -131,33 +114,6 @@ impl Message for Query {
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(owner, self, provider).await
     }
-}
-
-/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryReply {
-    /// Query reply entries.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<QueryReplyEntry>>,
-
-    /// Pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
-}
-
-/// [`QueryReplyEntry`] represents a [`Write`] entry returned by the query.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryReplyEntry {
-    /// The `RecordsWrite` message of the record if record exists.
-    #[serde(flatten)]
-    pub write: Write,
-
-    /// The initial write of the record if the returned `RecordsWrite` message
-    /// itself is not the initial write.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub initial_write: Option<Write>,
 }
 
 impl Query {
@@ -185,7 +141,7 @@ impl Query {
             }
 
             // verify protocol role is authorized
-            let verifier = protocol::Authorizer::new(protocol)
+            let verifier = verify_protocol::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
             return verifier.permit_query(owner, self, provider).await;
         }
@@ -282,24 +238,4 @@ impl Query {
 
         Ok(store_query.build())
     }
-}
-
-/// The [`Query`] message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filter Records for query.
-    pub filter: RecordsFilter,
-
-    /// Specifies how dates should be sorted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_sort: Option<Sort>,
-
-    /// The pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pagination: Option<Pagination>,
 }

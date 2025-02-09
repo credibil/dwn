@@ -1,17 +1,21 @@
 //! # Message Store
 
+use crate::interfaces::{Cursor, Document};
 use crate::provider::BlockStore;
-use crate::store::{Cursor, Entry, Query, block, index};
+use crate::store::{Query, Storable, index};
+use crate::utils::ipfs;
 use crate::{Result, unexpected};
 
 const PARTITION: &str = "MESSAGE";
 
 /// Store a message in the underlying store.
-pub async fn put(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<()> {
+pub async fn put(owner: &str, entry: &impl Storable, store: &impl BlockStore) -> Result<()> {
+    let document = entry.document();
+
     // store entry block
-    let message_cid = entry.cid()?;
+    let message_cid = document.cid()?;
     store.delete(owner, PARTITION, &message_cid).await?;
-    store.put(owner, PARTITION, &message_cid, &block::encode(entry)?).await?;
+    store.put(owner, PARTITION, &message_cid, &ipfs::encode_block(&document)?).await?;
 
     // index entry
     index::insert(owner, PARTITION, entry, store).await
@@ -20,7 +24,7 @@ pub async fn put(owner: &str, entry: &Entry, store: &impl BlockStore) -> Result<
 /// Queries the underlying store for matches to the provided query.
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
-) -> Result<(Vec<Entry>, Option<Cursor>)> {
+) -> Result<(Vec<Document>, Option<Cursor>)> {
     let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used
@@ -42,7 +46,7 @@ pub async fn query(
         let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
             return Err(unexpected!("missing block for message cid"));
         };
-        entries.push(block::decode(&bytes)?);
+        entries.push(ipfs::decode_block(&bytes)?);
     }
 
     Ok((entries, cursor))
@@ -50,11 +54,13 @@ pub async fn query(
 
 /// Fetch a single message by CID from the underlying store, returning
 /// `None` if no message was found.
-pub async fn get(owner: &str, message_cid: &str, store: &impl BlockStore) -> Result<Option<Entry>> {
+pub async fn get(
+    owner: &str, message_cid: &str, store: &impl BlockStore,
+) -> Result<Option<Document>> {
     let Some(bytes) = store.get(owner, PARTITION, message_cid).await? else {
         return Ok(None);
     };
-    Ok(Some(block::decode(&bytes)?))
+    Ok(Some(ipfs::decode_block(&bytes)?))
 }
 
 /// Delete message associated with the specified id.

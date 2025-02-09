@@ -3,13 +3,13 @@
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
+use credibil_infosec::Signer;
 
+use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
 pub use crate::grants::{Conditions, Publication, RecordsScope, Scope};
 use crate::grants::{GrantData, RequestData, RevocationData};
-use crate::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
-use crate::protocols::{self};
-use crate::provider::Signer;
-use crate::records::{self, Tag, Write};
+use crate::interfaces::protocols;
+use crate::interfaces::records::{self, Tag, Write};
 use crate::{Interface, utils};
 
 /// Options to use when creating a permission grant.

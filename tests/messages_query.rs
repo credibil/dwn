@@ -3,14 +3,16 @@
 //! This test demonstrates how a web node owner create messages and
 //! subsequently query for them.
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::Cursor;
 use std::sync::LazyLock;
 
-use dwn_node::interfaces::grants::{GrantBuilder, Scope};
-use dwn_node::interfaces::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition};
-use dwn_node::interfaces::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint};
+use dwn_node::client::grants::{GrantBuilder, Scope};
+use dwn_node::client::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
+use dwn_node::client::protocols::{ConfigureBuilder, Definition};
+use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use dwn_node::{Error, Interface, Method, StatusCode, endpoint};
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 
@@ -80,11 +82,11 @@ async fn owner_messages() {
     assert_eq!(reply.status.code, StatusCode::OK);
 
     let query_reply = reply.body.expect("should be records read");
-    let entries = query_reply.entries.expect("should have entries");
-    assert_eq!(entries.len(), 6);
+    let cids = query_reply.entries.expect("should have entries");
+    assert_eq!(cids.len(), 6);
 
-    for entry in entries {
-        assert!(expected_cids.contains(&entry));
+    for cid in cids {
+        assert!(expected_cids.contains(&cid));
     }
 
     // --------------------------------------------------
@@ -299,8 +301,8 @@ async fn match_grant_scope() {
     ];
     bob_grant.cid().expect("should have cid");
 
-    for entry in entries {
-        assert!(expected_cids.contains(&entry));
+    for cid in entries {
+        assert!(expected_cids.contains(&cid));
     }
 }
 

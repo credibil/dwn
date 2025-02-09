@@ -3,16 +3,18 @@
 //! This test demonstrates how a web node owner create a message and
 //! subsequently read it.
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
-use dwn_node::interfaces::grants::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
-use dwn_node::interfaces::messages::ReadBuilder;
-use dwn_node::interfaces::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
-use dwn_node::interfaces::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
+use dwn_node::client::grants::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
+use dwn_node::client::messages::ReadBuilder;
+use dwn_node::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
+use dwn_node::client::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
 use dwn_node::provider::MessageStore;
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint, store};
+use dwn_node::{Error, Interface, Method, StatusCode, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
@@ -1016,9 +1018,7 @@ async fn delete_with_no_write() {
         .build()
         .await
         .expect("should create write");
-
-    let entry = store::Entry::from(&delete);
-    MessageStore::put(&provider, &ALICE.did, &entry).await.expect("should put message");
+    MessageStore::put(&provider, &ALICE.did, &delete).await.expect("should put message");
 
     // --------------------------------------------------
     // Bob attempts to use the grant to read the protocol message, but fails.

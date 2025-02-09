@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 //! # Decentralized Web Node (DWN)
 //!
 //! A [Decentralized Web Node (DWN)] is a data storage and message relay
@@ -14,51 +12,71 @@
 //!
 //! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![feature(let_chains)]
+
 pub mod authorization;
-pub mod endpoint;
 mod error;
 pub mod event;
 mod grants;
 pub mod hd_key;
-#[cfg(feature = "interfaces")]
 pub mod interfaces;
-mod messages;
-mod protocols;
-pub mod provider;
-mod records;
-mod schema;
-pub mod store;
-mod tasks;
 mod utils;
 
-use ::serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use derive_more::Display;
-pub use http::StatusCode;
+#[cfg(feature = "client")]
+pub mod client;
 
-pub use crate::endpoint::Message;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "server")] {
+        pub mod endpoint;
+        mod handlers;
+        pub mod provider;
+        mod schema;
+        pub mod store;
+        mod tasks;
+
+        // re-exports
+        pub use http::StatusCode;
+
+        pub use crate::endpoint::Message;
+        pub use crate::provider::Provider;
+        pub use crate::utils::cid;
+    }
+}
+
+// Re-exports
+use ::serde::{Deserialize, Serialize};
+pub use credibil_infosec::{Receiver, Signer};
+use derive_more::Display;
+
 pub use crate::error::Error;
-pub use crate::provider::Provider;
-use crate::serde::rfc3339_micros;
-pub use crate::utils::cid;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// The message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(default)]
-pub struct Descriptor {
-    /// The associated web node interface.
-    pub interface: Interface,
+/// `BlockStore` is used by implementers to provide data storage
+/// capability.
+pub trait BlockStore: Send + Sync {
+    /// Store a data block in the underlying block store.
+    fn put(
+        &self, owner: &str, partition: &str, cid: &str, data: &[u8],
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// The interface method.
-    pub method: Method,
+    /// Fetches a single block by CID from the underlying store, returning
+    /// `None` if no match was found.
+    fn get(
+        &self, owner: &str, partition: &str, cid: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
 
-    /// The timestamp of the message.
-    #[serde(serialize_with = "rfc3339_micros")]
-    pub message_timestamp: DateTime<Utc>,
+    /// Delete the data block associated with the specified CID.
+    fn delete(
+        &self, owner: &str, partition: &str, cid: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Purge all blocks from the store.
+    fn purge(
+        &self, owner: &str, partition: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// Web node interfaces.
@@ -137,174 +155,6 @@ impl<T> From<T> for OneOrMany<T> {
 impl<T> From<Vec<T>> for OneOrMany<T> {
     fn from(value: Vec<T>) -> Self {
         Self::Many(value)
-    }
-}
-
-/// Range to use in filters.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Range<T: PartialEq> {
-    /// The filter's lower bound.
-    #[serde(flatten)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lower: Option<Lower<T>>,
-
-    /// The filter's upper bound.
-    #[serde(flatten)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub upper: Option<Upper<T>>,
-}
-
-/// Range lower bound comparision options.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Lower<T: PartialEq> {
-    /// Lower bound compare is greater than the specified value.
-    #[serde(rename = "gt")]
-    Exclusive(T),
-
-    /// Lower bound compare is greater than or equal to.
-    #[serde(rename = "gte")]
-    Inclusive(T),
-}
-
-impl<T: PartialEq + Default> Default for Lower<T> {
-    fn default() -> Self {
-        Self::Exclusive(T::default())
-    }
-}
-
-/// Range upper bound comparision options.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Upper<T: PartialEq> {
-    /// Lower bound compare is greater than the specified value.
-    #[serde(rename = "lt")]
-    Exclusive(T),
-
-    /// Lower bound compare is greater than or equal to.
-    #[serde(rename = "lte")]
-    Inclusive(T),
-}
-
-impl<T: PartialEq + Default> Default for Upper<T> {
-    fn default() -> Self {
-        Self::Exclusive(T::default())
-    }
-}
-
-impl<T: PartialEq> Range<T> {
-    /// Create a new range filter.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            lower: None,
-            upper: None,
-        }
-    }
-
-    /// Specify a 'greater-than' lower bound for the filter.
-    #[must_use]
-    pub fn gt(mut self, gt: T) -> Self {
-        self.lower = Some(Lower::Exclusive(gt));
-        self
-    }
-
-    /// Specify a 'greater-than-or-equal' lower bound for the filter.
-    #[must_use]
-    pub fn ge(mut self, ge: T) -> Self {
-        self.lower = Some(Lower::Inclusive(ge));
-        self
-    }
-
-    /// Specify a 'less-than' upper bound for the filter.
-    #[must_use]
-    pub fn lt(mut self, lt: T) -> Self {
-        self.upper = Some(Upper::Exclusive(lt));
-        self
-    }
-
-    /// Specify a 'less-than-or-equal' upper bound for the filter.
-    #[must_use]
-    pub fn le(mut self, le: T) -> Self {
-        self.upper = Some(Upper::Inclusive(le));
-        self
-    }
-
-    /// Check if the range contains the value.
-    pub fn contains(&self, value: &T) -> bool
-    where
-        T: PartialOrd,
-    {
-        let lower_ok = match &self.lower {
-            Some(Lower::Exclusive(lower)) => value > lower,
-            Some(Lower::Inclusive(lower)) => value >= lower,
-            None => true,
-        };
-        if !lower_ok {
-            return false;
-        }
-
-        match &self.upper {
-            Some(Upper::Exclusive(upper)) => value < upper,
-            Some(Upper::Inclusive(upper)) => value <= upper,
-            None => true,
-        }
-    }
-}
-
-/// Range filter.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct DateRange {
-    /// The filter's lower bound.
-    #[serde(rename = "from")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "serde::rfc3339_micros_opt")]
-    pub lower: Option<DateTime<Utc>>,
-
-    /// The filter's upper bound.
-    #[serde(rename = "to")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "serde::rfc3339_micros_opt")]
-    pub upper: Option<DateTime<Utc>>,
-}
-
-impl DateRange {
-    /// Create a new range filter.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            lower: None,
-            upper: None,
-        }
-    }
-
-    /// Specify a 'greater-than' lower bound for the filter.
-    #[must_use]
-    pub const fn gt(mut self, gt: DateTime<Utc>) -> Self {
-        self.lower = Some(gt);
-        self
-    }
-
-    /// Specify a 'less-than' upper bound for the filter.
-    #[must_use]
-    pub const fn lt(mut self, lt: DateTime<Utc>) -> Self {
-        self.upper = Some(lt);
-        self
-    }
-
-    /// Check if the range contains the value.
-    #[must_use]
-    pub fn contains(&self, value: &DateTime<Utc>) -> bool {
-        if let Some(lower) = &self.lower {
-            if value < lower {
-                return false;
-            }
-        }
-        if let Some(upper) = &self.upper {
-            if value >= upper {
-                return false;
-            }
-        }
-
-        true
     }
 }
 

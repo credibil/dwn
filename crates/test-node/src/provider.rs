@@ -12,7 +12,7 @@ pub mod keystore;
 use anyhow::Result;
 use blockstore::InMemoryBlockstore;
 use dwn_node::provider::{
-    DataStore, DidResolver, Document, EventLog, MessageStore, Provider, TaskStore,
+    DataStore, DidDocument, DidResolver, EventLog, MessageStore, Provider, TaskStore,
 };
 
 #[derive(Clone)]
@@ -37,7 +37,7 @@ impl EventLog for ProviderImpl {}
 impl TaskStore for ProviderImpl {}
 
 impl DidResolver for ProviderImpl {
-    async fn resolve(&self, url: &str) -> Result<Document> {
+    async fn resolve(&self, url: &str) -> Result<DidDocument> {
         unimplemented!("DidResolver::resolve")
     }
 }

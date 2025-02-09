@@ -3,22 +3,14 @@
 //! The protocols query endpoint handles `ProtocolsQuery` messages — requests
 //! to query the [`MessageStore`] for protocols configured for the DWN.
 
-use serde::{Deserialize, Serialize};
-
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
-use crate::protocols::{Configure, ProtocolsFilter};
+use crate::handlers::verify_grant;
+use crate::interfaces::Descriptor;
+use crate::interfaces::protocols::{Access, Configure, Query, QueryReply};
 use crate::provider::{MessageStore, Provider};
-use crate::store::{Cursor, ProtocolsQueryBuilder};
-use crate::utils::cid;
-use crate::{Descriptor, Result, grants, utils};
-
-// Access level for query.
-#[derive(PartialEq, PartialOrd)]
-enum Access {
-    Published,
-    Unpublished,
-}
+use crate::store::ProtocolsQueryBuilder;
+use crate::{Result, utils};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -65,23 +57,8 @@ pub async fn handle(
     })
 }
 
-/// The [`Query`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Query {
-    /// The Query descriptor.
-    pub descriptor: QueryDescriptor,
-
-    /// The message authorization.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization: Option<Authorization>,
-}
-
 impl Message for Query {
     type Reply = QueryReply;
-
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
 
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
@@ -94,18 +71,6 @@ impl Message for Query {
     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
         handle(owner, self, provider).await
     }
-}
-
-/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct QueryReply {
-    /// [`Configure`] entries matching the query.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Vec<Configure>>,
-
-    /// Pagination cursor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<Cursor>,
 }
 
 impl Query {
@@ -125,8 +90,8 @@ impl Query {
         };
 
         // verify permission grant
-        let grant = grants::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
+        let grant = verify_grant::fetch_grant(owner, grant_id, store).await?;
+        grant.verify(owner, &authzn.signer()?, &self.descriptor.base, store).await?;
 
         // if set, query and grant protocols need to match
         let Some(protocol) = grant.data.scope.protocol() else {
@@ -143,17 +108,4 @@ impl Query {
 
         Ok(Access::Unpublished)
     }
-}
-
-/// The [`Query`] message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// Filter Records for query.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub filter: Option<ProtocolsFilter>,
 }

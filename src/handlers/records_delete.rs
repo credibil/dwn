@@ -1,28 +1,28 @@
 //! # Records Delete
 //!
-//! The records delete endpoint handles `RecordsDelete` messages — requests
+//! The documents delete endpoint handles `RecordsDelete` messages — requests
 //! to delete a [`Write`] record.
 //!
 //! Technically, the [`Write`] record is not deleted, but rather a new
 //! [`Delete`] record is created to mark the record as deleted. The [`Delete`]
 //! record is used to prune the record and its descendants from the system,
-//! leaving only the [`Delete`] and initial [`Write`] records.
+//! leaving only the [`Delete`] and initial [`Write`] documents.
 
 use std::collections::HashMap;
 
 use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
 use crate::endpoint::{Message, Reply, Status};
+use crate::handlers::verify_protocol;
+use crate::interfaces::records::{Delete, DeleteReply, RecordsFilter, Write};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::records::{RecordsFilter, Write, protocol};
-use crate::store::{Entry, EntryType, RecordsQueryBuilder};
+use crate::store::{RecordsQueryBuilder, Storable};
 use crate::tasks::{self, Task, TaskType};
-use crate::utils::cid;
-use crate::{Descriptor, Error, Interface, Method, Result, forbidden, unexpected};
+use crate::{Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Delete`] message.
 ///
@@ -83,23 +83,8 @@ pub async fn handle(
     })
 }
 
-/// The [`Delete`] message expected by the handler.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Delete {
-    /// Delete descriptor.
-    pub descriptor: DeleteDescriptor,
-
-    /// Message authorization.
-    pub authorization: Authorization,
-}
-
 impl Message for Delete {
     type Reply = DeleteReply;
-
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
 
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
@@ -114,27 +99,39 @@ impl Message for Delete {
     }
 }
 
-/// [`DeleteReply`] is returned by the handler in the [`Reply`] `body` field.
-#[derive(Debug)]
-pub struct DeleteReply;
+impl Storable for Delete {
+    fn document(&self) -> Document {
+        Document::Delete(self.clone())
+    }
 
-impl TryFrom<Entry> for Delete {
+    fn indexes(&self) -> HashMap<String, String> {
+        let mut indexes = self.indexes.clone();
+        indexes.extend(self.build_indexes());
+        indexes
+    }
+
+    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.indexes.insert(key.into(), value.into());
+    }
+}
+
+impl TryFrom<Document> for Delete {
     type Error = crate::Error;
 
-    fn try_from(record: Entry) -> Result<Self> {
-        match record.message {
-            EntryType::Delete(delete) => Ok(delete),
+    fn try_from(document: Document) -> Result<Self> {
+        match document {
+            Document::Delete(delete) => Ok(delete),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }
 }
 
-impl TryFrom<&Entry> for Delete {
+impl TryFrom<&Document> for Delete {
     type Error = crate::Error;
 
-    fn try_from(record: &Entry) -> Result<Self> {
-        match &record.message {
-            EntryType::Delete(delete) => Ok(delete.clone()),
+    fn try_from(document: &Document) -> Result<Self> {
+        match document {
+            Document::Delete(delete) => Ok(delete.clone()),
             _ => Err(unexpected!("expected `RecordsDelete` message")),
         }
     }
@@ -179,7 +176,7 @@ impl Delete {
         }
 
         if let Some(protocol) = &write.descriptor.protocol {
-            let protocol = protocol::Authorizer::new(protocol)
+            let protocol = verify_protocol::Authorizer::new(protocol)
                 .context_id(write.context_id.as_ref())
                 .initial_write(write);
             return protocol.permit_delete(owner, self, store).await;
@@ -187,21 +184,6 @@ impl Delete {
 
         Err(forbidden!("delete request failed authorization"))
     }
-}
-
-/// The [`Delete`] message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeleteDescriptor {
-    /// The base descriptor
-    #[serde(flatten)]
-    pub base: Descriptor,
-
-    /// The ID of the record to delete.
-    pub record_id: String,
-
-    /// Specifies whether descendent records should be pruned or not.
-    pub prune: bool,
 }
 
 async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Result<()> {
@@ -214,7 +196,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 
     let (entries, _) = MessageStore::query(provider, owner, &query).await?;
     if entries.is_empty() {
-        return Err(Error::NotFound("no matching records found".to_string()));
+        return Err(Error::NotFound("no matching documents found".to_string()));
     }
     if entries.len() > 2 {
         return Err(unexpected!("multiple messages exist"));
@@ -233,30 +215,30 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     }
 
     // ensure the `RecordsDelete` message is searchable
-    let mut delete_entry = Entry::from(delete);
+    let mut delete = delete.clone();
     for (key, value) in write.build_indexes() {
-        delete_entry.add_index(key, value);
+        delete.add_index(key, value);
     }
 
-    MessageStore::put(provider, owner, &delete_entry).await?;
-    EventLog::append(provider, owner, &delete_entry).await?;
-    EventStream::emit(provider, owner, &delete_entry).await?;
+    MessageStore::put(provider, owner, &delete).await?;
+    EventLog::append(provider, owner, &delete).await?;
+    EventStream::emit(provider, owner, &delete.document()).await?;
 
-    // purge/hard-delete all descendent records
+    // purge/hard-delete all descendent documents
     if delete.descriptor.prune {
         delete_children(owner, &delete.descriptor.record_id, provider).await?;
     }
 
     // delete all messages except initial write and most recent
-    delete_earlier(owner, &Entry::from(delete), &entries, provider).await?;
+    delete_earlier(owner, &Document::Delete(delete.clone()), &entries, provider).await?;
 
     Ok(())
 }
 
-// Purge a record's descendant records and data.
+// Purge a record's descendant documents and data.
 #[async_recursion]
 async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider) -> Result<()> {
-    // fetch child records
+    // fetch child documents
     let query =
         RecordsQueryBuilder::new().add_filter(RecordsFilter::new().parent_id(record_id)).build();
     let (children, _) = MessageStore::query(provider, owner, &query).await?;
@@ -265,12 +247,12 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
     }
 
     // group by `record_id` (a record can have multiple children)
-    let mut record_id_map = HashMap::<&str, Vec<Entry>>::new();
-    for entry in children {
-        let record_id = if let Some(write) = entry.as_write() {
+    let mut record_id_map = HashMap::<&str, Vec<Document>>::new();
+    for document in children {
+        let record_id = if let Some(write) = document.as_write() {
             &write.record_id
         } else {
-            let Some(delete) = entry.as_delete() else {
+            let Some(delete) = document.as_delete() else {
                 return Err(unexpected!("unexpected message type"));
             };
             &delete.descriptor.record_id
@@ -278,8 +260,8 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
 
         record_id_map
             .get_mut(record_id.as_str())
-            .unwrap_or(&mut Vec::<Entry>::new())
-            .push(entry.clone());
+            .unwrap_or(&mut Vec::<Document>::new())
+            .push(document.clone());
     }
 
     for (record_id, entries) in record_id_map {
@@ -292,13 +274,15 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
     Ok(())
 }
 
-// Purge record's specified records and data.
-async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Result<()> {
+// Purge record's specified documents and data.
+async fn purge(owner: &str, documents: &[Document], provider: &impl Provider) -> Result<()> {
     // filter out `RecordsDelete` messages
-    let mut writes =
-        records.iter().filter(|m| m.descriptor().method == Method::Write).collect::<Vec<&Entry>>();
+    let mut writes = documents
+        .iter()
+        .filter(|m| m.descriptor().method == Method::Write)
+        .collect::<Vec<&Document>>();
 
-    // order records from earliest to most recent
+    // order documents from earliest to most recent
     writes.sort_by(|a, b| a.descriptor().message_timestamp.cmp(&b.descriptor().message_timestamp));
 
     // delete data for the most recent write
@@ -311,7 +295,7 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
     DataStore::delete(provider, owner, &write.record_id, &write.descriptor.data_cid).await?;
 
     // delete message events
-    for message in records {
+    for message in documents {
         let cid = message.cid()?;
         EventLog::delete(provider, owner, &cid).await?;
         MessageStore::delete(provider, owner, &cid).await?;
@@ -324,23 +308,22 @@ async fn purge(owner: &str, records: &[Entry], provider: &impl Provider) -> Resu
 // given tenant, but keep the initial write write for future processing by
 // ensuring its `private` index is "true".
 async fn delete_earlier(
-    owner: &str, latest: &Entry, existing: &[Entry], provider: &impl Provider,
+    owner: &str, latest: &Document, existing: &[Document], provider: &impl Provider,
 ) -> Result<()> {
-    // N.B. typically there will only be, at most, two existing records per
+    // N.B. typically there will only be, at most, two existing documents per
     // `record_id` (initial + a potential subsequent write/delete),
-    for entry in existing {
-        if entry.descriptor().message_timestamp < latest.descriptor().message_timestamp {
-            delete_data(owner, entry, latest, provider).await?;
+    for document in existing {
+        if document.descriptor().message_timestamp < latest.descriptor().message_timestamp {
+            delete_data(owner, document, latest, provider).await?;
 
             // when the existing message is the initial write, retain it BUT,
             // ensure the message is marked as `archived`
-            let write = Write::try_from(entry)?;
+            let mut write = Write::try_from(document)?;
             if write.is_initial()? {
-                let mut entry = Entry::from(&write);
-                entry.add_index("initial", true.to_string());
-                MessageStore::put(provider, owner, &entry).await?;
+                write.add_index("initial", true.to_string());
+                MessageStore::put(provider, owner, &write).await?;
             } else {
-                let cid = entry.cid()?;
+                let cid = document.cid()?;
                 MessageStore::delete(provider, owner, &cid).await?;
                 EventLog::delete(provider, owner, &cid).await?;
             }
@@ -352,7 +335,7 @@ async fn delete_earlier(
 
 // Deletes the data referenced by the given message if needed.
 async fn delete_data(
-    owner: &str, existing: &Entry, latest: &Entry, store: &impl DataStore,
+    owner: &str, existing: &Document, latest: &Document, store: &impl DataStore,
 ) -> Result<()> {
     let Some(existing_write) = existing.as_write() else {
         return Err(unexpected!("unexpected message type"));

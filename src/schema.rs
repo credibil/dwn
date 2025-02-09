@@ -2,6 +2,8 @@
 //!
 //! This module validates messages against their JSON schemas.
 
+use std::fmt::Write as _;
+
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
 use serde::Serialize;
@@ -31,7 +33,8 @@ pub fn validate_value<T: Serialize + ?Sized>(schema: &str, value: &T) -> Result<
     if !errors.is_empty() {
         let mut error = String::new();
         for e in errors {
-            error.push_str(&format!("\n - {e} at {}", e.instance_path));
+            write!(&mut error, "\n - {e} at {}", e.instance_path)
+                .map_err(|e| unexpected!("issue capturing errors: {e}"))?;
         }
         return Err(unexpected!("validation failed for {schema}: {error}"));
     }

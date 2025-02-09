@@ -1,315 +1,184 @@
-//! # Messages Interface
+//! # Messages Query
 //!
-//! The `Messages` interface provides methods to query, read, and subscribe to
-//! any DWN message regardless of the interface or method.
+//! The messages query endpoint handles `MessagesQuery` messages — requests
+//! to query the [`EventLog`] for matching persisted messages (of any type).
 
-use std::str::FromStr;
+use std::io;
 
-use ::cid::Cid;
-use anyhow::{Result, anyhow};
-use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
-use crate::authorization::AuthorizationBuilder;
-pub use crate::messages::MessagesFilter;
-use crate::messages::{
-    Query, QueryDescriptor, Read, ReadDescriptor, Subscribe, SubscribeDescriptor,
-};
-use crate::provider::Signer;
-use crate::utils::cid;
-use crate::{Descriptor, Interface, Method};
+use super::{Cursor, DateRange, Descriptor, Document};
+use crate::authorization::Authorization;
+use crate::event::Subscriber;
+use crate::{Interface, Method};
 
-/// Options to use when creating a permission grant.
-pub struct QueryBuilder<S> {
-    message_timestamp: DateTime<Utc>,
-    filters: Option<Vec<MessagesFilter>>,
-    permission_grant_id: Option<String>,
-    signer: S,
+/// The [`Query`] message expected by the handler.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Query {
+    /// The `Query` descriptor.
+    pub descriptor: QueryDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
 }
 
-/// Builder state is unsigned.
-#[doc(hidden)]
-pub struct Unsigned;
-/// Builder state is signed.
-#[doc(hidden)]
-pub struct Signed<'a, S: Signer>(pub &'a S);
+/// The [`Query`] message descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: Descriptor,
 
-impl Default for QueryBuilder<Unsigned> {
-    fn default() -> Self {
-        Self::new()
-    }
+    /// Filters to apply when querying for messages.
+    pub filters: Vec<MessagesFilter>,
+
+    /// The pagination cursor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
 }
 
-/// Builder for creating a permission grant.
-impl QueryBuilder<Unsigned> {
-    /// Returns a new [`QueryBuilder`]
+/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct QueryReply {
+    /// Entries matching the message's query.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Vec<String>>,
+
+    /// The message authorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<Cursor>,
+}
+
+/// The [`Read`] message expected by the handler.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Read {
+    /// The `Read` descriptor.
+    pub descriptor: ReadDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// The [`Read`]  message descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: Descriptor,
+
+    /// The CID of the message to read.
+    pub message_cid: String,
+}
+
+/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ReadReply {
+    /// The `Read` descriptor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<ReadReplyEntry>,
+}
+
+/// `Read` reply entry
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ReadReplyEntry {
+    /// The CID of the message.
+    pub message_cid: String,
+
+    /// The message.
+    pub message: Document,
+
+    /// The data associated with the message.
+    #[serde(skip)]
+    pub data: Option<io::Cursor<Vec<u8>>>,
+}
+
+/// The [`Subscribe`] message expected by the handler.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct Subscribe {
+    /// The Subscribe descriptor.
+    pub descriptor: SubscribeDescriptor,
+
+    /// The message authorization.
+    pub authorization: Authorization,
+}
+
+/// The [`Subscribe`]  message descriptor.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscribeDescriptor {
+    /// The base descriptor
+    #[serde(flatten)]
+    pub base: Descriptor,
+
+    /// Filters to apply when subscribing to messages.
+    pub filters: Vec<MessagesFilter>,
+}
+
+/// [`SubscribeReply`] is returned by the handler in the [`Reply`] `body` field.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SubscribeReply {
+    /// The subscription to the requested events.
+    #[serde(skip)]
+    pub subscription: Subscriber,
+}
+
+/// The `Messages` can be used to filter messages by interface, method,
+/// protocol, and timestamp.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessagesFilter {
+    /// The message interface.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface: Option<Interface>,
+
+    /// The message method.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub method: Option<Method>,
+
+    /// The message protocol.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
+
+    /// Filter messages timestamped within the specified range.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_timestamp: Option<DateRange>,
+}
+
+/// Provide  builder-like behaviour to create a [`MessagesFilter`].
+impl MessagesFilter {
+    /// Returns a new [`MessagesFilter`]
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            message_timestamp: Utc::now(),
-            filters: None,
-            permission_grant_id: None,
-            signer: Unsigned,
-        }
+        Self::default()
     }
 
-    /// Specify a permission grant ID to use with the configuration.
+    /// Specify the interface to filter mesages on.
     #[must_use]
-    pub fn add_filter(mut self, filter: MessagesFilter) -> Self {
-        self.filters.get_or_insert_with(Vec::new).push(filter);
+    pub const fn interface(mut self, interface: Interface) -> Self {
+        self.interface = Some(interface);
         self
     }
 
-    /// Specify a permission grant ID to use with the configuration.
+    /// Specify the method to filter mesages on.
     #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
+    pub const fn method(mut self, method: Method) -> Self {
+        self.method = Some(method);
         self
     }
 
-    /// Logically (from user POV), sign the record.
-    ///
-    /// At this point, the builder simply captures the signer for use in the
-    /// final build step.
+    /// Specify a protocol to filter messages by.
     #[must_use]
-    pub fn sign<S: Signer>(self, signer: &S) -> QueryBuilder<Signed<'_, S>> {
-        QueryBuilder {
-            signer: Signed(signer),
-
-            message_timestamp: self.message_timestamp,
-            filters: self.filters,
-            permission_grant_id: self.permission_grant_id,
-        }
-    }
-}
-
-impl<S: Signer> QueryBuilder<Signed<'_, S>> {
-    /// Generate the permission grant.
-    ///
-    /// # Errors
-    ///
-    /// The [`build`] method will return an error when there is an issue is
-    /// ecountered signing the message.
-    ///
-    /// Schema validation could potentially fail in debug, but this is
-    /// considered unlikely due to the use of strongly-typed data structures.
-    pub async fn build(self) -> Result<Query> {
-        let descriptor = QueryDescriptor {
-            base: Descriptor {
-                interface: Interface::Messages,
-                method: Method::Query,
-                message_timestamp: self.message_timestamp,
-            },
-            filters: self.filters.unwrap_or_default(),
-            cursor: None,
-        };
-
-        // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(id);
-        }
-        let authorization = builder.build(self.signer.0).await?;
-
-        Ok(Query {
-            descriptor,
-            authorization,
-        })
-    }
-}
-
-/// Options to use when creating a permission grant.
-pub struct ReadBuilder<M, S> {
-    message_timestamp: DateTime<Utc>,
-    permission_grant_id: Option<String>,
-    message_cid: M,
-    signer: S,
-}
-
-/// Builder state has no message_cid.
-#[doc(hidden)]
-pub struct NoMessageCid;
-/// Builder state has a message_cid.
-#[doc(hidden)]
-pub struct MessageCid(String);
-
-impl Default for ReadBuilder<NoMessageCid, Unsigned> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Builder for a `MessagesRead` messages.
-impl ReadBuilder<NoMessageCid, Unsigned> {
-    /// Returns a new [`ReadBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            message_timestamp: Utc::now(),
-            permission_grant_id: None,
-            message_cid: NoMessageCid,
-            signer: Unsigned,
-        }
-    }
-
-    /// Specify the CID of the message to read.
-    #[must_use]
-    pub fn message_cid(self, message_cid: impl Into<String>) -> ReadBuilder<MessageCid, Unsigned> {
-        ReadBuilder {
-            message_cid: MessageCid(message_cid.into()),
-
-            message_timestamp: self.message_timestamp,
-            permission_grant_id: self.permission_grant_id,
-            signer: self.signer,
-        }
-    }
-}
-
-impl<M> ReadBuilder<M, Unsigned> {
-    /// Specify a permission grant ID to use with the configuration.
-    #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
-        self
-    }
-}
-
-impl ReadBuilder<MessageCid, Unsigned> {
-    /// Logically (from user POV), sign the record.
-    ///
-    /// At this point, the builder simply captures the signer for use in the
-    /// final build step.
-    #[must_use]
-    pub fn sign<S: Signer>(self, signer: &S) -> ReadBuilder<MessageCid, Signed<'_, S>> {
-        ReadBuilder {
-            signer: Signed(signer),
-
-            message_timestamp: self.message_timestamp,
-            permission_grant_id: self.permission_grant_id,
-            message_cid: self.message_cid,
-        }
-    }
-}
-
-impl<S: Signer> ReadBuilder<MessageCid, Signed<'_, S>> {
-    /// Generate the Read message.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail when there is an issue signing the message or
-    /// serilaizing the descriptor to CBOR.
-    pub async fn build(self) -> Result<Read> {
-        // verify CID
-        let message_cid = self.message_cid.0;
-        let _ = Cid::from_str(&message_cid).map_err(|e| anyhow!("invalid CID: {e}"))?;
-
-        let descriptor = ReadDescriptor {
-            base: Descriptor {
-                interface: Interface::Messages,
-                method: Method::Read,
-                message_timestamp: self.message_timestamp,
-            },
-            message_cid,
-        };
-
-        // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(id);
-        }
-        let authorization = builder.build(self.signer.0).await?;
-
-        Ok(Read {
-            descriptor,
-            authorization,
-        })
-    }
-}
-
-/// Options to use when creating a permission grant.
-pub struct SubscribeBuilder<S> {
-    message_timestamp: DateTime<Utc>,
-    filters: Option<Vec<MessagesFilter>>,
-    permission_grant_id: Option<String>,
-    signer: S,
-}
-
-impl Default for SubscribeBuilder<Unsigned> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Builder for creating a permission grant.
-impl SubscribeBuilder<Unsigned> {
-    /// Returns a new [`SubscribeBuilder`]
-    #[must_use]
-    pub fn new() -> Self {
-        // set defaults
-        Self {
-            message_timestamp: Utc::now(),
-            filters: None,
-            permission_grant_id: None,
-            signer: Unsigned,
-        }
-    }
-
-    /// Specify event filter to use when subscribing.
-    #[must_use]
-    pub fn add_filter(mut self, filter: MessagesFilter) -> Self {
-        self.filters.get_or_insert_with(Vec::new).push(filter);
+    pub fn protocol(mut self, protocol: impl Into<String>) -> Self {
+        self.protocol = Some(protocol.into());
         self
     }
 
-    /// Specify a permission grant ID to use with the configuration.
+    /// Filter by message timestamp.
     #[must_use]
-    pub fn permission_grant_id(mut self, permission_grant_id: impl Into<String>) -> Self {
-        self.permission_grant_id = Some(permission_grant_id.into());
+    pub const fn message_timestamp(mut self, message_timestamp: DateRange) -> Self {
+        self.message_timestamp = Some(message_timestamp);
         self
-    }
-
-    /// Logically (from user POV), sign the record.
-    ///
-    /// At this point, the builder simply captures the signer for use in the
-    /// final build step.
-    #[must_use]
-    pub fn sign<S: Signer>(self, signer: &S) -> SubscribeBuilder<Signed<'_, S>> {
-        SubscribeBuilder {
-            signer: Signed(signer),
-
-            message_timestamp: self.message_timestamp,
-            filters: self.filters,
-            permission_grant_id: self.permission_grant_id,
-        }
-    }
-}
-
-impl<S: Signer> SubscribeBuilder<Signed<'_, S>> {
-    /// Generate the permission grant.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail when there is an issue signing the message or
-    /// serilaizing the descriptor to CBOR.
-    pub async fn build(self) -> Result<Subscribe> {
-        let descriptor = SubscribeDescriptor {
-            base: Descriptor {
-                interface: Interface::Messages,
-                method: Method::Subscribe,
-                message_timestamp: self.message_timestamp,
-            },
-            filters: self.filters.unwrap_or_default(),
-        };
-
-        // authorization
-        let mut builder = AuthorizationBuilder::new().descriptor_cid(cid::from_value(&descriptor)?);
-        if let Some(id) = self.permission_grant_id {
-            builder = builder.permission_grant_id(id);
-        }
-        let authorization = builder.build(self.signer.0).await?;
-
-        Ok(Subscribe {
-            descriptor,
-            authorization,
-        })
     }
 }

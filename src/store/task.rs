@@ -1,6 +1,6 @@
 //! # Event Log
 
-// use crate::store::{Cursor, Entry, Query, block, index};
+// use crate::store::{Cursor, Storable, Query, block, index};
 use crate::Result;
 use crate::provider::BlockStore;
 pub use crate::tasks::ResumableTask;

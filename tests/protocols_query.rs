@@ -3,14 +3,16 @@
 //! This test demonstrates how a web node owner create differnt types of
 //! messages and subsequently query for them.
 
+#![cfg(all(feature = "client", feature = "server"))]
+
 use std::sync::LazyLock;
 use std::time::Duration;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::Days;
 use credibil_infosec::jose::jws::{Jws, Protected, Signature};
-use dwn_node::interfaces::grants::{GrantBuilder, RevocationBuilder, Scope};
-use dwn_node::interfaces::protocols::{
+use dwn_node::client::grants::{GrantBuilder, RevocationBuilder, Scope};
+use dwn_node::client::protocols::{
     ConfigureBuilder, Definition, ProtocolType, ProtocolsFilter, QueryBuilder,
 };
 use dwn_node::{Error, Method, StatusCode, cid, endpoint};
