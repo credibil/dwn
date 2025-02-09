@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::interfaces::protocols::Configure;
 use crate::interfaces::records::{Delete, Write};
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::{Interface, Message, Method, Result};
+use crate::{Interface, Method, Result};
 
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -77,9 +77,9 @@ impl Document {
     #[must_use]
     pub fn descriptor(&self) -> &Descriptor {
         match self {
-            Self::Write(write) => write.descriptor(),
-            Self::Delete(delete) => delete.descriptor(),
-            Self::Configure(configure) => configure.descriptor(),
+            Self::Write(write) => &write.descriptor.base,
+            Self::Delete(delete) => &delete.descriptor.base,
+            Self::Configure(configure) => &configure.descriptor.base,
         }
     }
 

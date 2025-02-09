@@ -12,7 +12,7 @@ use dwn_node::client::records::{
 };
 use dwn_node::client::{DateRange, Pagination, Range};
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Message, StatusCode, endpoint};
+use dwn_node::{Error, StatusCode, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

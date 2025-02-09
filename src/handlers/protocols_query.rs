@@ -91,7 +91,7 @@ impl Query {
 
         // verify permission grant
         let grant = verify_grant::fetch_grant(owner, grant_id, store).await?;
-        grant.verify(owner, &authzn.signer()?, self.descriptor(), store).await?;
+        grant.verify(owner, &authzn.signer()?, &self.descriptor.base, store).await?;
 
         // if set, query and grant protocols need to match
         let Some(protocol) = grant.data.scope.protocol() else {

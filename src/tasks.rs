@@ -31,7 +31,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::time::{Duration, sleep};
 
-use crate::endpoint::Message;
 use crate::interfaces::records::Delete;
 use crate::provider::{Provider, TaskStore};
 use crate::{Result, unexpected};

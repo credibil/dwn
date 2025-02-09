@@ -153,12 +153,6 @@ pub async fn handle(
 impl Message for Write {
     type Reply = WriteReply;
 
-    fn cid(&self) -> Result<String> {
-        let mut write = self.clone();
-        write.encoded_data = None;
-        cid::from_value(&write)
-    }
-
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }
@@ -211,6 +205,17 @@ impl TryFrom<&Document> for Write {
 }
 
 impl Write {
+    /// Compute the content identifier (CID) for the `Write` message.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail if the message cannot be serialized to CBOR.
+    pub fn cid(&self) -> Result<String> {
+        let mut write = self.clone();
+        write.encoded_data = None;
+        cid::from_value(&write)
+    }
+
     /// Verify the integrity of `RecordsWrite` messages using a protocol.
     ///
     /// # Errors

@@ -18,11 +18,11 @@ pub async fn append(owner: &str, event: &impl Storable, store: &impl BlockStore)
     store.put(owner, PARTITION, &message_cid, &block::encode(&document)?).await?;
 
     // add a 'watermark' index entry for sorting and pagination
-    // let mut event = event;
-    // let watermark = ulid::Ulid::new().to_string();
-    // // Storable::add_index(&mut event, "watermark".to_string(), watermark);
+    let mut event = event.clone();
+    let watermark = ulid::Ulid::new().to_string();
+    event.add_index("watermark".to_string(), watermark);
 
-    index::insert(owner, PARTITION, event, store).await
+    index::insert(owner, PARTITION, &event, store).await
 }
 
 pub async fn events(

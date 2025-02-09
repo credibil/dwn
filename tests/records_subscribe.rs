@@ -8,7 +8,7 @@ use std::time::Duration;
 use dwn_node::client::records::{
     Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
 };
-use dwn_node::{Message, StatusCode, endpoint};
+use dwn_node::{StatusCode, endpoint};
 use futures::StreamExt;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

@@ -389,7 +389,6 @@ mod tests {
     use test_node::keystore;
 
     use super::*;
-    use crate::Message;
     use crate::client::protocols::{ConfigureBuilder, Definition};
     use crate::client::records::{Data, WriteBuilder};
     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};

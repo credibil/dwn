@@ -12,7 +12,7 @@ use dwn_node::client::grants::{GrantBuilder, Scope};
 use dwn_node::client::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use dwn_node::client::protocols::{ConfigureBuilder, Definition};
 use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint};
+use dwn_node::{Error, Interface, Method, StatusCode, endpoint};
 use futures::StreamExt;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

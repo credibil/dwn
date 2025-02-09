@@ -20,7 +20,7 @@ use dwn_node::client::records::{
 use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
 use dwn_node::provider::EventLog;
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Message, Method, StatusCode, client, endpoint, store};
+use dwn_node::{Error, Interface, Method, StatusCode, client, endpoint, store};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

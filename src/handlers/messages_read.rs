@@ -113,7 +113,7 @@ impl Read {
             return Err(forbidden!("missing grant ID"));
         };
         let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
-        grant.verify(owner, &author, self.descriptor(), provider).await?;
+        grant.verify(owner, &author, &self.descriptor.base, provider).await?;
         verify_scope(owner, document, grant.data.scope, provider).await?;
 
         Ok(())

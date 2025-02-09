@@ -14,7 +14,7 @@ use dwn_node::client::protocols::{ConfigureBuilder, Definition, ProtocolType, Ru
 use dwn_node::client::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
 use dwn_node::provider::MessageStore;
 use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Message, Method, StatusCode, endpoint};
+use dwn_node::{Error, Interface, Method, StatusCode, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

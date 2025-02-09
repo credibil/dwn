@@ -69,7 +69,7 @@ impl Query {
             return Err(forbidden!("author has no grant"));
         };
         let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
-        grant.verify(owner, &authzn.signer()?, self.descriptor(), provider).await?;
+        grant.verify(owner, &authzn.signer()?, &self.descriptor.base, provider).await?;
 
         // verify filter protocol
         if grant.data.scope.protocol().is_none() {

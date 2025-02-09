@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use crate::authorization::Authorization;
 use crate::interfaces::Descriptor;
 use crate::provider::Provider;
-use crate::utils::cid;
 use crate::{Result, schema, unauthorized};
 
 /// Handle incoming messages.
@@ -38,15 +37,6 @@ pub async fn handle<T>(
 pub trait Message: Serialize + Clone + Debug + Send + Sync {
     /// The inner reply type specific to the implementing message.
     type Reply;
-
-    /// Compute the content identifier (CID) for the message.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail if the message cannot be serialized to CBOR.
-    fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
 
     /// Returns message descriptor properties common to all messages (i.e.,
     /// `interface`, `method`, and `message_timestamp`).
