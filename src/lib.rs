@@ -17,9 +17,7 @@
 
 pub mod authorization;
 mod error;
-// #[cfg(feature = "server")]
 pub mod event;
-// #[cfg(feature = "server")]
 mod grants;
 pub mod hd_key;
 pub mod interfaces;

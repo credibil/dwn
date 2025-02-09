@@ -75,7 +75,7 @@ impl Document {
 
     /// The message's CID.
     #[must_use]
-    pub fn descriptor(&self) -> &Descriptor {
+    pub const fn descriptor(&self) -> &Descriptor {
         match self {
             Self::Write(write) => &write.descriptor.base,
             Self::Delete(delete) => &delete.descriptor.base,
