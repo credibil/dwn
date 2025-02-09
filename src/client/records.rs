@@ -151,6 +151,7 @@ impl<S: Signer> DeleteBuilder<RecordId, Signed<'_, S>> {
         }
         let authorization = auth_builder.build(self.signer.0).await?;
 
+        #[allow(clippy::needless_update)]
         Ok(Delete {
             descriptor,
             authorization,

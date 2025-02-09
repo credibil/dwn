@@ -24,6 +24,7 @@ use crate::authorization::{Authorization, JwsPayload};
 use crate::event::Subscriber;
 use crate::hd_key::DerivationScheme;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
+use crate::utils::cid;
 use crate::{OneOrMany, Result, unexpected, utils};
 
 /// The [`Delete`] message expected by the handler.
@@ -38,7 +39,19 @@ pub struct Delete {
 
     /// Flattened fields as key/value pairs to use for indexing stored records.
     #[serde(skip)]
+    #[cfg(feature = "server")]
     pub(crate) indexes: HashMap<String, String>,
+}
+
+impl Delete {
+    /// Compute the content identifier (CID) for the `Delete` message.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail if the message cannot be serialized to CBOR.
+    pub fn cid(&self) -> Result<String> {
+        cid::from_value(self)
+    }
 }
 
 /// The [`Delete`] message descriptor.
@@ -201,6 +214,7 @@ impl RecordsFilter {
     }
 
     /// Normalizes protocol and schema URLs within the `RecordsFilter`.
+    #[cfg(feature = "client")]
     pub(crate) fn normalize(&self) -> Result<Self> {
         let mut filter = self.clone();
         filter.protocol = if let Some(protocol) = &self.protocol {
@@ -214,6 +228,7 @@ impl RecordsFilter {
     }
 
     /// Check whether the filter will return a concise set of results.
+    #[cfg(feature = "server")]
     pub(crate) const fn is_concise(&self) -> bool {
         self.record_id.is_some()
             || self.protocol_path.is_some()
@@ -225,6 +240,7 @@ impl RecordsFilter {
     /// Create an optimized filter to use with single-field indexes. This
     /// method chooses the best filter property, in order of priority, to use
     /// when querying.
+    #[cfg(feature = "server")]
     pub(crate) fn as_concise(&self) -> Option<(String, String)> {
         if let Some(record_id) = &self.record_id {
             return Some(("recordId".to_string(), record_id.clone()));
@@ -588,10 +604,22 @@ pub struct Write {
 
     /// Flattened fields as key/value pairs to use for indexing stored records.
     #[serde(skip)]
+    #[cfg(feature = "server")]
     pub(crate) indexes: HashMap<String, String>,
 }
 
 impl Write {
+    /// Compute the content identifier (CID) for the `Write` message.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail if the message cannot be serialized to CBOR.
+    pub fn cid(&self) -> Result<String> {
+        let mut write = self.clone();
+        write.encoded_data = None;
+        cid::from_value(&write)
+    }
+
     /// Computes the deterministic Storable ID (Record ID) of the message.
     ///
     /// # Errors

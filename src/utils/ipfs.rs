@@ -10,7 +10,7 @@ use ipld_core::ipld::Ipld;
 use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
-use crate::provider::BlockStore;
+use crate::BlockStore;
 use crate::utils::cid;
 use crate::{Result, unexpected};
 
@@ -73,6 +73,7 @@ fn root_cid(record_id: &str, data_cid: &str) -> Result<String> {
 }
 
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
+#[cfg(feature = "server")]
 pub fn encode_block<T>(payload: &T) -> Result<Vec<u8>>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -87,6 +88,7 @@ where
 }
 
 /// Decodes a block.
+#[cfg(feature = "server")]
 pub fn decode_block<T>(data: &[u8]) -> Result<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,

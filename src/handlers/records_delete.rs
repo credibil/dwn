@@ -22,7 +22,6 @@ use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{RecordsQueryBuilder, Storable};
 use crate::tasks::{self, Task, TaskType};
-use crate::utils::cid;
 use crate::{Error, Interface, Method, Result, forbidden, unexpected};
 
 /// Handle — or process — a [`Delete`] message.
@@ -145,15 +144,6 @@ impl Task for Delete {
 }
 
 impl Delete {
-    /// Compute the content identifier (CID) for the `Delete` message.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail if the message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
-
     /// Build flattened indexes for the write message.
     #[must_use]
     pub(crate) fn build_indexes(&self) -> HashMap<String, String> {

@@ -12,6 +12,7 @@ use crate::event::{Event, Subscriber};
 use crate::interfaces::{Cursor, Document};
 use crate::store::{Query, Storable, data, event_log, message, task};
 use crate::tasks::ResumableTask;
+pub use crate::BlockStore;
 
 /// Provider trait.
 pub trait Provider:
@@ -19,28 +20,7 @@ pub trait Provider:
 {
 }
 
-/// `BlockStore` is used by implementers to provide data storage
-/// capability.
-pub trait BlockStore: Send + Sync {
-    /// Store a data block in the underlying block store.
-    fn put(
-        &self, owner: &str, partition: &str, cid: &str, data: &[u8],
-    ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Fetches a single block by CID from the underlying store, returning
-    /// `None` if no match was found.
-    fn get(
-        &self, owner: &str, partition: &str, cid: &str,
-    ) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
-
-    /// Delete the data block associated with the specified CID.
-    fn delete(
-        &self, owner: &str, partition: &str, cid: &str,
-    ) -> impl Future<Output = Result<()>> + Send;
-
-    /// Purge all blocks from the store.
-    fn purge(&self, owner: &str, partition: &str) -> impl Future<Output = Result<()>> + Send;
-}
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.

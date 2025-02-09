@@ -17,6 +17,7 @@ pub fn clean(uri: &str) -> Result<String> {
     Ok(format!("{scheme}{authority}{path}"))
 }
 
+#[cfg(feature = "server")]
 pub fn validate(uri: &str) -> Result<()> {
     uri.parse::<Uri>().map_or_else(|_| Err(unexpected!("invalid URL: {uri}")), |_| Ok(()))
 }

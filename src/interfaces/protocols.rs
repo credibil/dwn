@@ -3,7 +3,9 @@
 //! The protocols configure endpoint handles `ProtocolsConfigure` messages —
 //! requests to write to [`Configure`] records to the DWN's [`MessageStore`].
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+#[cfg(feature = "server")]
+use std::collections::HashMap;
 
 use credibil_infosec::jose::jwk::PublicKeyJwk;
 use serde::{Deserialize, Serialize};
@@ -12,6 +14,7 @@ use serde_json::Value;
 use super::{Cursor, Descriptor};
 use crate::authorization::Authorization;
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
+use crate::utils::cid;
 use crate::{Result, unexpected};
 
 /// Default protocol for managing web node permission grants.
@@ -37,7 +40,19 @@ pub struct Configure {
 
     /// Flattened fields as key/value pairs to use for indexing stored records.
     #[serde(skip)]
+    #[cfg(feature = "server")]
     pub(crate) indexes: HashMap<String, String>,
+}
+
+impl Configure {
+    /// Compute the content identifier (CID) for the `Configure` message.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail if the message cannot be serialized to CBOR.
+    pub fn cid(&self) -> Result<String> {
+        cid::from_value(self)
+    }
 }
 
 /// The [`Configure`] message descriptor.

@@ -194,16 +194,8 @@ impl TryFrom<Document> for Configure {
 }
 
 impl Configure {
-    /// Compute the content identifier (CID) for the `Configure` message.
-    ///
-    /// # Errors
-    ///
-    /// This method will fail if the message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
-        cid::from_value(self)
-    }
-
     /// Build flattened indexes for the write message.
+    #[cfg(feature = "server")]
     #[must_use]
     pub(crate) fn build_indexes(&self) -> HashMap<String, String> {
         let mut indexes = HashMap::new();

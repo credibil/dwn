@@ -17,6 +17,8 @@
 //! The Protocols client provides a builder and related types to use in
 //! building Protocol-related messages (Configure and Query).
 
+#![cfg(feature = "client")]
+
 use chrono::{DateTime, Utc};
 use credibil_infosec::Signer;
 
@@ -157,11 +159,19 @@ impl<S: Signer> ConfigureBuilder<Defined, Signed<'_, S>> {
         }
         let authorization = builder.build(self.signer.0).await?;
 
+        // if cfg!(feature = "client") {
+        //     Ok(Configure {
+        //         descriptor,
+        //         authorization,
+        //     })
+        // } else {
+        #[allow(clippy::needless_update)]
         Ok(Configure {
             descriptor,
             authorization,
             ..Configure::default()
         })
+        // }
     }
 }
 

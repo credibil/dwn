@@ -3,8 +3,10 @@
 //! The `Authorization` module groups types and functionality loosely related
 //! to message authorization and authentication.
 
+#[cfg(feature = "server")]
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
+#[cfg(feature = "server")]
 use credibil_did::{DidResolver, Resource, dereference};
 use credibil_infosec::jose::JwsBuilder;
 use credibil_infosec::{Jws, Signer};
@@ -26,6 +28,7 @@ use crate::{Result, unexpected};
 /// ...
 /// ```
 #[doc(hidden)]
+#[cfg(feature = "server")]
 macro_rules! verify_key {
     ($resolver:expr) => {{
         // create local reference before moving into closure
@@ -100,6 +103,7 @@ pub struct Authorization {
 
 impl Authorization {
     /// Verify message signature.
+    #[cfg(feature = "server")]
     pub(crate) async fn verify(&self, resolver: impl DidResolver) -> Result<()> {
         let verifier = verify_key!(resolver);
 
@@ -132,6 +136,7 @@ impl Authorization {
     }
 
     /// Get message owner's DID.
+    #[cfg(feature = "server")]
     pub(crate) fn owner(&self) -> Result<Option<String>> {
         let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
             grant.authorization.signature.did()?
@@ -150,6 +155,7 @@ impl Authorization {
     }
 
     /// Get the owner's signing DID from the owner signature.
+    #[cfg(feature = "server")]
     pub(crate) fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
             return Err(unexpected!("owner delegated grant not found"));

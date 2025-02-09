@@ -269,6 +269,7 @@ impl Default for RecordsScope {
 
 impl RecordsScope {
     /// A shortcut to unpack the context ID, if it is set.
+    #[cfg(feature = "client")]
     #[must_use]
     pub fn context_id(&self) -> Option<&str> {
         match self {
@@ -278,6 +279,7 @@ impl RecordsScope {
     }
 
     /// A shortcut to access the protocol path, if it is set.
+    #[cfg(feature = "client")]
     #[must_use]
     pub fn protocol_path(&self) -> Option<&str> {
         match self {

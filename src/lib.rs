@@ -21,43 +21,63 @@ pub mod event;
 mod grants;
 pub mod hd_key;
 pub mod interfaces;
-// #[cfg(feature = "server")]
-pub mod provider;
-// #[cfg(feature = "server")]
-mod schema;
 mod utils;
 
-pub use http::StatusCode;
-
-pub use crate::error::Error;
-pub use crate::provider::Provider;
-pub use crate::utils::cid;
-
-// Client features.
 #[cfg(feature = "client")]
 pub mod client;
 
-// Server features.
-// #[cfg(feature = "server")]
-pub mod endpoint;
-// #[cfg(feature = "server")]
-mod handlers;
-// #[cfg(feature = "server")]
-pub mod store;
-// #[cfg(feature = "server")]
-mod tasks;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "server")] {
+        pub mod endpoint;
+        mod handlers;
+        pub mod provider;
+        mod schema;
+        pub mod store;
+        mod tasks;
 
-// Server re-exports
+        // re-exports
+        pub use http::StatusCode;
 
+        pub use crate::endpoint::Message;
+        pub use crate::provider::Provider;
+        pub use crate::utils::cid;
+    }
+}
+
+// Re-exports
 use ::serde::{Deserialize, Serialize};
 pub use credibil_infosec::{Receiver, Signer};
 use derive_more::Display;
 
-#[cfg(feature = "server")]
-pub use crate::endpoint::Message;
+pub use crate::error::Error;
 
 /// Result type for `DWN` handlers.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+/// `BlockStore` is used by implementers to provide data storage
+/// capability.
+pub trait BlockStore: Send + Sync {
+    /// Store a data block in the underlying block store.
+    fn put(
+        &self, owner: &str, partition: &str, cid: &str, data: &[u8],
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Fetches a single block by CID from the underlying store, returning
+    /// `None` if no match was found.
+    fn get(
+        &self, owner: &str, partition: &str, cid: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+
+    /// Delete the data block associated with the specified CID.
+    fn delete(
+        &self, owner: &str, partition: &str, cid: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Purge all blocks from the store.
+    fn purge(
+        &self, owner: &str, partition: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
 
 /// Web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]

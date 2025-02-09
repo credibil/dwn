@@ -8,8 +8,8 @@ use multihash_codetable::MultihashDigest;
 use serde::Serialize;
 
 use crate::Result;
-use crate::provider::BlockStore;
 use crate::utils::ipfs;
+use crate::BlockStore;
 
 const RAW: u64 = 0x55;
 // const DAG_CBOR: u64 = 0x71;
