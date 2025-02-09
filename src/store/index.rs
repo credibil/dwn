@@ -109,7 +109,7 @@ impl<S: BlockStore> Indexes<'_, S> {
         let Some(data) = self.store.get(self.owner, self.partition, &index_cid).await? else {
             return Ok(Index::new(field));
         };
-        ipfs::decode_block(&data).map_err(Into::into)
+        ipfs::decode_block(&data)
     }
 
     /// Update an index.
