@@ -472,13 +472,13 @@ mod tests {
 
     impl BlockStore for BlockStoreImpl {
         async fn put(&self, owner: &str, partition: &str, cid: &str, data: &[u8]) -> Result<()> {
-            // HACK: convert libipld CID to blockstore CID
+            // convert libipld CID to blockstore CID
             let block_cid = ::cid::Cid::from_str(cid)?;
             self.blockstore.put_keyed(&block_cid, data).await.map_err(Into::into)
         }
 
         async fn get(&self, owner: &str, partition: &str, cid: &str) -> Result<Option<Vec<u8>>> {
-            // HACK: convert libipld CID to blockstore CID
+            // convert libipld CID to blockstore CID
             let block_cid = ::cid::Cid::try_from(cid)?;
             let Some(bytes) = self.blockstore.get(&block_cid).await? else {
                 return Ok(None);
