@@ -10,7 +10,7 @@ use credibil_infosec::jose::jwe::{self, Header, KeyEncryption, Protected, Recipi
 
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
 use crate::interfaces::records::{EncryptedKey, Write};
-use crate::{Result, unexpected};
+use crate::{Result, bad};
 
 /// Decrypt the provided data using the encryption properties specified in the
 /// `Write` message.
@@ -23,13 +23,13 @@ pub async fn decrypt(
     data: &[u8], write: &Write, ancestor_jwk: &DerivedPrivateJwk, _: &impl Receiver,
 ) -> Result<Vec<u8>> {
     let Some(encryption) = &write.encryption else {
-        return Err(unexpected!("encryption parameter not set"));
+        return Err(bad!("encryption parameter not set"));
     };
     let Some(recipient) = encryption.key_encryption.iter().find(|k| {
         k.root_key_id == ancestor_jwk.root_key_id
             && k.derivation_scheme == ancestor_jwk.derivation_scheme
     }) else {
-        return Err(unexpected!("encryption key not found"));
+        return Err(bad!("encryption key not found"));
     };
 
     // ------------------------------------------------------------------------
@@ -68,7 +68,7 @@ pub async fn decrypt(
     };
 
     let plaintext: Vec<u8> =
-        jwe::decrypt(&jwe, &receiver).await.map_err(|e| unexpected!("failed to decrypt: {e}"))?;
+        jwe::decrypt(&jwe, &receiver).await.map_err(|e| bad!("failed to decrypt: {e}"))?;
 
     Ok(plaintext)
 }
@@ -87,10 +87,10 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
         }
         DerivationScheme::ProtocolPath => {
             let Some(protocol) = &descriptor.protocol else {
-                return Err(unexpected!("`protocol` not set"));
+                return Err(bad!("`protocol` not set"));
             };
             let Some(protocol_path) = &descriptor.protocol_path else {
-                return Err(unexpected!("`protocol_path` not set"));
+                return Err(bad!("`protocol_path` not set"));
             };
 
             let segments =
@@ -101,14 +101,14 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
         }
         DerivationScheme::ProtocolContext => {
             let Some(context_id) = &write.context_id else {
-                return Err(unexpected!("`context_id` not set"));
+                return Err(bad!("`context_id` not set"));
             };
             let segments = context_id.split('/').map(ToString::to_string).collect::<Vec<String>>();
             vec![DerivationScheme::ProtocolContext.to_string(), segments[0].clone()]
         }
         DerivationScheme::Schemas => {
             let Some(schema) = &descriptor.schema else {
-                return Err(unexpected!("`schema` not set"));
+                return Err(bad!("`schema` not set"));
             };
             vec![DerivationScheme::Schemas.to_string(), schema.clone()]
         }

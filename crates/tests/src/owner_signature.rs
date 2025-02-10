@@ -7,8 +7,8 @@
 use std::io::Read;
 use std::sync::LazyLock;
 
-use dwn_node::client::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
-use dwn_node::endpoint;
+use credibil_dwn::client::records::{Data, ReadBuilder, RecordsFilter, WriteBuilder};
+use credibil_dwn::endpoint;
 use http::StatusCode;
 use serde_json::{Value, json};
 use test_node::keystore::{self, Keyring};

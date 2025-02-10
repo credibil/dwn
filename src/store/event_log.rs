@@ -5,7 +5,7 @@ use crate::interfaces::{Cursor, Pagination};
 use crate::provider::BlockStore;
 use crate::store::{Query, Sort, Storable, index};
 use crate::utils::ipfs;
-use crate::{Result, unexpected};
+use crate::{Result, bad};
 
 const PARTITION: &str = "EVENTLOG";
 
@@ -67,7 +67,7 @@ pub async fn query(
     let mut entries = Vec::new();
     for item in results {
         let Some(bytes) = store.get(owner, PARTITION, &item.message_cid).await? else {
-            return Err(unexpected!("missing block for message cid"));
+            return Err(bad!("missing block for message cid"));
         };
         entries.push(ipfs::decode_block(&bytes)?);
     }

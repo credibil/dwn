@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
 use crate::utils::cid;
-use crate::{BlockStore, Result, unexpected};
+use crate::{BlockStore, Result, bad};
 
 /// The maximum size of a message.
 // pub const MAX_ENCODED_SIZE: usize = 30000;
@@ -45,10 +45,10 @@ pub async fn import(
             store
                 .put(owner, PARTITION, cid, block.data())
                 .await
-                .map_err(|e| unexpected!("issue storing data: {e}"))?;
+                .map_err(|e| bad!("issue storing data: {e}"))?;
 
             // save link to block
-            let cid = Cid::from_str(cid).map_err(|e| unexpected!("issue parsing CID: {e}"))?;
+            let cid = Cid::from_str(cid).map_err(|e| bad!("issue parsing CID: {e}"))?;
             links.push(Ipld::Link(cid));
             byte_count += bytes_read;
         }
@@ -80,10 +80,10 @@ where
     T: Serialize + for<'a> Deserialize<'a>,
 {
     // encode payload
-    let data = DagCborCodec::encode_to_vec(payload)
-        .map_err(|e| unexpected!("issue encoding block: {e}"))?;
+    let data =
+        DagCborCodec::encode_to_vec(payload).map_err(|e| bad!("issue encoding block: {e}"))?;
     if data.len() > MAX_BLOCK_SIZE {
-        return Err(unexpected!("block is too large"));
+        return Err(bad!("block is too large"));
     }
     Ok(data)
 }
@@ -94,7 +94,7 @@ pub fn decode_block<T>(data: &[u8]) -> Result<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
-    DagCborCodec::decode_from_slice(data).map_err(|e| unexpected!("issue decoding block: {e}"))
+    DagCborCodec::decode_from_slice(data).map_err(|e| bad!("issue decoding block: {e}"))
 }
 
 /// Block represents a unit of data uniquely identified by a content identifier
@@ -110,10 +110,10 @@ impl Block {
         T: Serialize + for<'a> Deserialize<'a>,
     {
         // encode payload
-        let data = DagCborCodec::encode_to_vec(payload)
-            .map_err(|e| unexpected!("issue encoding block: {e}"))?;
+        let data =
+            DagCborCodec::encode_to_vec(payload).map_err(|e| bad!("issue encoding block: {e}"))?;
         if data.len() > MAX_BLOCK_SIZE {
-            return Err(unexpected!("block is too large"));
+            return Err(bad!("block is too large"));
         }
         let cid = cid::from_value(payload)?;
 

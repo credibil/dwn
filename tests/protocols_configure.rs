@@ -8,13 +8,13 @@
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use dwn_node::client::grants::{GrantBuilder, RevocationBuilder, Scope};
-use dwn_node::client::protocols::{
+use credibil_dwn::client::grants::{GrantBuilder, RevocationBuilder, Scope};
+use credibil_dwn::client::protocols::{
     Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
 };
-use dwn_node::provider::MessageStore;
-use dwn_node::store::ProtocolsQueryBuilder;
-use dwn_node::{Error, Message, Method, StatusCode, endpoint};
+use credibil_dwn::provider::MessageStore;
+use credibil_dwn::store::ProtocolsQueryBuilder;
+use credibil_dwn::{Error, Message, Method, StatusCode, endpoint};
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 use tokio::time;

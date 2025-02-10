@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use blockstore::Blockstore as _;
-use dwn_node::provider::BlockStore;
+use credibil_dwn::provider::BlockStore;
 
 use super::ProviderImpl;
 

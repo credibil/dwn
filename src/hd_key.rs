@@ -24,7 +24,7 @@ use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
-use crate::{Error, Result, unexpected};
+use crate::{Error, Result, bad};
 
 /// Key derivation schemes.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -67,7 +67,7 @@ impl FromStr for DerivationScheme {
             "protocolContext" => Ok(Self::ProtocolContext),
             "protocolPath" => Ok(Self::ProtocolPath),
             "schemas" => Ok(Self::Schemas),
-            _ => Err(unexpected!("invalid derivation scheme")),
+            _ => Err(bad!("invalid derivation scheme")),
         }
     }
 }
@@ -127,7 +127,7 @@ pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<
             // validate initial part of descendant path matches ancestor
             for (i, segment) in ancestor_path.iter().enumerate() {
                 if segment != &descendant_path[i] {
-                    return Err(unexpected!(
+                    return Err(bad!(
                         "ancestor and descendant key derivation segments do not match"
                     ));
                 }
@@ -142,7 +142,7 @@ pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<
 
     let ancestor_secret = Base64UrlUnpadded::decode_vec(&ancestor.derived_private_key.d)?;
     let secret_bytes: [u8; PUBLIC_KEY_LENGTH] =
-        ancestor_secret.try_into().map_err(|_| unexpected!("invalid secret key"))?;
+        ancestor_secret.try_into().map_err(|_| bad!("invalid secret key"))?;
 
     // derive descendant private/public keypair
     let derived_secret = derive_key(secret_bytes, sub_path)?;
@@ -189,7 +189,7 @@ pub fn derive_key(
 
     for segment in path {
         if segment.is_empty() {
-            return Err(unexpected!("invalid key derivation path"));
+            return Err(bad!("invalid key derivation path"));
         }
         let mut okm = [0u8; PUBLIC_KEY_LENGTH];
         // let salt = hex!(owner); // TODO: use owner as salt

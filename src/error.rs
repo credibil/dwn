@@ -121,7 +121,7 @@ impl From<std::io::Error> for Error {
 /// Construct an `Error::BadRequest` error from a string or existing error
 /// value.
 #[macro_export]
-macro_rules! unexpected {
+macro_rules! bad {
     ($fmt:expr, $($arg:tt)*) => {
         $crate::Error::BadRequest(format!($fmt, $($arg)*))
     };
@@ -199,7 +199,7 @@ mod test {
     // Test that the error details are returned as an http query string.
     #[test]
     fn macro_literal() {
-        let err = unexpected!("bad request");
+        let err = bad!("bad request");
         let ser = serde_json::to_value(&err).unwrap();
         assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
     }
@@ -207,14 +207,14 @@ mod test {
     #[test]
     fn macro_expr() {
         let expr = anyhow!("bad request");
-        let err = unexpected!("{expr}");
+        let err = bad!("{expr}");
         let ser = serde_json::to_value(&err).unwrap();
         assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
     }
 
     #[test]
     fn macro_tt() {
-        let err = unexpected!("bad request: {}", "a token");
+        let err = bad!("bad request: {}", "a token");
         let ser = serde_json::to_value(&err).unwrap();
         assert_eq!(ser, json!({"code": 400, "detail": "bad request: a token"}));
     }

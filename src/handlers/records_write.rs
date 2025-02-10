@@ -25,7 +25,7 @@ use crate::interfaces::{DateRange, Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{GrantedQueryBuilder, RecordsQueryBuilder, Storable, data};
 use crate::utils::cid;
-use crate::{Error, Method, Result, forbidden, schema, unexpected};
+use crate::{Error, Method, Result, bad, forbidden, schema};
 
 /// Handle — or process — a [`Write`] message.
 ///
@@ -47,14 +47,14 @@ pub async fn handle(
 
     // when no existing documents, verify this write is the initial write
     if initial_entry.is_none() && !is_initial {
-        return Err(unexpected!("initial write not found"));
+        return Err(bad!("initial write not found"));
     }
 
     // when message is an update, verify 'immutable' properties are unchanged
     if let Some(initial_entry) = &initial_entry {
         let earliest = Write::try_from(initial_entry)?;
         if !earliest.is_initial()? {
-            return Err(unexpected!("initial write is not the earliest message"));
+            return Err(bad!("initial write is not the earliest message"));
         }
         write.verify_immutable(&earliest)?;
     }
@@ -70,7 +70,7 @@ pub async fn handle(
             return Err(Error::Conflict("an update with a larger CID already exists".to_string()));
         }
         if latest_entry.descriptor().method == Method::Delete {
-            return Err(unexpected!("record has been deleted"));
+            return Err(bad!("record has been deleted"));
         }
     }
 
@@ -81,7 +81,7 @@ pub async fn handle(
     } else if !is_initial {
         // no data AND NOT an initial write
         let Some(existing) = &latest_entry else {
-            return Err(unexpected!("latest existing record not found"));
+            return Err(bad!("latest existing record not found"));
         };
         write.clone_data(owner, existing, provider).await?;
     }
@@ -188,7 +188,7 @@ impl TryFrom<Document> for Write {
     fn try_from(document: Document) -> Result<Self> {
         match document {
             Document::Write(write) => Ok(write),
-            _ => Err(unexpected!("expected `RecordsWrite` message")),
+            _ => Err(bad!("expected `RecordsWrite` message")),
         }
     }
 }
@@ -199,7 +199,7 @@ impl TryFrom<&Document> for Write {
     fn try_from(document: &Document) -> Result<Self> {
         match &document {
             Document::Write(write) => Ok(write.clone()),
-            _ => Err(unexpected!("expected `RecordsWrite` message")),
+            _ => Err(bad!("expected `RecordsWrite` message")),
         }
     }
 }
@@ -370,13 +370,13 @@ impl Write {
     /// Verify the integrity of the `records::Write` as a role record.
     async fn verify_role_record(&self, owner: &str, store: &impl MessageStore) -> Result<()> {
         let Some(recipient) = &self.descriptor.recipient else {
-            return Err(unexpected!("role record is missing recipient"));
+            return Err(bad!("role record is missing recipient"));
         };
         let Some(protocol) = &self.descriptor.protocol else {
-            return Err(unexpected!("missing protocol"));
+            return Err(bad!("missing protocol"));
         };
         let Some(protocol_path) = &self.descriptor.protocol_path else {
-            return Err(unexpected!("missing protocol_path"));
+            return Err(bad!("missing protocol_path"));
         };
 
         // if this is not the root record, add a prefix filter to the query
@@ -395,10 +395,10 @@ impl Write {
         let (documents, _) = store.query(owner, &query).await?;
         for document in documents {
             let Some(w) = document.as_write() else {
-                return Err(unexpected!("expected `RecordsWrite` message"));
+                return Err(bad!("expected `RecordsWrite` message"));
             };
             if w.record_id != self.record_id {
-                return Err(unexpected!("recipient already has this role record",));
+                return Err(bad!("recipient already has this role record",));
             }
         }
 
@@ -616,7 +616,7 @@ impl Write {
     async fn verify_integrity(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         if self.is_initial()? {
             if self.descriptor.base.message_timestamp != self.descriptor.date_created {
-                return Err(unexpected!("`message_timestamp` and `date_created` do not match"));
+                return Err(bad!("`message_timestamp` and `date_created` do not match"));
             }
 
             // when the message is a protocol context root, the `context_id`
@@ -625,7 +625,7 @@ impl Write {
                 let author = self.authorization.author()?;
                 let context_id = self.entry_id(&author)?;
                 if self.context_id != Some(context_id) {
-                    return Err(unexpected!("invalid context ID"));
+                    return Err(bad!("invalid context ID"));
                 }
             }
         }
@@ -636,27 +636,27 @@ impl Write {
         }
 
         let decoded = Base64UrlUnpadded::decode_vec(&self.authorization.signature.payload)
-            .map_err(|e| unexpected!("issue decoding header: {e}"))?;
+            .map_err(|e| bad!("issue decoding header: {e}"))?;
         let payload: SignaturePayload = serde_json::from_slice(&decoded)
-            .map_err(|e| unexpected!("issue deserializing header: {e}"))?;
+            .map_err(|e| bad!("issue deserializing header: {e}"))?;
 
         // verify integrity of message against signature payload
         if self.record_id != payload.record_id {
-            return Err(unexpected!("message and authorization record IDs do not match"));
+            return Err(bad!("message and authorization record IDs do not match"));
         }
         if self.context_id != payload.context_id {
-            return Err(unexpected!("message and authorization context IDs do not match"));
+            return Err(bad!("message and authorization context IDs do not match"));
         }
         if let Some(attestation_cid) = payload.attestation_cid {
             let expected_cid = cid::from_value(&self.attestation)?;
             if attestation_cid != expected_cid {
-                return Err(unexpected!("message and authorization attestation CIDs do not match"));
+                return Err(bad!("message and authorization attestation CIDs do not match"));
             }
         }
         if let Some(encryption_cid) = payload.encryption_cid {
             let expected_cid = cid::from_value(&self.encryption)?;
             if encryption_cid != expected_cid {
-                return Err(unexpected!("message and authorization `encryptionCid`s do not match"));
+                return Err(bad!("message and authorization `encryptionCid`s do not match"));
             }
         }
 
@@ -678,7 +678,7 @@ impl Write {
             || self_desc.date_created.to_rfc3339_opts(Micros, true)
                 != other_desc.date_created.to_rfc3339_opts(Micros, true)
         {
-            return Err(unexpected!("immutable properties do not match"));
+            return Err(bad!("immutable properties do not match"));
         }
 
         Ok(())
@@ -698,10 +698,10 @@ impl Write {
             // verify data integrity
             let (data_cid, data_size) = cid::from_reader(stream.clone())?;
             if self.descriptor.data_cid != data_cid {
-                return Err(unexpected!("actual data CID does not match message `data_cid`"));
+                return Err(bad!("actual data CID does not match message `data_cid`"));
             }
             if self.descriptor.data_size != data_size {
-                return Err(unexpected!("actual data size does not match message `data_size`"));
+                return Err(bad!("actual data size does not match message `data_size`"));
             }
 
             // store the stream data with the message
@@ -721,10 +721,10 @@ impl Write {
 
             // verify integrity of stored data
             if self.descriptor.data_cid != data_cid {
-                return Err(unexpected!("actual data CID does not match message `data_cid`"));
+                return Err(bad!("actual data CID does not match message `data_cid`"));
             }
             if self.descriptor.data_size != data_size {
-                return Err(unexpected!("actual data size does not match message `data_size`"));
+                return Err(bad!("actual data size does not match message `data_size`"));
             }
         }
 
@@ -742,10 +742,10 @@ impl Write {
         // Perform `data_cid` check in case a user attempts to gain access to data
         // by referencing a different known `data_cid`.
         if latest.descriptor.data_cid != self.descriptor.data_cid {
-            return Err(unexpected!("data CID does not match descriptor `data_cid`"));
+            return Err(bad!("data CID does not match descriptor `data_cid`"));
         }
         if latest.descriptor.data_size != self.descriptor.data_size {
-            return Err(unexpected!("data size does not match descriptor `data_size`"));
+            return Err(bad!("data size does not match descriptor `data_size`"));
         }
 
         // if bigger than encoding threshold, ensure data exists for this record
@@ -753,14 +753,14 @@ impl Write {
             let result =
                 DataStore::get(store, owner, &self.record_id, &self.descriptor.data_cid).await?;
             if result.is_none() {
-                return Err(unexpected!("referenced data does not exist"));
+                return Err(bad!("referenced data does not exist"));
             }
             return Ok(());
         }
 
         // otherwise, copy `encoded_data` to the new message
         if latest.encoded_data.is_none() {
-            return Err(unexpected!("referenced data does not exist"));
+            return Err(bad!("referenced data does not exist"));
         }
         self.encoded_data = latest.encoded_data;
 
@@ -771,7 +771,7 @@ impl Write {
     async fn revoke_grants(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         // verify revocation message matches grant being revoked
         let Some(grant_id) = &self.descriptor.parent_id else {
-            return Err(unexpected!("missing `parent_id`"));
+            return Err(bad!("missing `parent_id`"));
         };
         let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
 
@@ -779,7 +779,7 @@ impl Write {
         if let Some(tags) = &self.descriptor.tags {
             if let Some(tag_protocol) = tags.get("protocol") {
                 if tag_protocol.as_str() != grant.data.scope.protocol() {
-                    return Err(unexpected!("revocation protocol does not match grant protocol"));
+                    return Err(bad!("revocation protocol does not match grant protocol"));
                 }
             }
         }
@@ -845,7 +845,7 @@ pub async fn initial_write(
     if let Some(document) = documents.first() {
         let write = Write::try_from(document)?;
         if !write.is_initial()? {
-            return Err(unexpected!("initial write is not earliest message"));
+            return Err(bad!("initial write is not earliest message"));
         }
         Ok(Some(write))
     } else {

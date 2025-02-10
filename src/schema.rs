@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::endpoint::Message;
-use crate::{Result, unexpected};
+use crate::{Result, bad};
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
@@ -35,9 +35,9 @@ pub fn validate_value<T: Serialize + ?Sized>(schema: &str, value: &T) -> Result<
         let mut error = String::new();
         for e in errors {
             write!(&mut error, "\n - {e} at {}", e.instance_path)
-                .map_err(|e| unexpected!("issue capturing errors: {e}"))?;
+                .map_err(|e| bad!("issue capturing errors: {e}"))?;
         }
-        return Err(unexpected!("validation failed for {schema}: {error}"));
+        return Err(bad!("validation failed for {schema}: {error}"));
     }
 
     Ok(())
@@ -104,7 +104,7 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             Ok(serde_json::from_slice(schema)?)
         }
 
-        _ => Err(unexpected!("schema not found: {schema_name}")),
+        _ => Err(bad!("schema not found: {schema_name}")),
     }
 }
 
@@ -193,7 +193,7 @@ impl Retrieve for Retriever {
                 Ok(serde_json::from_slice(schema)?)
             }
 
-            _ => Err(unexpected!("Schema not found: {uri}").into()),
+            _ => Err(bad!("Schema not found: {uri}").into()),
         }
     }
 }
