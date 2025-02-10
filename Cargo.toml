@@ -20,8 +20,7 @@ version.workspace = true
 workspace = true
 
 [features]
-default = ["server"]
-# default = ["client", "server"]
+default = ["client", "server"]
 # Includes DWN client features such as request builders.
 client = []
 # Includes DWN server features such handlers.
@@ -92,8 +91,8 @@ anyhow = "1.0.95"
 base64ct = { version = "1.6.0", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-did = "0.1.0"
-credibil-infosec = "0.1.0"
 credibil-dwn = { path = "." }
+credibil-infosec = "0.1.0"
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
 http = "1.2.0"
