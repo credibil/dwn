@@ -23,8 +23,11 @@ pub mod hd_key;
 pub mod interfaces;
 mod utils;
 
-#[cfg(feature = "client")]
-pub mod client;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "client")] {
+        pub mod client;
+    }
+}
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "server")] {
@@ -44,7 +47,6 @@ cfg_if::cfg_if! {
     }
 }
 
-// Re-exports
 use ::serde::{Deserialize, Serialize};
 pub use credibil_infosec::{Receiver, Signer};
 use derive_more::Display;

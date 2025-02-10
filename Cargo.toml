@@ -20,8 +20,8 @@ version.workspace = true
 workspace = true
 
 [features]
-# default = ["client"]
-default = ["client", "server"]
+default = ["server"]
+# default = ["client", "server"]
 # Includes DWN client features such as request builders.
 client = []
 # Includes DWN server features such handlers.
