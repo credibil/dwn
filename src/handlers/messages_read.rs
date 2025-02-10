@@ -21,7 +21,7 @@ use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::{Error, Interface, Result, forbidden, unexpected};
+use crate::{Error, Interface, Result, bad, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -32,8 +32,7 @@ use crate::{Error, Interface, Result, forbidden, unexpected};
 /// [`MessageStore`].
 pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
     // validate message CID
-    let cid =
-        Cid::from_str(&read.descriptor.message_cid).map_err(|e| unexpected!("invalid CID: {e}"))?;
+    let cid = Cid::from_str(&read.descriptor.message_cid).map_err(|e| bad!("invalid CID: {e}"))?;
 
     let Some(mut document) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
         return Err(Error::NotFound("message not found".to_string()));

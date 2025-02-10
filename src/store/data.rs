@@ -7,7 +7,7 @@ use ipld_core::ipld::Ipld;
 
 use crate::provider::BlockStore;
 use crate::utils::ipfs::{self, Block};
-use crate::{Result, unexpected};
+use crate::{Result, bad};
 
 /// The maximum size of a message.
 pub const MAX_ENCODED_SIZE: usize = 30000;
@@ -39,10 +39,10 @@ pub(crate) async fn put(
     //         store
     //             .put(owner, PARTITION, cid, block.data())
     //             .await
-    //             .map_err(|e| unexpected!("issue storing data: {e}"))?;
+    //             .map_err(|e| bad!("issue storing data: {e}"))?;
 
     //         // save link to block
-    //         let cid = Cid::from_str(cid).map_err(|e| unexpected!("issue parsing CID: {e}"))?;
+    //         let cid = Cid::from_str(cid).map_err(|e| bad!("issue parsing CID: {e}"))?;
     //         links.push(Ipld::Link(cid));
     //         byte_count += bytes_read;
     //     }
@@ -83,7 +83,7 @@ pub(crate) async fn get(
     for link in links {
         // get data block
         let Ipld::Link(link_cid) = link else {
-            return Err(unexpected!("invalid link"));
+            return Err(bad!("invalid link"));
         };
         let Some(bytes) = store.get(owner, PARTITION, &link_cid.to_string()).await? else {
             return Ok(None);

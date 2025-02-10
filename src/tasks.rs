@@ -33,7 +33,7 @@ use tokio::time::{Duration, sleep};
 
 use crate::interfaces::records::Delete;
 use crate::provider::{Provider, TaskStore};
-use crate::{Result, unexpected};
+use crate::{Result, bad};
 
 // The frequency with which an automatic timeout extension is requested.
 const EXTEND_SECS: u64 = 30;
@@ -42,8 +42,7 @@ const EXTEND_SECS: u64 = 30;
 pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Result<()> {
     // register the task
     let timeout = (Utc::now() + Duration::from_secs(EXTEND_SECS * 2)).timestamp();
-    let timeout =
-        u64::try_from(timeout).map_err(|e| unexpected!("issue converting timeout: {e}"))?;
+    let timeout = u64::try_from(timeout).map_err(|e| bad!("issue converting timeout: {e}"))?;
 
     let resumable = ResumableTask {
         task_id: task.cid()?,
@@ -66,7 +65,7 @@ async fn extend_timeout(owner: &str, task_id: &str, provider: &impl Provider) ->
         sleep(Duration::from_secs(EXTEND_SECS)).await;
         TaskStore::extend(provider, owner, task_id, EXTEND_SECS)
             .await
-            .map_err(|e| unexpected!("failed to extend timeout: {e}"))?;
+            .map_err(|e| bad!("failed to extend timeout: {e}"))?;
     }
     Ok(())
 }

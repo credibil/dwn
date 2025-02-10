@@ -543,6 +543,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "credibil-dwn"
+version = "0.1.0-beta.1"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "async-recursion",
+ "base64ct",
+ "blockstore",
+ "cfg-if",
+ "chrono",
+ "ciborium",
+ "cid",
+ "credibil-did",
+ "credibil-infosec",
+ "derive_more",
+ "ed25519-dalek",
+ "futures",
+ "hkdf",
+ "http",
+ "ipld-core",
+ "jsonschema",
+ "multihash-codetable",
+ "rand 0.8.5",
+ "serde",
+ "serde_ipld_dagcbor",
+ "serde_json",
+ "sha2 0.10.8",
+ "test-node",
+ "thiserror 2.0.11",
+ "tokio",
+ "ulid",
+ "uuid",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
 name = "credibil-infosec"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -757,43 +794,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "dwn-node"
-version = "0.1.0-beta.1"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "async-recursion",
- "base64ct",
- "blockstore",
- "cfg-if",
- "chrono",
- "ciborium",
- "cid",
- "credibil-did",
- "credibil-infosec",
- "derive_more",
- "ed25519-dalek",
- "futures",
- "hkdf",
- "http",
- "ipld-core",
- "jsonschema",
- "multihash-codetable",
- "rand 0.8.5",
- "serde",
- "serde_ipld_dagcbor",
- "serde_json",
- "sha2 0.10.8",
- "test-node",
- "thiserror 2.0.11",
- "tokio",
- "ulid",
- "uuid",
- "x25519-dalek",
- "zeroize",
 ]
 
 [[package]]
@@ -1949,7 +1949,7 @@ name = "records"
 version = "0.0.0"
 dependencies = [
  "base64ct",
- "dwn-node",
+ "credibil-dwn",
  "serde_json",
  "test-node",
  "tokio",
@@ -2467,8 +2467,8 @@ dependencies = [
  "base64ct",
  "blockstore",
  "cid",
+ "credibil-dwn",
  "credibil-infosec",
- "dwn-node",
  "ed25519-dalek",
  "futures",
  "multibase",
@@ -2482,7 +2482,7 @@ dependencies = [
 name = "tests"
 version = "0.0.0"
 dependencies = [
- "dwn-node",
+ "credibil-dwn",
  "http",
  "rand 0.8.5",
  "serde_json",

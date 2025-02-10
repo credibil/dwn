@@ -6,18 +6,20 @@ use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_infosec::Signer;
-use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
-use dwn_node::client::grants::{GrantBuilder, RecordsScope, Scope};
-use dwn_node::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
-use dwn_node::client::records::{
+use credibil_dwn::client::grants::{GrantBuilder, RecordsScope, Scope};
+use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
+use credibil_dwn::client::records::{
     Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, ReadBuilder, Recipient, RecordsFilter,
     WriteBuilder, decrypt,
 };
-use dwn_node::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
-use dwn_node::provider::{DataStore, MessageStore};
-use dwn_node::store::{MAX_ENCODED_SIZE, Storable};
-use dwn_node::{Error, Method, StatusCode, cid, endpoint};
+use credibil_dwn::hd_key::{
+    self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk,
+};
+use credibil_dwn::provider::{DataStore, MessageStore};
+use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
+use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
+use credibil_infosec::Signer;
+use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

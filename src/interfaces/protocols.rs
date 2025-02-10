@@ -15,7 +15,7 @@ use super::{Cursor, Descriptor};
 use crate::authorization::Authorization;
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use crate::utils::cid;
-use crate::{Result, unexpected};
+use crate::{Result, bad};
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL_URI: &str = "https://credibil.website/dwn/permissions";
@@ -439,7 +439,7 @@ fn validate_rule_set(
     // validate size rule
     if let Some(size) = &rule_set.size {
         if size.max.is_some() && size.min > size.max {
-            return Err(unexpected!("invalid size range"));
+            return Err(bad!("invalid size range"));
         }
     }
 
@@ -448,7 +448,7 @@ fn validate_rule_set(
         for tag in tags.undefined.keys() {
             let schema = serde_json::from_str(tag)?;
             jsonschema::validator_for(&schema)
-                .map_err(|e| unexpected!("tag schema validation error: {e}"))?;
+                .map_err(|e| bad!("tag schema validation error: {e}"))?;
         }
     }
 
@@ -461,7 +461,7 @@ fn validate_rule_set(
         if let Some(role) = &action.role {
             // role must contain valid protocol paths to a role record
             if !roles.contains(role) {
-                return Err(unexpected!("missing role {role} in action"));
+                return Err(bad!("missing role {role} in action"));
             }
 
             // if ANY `can` actions are read-like ('read', 'query', 'subscribe')
@@ -471,13 +471,13 @@ fn validate_rule_set(
 
             // intersection of `read_actions` and `can`: it should be empty or 3
             if !read_actions.is_empty() && read_actions.len() != 3 {
-                return Err(unexpected!("role {role} is missing read-like actions"));
+                return Err(bad!("role {role} is missing read-like actions"));
             }
         }
 
         // when `who` is `anyone`, `of` cannot be set
         if action.who.as_ref().is_some_and(|w| w == &Actor::Anyone) && action.of.is_some() {
-            return Err(unexpected!("`of` must not be set when `who` is \"anyone\""));
+            return Err(bad!("`of` must not be set when `who` is \"anyone\""));
         }
 
         // When `who` is "recipient" and `of` is unset, `can` must only contain
@@ -491,7 +491,7 @@ fn validate_rule_set(
         if action.who.as_ref().is_some_and(|w| w == &Actor::Recipient) && action.of.is_none() {
             let allowed = [Action::CoUpdate, Action::CoDelete, Action::CoPrune];
             if !allowed.iter().any(|ra| action.can.contains(ra)) {
-                return Err(unexpected!(
+                return Err(bad!(
                     "recipient action must contain only co-update, co-delete, and co-prune",
                 ));
             }
@@ -499,15 +499,15 @@ fn validate_rule_set(
 
         // when `who` is set to "author" then `of` must be set
         if action.who.as_ref().is_some_and(|w| w == &Actor::Author) && action.of.is_none() {
-            return Err(unexpected!("`of` must be set when `who` is set to 'author'"));
+            return Err(bad!("`of` must be set when `who` is set to 'author'"));
         }
 
         // when `can` contains `update` or `delete`, it must also contain `create`
         if action.can.contains(&Action::Update) && !action.can.contains(&Action::Create) {
-            return Err(unexpected!("action rule {action:?} contains 'update' but no 'create'"));
+            return Err(bad!("action rule {action:?} contains 'update' but no 'create'"));
         }
         if action.can.contains(&Action::Delete) && !action.can.contains(&Action::Create) {
-            return Err(unexpected!("action rule {action:?} contains 'delete' but no 'create'"));
+            return Err(bad!("action rule {action:?} contains 'delete' but no 'create'"));
         }
 
         // ensure no duplicate actors or roles in the remaining action rules
@@ -515,10 +515,10 @@ fn validate_rule_set(
         for other in action_iter.clone() {
             if action.who.is_some() {
                 if action.who == other.who && action.of == other.of {
-                    return Err(unexpected!("an actor may only have one rule within a rule set"));
+                    return Err(bad!("an actor may only have one rule within a rule set"));
                 }
             } else if action.role == other.role {
-                return Err(unexpected!(
+                return Err(bad!(
                     "more than one action rule per role {:?} not allowed within a rule set: {action:?}",
                     action.role
                 ));
@@ -529,7 +529,7 @@ fn validate_rule_set(
     // verify nested rule sets
     for (set_name, rule_set) in &rule_set.structure {
         if !types.contains(&set_name) {
-            return Err(unexpected!("rule set {set_name} is not declared as an allowed type"));
+            return Err(bad!("rule set {set_name} is not declared as an allowed type"));
         }
         let protocol_path = if protocol_path.is_empty() {
             set_name
@@ -548,7 +548,7 @@ fn role_paths(
 ) -> Result<Vec<String>> {
     // restrict to max depth of 10 levels
     if protocol_path.split('/').count() > 10 {
-        return Err(unexpected!("Storable nesting depth exceeded 10 levels."));
+        return Err(bad!("Storable nesting depth exceeded 10 levels."));
     }
 
     let mut roles = roles.to_owned();

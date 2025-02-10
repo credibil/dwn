@@ -14,7 +14,7 @@ use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Result, forbidden, unexpected, utils};
+use crate::{Result, bad, forbidden, utils};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -131,13 +131,13 @@ impl Query {
         // verify protocol when request invokes a protocol role
         if authzn.payload()?.protocol_role.is_some() {
             let Some(protocol) = &self.descriptor.filter.protocol else {
-                return Err(unexpected!("missing protocol"));
+                return Err(bad!("missing protocol"));
             };
             let Some(protocol_path) = &self.descriptor.filter.protocol_path else {
-                return Err(unexpected!("missing `protocol_path`"));
+                return Err(bad!("missing `protocol_path`"));
             };
             if protocol_path.contains('/') && self.descriptor.filter.context_id.is_none() {
-                return Err(unexpected!("missing `context_id`"));
+                return Err(bad!("missing `context_id`"));
             }
 
             // verify protocol role is authorized
@@ -168,7 +168,7 @@ impl Query {
         if self.descriptor.date_sort == Some(Sort::PublishedAsc)
             || self.descriptor.date_sort == Some(Sort::PublishedDesc)
         {
-            return Err(unexpected!(
+            return Err(bad!(
                 "cannot sort by `date_published` when querying for unpublished records"
             ));
         }

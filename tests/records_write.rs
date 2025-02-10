@@ -7,20 +7,20 @@ use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use credibil_infosec::Signer;
-use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
-use dwn_node::authorization::JwsPayload;
-use dwn_node::client::grants::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
-use dwn_node::client::messages::MessagesFilter;
-use dwn_node::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet, Size};
-use dwn_node::client::records::{
+use credibil_dwn::authorization::JwsPayload;
+use credibil_dwn::client::grants::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
+use credibil_dwn::client::messages::MessagesFilter;
+use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet, Size};
+use credibil_dwn::client::records::{
     Attestation, Data, DeleteBuilder, EncryptOptions, ProtocolBuilder, QueryBuilder, ReadBuilder,
     Recipient, RecordsFilter, SignaturePayload, WriteBuilder,
 };
-use dwn_node::hd_key::{DerivationScheme, PrivateKeyJwk};
-use dwn_node::provider::EventLog;
-use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, Interface, Method, StatusCode, client, endpoint, store};
+use credibil_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
+use credibil_dwn::provider::EventLog;
+use credibil_dwn::store::MAX_ENCODED_SIZE;
+use credibil_dwn::{Error, Interface, Method, StatusCode, client, endpoint, store};
+use credibil_infosec::Signer;
+use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
@@ -5689,7 +5689,7 @@ async fn context_id_mismatch() {
     // alter the signature context ID
     let payload = SignaturePayload {
         base: JwsPayload {
-            descriptor_cid: dwn_node::cid::from_value(&write.descriptor).unwrap(),
+            descriptor_cid: credibil_dwn::cid::from_value(&write.descriptor).unwrap(),
             ..JwsPayload::default()
         },
         record_id: write.record_id.clone(),
@@ -5724,7 +5724,7 @@ async fn invalid_attestation() {
     // alter the signature attestation CID
     let payload = SignaturePayload {
         base: JwsPayload {
-            descriptor_cid: dwn_node::cid::from_value(&write.descriptor).unwrap(),
+            descriptor_cid: credibil_dwn::cid::from_value(&write.descriptor).unwrap(),
             ..JwsPayload::default()
         },
         record_id: write.record_id.clone(),
@@ -5767,7 +5767,7 @@ async fn attestation_descriptor_cid() {
 
     // alter the attestation descriptor_cid
     let payload = Attestation {
-        descriptor_cid: dwn_node::cid::from_value(&"somerandomrecordid")
+        descriptor_cid: credibil_dwn::cid::from_value(&"somerandomrecordid")
             .expect("should create CID"),
     };
     let attestation =
@@ -5775,12 +5775,12 @@ async fn attestation_descriptor_cid() {
 
     let payload = SignaturePayload {
         base: JwsPayload {
-            descriptor_cid: dwn_node::cid::from_value(&write.descriptor).unwrap(),
+            descriptor_cid: credibil_dwn::cid::from_value(&write.descriptor).unwrap(),
             ..JwsPayload::default()
         },
         record_id: write.record_id.clone(),
         context_id: write.context_id.clone(),
-        attestation_cid: Some(dwn_node::cid::from_value(&attestation).unwrap()),
+        attestation_cid: Some(credibil_dwn::cid::from_value(&attestation).unwrap()),
         ..SignaturePayload::default()
     };
     write.authorization.signature =

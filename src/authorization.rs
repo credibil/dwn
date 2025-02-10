@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
-use crate::{Result, unexpected};
+use crate::{Result, bad};
 
 /// Creates a closure to resolve pub key material required by `Jws::decode`.
 ///
@@ -132,7 +132,7 @@ impl Authorization {
         self.author_delegated_grant
             .as_ref()
             .map_or_else(|| self.signature.did(), |grant| grant.authorization.signature.did())
-            .map_err(|e| unexpected!("issue getting author's DID: {e}"))
+            .map_err(|e| bad!("issue getting author's DID: {e}"))
     }
 
     /// Get message owner's DID.
@@ -151,20 +151,16 @@ impl Authorization {
 
     /// Get message signer's DID from the message authorization.
     pub(crate) fn signer(&self) -> Result<String> {
-        self.signature.did().map_err(|e| unexpected!("issue getting signer's DID: {e}"))
+        self.signature.did().map_err(|e| bad!("issue getting signer's DID: {e}"))
     }
 
     /// Get the owner's signing DID from the owner signature.
     #[cfg(feature = "server")]
     pub(crate) fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
-            return Err(unexpected!("owner delegated grant not found"));
+            return Err(bad!("owner delegated grant not found"));
         };
-        grant
-            .authorization
-            .signature
-            .did()
-            .map_err(|e| unexpected!("issue getting owner's DID: {e}"))
+        grant.authorization.signature.did().map_err(|e| bad!("issue getting owner's DID: {e}"))
     }
 
     /// Extract the JWS payload from the authorization's signature.
@@ -174,9 +170,9 @@ impl Authorization {
     /// Will return an error if the payload cannot be decoded or deserialized.
     pub fn payload(&self) -> Result<JwsPayload> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.signature.payload)
-            .map_err(|e| unexpected!("issue decoding signature payload: {e}"))?;
+            .map_err(|e| bad!("issue decoding signature payload: {e}"))?;
         serde_json::from_slice(&decoded)
-            .map_err(|e| unexpected!("issue deserializing signature payload: {e}"))
+            .map_err(|e| bad!("issue deserializing signature payload: {e}"))
     }
 }
 
@@ -232,8 +228,7 @@ impl AuthorizationBuilder {
     /// Will return an error when an incorrect value has been provided or when
     /// there was an issue signing the Authorization
     pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
-        let descriptor_cid =
-            self.descriptor_cid.ok_or_else(|| unexpected!("descriptor not found"))?;
+        let descriptor_cid = self.descriptor_cid.ok_or_else(|| bad!("descriptor not found"))?;
         let delegated_grant_id = if let Some(grant) = &self.delegated_grant {
             Some(cid::from_value(grant)?)
         } else {

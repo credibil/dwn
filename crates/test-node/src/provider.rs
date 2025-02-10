@@ -11,7 +11,7 @@ pub mod keystore;
 
 use anyhow::Result;
 use blockstore::InMemoryBlockstore;
-use dwn_node::provider::{
+use credibil_dwn::provider::{
     DataStore, DidDocument, DidResolver, EventLog, MessageStore, Provider, TaskStore,
 };
 

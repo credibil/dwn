@@ -20,7 +20,7 @@ use crate::interfaces::{Descriptor, Document};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::Storable;
 use crate::utils::cid;
-use crate::{Error, Result, forbidden, store, unexpected, utils};
+use crate::{Error, Result, bad, forbidden, store, utils};
 
 /// Define a default protocol definition.
 pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
@@ -113,7 +113,7 @@ pub async fn handle(
         let Some(latest) = existing.iter().max_by(|a, b| {
             a.descriptor.base.message_timestamp.cmp(&b.descriptor.base.message_timestamp)
         }) else {
-            return Err(unexpected!("no matching protocol entries found"));
+            return Err(bad!("no matching protocol entries found"));
         };
 
         let configure_ts = configure.descriptor.base.message_timestamp.timestamp_micros();
@@ -188,7 +188,7 @@ impl TryFrom<Document> for Configure {
     fn try_from(document: Document) -> Result<Self> {
         match document {
             Document::Configure(configure) => Ok(configure),
-            _ => Err(unexpected!("expected `ProtocolsConfigure` message")),
+            _ => Err(bad!("expected `ProtocolsConfigure` message")),
         }
     }
 }

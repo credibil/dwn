@@ -1,6 +1,6 @@
 use anyhow::Result;
-use dwn_node::event::{Event, Subscriber};
-use dwn_node::provider::EventStream;
+use credibil_dwn::event::{Event, Subscriber};
+use credibil_dwn::provider::EventStream;
 use futures::stream::StreamExt;
 
 use crate::provider::ProviderImpl;

@@ -8,11 +8,11 @@
 use std::io::Cursor;
 use std::sync::LazyLock;
 
-use dwn_node::client::grants::{GrantBuilder, Scope};
-use dwn_node::client::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
-use dwn_node::client::protocols::{ConfigureBuilder, Definition};
-use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
-use dwn_node::{Error, Interface, Method, StatusCode, endpoint};
+use credibil_dwn::client::grants::{GrantBuilder, Scope};
+use credibil_dwn::client::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
+use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
+use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 

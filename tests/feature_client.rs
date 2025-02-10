@@ -8,11 +8,11 @@
 use std::io::Cursor;
 use std::sync::LazyLock;
 
-use dwn_node::Method;
-use dwn_node::client::grants::{GrantBuilder, Scope};
-use dwn_node::client::messages::{QueryBuilder, ReadBuilder};
-use dwn_node::client::protocols::{ConfigureBuilder, Definition};
-use dwn_node::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use credibil_dwn::Method;
+use credibil_dwn::client::grants::{GrantBuilder, Scope};
+use credibil_dwn::client::messages::{QueryBuilder, ReadBuilder};
+use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
+use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use test_node::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());

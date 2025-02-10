@@ -14,7 +14,7 @@ base64ct.workspace = true
 blockstore = "0.7.1"
 cid.workspace = true
 credibil-infosec.workspace = true
-dwn-node = { workspace = true, features = ["server"] }
+credibil-dwn = { workspace = true, features = ["server"] }
 ed25519-dalek.workspace = true
 futures.workspace = true
 multibase.workspace = true

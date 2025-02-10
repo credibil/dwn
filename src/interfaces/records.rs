@@ -25,7 +25,7 @@ use crate::event::Subscriber;
 use crate::hd_key::DerivationScheme;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::utils::cid;
-use crate::{OneOrMany, Result, unexpected, utils};
+use crate::{OneOrMany, Result, bad, utils};
 
 /// The [`Delete`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -974,7 +974,7 @@ impl Encrypted {
             } else {
                 let mut decoded = Base64UrlUnpadded::decode_vec(&jwk.x)?;
                 let Some(y) = &jwk.y else {
-                    return Err(unexpected!("missing y"));
+                    return Err(bad!("missing y"));
                 };
                 decoded.extend(&Base64UrlUnpadded::decode_vec(y)?);
                 decoded
@@ -985,15 +985,14 @@ impl Encrypted {
                 key_id: recipient.key_id.clone(),
                 public_key: jwe::PublicKey::try_from(decoded)?,
             };
-            let cek: [u8; 32] =
-                self.cek.clone().try_into().map_err(|_| unexpected!("invalid CEK key"))?;
+            let cek: [u8; 32] = self.cek.clone().try_into().map_err(|_| bad!("invalid CEK key"))?;
 
             // encrypt cek
             let ke = match self.key_algorithm {
                 KeyAlgorithm::EcdhEsA256Kw => jwe::ecdh_a256kw(&cek, &recip)?,
                 KeyAlgorithm::EciesEs256K => jwe::ecies_es256k(&cek, &recip)?,
                 KeyAlgorithm::EcdhEs => {
-                    return Err(unexpected!("ECDH-ES requires a single recipient"));
+                    return Err(bad!("ECDH-ES requires a single recipient"));
                 }
             };
 

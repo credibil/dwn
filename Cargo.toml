@@ -1,5 +1,5 @@
 [package]
-name = "dwn-node"
+name = "credibil-dwn"
 description = "Decentralized Web Node (DWN)"
 readme = "README.md"
 authors.workspace = true
@@ -93,7 +93,7 @@ base64ct = { version = "1.6.0", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-did = "0.1.0"
 credibil-infosec = "0.1.0"
-dwn-node = { path = "." }
+credibil-dwn = { path = "." }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
 http = "1.2.0"

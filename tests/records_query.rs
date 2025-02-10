@@ -6,13 +6,13 @@ use std::io::Cursor;
 use std::sync::LazyLock;
 
 use chrono::{DateTime, Duration, Utc};
-use dwn_node::client::protocols::{ConfigureBuilder, Definition};
-use dwn_node::client::records::{
+use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
+use credibil_dwn::client::records::{
     Data, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, WriteBuilder,
 };
-use dwn_node::client::{DateRange, Pagination, Range};
-use dwn_node::store::MAX_ENCODED_SIZE;
-use dwn_node::{Error, StatusCode, endpoint};
+use credibil_dwn::client::{DateRange, Pagination, Range};
+use credibil_dwn::store::MAX_ENCODED_SIZE;
+use credibil_dwn::{Error, StatusCode, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;

@@ -6,15 +6,15 @@ use std::io::Read;
 use std::sync::LazyLock;
 
 use chrono::Days;
-use dwn_node::client::messages;
-use dwn_node::client::messages::MessagesFilter;
-use dwn_node::client::protocols::{ConfigureBuilder, Definition};
-use dwn_node::client::records::{
+use credibil_dwn::client::messages;
+use credibil_dwn::client::messages::MessagesFilter;
+use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
+use credibil_dwn::client::records::{
     Data, DeleteBuilder, DeleteDescriptor, ProtocolBuilder, QueryBuilder, ReadBuilder,
     RecordsFilter, WriteBuilder,
 };
-use dwn_node::provider::{EventLog, MessageStore};
-use dwn_node::{Error, Interface, Method, StatusCode, endpoint, store};
+use credibil_dwn::provider::{EventLog, MessageStore};
+use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint, store};
 use test_node::keystore::{self, Keyring};
 use test_node::provider::ProviderImpl;
 

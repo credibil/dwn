@@ -10,8 +10,8 @@
 //!
 //! ```rust
 //! use base64ct::{Base64UrlUnpadded, Encoding};
-//! use dwn_node::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
-//! use dwn_node::{StatusCode, endpoint};
+//! use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
+//! use credibil_dwn::{StatusCode, endpoint};
 //! use test_node::keystore;
 //! use test_node::provider::ProviderImpl;
 //!

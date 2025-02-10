@@ -8,7 +8,7 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-dwn-node = { workspace = true, features = ["client", "server"] }
+credibil-dwn = { workspace = true, features = ["client", "server"] }
 http.workspace = true
 rand.workspace = true
 serde_json.workspace = true

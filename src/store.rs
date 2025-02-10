@@ -25,7 +25,7 @@ use chrono::DateTime;
 pub use self::data::MAX_ENCODED_SIZE;
 use crate::interfaces::records::{self, RecordsFilter, Sort, TagFilter};
 use crate::interfaces::{DateRange, Document, Pagination, Range, messages};
-use crate::{Interface, Method, Result, unexpected};
+use crate::{Interface, Method, Result, bad};
 
 /// The `Storable` trait is used to wrap each message with a unifying type used
 /// for all stored messages (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
@@ -217,12 +217,12 @@ impl Matcher {
             MatchOn::Range(range) => {
                 let int_val = value
                     .parse()
-                    .map_err(|e| unexpected!("issue converting match value to usize: {e}"))?;
+                    .map_err(|e| bad!("issue converting match value to usize: {e}"))?;
                 range.contains(&int_val)
             }
             MatchOn::DateRange(range) => {
                 let date_val = DateTime::parse_from_rfc3339(value)
-                    .map_err(|e| unexpected!("issue converting match value to date: {e}"))?;
+                    .map_err(|e| bad!("issue converting match value to date: {e}"))?;
                 range.contains(&date_val.into())
             }
         };

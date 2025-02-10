@@ -15,7 +15,7 @@ use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Error, Method, Result, forbidden, unexpected};
+use crate::{Error, Method, Result, bad, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -33,19 +33,19 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         return Err(Error::NotFound("no matching record".to_string()));
     }
     if entries.len() > 1 {
-        return Err(unexpected!("multiple messages exist"));
+        return Err(bad!("multiple messages exist"));
     }
 
     // if record is deleted, return as NotFound
     if entries[0].descriptor().method == Method::Delete {
         let Some(delete) = entries[0].as_delete() else {
-            return Err(unexpected!("expected `RecordsDelete` message"));
+            return Err(bad!("expected `RecordsDelete` message"));
         };
 
         let Ok(Some(write)) =
             records_write::initial_write(owner, &delete.descriptor.record_id, provider).await
         else {
-            return Err(unexpected!("initial write for deleted record not found"));
+            return Err(bad!("initial write for deleted record not found"));
         };
 
         read.authorize(owner, &write, provider).await?;
@@ -104,11 +104,11 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             .build();
         let (entries, _) = MessageStore::query(provider, owner, &query).await?;
         if entries.is_empty() {
-            return Err(unexpected!("initial write not found"));
+            return Err(bad!("initial write not found"));
         }
 
         let Some(mut initial_write) = entries[0].as_write().cloned() else {
-            return Err(unexpected!("expected `RecordsWrite` message"));
+            return Err(bad!("expected `RecordsWrite` message"));
         };
 
         initial_write.encoded_data = None;
