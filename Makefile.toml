@@ -26,7 +26,6 @@ dependencies = ["clean"]
 
 [tasks.test]
 command = "cargo"
-# args = ["nextest", "run", "--no-fail-fast"]
 args = ["nextest", "run", "--workspace", "--no-fail-fast"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
@@ -84,20 +83,17 @@ command = "cargo"
 args = ["semver-checks"]
 install_crate = "cargo-semver-checks"
 
-[tasks.pre-pub]
-run_task = { name = ["pre-pub-dwn"], parallel = true }
-
-[tasks.pre-pub-dwn]
+[tasks.prepub]
 command = "cargo"
-args = ["publish", "--allow-dirty", "--dry-run", "--package", "dwn-node"]
+args = ["publish", "--allow-dirty", "--dry-run"]
 
-# args = release level: one of `release`, `major`, `minor`, `patch`, `alpha`, `beta`, `rc`
-[tasks.release]
+# args: one of `release`, `major`, `minor`, `patch`, `alpha`, `beta`, `rc`
+[tasks.dryrun]
 command = "cargo"
 args = ["release", "${@}"]
 install_crate = "cargo-release"
 
-[tasks.publish]
+[tasks.release]
 command = "cargo"
 args = ["release", "${@}", "--execute"]
 install_crate = "cargo-release"

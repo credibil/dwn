@@ -2,6 +2,7 @@
 //!
 //! This module validates messages against their JSON schemas.
 
+use std::error::Error;
 use std::fmt::Write as _;
 
 use jsonschema::error::ValidationError;
@@ -107,18 +108,12 @@ fn precompiled(schema_name: &str) -> Result<Value> {
     }
 }
 
-struct Retriever {
-    // schemas: HashMap<String, Value>,
-}
+struct Retriever;
 
 impl Retrieve for Retriever {
     fn retrieve(
-        &self, uri: &Uri<&str>,
-    ) -> Result<Value, Box<(dyn std::error::Error + Send + Sync + 'static)>> {
-        // let Some(file) = uri.path().split('/').last() else {
-        //     return Err(unexpected!("schema not found: {uri}").into());
-        // };
-
+        &self, uri: &Uri<String>,
+    ) -> Result<Value, Box<(dyn Error + Send + Sync + 'static)>> {
         match uri.path().as_str() {
             "/dwn/json-schemas/defs.json" => {
                 let schema = include_bytes!("../schemas/definitions.json");
@@ -189,20 +184,6 @@ impl Retrieve for Retriever {
                 let schema = include_bytes!("../schemas/jwk/general-jwk.json");
                 Ok(serde_json::from_slice(schema)?)
             }
-            // "/dwn/json-schemas/permission-grant-data.json" => {
-            //     let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
-            //     Ok(serde_json::from_slice(schema)?)
-            // }
-            // "/dwn/json-schemas/permissions/permission-request-data.json" =>
-            // {
-            //     let schema = include_bytes!("../schemas/permissions/permission-request-data.json");
-            //     Ok(serde_json::from_slice(schema)?)
-            // }
-            // "/dwn/json-schemas/permissions/permission-revocation-data.json" =>
-            // {
-            //     let schema = include_bytes!("../schemas/permissions/permission-revocation-data.json");
-            //     Ok(serde_json::from_slice(schema)?)
-            // }
             "/dwn/json-schemas/permissions/defs.json" => {
                 let schema = include_bytes!("../schemas/permissions/permissions-definitions.json");
                 Ok(serde_json::from_slice(schema)?)
