@@ -8,25 +8,29 @@
 //!
 //! The following example demonstrates how to write and query for a DWN record.
 //!
-//! ```rust
-//! use credibil_dwn::StatusCode;
+//! ```rust,ignore
 //! use credibil_dwn::client::records::{Data, WriteBuilder};
-//! use reqwest;
+//! use credibil_dwn::{Result, StatusCode};
 //! use test_node::keystore;
 //!
-//! let alice = keystore::new_keyring();
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let alice = keystore::new_keyring();
 //!
-//! // create a message to write a record
-//! let write = WriteBuilder::new()
-//!     .data(Data::from(b"a new write record".to_vec()))
-//!     .sign(&alice)
-//!     .build()
-//!     .await?;
+//!     // create a message to write a record
+//!     let write = WriteBuilder::new()
+//!         .data(Data::from(b"a new write record".to_vec()))
+//!         .sign(&alice)
+//!         .build()
+//!         .await?;
 //!
-//! // send the request to a DWN node
-//! let client = reqwest::Client::new();
-//! let reply = client.post("http://dwn.io/post").json(&write).send().await?;
-//! assert_eq!(reply.status, StatusCode::ACCEPTED);
+//!     // send the request to a DWN node
+//!     let client = reqwest::Client::new();
+//!     let reply = client.post("http://dwn.io/post").json(&write).send().await?;
+//!     assert_eq!(reply.status, StatusCode::ACCEPTED);
+//!
+//!     Ok(())
+//! }
 //! ```
 
 mod encryption;

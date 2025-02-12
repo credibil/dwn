@@ -31,12 +31,12 @@ env = { RUSTFLAGS = "-Dwarnings" }
 
 [tasks.doctest]
 command = "cargo"
-args = ["test", "--workspace", "doc"]
+args = ["test", "--doc"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
 [tasks.doc]
 command = "cargo"
-args = ["doc", "${@}"]
+args = ["doc", "--open"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
 # -----------------------------------------------------------------------------
