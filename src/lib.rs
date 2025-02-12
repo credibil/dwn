@@ -2,10 +2,10 @@
 //!
 //! A [Decentralized Web Node (DWN)] is a data storage and message relay
 //! mechanism that can be used to share public or private permissioned data
-//! for a given Decentralized Identifier (DID). 
-//! 
+//! for a given Decentralized Identifier (DID).
+//!
 //! DWNs are designed to be deployed in mesh-like datastore construct that
-//! replicates state across all nodes. The owner can secure, manage, and 
+//! replicates state across all nodes. The owner can secure, manage, and
 //! transact data with others without reliance on location or provider-specific
 //! infrastructure, interfaces, or routing mechanisms.
 //!
