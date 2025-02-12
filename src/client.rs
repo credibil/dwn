@@ -14,7 +14,7 @@
 //! use test_node::keystore;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<()> {
+//! async fn main() {
 //!     let alice = keystore::new_keyring();
 //!
 //!     // create a message to write a record
@@ -22,14 +22,13 @@
 //!         .data(Data::from(b"a new write record".to_vec()))
 //!         .sign(&alice)
 //!         .build()
-//!         .await?;
+//!         .await
+//!         .unwrap();
 //!
 //!     // send the request to a DWN node
 //!     let client = reqwest::Client::new();
-//!     let reply = client.post("http://dwn.io/post").json(&write).send().await?;
-//!     assert_eq!(reply.status, StatusCode::ACCEPTED);
-//!
-//!     Ok(())
+//!     let reply = client.post("http://dwn.io/post").json(&write).send().await.unwrap();
+//!     assert_eq!(reply.status(), StatusCode::ACCEPTED);
 //! }
 //! ```
 
