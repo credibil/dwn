@@ -9,8 +9,8 @@
 //! The following example demonstrates how to write and query for a DWN record.
 //!
 //! ```rust
-//! use credibil_dwn::client::records::{Data, WriteBuilder};
 //! use credibil_dwn::StatusCode;
+//! use credibil_dwn::client::records::{Data, WriteBuilder};
 //! use reqwest;
 //! use test_node::keystore;
 //!

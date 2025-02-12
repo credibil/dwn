@@ -87,7 +87,7 @@ impl<S: Signer> QueryBuilder<Signed<'_, S>> {
     ///
     /// # Errors
     ///
-    /// The [`build`] method will return an error when there is an issue is
+    /// The [`QueryBuilder::build`] method will return an error when there is an issue is
     /// ecountered signing the message.
     ///
     /// Schema validation could potentially fail in debug, but this is

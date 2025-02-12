@@ -34,6 +34,11 @@ command = "cargo"
 args = ["test", "--workspace", "doc"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
+[tasks.doc]
+command = "cargo"
+args = ["doc", "${@}"]
+env = { RUSTFLAGS = "-Dwarnings" }
+
 # -----------------------------------------------------------------------------
 # Basic hygiene
 # -----------------------------------------------------------------------------

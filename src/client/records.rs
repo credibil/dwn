@@ -1189,7 +1189,8 @@ impl Write {
     ///
     /// This method will fail when there is an issue serializing the message
     /// to CBOR or when there is an issue signing message. The returned
-    /// [`Error`] will contain a brief clarifying description of the error.
+    /// [`crate::Error`] will contain a brief clarifying description of the
+    /// error.
     pub async fn sign_as_author(
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
         signer: &impl Signer,
@@ -1233,8 +1234,8 @@ impl Write {
     ///
     /// This method will fail when the message has not been previously signed
     /// by the author or there is an issue issue signing the message.
-    /// The returned [`Error`] will contain a brief clarifying description of the
-    /// error.
+    /// The returned [`crate::Error`] will contain a brief clarifying
+    /// description of the error.
     pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
         if self.authorization.author().is_err() {
             return Err(anyhow!("message signature is required in order to sign as owner"));
@@ -1260,8 +1261,8 @@ impl Write {
     ///
     /// This method will fail when the message has not been previously signed
     /// by the author or there is an issue issue signing the message.
-    /// The returned [`Error`] will contain a brief clarifying description of the
-    /// error.
+    /// The returned [`crate::Error`] will contain a brief clarifying
+    /// description of the error.
     pub async fn sign_as_delegate(
         &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
     ) -> Result<()> {

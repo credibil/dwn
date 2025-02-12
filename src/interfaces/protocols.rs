@@ -1,7 +1,8 @@
 //! # Protocols Configure
 //!
 //! The protocols configure endpoint handles `ProtocolsConfigure` messages —
-//! requests to write to [`Configure`] records to the DWN's [`MessageStore`].
+//! requests to write to [`Configure`] records to the DWN's
+//! [`crate::provider::MessageStore`].
 
 use std::collections::BTreeMap;
 #[cfg(feature = "server")]
@@ -355,7 +356,8 @@ pub struct Tags {
     pub undefined: BTreeMap<String, Value>,
 }
 
-/// [`ConfigureReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`ConfigureReply`] is returned by the handler in the
+/// [`crate::endpoint::Reply`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigureReply {
     /// The [`Configure`] entry.
@@ -397,7 +399,8 @@ pub struct QueryDescriptor {
     pub filter: Option<ProtocolsFilter>,
 }
 
-/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
     /// [`Configure`] entries matching the query.

@@ -69,7 +69,8 @@ pub struct DeleteDescriptor {
     pub prune: bool,
 }
 
-/// [`DeleteReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`DeleteReply`] is returned by the handler in the
+/// [`crate::endpoint::Reply`] `body` field.
 #[derive(Debug)]
 pub struct DeleteReply;
 
@@ -105,7 +106,8 @@ pub struct QueryDescriptor {
     pub pagination: Option<Pagination>,
 }
 
-/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryReply {
@@ -501,7 +503,8 @@ pub struct ReadDescriptor {
     pub filter: RecordsFilter,
 }
 
-/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`ReadReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadReply {
@@ -557,7 +560,8 @@ pub struct SubscribeDescriptor {
     pub filter: RecordsFilter,
 }
 
-/// [`SubscribeReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`SubscribeReply`] is returned by the handler in the
+/// [`crate::endpoint::Reply`] `body` field.
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeReply {
@@ -798,8 +802,8 @@ impl Tag {
     }
 }
 
-/// For consistency, [`WriteReply`] is returned by the handler in the [`Reply`]
-/// `body` field, but contains no data.
+/// For consistency, [`WriteReply`] is returned by the handler in the
+/// [`crate::endpoint::Reply`] `body` field, but contains no data.
 #[derive(Clone, Debug)]
 pub struct WriteReply;
 
