@@ -14,23 +14,19 @@
 //! use reqwest;
 //! use test_node::keystore;
 //!
-//! #[tokio::main]
-//! async fn main() {
-//!     let alice = keystore::new_keyring();
+//! let alice = keystore::new_keyring();
 //!
-//!     // create a message to write a record
-//!     let write = WriteBuilder::new()
-//!         .data(Data::from(b"a new write record".to_vec()))
-//!         .sign(&alice)
-//!         .build()
-//!         .await
-//!         .expect("should create write");
+//! // create a message to write a record
+//! let write = WriteBuilder::new()
+//!     .data(Data::from(b"a new write record".to_vec()))
+//!     .sign(&alice)
+//!     .build()
+//!     .await?;
 //!
-//!     // send the request to a DWN node
-//!     let client = reqwest::Client::new();
-//!     let reply = client.post("http://dwn.io/post").json(&write).send().await?;
-//!     assert_eq!(reply.status, StatusCode::ACCEPTED);
-//! }
+//! // send the request to a DWN node
+//! let client = reqwest::Client::new();
+//! let reply = client.post("http://dwn.io/post").json(&write).send().await?;
+//! assert_eq!(reply.status, StatusCode::ACCEPTED);
 //! ```
 
 mod encryption;

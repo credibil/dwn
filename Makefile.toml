@@ -75,7 +75,7 @@ install_crate = "cargo-outdated"
 dependencies = ["audit", "fmt", "lint", "outdated", "unused"]
 
 # -----------------------------------------------------------------------------
-# Publishing
+# Releasing
 # -----------------------------------------------------------------------------
 
 [tasks.semver]
