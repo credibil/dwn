@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 pub mod provider;
 
 pub use provider::keystore;
