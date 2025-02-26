@@ -183,7 +183,7 @@ async fn match_grant_scope() {
     let provider = ProviderImpl::new().await.expect("should create provider");
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `EventsQuery` for BOB.
+    // Alice creates a grant scoped to `MessagesQuery` for Bob.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(&BOB.did)
@@ -278,7 +278,6 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     // Bob uses the grant to query for the messages.
     // --------------------------------------------------
-
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
         .sign(&*BOB)
@@ -325,7 +324,7 @@ async fn mismatched_grant_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Bob attempts to use the `MessagesSubscribe` grant on a `EventsQuery` message.
+    // Bob attempts to use the `MessagesSubscribe` grant on a `MessagesQuery` message.
     // --------------------------------------------------
     let query = QueryBuilder::new()
         .permission_grant_id(&bob_grant.record_id)
@@ -378,7 +377,7 @@ async fn match_protocol_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `EventsQuery` for BOB.
+    // Alice creates a grant scoped to `MessagesQuery` for BOB.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(&BOB.did)
@@ -454,7 +453,7 @@ async fn mismatched_protocol_scope() {
     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
-    // Alice creates a grant scoped to `EventsQuery` for BOB.
+    // Alice creates a grant scoped to `MessagesQuery` for BOB.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(&BOB.did)
