@@ -28,11 +28,11 @@ pub fn new_keyring() -> Keyring {
     let verifying_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
 
     // public key (X25519)
-    let x25519_bytes = verifying_key.to_montgomery().to_bytes();
+    let public_key = verifying_key.to_montgomery();
 
     Keyring {
         did: format!("did:key:{verifying_multi}"),
-        public_key: Base64UrlUnpadded::encode_string(&x25519_bytes),
+        public_key: Base64UrlUnpadded::encode_string(public_key.as_bytes()),
         secret_key: Base64UrlUnpadded::encode_string(signing_key.as_bytes()),
     }
 }
