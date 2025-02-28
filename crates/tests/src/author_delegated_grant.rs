@@ -10,8 +10,8 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use credibil_dwn::{Method, endpoint};
 use http::StatusCode;
+use test_node::ProviderImpl;
 use test_node::keystore::{self, Keyring};
-use test_node::provider::ProviderImpl;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());

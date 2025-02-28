@@ -14,7 +14,7 @@ use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use test_node::keystore::{self, Keyring};
-use test_node::provider::ProviderImpl;
+use test_node::ProviderImpl;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
 static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());

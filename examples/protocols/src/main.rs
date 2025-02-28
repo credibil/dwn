@@ -3,7 +3,7 @@ use credibil_dwn::client::protocols::Query;
 use credibil_dwn::{Signer, endpoint};
 use serde_json::json;
 use test_node::keystore;
-use test_node::provider::ProviderImpl;
+use test_node::ProviderImpl;
 
 #[tokio::main]
 async fn main() {

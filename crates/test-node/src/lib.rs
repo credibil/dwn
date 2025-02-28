@@ -1,31 +1,43 @@
-#![feature(let_chains)]
+#![allow(missing_docs)]
+#![allow(unused_variables)]
 
-pub mod provider;
+//! # Provider
+//!
+//! Implementation of the `Provider` trait for testing and examples.
 
-pub use provider::keystore;
+pub mod block_store;
+mod event_stream;
+pub mod keystore;
 
-/// Configure Insta snapshot name.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// snapshot!("issuer:immediate");
-///
-/// ...
-///
-/// assert_snapshot!("credential", vc, {
-///    ".validFrom" => "[validFrom]",
-///    ".credentialSubject" => insta::sorted_redaction()
-/// });
-/// ```
-///
-/// will result in a snapshot named `credential@issuer:immediate.snap`.
-#[macro_export]
-macro_rules! snapshot{
-    ($($expr:expr),*) => {
-        let mut settings = insta::Settings::clone_current();
-        settings.set_snapshot_suffix(format!($($expr,)*));
-        settings.set_prepend_module_to_snapshot(false);
-        let _guard = settings.bind_to_scope();
+use anyhow::Result;
+use blockstore::InMemoryBlockstore;
+use credibil_dwn::provider::{
+    DataStore, DidDocument, DidResolver, EventLog, MessageStore, Provider, TaskStore,
+};
+
+#[derive(Clone)]
+pub struct ProviderImpl {
+    blockstore: InMemoryBlockstore<64>,
+    pub nats_client: async_nats::Client,
+}
+
+impl ProviderImpl {
+    pub async fn new() -> Result<Self> {
+        Ok(Self {
+            blockstore: InMemoryBlockstore::<64>::new(),
+            nats_client: async_nats::connect("demo.nats.io").await?,
+        })
+    }
+}
+
+impl Provider for ProviderImpl {}
+impl MessageStore for ProviderImpl {}
+impl DataStore for ProviderImpl {}
+impl EventLog for ProviderImpl {}
+impl TaskStore for ProviderImpl {}
+
+impl DidResolver for ProviderImpl {
+    async fn resolve(&self, url: &str) -> Result<DidDocument> {
+        unimplemented!("DidResolver::resolve")
     }
 }

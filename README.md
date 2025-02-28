@@ -14,7 +14,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 use credibil_dwn::{StatusCode, endpoint};
 use test_node::keystore;
-use test_node::provider::ProviderImpl;
+use test_node::ProviderImpl;
 
 #[tokio::main]
 async fn main() {
