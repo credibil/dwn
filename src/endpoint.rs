@@ -102,18 +102,3 @@ pub struct Status {
     pub detail: Option<String>,
 }
 
-// impl Message for Subscribe {
-//     type Reply = SubscribeReply;
-
-//     fn descriptor(&self) -> &Descriptor {
-//         &self.descriptor.base
-//     }
-
-//     fn authorization(&self) -> Option<&Authorization> {
-//         Some(&self.authorization)
-//     }
-
-//     async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-//         messages::subscribe::handle(owner, self, provider).await
-//     }
-// }
