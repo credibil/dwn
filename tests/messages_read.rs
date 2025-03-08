@@ -19,9 +19,9 @@ use rand::RngCore;
 use test_node::keystore::{self, Keyring};
 use test_node::ProviderImpl;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]

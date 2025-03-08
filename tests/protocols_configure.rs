@@ -15,13 +15,13 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::ProtocolsQueryBuilder;
 use credibil_dwn::{Error, Message, Method, StatusCode, endpoint};
-use test_node::keystore::{self, Keyring};
 use test_node::ProviderImpl;
+use test_node::keystore::{self, Keyring};
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]

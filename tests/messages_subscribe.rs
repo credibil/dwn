@@ -18,8 +18,8 @@ use test_node::keystore::{self, Keyring};
 use test_node::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // TODO: implement fake provider with no subscription support for this test.
 // // Should respond with a status of NotImplemented (501) if subscriptions are

@@ -10,11 +10,11 @@ use credibil_dwn::client::records::{
 };
 use credibil_dwn::{StatusCode, endpoint};
 use futures::StreamExt;
-use test_node::keystore::{self, Keyring};
 use test_node::ProviderImpl;
+use test_node::keystore::{self, Keyring};
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]

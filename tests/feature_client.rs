@@ -15,8 +15,8 @@ use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use test_node::keystore::{self, Keyring};
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
