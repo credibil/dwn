@@ -3,7 +3,7 @@ use credibil_dwn::event::{Event, Subscriber};
 use credibil_dwn::provider::EventStream;
 use futures::stream::StreamExt;
 
-use crate::ProviderImpl;
+use crate::provider::ProviderImpl;
 
 const SUBJECT: &str = "events";
 

@@ -15,6 +15,7 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::ProtocolsQueryBuilder;
 use credibil_dwn::{Error, Message, Method, StatusCode, endpoint};
+use test_node::ProviderImpl;
 use test_node::keystore::{self, Keyring};
 use tokio::time;
 

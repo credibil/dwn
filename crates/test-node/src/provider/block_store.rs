@@ -4,7 +4,7 @@ use anyhow::Result;
 use blockstore::Blockstore as _;
 use credibil_dwn::provider::BlockStore;
 
-use super::ProviderImpl;
+use crate::provider::ProviderImpl;
 
 impl BlockStore for ProviderImpl {
     async fn put(&self, owner: &str, partition: &str, cid: &str, block: &[u8]) -> Result<()> {
