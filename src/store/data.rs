@@ -19,6 +19,45 @@ const PARTITION: &str = "DATA";
 pub(crate) async fn put(
     owner: &str, record_id: &str, data_cid: &str, reader: impl Read, store: &impl BlockStore,
 ) -> Result<(String, usize)> {
+    // let mut links = vec![];
+    // let mut byte_count = 0;
+    // let mut reader = reader;
+
+    // // read data stream in chunks, storing each chunk as an IPLD block
+    // loop {
+    //     let mut buffer = [0u8; CHUNK_SIZE];
+    //     if let Ok(bytes_read) = reader.read(&mut buffer[..]) {
+    //         if bytes_read == 0 {
+    //             break;
+    //         }
+    //         // encode buffer to IPLD block
+    //         let ipld = Ipld::Bytes(buffer[..bytes_read].to_vec());
+    //         let block = Block::encode(&ipld)?;
+
+    //         // insert into the blockstore
+    //         let cid = block.cid();
+    //         store
+    //             .put(owner, PARTITION, cid, block.data())
+    //             .await
+    //             .map_err(|e| bad!("issue storing data: {e}"))?;
+
+    //         // save link to block
+    //         let cid = Cid::from_str(cid).map_err(|e| bad!("issue parsing CID: {e}"))?;
+    //         links.push(Ipld::Link(cid));
+    //         byte_count += bytes_read;
+    //     }
+    // }
+
+    // // the root block links the data blocks — yields the `data_cid`
+    // let root = Block::encode(&Ipld::List(links))?;
+
+    // // use a 'partition' CID to ensure the root data block is stored
+    // // by the owner, record_id, and data_cid
+    // let root_cid = root_cid(record_id, data_cid)?;
+    // store.put(owner, PARTITION, &root_cid, root.data()).await?;
+
+    // Ok((root.cid().to_string(), byte_count))
+
     ipfs::import(owner, record_id, data_cid, reader, store).await
 }
 

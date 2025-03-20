@@ -74,7 +74,7 @@ homepage = "https://credibil.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/credibil/dwn"
 rust-version = "1.85"
-version = "0.1.0"
+version = "0.1.2"
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -88,19 +88,19 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.95"
+anyhow = "1.0.96"
 base64ct = { version = "1.6.0", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
-credibil-did = "0.1.0"
+credibil-did = "0.1.2"
+credibil-infosec = "0.1.1"
 credibil-dwn = { path = "." }
-credibil-infosec = "0.1.0"
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
 http = "1.2.0"
-multibase = "0.9"
+multibase = "0.9.1"
 rand = "0.8.5"
-serde = { version = "1.0.217", features = ["derive"] }
-serde_json = { version = "1.0.138", features = ["alloc"] }
+serde = { version = "1.0.218", features = ["derive"] }
+serde_json = { version = "1.0.139", features = ["alloc"] }
 sha2 = "0.10.8"
 test-node = { path = "crates/test-node" }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time"] }

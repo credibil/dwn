@@ -12,7 +12,6 @@
 //! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![feature(let_chains)]
 
 pub mod authorization;
 mod error;

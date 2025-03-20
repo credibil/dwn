@@ -8,9 +8,10 @@
 //!
 //! The following example demonstrates how to write and query for a DWN record.
 //!
-//! ```rust,ignore
-//! use credibil_dwn::client::records::{Data, WriteBuilder};
-//! use credibil_dwn::{Result, StatusCode};
+//! ```rust
+//! use base64ct::{Base64UrlUnpadded, Encoding};
+//! use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
+//! use credibil_dwn::{StatusCode, endpoint};
 //! use test_node::keystore;
 //!
 //! #[tokio::main]

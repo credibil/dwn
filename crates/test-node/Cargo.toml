@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
-async-nats = "0.38.0"
+async-nats = "0.39.0"
 base64ct.workspace = true
 blockstore = "0.7.1"
 cid.workspace = true
