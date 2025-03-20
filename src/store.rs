@@ -46,7 +46,8 @@ pub trait Storable: Clone + Send + Sync {
 }
 
 /// The top-level query data structure used for both
-/// [`crate::provider::MessageStore`] and `EventLog` queries.
+/// [`crate::provider::MessageStore`] and [`crate::provider::EventLog`] 
+/// queries.
 ///
 /// The query is composed of one or more [`MatchSet`]s derived from filters
 /// associated with the messagetype being queried. [`MatchSet`]s are 'OR-ed'

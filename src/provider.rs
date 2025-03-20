@@ -32,7 +32,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Document>, Option<Cursor>)>> + Send {
-        async move { message::query(owner, query, self).await.map_err(Into::into) }
+        async { message::query(owner, query, self).await.map_err(Into::into) }
     }
 
     /// Fetch a single message by CID from the underlying store, returning
