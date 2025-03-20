@@ -3,18 +3,61 @@
 A Rust-based implementation of the Decentralized Web Node [specification], as ported from TBD's 
 (now DIF's) TypeScript [reference implementation].
 
-> [!CAUTION]
->
-> **Experimental code!**
->
-> The code in this repository is experimental and under active development.
-> 
-> While the library is near functionally complete, it has not yet had the hardening that comes with
-> ongoing, real-world use.
+> [!CAUTION] Experimental code!
+> While the library is functionally complete, it has not yet had the
+> hardening that comes with ongoing, real-world use.
 
-## Getting Started
+## DWN in action
 
-[TODO] Example impementations can be found in the [examples](./examples) directory. 
+```rust
+use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
+use credibil_dwn::{StatusCode, endpoint};
+use test_node::keystore;
+use test_node::ProviderImpl;
+
+#[tokio::main]
+async fn main() {
+    // create a provider for the DWN library
+    let provider = ProviderImpl::new().await.expect("should create provider");
+    let alice = keystore::new_keyring();
+
+    // create a request to write a new record (and serialize to JSON)
+    let write = WriteBuilder::new()
+        .data(Data::from(b"a new write record".to_vec()))
+        .sign(&alice)
+        .build()
+        .await
+        .expect("should create write");
+
+    // this would normally run on a web server (for example, axum)
+    // ... deserialize request and pass to the endpoint
+    let reply =
+        endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+
+    // find and read the previously written record
+    let query = QueryBuilder::new()
+        .filter(RecordsFilter::new().record_id(&write.record_id))
+        .sign(&alice)
+        .build()
+        .await
+        .expect("should create read");
+
+    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should write");
+    assert_eq!(reply.status.code, StatusCode::OK);
+
+    let body = reply.body.expect("should have body");
+    let entries = body.entries.expect("should have entries");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].write.encoded_data,
+        Some(Base64UrlUnpadded::encode_string(b"a new write record"))
+    );
+}
+```
+
+Example impementations can be found in the [examples](./examples) directory. 
 
 Additionally, the
 [tests](./tests) directory contains a comprehensive suite of tests that demonstrate a wide variety

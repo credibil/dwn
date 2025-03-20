@@ -13,40 +13,23 @@
 //! use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 //! use credibil_dwn::{StatusCode, endpoint};
 //! use test_node::keystore;
-//! use test_node::provider::ProviderImpl;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let provider = ProviderImpl::new().await.expect("should create provider");
 //!     let alice = keystore::new_keyring();
 //!
+//!     // create a message to write a record
 //!     let write = WriteBuilder::new()
 //!         .data(Data::from(b"a new write record".to_vec()))
 //!         .sign(&alice)
 //!         .build()
 //!         .await
-//!         .expect("should create write");
-//!     let reply =
-//!         endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
-//!     assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+//!         .unwrap();
 //!
-//!     // and to read the previously written record:
-//!     let query = QueryBuilder::new()
-//!         .filter(RecordsFilter::new().record_id(&write.record_id))
-//!         .sign(&alice)
-//!         .build()
-//!         .await
-//!         .expect("should create read");
-//!     let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should write");
-//!     assert_eq!(reply.status.code, StatusCode::OK);
-//!
-//!     let body = reply.body.expect("should have body");
-//!     let entries = body.entries.expect("should have entries");
-//!     assert_eq!(entries.len(), 1);
-//!     assert_eq!(
-//!         entries[0].write.encoded_data,
-//!         Some(Base64UrlUnpadded::encode_string(b"a new write record"))
-//!     );
+//!     // send the request to a DWN node
+//!     let client = reqwest::Client::new();
+//!     let reply = client.post("http://dwn.io/post").json(&write).send().await.unwrap();
+//!     assert_eq!(reply.status(), StatusCode::ACCEPTED);
 //! }
 //! ```
 

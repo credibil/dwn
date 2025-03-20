@@ -23,13 +23,13 @@ use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
-use test_node::provider::ProviderImpl;
+use test_node::ProviderImpl;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static ISSUER: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static PFI: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ISSUER: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static PFI: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // // Should handle pre-processing errors
 // #[tokio::test]

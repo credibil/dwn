@@ -17,12 +17,12 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::jose::jws::{Jws, Protected, Signature};
 use test_node::keystore::{self, Keyring};
-use test_node::provider::ProviderImpl;
+use test_node::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // Should return protocols matching the query.
 #[tokio::test]

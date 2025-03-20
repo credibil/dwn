@@ -1,7 +1,8 @@
 //! # Messages Query
 //!
 //! The messages query endpoint handles `MessagesQuery` messages — requests
-//! to query the [`EventLog`] for matching persisted messages (of any type).
+//! to query the [`crate::provider::EventLog`] for matching persisted messages
+//! (of any type).
 
 use std::io;
 
@@ -38,7 +39,8 @@ pub struct QueryDescriptor {
     pub cursor: Option<Cursor>,
 }
 
-/// [`QueryReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
     /// Entries matching the message's query.
@@ -72,7 +74,8 @@ pub struct ReadDescriptor {
     pub message_cid: String,
 }
 
-/// [`ReadReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`ReadReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ReadReply {
     /// The `Read` descriptor.
@@ -116,7 +119,8 @@ pub struct SubscribeDescriptor {
     pub filters: Vec<MessagesFilter>,
 }
 
-/// [`SubscribeReply`] is returned by the handler in the [`Reply`] `body` field.
+/// [`SubscribeReply`] is returned by the handler in the
+/// [`crate::endpoint::Reply`] `body` field.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.

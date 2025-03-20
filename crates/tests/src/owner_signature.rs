@@ -11,11 +11,11 @@ use credibil_dwn::client::records::{Data, ReadBuilder, RecordsFilter, WriteBuild
 use credibil_dwn::endpoint;
 use http::StatusCode;
 use serde_json::{Value, json};
+use test_node::ProviderImpl;
 use test_node::keystore::{self, Keyring};
-use test_node::provider::ProviderImpl;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]

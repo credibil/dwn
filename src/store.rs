@@ -45,8 +45,9 @@ pub trait Storable: Clone + Send + Sync {
     fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>);
 }
 
-/// The top-level query data structure used for both [`MessageStore`] and
-/// `EventLog` queries.
+/// The top-level query data structure used for both
+/// [`crate::provider::MessageStore`] and [`crate::provider::EventLog`] 
+/// queries.
 ///
 /// The query is composed of one or more [`MatchSet`]s derived from filters
 /// associated with the messagetype being queried. [`MatchSet`]s are 'OR-ed'

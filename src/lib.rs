@@ -1,14 +1,13 @@
 //! # Decentralized Web Node (DWN)
 //!
 //! A [Decentralized Web Node (DWN)] is a data storage and message relay
-//! mechanism entities can use to locate public or private permissioned data
-//! related to a given Decentralized Identifier (DID). Decentralized Web Nodes
-//! are designed to be deployed in mesh-like datastore construct that enables
-//! an entity to operate multiple nodes that replicate state across all nodes.
+//! mechanism that can be used to share public or private permissioned data
+//! for a given Decentralized Identifier (DID).
 //!
-//! A DWN allows the owning entity to secure, manage, and transact data with
-//! others without reliance on location or provider-specific infrastructure,
-//! interfaces, or routing mechanisms.
+//! DWNs are designed to be deployed in mesh-like datastore construct that
+//! replicates state across all nodes. The owner can secure, manage, and
+//! transact data with others without reliance on location or provider-specific
+//! infrastructure, interfaces, or routing mechanisms.
 //!
 //! [Decentralized Web Node (DWN)]: https://identity.foundation/working-groups/didcomm-messaging/spec/#decentralized-web-node-dwn
 
@@ -22,8 +21,11 @@ pub mod hd_key;
 pub mod interfaces;
 mod utils;
 
-#[cfg(feature = "client")]
-pub mod client;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "client")] {
+        pub mod client;
+    }
+}
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "server")] {
@@ -43,7 +45,6 @@ cfg_if::cfg_if! {
     }
 }
 
-// Re-exports
 use ::serde::{Deserialize, Serialize};
 pub use credibil_infosec::{Receiver, Signer};
 use derive_more::Display;

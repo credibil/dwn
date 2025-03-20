@@ -31,7 +31,12 @@ env = { RUSTFLAGS = "-Dwarnings" }
 
 [tasks.doctest]
 command = "cargo"
-args = ["test", "--workspace", "doc"]
+args = ["test", "--doc"]
+env = { RUSTFLAGS = "-Dwarnings" }
+
+[tasks.doc]
+command = "cargo"
+args = ["doc", "--open"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
 # -----------------------------------------------------------------------------
@@ -75,7 +80,7 @@ install_crate = "cargo-outdated"
 dependencies = ["audit", "fmt", "lint", "outdated", "unused"]
 
 # -----------------------------------------------------------------------------
-# Publishing
+# Releasing
 # -----------------------------------------------------------------------------
 
 [tasks.semver]

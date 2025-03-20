@@ -15,11 +15,11 @@ use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, StatusCode, endpoint};
 use rand::RngCore;
 use test_node::keystore::{self, Keyring};
-use test_node::provider::ProviderImpl;
+use test_node::ProviderImpl;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static BOB: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
-static CAROL: LazyLock<Keyring> = LazyLock::new(|| keystore::new_keyring());
+static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 
 // Should return a status of BadRequest (400) when querying for unpublished records
 // with sort date set to `Sort::Publishedxxx`.
