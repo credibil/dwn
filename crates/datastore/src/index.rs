@@ -161,7 +161,6 @@ impl<S: BlockStore> Indexes<'_, S> {
                 matches.insert(item.message_cid.clone());
 
                 // sort results as we collect using `message_cid` as a tie-breaker
-                println!("sort_field: {}", sort_field);
                 let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
                 results.insert(sort_key, item.clone());
             }
