@@ -7,8 +7,8 @@ use std::io::Read;
 
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document as DidDocument};
+pub use datastore::BlockStore;
 
-pub use crate::BlockStore;
 use crate::event::{Event, Subscriber};
 use crate::interfaces::{Cursor, Document};
 use crate::store::{Query, Storable, data, event_log, message, task};

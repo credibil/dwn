@@ -2,8 +2,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_dwn::client::protocols::Query;
 use credibil_dwn::{Signer, endpoint};
 use serde_json::json;
-use test_node::keystore;
-use test_node::ProviderImpl;
+use test_node::{ProviderImpl, keystore};
 
 #[tokio::main]
 async fn main() {

@@ -37,6 +37,7 @@ ciborium = "0.2.2"
 cid.workspace = true
 credibil-did.workspace = true
 credibil-infosec.workspace = true
+datastore.workspace = true
 derive_more = { version = "2.0.1", features = ["display"] }
 ed25519-dalek.workspace = true
 futures.workspace = true
@@ -59,7 +60,7 @@ zeroize = "1.8.1"
 
 [dev-dependencies]
 blockstore = "0.7.1"
-reqwest = {version="0.12.12",features = ["json"]}
+reqwest = { version = "0.12.12", features = ["json"] }
 test-node.workspace = true
 
 [workspace]
@@ -92,8 +93,9 @@ anyhow = "1.0.96"
 base64ct = { version = "1.6.0", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-did = "0.1.2"
-credibil-infosec = "0.1.1"
 credibil-dwn = { path = "." }
+credibil-infosec = "0.1.1"
+datastore = { path = "./crates/datastore" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
 http = "1.2.0"

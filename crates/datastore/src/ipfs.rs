@@ -5,14 +5,13 @@ use std::io::Read;
 use std::str::FromStr;
 
 use ::cid::Cid;
+use anyhow::{Result, anyhow};
 use ipld_core::codec::Codec; // Links
 use ipld_core::ipld::Ipld;
 use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
-use crate::provider::BlockStore;
-use crate::utils::cid;
-use crate::{Result, bad};
+use crate::{BlockStore, cid};
 
 /// The maximum size of a message.
 // pub const MAX_ENCODED_SIZE: usize = 30000;
@@ -46,10 +45,10 @@ pub async fn import(
             store
                 .put(owner, PARTITION, cid, block.data())
                 .await
-                .map_err(|e| bad!("issue storing data: {e}"))?;
+                .map_err(|e| anyhow!("issue storing data: {e}"))?;
 
             // save link to block
-            let cid = Cid::from_str(cid).map_err(|e| bad!("issue parsing CID: {e}"))?;
+            let cid = Cid::from_str(cid).map_err(|e| anyhow!("issue parsing CID: {e}"))?;
             links.push(Ipld::Link(cid));
             byte_count += bytes_read;
         }
@@ -75,27 +74,25 @@ fn root_cid(record_id: &str, data_cid: &str) -> Result<String> {
 }
 
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
-#[cfg(feature = "server")]
 pub fn encode_block<T>(payload: &T) -> Result<Vec<u8>>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
     // encode payload
     let data =
-        DagCborCodec::encode_to_vec(payload).map_err(|e| bad!("issue encoding block: {e}"))?;
+        DagCborCodec::encode_to_vec(payload).map_err(|e| anyhow!("issue encoding block: {e}"))?;
     if data.len() > MAX_BLOCK_SIZE {
-        return Err(bad!("block is too large"));
+        return Err(anyhow!("block is too large"));
     }
     Ok(data)
 }
 
 /// Decodes a block.
-#[cfg(feature = "server")]
 pub fn decode_block<T>(data: &[u8]) -> Result<T>
 where
     T: Serialize + for<'a> Deserialize<'a>,
 {
-    DagCborCodec::decode_from_slice(data).map_err(|e| bad!("issue decoding block: {e}"))
+    DagCborCodec::decode_from_slice(data).map_err(|e| anyhow!("issue decoding block: {e}"))
 }
 
 /// Block represents a unit of data uniquely identified by a content identifier
@@ -111,10 +108,10 @@ impl Block {
         T: Serialize + for<'a> Deserialize<'a>,
     {
         // encode payload
-        let data =
-            DagCborCodec::encode_to_vec(payload).map_err(|e| bad!("issue encoding block: {e}"))?;
+        let data = DagCborCodec::encode_to_vec(payload)
+            .map_err(|e| anyhow!("issue encoding block: {e}"))?;
         if data.len() > MAX_BLOCK_SIZE {
-            return Err(bad!("block is too large"));
+            return Err(anyhow!("block is too large"));
         }
         let cid = cid::from_value(payload)?;
 

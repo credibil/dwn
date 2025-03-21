@@ -553,6 +553,7 @@ dependencies = [
  "cid",
  "credibil-did",
  "credibil-infosec",
+ "datastore",
  "derive_more",
  "ed25519-dalek",
  "futures",
@@ -717,6 +718,30 @@ checksum = "18e4fdb82bd54a12e42fb58a800dcae6b9e13982238ce2296dc3570b92148e1f"
 dependencies = [
  "data-encoding",
  "syn",
+]
+
+[[package]]
+name = "datastore"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "base64ct",
+ "blockstore",
+ "chrono",
+ "ciborium",
+ "cid",
+ "ed25519-dalek",
+ "futures",
+ "ipld-core",
+ "multibase",
+ "multihash-codetable",
+ "rand 0.8.5",
+ "serde",
+ "serde_ipld_dagcbor",
+ "serde_json",
+ "sha2 0.10.8",
+ "x25519-dalek",
 ]
 
 [[package]]

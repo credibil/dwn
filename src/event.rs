@@ -23,6 +23,7 @@ pub type Event = Document;
 
 /// Filter to use when subscribing to events.
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SubscribeFilter {
     /// Filter events using a Messages filter.
     Messages(Vec<MessagesFilter>),

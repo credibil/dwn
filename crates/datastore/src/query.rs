@@ -1,121 +1,134 @@
-//! # Interfaces
+//! # Store
 //!
-//! Interfaces are the main building blocks of a DWN. They define the
-//! structure of the data that is exchanged between users and the DWN.
+//! The `store` module provides utilities for storing and retrieving messages
+//! and associated data.
 //!
-//! The three primary interfaces are `Records`, `Protocols`, and `Messages`
-//! with each having a subset of `Methods` that define the operations that can
-//! be performed on the data.
+//! The two primary types exposed by this module are [`Storable`] and [`Query`].
 //!
-//! Interface methods are executed by sending JSON messages to the DWN which,
-//! in turn, will respond with a JSON reply. This library provides the tools
-//! to easily create and parse these messages.
+//! [`Storable`] wraps each message with a unifying type used to simplify storage
+//! and retrieval as well as providing a vehicle for attaching addtional data
+//! alongside the message (i.e. indexes).
+//!
+//! [`Query`] wraps store-specific query options for querying the underlying
+//! store.
 
-pub mod messages;
-pub mod protocols;
-pub mod records;
+use std::fmt::Display;
 
+use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::interfaces::protocols::Configure;
-use crate::interfaces::records::{Delete, Write};
-use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
-use crate::{Interface, Method, Result};
+/// The top-level query data structure used for both
+/// [`crate::provider::MessageStore`] and [`crate::provider::EventLog`]
+/// queries.
+///
+/// The query is composed of one or more [`MatchSet`]s derived from filters
+/// associated with the messagetype being queried. [`MatchSet`]s are 'OR-ed'
+/// together to form the query.
+///
+/// Sorting and pagination options are also included although not always
+/// used.
+#[derive(Clone, Debug, Default)]
+pub struct Query {
+    /// One or more sets of events to match.
+    pub match_sets: Vec<MatchSet>,
 
-/// The message descriptor.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(default)]
-pub struct Descriptor {
-    /// The associated web node interface.
-    pub interface: Interface,
+    /// Sort options.
+    pub sort: Sort,
 
-    /// The interface method.
-    pub method: Method,
-
-    /// The timestamp of the message.
-    #[serde(serialize_with = "rfc3339_micros")]
-    pub message_timestamp: DateTime<Utc>,
+    /// Pagination options.
+    pub pagination: Option<Pagination>,
 }
 
-/// `Document` is used to store and retrieve messages in a type-independent manner.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[allow(clippy::large_enum_variant)]
-pub enum Document {
-    /// `RecordsWrite` message.
-    Write(Write),
+impl Query {
+    /// Determine whether the query can be expressed in a concise form.
+    #[must_use]
+    pub(crate) fn is_concise(&self) -> bool {
+        if self.match_sets.is_empty() {
+            return false;
+        }
 
-    /// `RecordsDelete` message.
-    Delete(Delete),
+        for ms in &self.match_sets {
+            let Some((_, value)) = &ms.index else {
+                return false;
+            };
+            if value.is_empty() {
+                return false;
+            }
+        }
 
-    /// `ProtocolsConfigure` message.
-    Configure(Configure),
-}
-
-impl Default for Document {
-    fn default() -> Self {
-        Self::Write(Write::default())
+        true
     }
 }
 
-impl Document {
-    /// The message's CID.
+/// A `MatchSet` contains a set of [`Matcher`]s derived from the underlying
+/// filter object. [`Matcher`]s are 'AND-ed' together for a successful match.
+#[derive(Clone, Debug, Default)]
+pub struct MatchSet {
+    /// The set of matchers.
+    pub inner: Vec<Matcher>,
+
+    /// The index to use for the query.
+    pub index: Option<(String, String)>,
+}
+
+/// A `Matcher` is used to match the `field`/`value` pair to a proovided index
+/// value during the process of executing a query.
+#[derive(Clone, Debug)]
+pub struct Matcher {
+    /// The name of the field this matcher applies to.
+    pub field: String,
+
+    /// The value and strategy to use for a successful match.
+    pub value: MatchOn,
+}
+
+impl Matcher {
+    /// Check if the field value matches the filter value.
     ///
     /// # Errors
     ///
-    /// The underlying CID computation is not infallible and may fail if the
-    /// message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
-        match self {
-            Self::Write(write) => write.cid(),
-            Self::Delete(delete) => delete.cid(),
-            Self::Configure(configure) => configure.cid(),
-        }
-    }
-
-    /// The message's CID.
-    #[must_use]
-    pub const fn descriptor(&self) -> &Descriptor {
-        match self {
-            Self::Write(write) => &write.descriptor.base,
-            Self::Delete(delete) => &delete.descriptor.base,
-            Self::Configure(configure) => &configure.descriptor.base,
-        }
-    }
-
-    /// Returns the `RecordsWrite` message, when set.
-    #[must_use]
-    pub const fn as_write(&self) -> Option<&records::Write> {
-        match &self {
-            Self::Write(write) => Some(write),
-            _ => None,
-        }
-    }
-
-    /// Returns the `RecordsDelete` message, when set.
-    #[must_use]
-    pub const fn as_delete(&self) -> Option<&records::Delete> {
-        match &self {
-            Self::Delete(delete) => Some(delete),
-            _ => None,
-        }
-    }
-
-    /// Returns the `ProtocolsConfigure` message, when set.
-    #[must_use]
-    pub const fn as_configure(&self) -> Option<&Configure> {
-        match &self {
-            Self::Configure(configure) => Some(configure),
-            _ => None,
-        }
+    /// The `Matcher` may fail to parse the provided value to the correct type
+    /// and will return an error in this case.
+    pub(crate) fn is_match(&self, value: &str) -> Result<bool> {
+        let matched = match &self.value {
+            MatchOn::Equal(filter_val) => value == filter_val,
+            MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
+            MatchOn::OneOf(values) => values.contains(&value.to_string()),
+            MatchOn::Range(range) => {
+                let int_val = value
+                    .parse()
+                    .map_err(|e| anyhow!("issue converting match value to usize: {e}"))?;
+                range.contains(&int_val)
+            }
+            MatchOn::DateRange(range) => {
+                let date_val = DateTime::parse_from_rfc3339(value)
+                    .map_err(|e| anyhow!("issue converting match value to date: {e}"))?;
+                range.contains(&date_val.into())
+            }
+        };
+        Ok(matched)
     }
 }
 
-impl datastore::store::Document for Document {
-    fn cid(&self) -> anyhow::Result<String> {
-        self.cid().map_err(Into::into)
-    }
+/// The [`MatchOn`] enum is used to specify the matching strategy to be
+/// employed by the `Matcher`.
+#[derive(Clone, Debug)]
+pub enum MatchOn {
+    /// The match must be equal.
+    Equal(String),
+
+    /// The match must start with the specified value.
+    StartsWith(String),
+
+    /// The match must be with at least one of the items specified.
+    OneOf(Vec<String>),
+
+    /// The match must be in the specified range.
+    Range(Range<usize>),
+
+    /// The match must be in the specified date range.
+    DateRange(DateRange),
 }
 
 /// Range to use in filters.
@@ -228,6 +241,8 @@ impl<T: PartialEq> Range<T> {
     }
 }
 
+use crate::serde::rfc3339_micros_opt;
+
 /// Range filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DateRange {
@@ -283,6 +298,37 @@ impl DateRange {
         }
 
         true
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub enum Sort {
+    /// Sort by the specified field in ascending order.
+    Ascending(String),
+
+    /// Sort by the specified field in descending order.
+    Descending(String),
+}
+
+impl Sort {
+    /// Short-circuit testing for ascending/descending sort.
+    #[must_use]
+    pub const fn is_ascending(&self) -> bool {
+        matches!(self, Self::Ascending(_))
+    }
+}
+
+impl Default for Sort {
+    fn default() -> Self {
+        Self::Ascending("messageTimestamp".to_string())
+    }
+}
+
+impl Display for Sort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ascending(s) | Self::Descending(s) => write!(f, "{s}"),
+        }
     }
 }
 

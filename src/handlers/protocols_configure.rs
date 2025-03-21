@@ -167,7 +167,7 @@ impl Message for Configure {
 }
 
 impl Storable for Configure {
-    fn document(&self) -> Document {
+    fn document(&self) -> impl crate::store::Document {
         Document::Configure(self.clone())
     }
 

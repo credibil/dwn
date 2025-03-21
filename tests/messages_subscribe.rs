@@ -14,8 +14,8 @@ use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use futures::StreamExt;
-use test_node::keystore::{self, Keyring};
 use test_node::ProviderImpl;
+use test_node::keystore::{self, Keyring};
 use tokio::time;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);

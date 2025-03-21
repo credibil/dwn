@@ -9,17 +9,15 @@ use std::collections::btree_map::Range;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Bound::{self, Excluded, Included, Unbounded};
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::Result;
-use crate::provider::BlockStore;
-use crate::store::{Query, Storable};
-use crate::utils::{cid, ipfs};
+use crate::query::Query;
+use crate::store::{Document, Storable};
+use crate::{BlockStore, cid, ipfs};
 
-// const NULL: u8 = 0x00;
-// const MAX: u8 = 0x7E;
-const NULL: char = '\u{100000}';
-const MAX: char = '\u{10ffff}';
+const NULL: char = '\u{100000}'; // u8 = 0x00;
+const MAX: char = '\u{10ffff}'; // u8 = 0x7E;
 
 /// Insert an entry's queryable fields into indexes.
 pub async fn insert(
@@ -118,10 +116,7 @@ impl<S: BlockStore> Indexes<'_, S> {
 
         // update the index block
         self.store.delete(self.owner, self.partition, &index_cid).await?;
-        self.store
-            .put(self.owner, self.partition, &index_cid, &ipfs::encode_block(&index)?)
-            .await
-            .map_err(Into::into)
+        self.store.put(self.owner, self.partition, &index_cid, &ipfs::encode_block(&index)?).await
     }
 
     // This query strategy is used when the filter contains a property that
@@ -166,6 +161,7 @@ impl<S: BlockStore> Indexes<'_, S> {
                 matches.insert(item.message_cid.clone());
 
                 // sort results as we collect using `message_cid` as a tie-breaker
+                println!("sort_field: {}", sort_field);
                 let sort_key = format!("{}{}", &item.fields[&sort_field], item.message_cid);
                 results.insert(sort_key, item.clone());
             }
@@ -376,124 +372,123 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #![cfg(feature = "client")]
+// #[cfg(test)]
+// mod tests {
 
-    use std::io::Cursor;
-    use std::str::FromStr;
+//     use std::io::Cursor;
+//     use std::str::FromStr;
 
-    use anyhow::Result;
-    use blockstore::{Blockstore as _, InMemoryBlockstore};
-    use rand::RngCore;
-    use test_node::keystore;
+//     use anyhow::Result;
+//     use blockstore::{Blockstore as _, InMemoryBlockstore};
+//     use rand::RngCore;
+//     use test_node::keystore;
 
-    use super::*;
-    use crate::client::protocols::{ConfigureBuilder, Definition};
-    use crate::client::records::{Data, WriteBuilder};
-    use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
+//     use super::*;
+//     use crate::client::protocols::{ConfigureBuilder, Definition};
+//     use crate::client::records::{Data, WriteBuilder};
+//     use crate::store::{ProtocolsQueryBuilder, RecordsFilter, RecordsQueryBuilder};
 
-    const PARTITION: &str = "TEST";
+//     const PARTITION: &str = "TEST";
 
-    #[tokio::test]
-    async fn query_records() {
-        let block_store = BlockStoreImpl::new();
-        let alice = keystore::new_keyring();
+//     #[tokio::test]
+//     async fn query_records() {
+//         let block_store = BlockStoreImpl::new();
+//         let alice = keystore::new_keyring();
 
-        let mut data = [0u8; 10];
-        rand::thread_rng().fill_bytes(&mut data);
-        let stream = Cursor::new(data.to_vec());
+//         let mut data = [0u8; 10];
+//         rand::thread_rng().fill_bytes(&mut data);
+//         let stream = Cursor::new(data.to_vec());
 
-        let write = WriteBuilder::new()
-            .data(Data::Stream(stream.clone()))
-            .published(true)
-            .sign(&alice)
-            .build()
-            .await
-            .unwrap();
+//         let write = WriteBuilder::new()
+//             .data(Data::Stream(stream.clone()))
+//             .published(true)
+//             .sign(&alice)
+//             .build()
+//             .await
+//             .unwrap();
 
-        // add message
-        let message_cid = write.cid().unwrap();
-        let block = ipfs::encode_block(&write).unwrap();
-        block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
+//         // add message
+//         let message_cid = write.cid().unwrap();
+//         let block = ipfs::encode_block(&write).unwrap();
+//         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
-        // update indexes
-        super::insert(&alice.did, PARTITION, &write, &block_store).await.unwrap();
+//         // update indexes
+//         super::insert(&alice.did, PARTITION, &write, &block_store).await.unwrap();
 
-        // execute query
-        let query = RecordsQueryBuilder::new()
-            .add_filter(
-                RecordsFilter::new()
-                    // .add_author(&alice.did)
-                    // .data_size(Range::new().gt(8)),
-                    .record_id(write.record_id),
-            )
-            .build();
+//         // execute query
+//         let query = RecordsQueryBuilder::new()
+//             .add_filter(
+//                 RecordsFilter::new()
+//                     // .add_author(&alice.did)
+//                     // .data_size(Range::new().gt(8)),
+//                     .record_id(write.record_id),
+//             )
+//             .build();
 
-        let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
-    }
+//         let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
+//     }
 
-    #[tokio::test]
-    async fn query_protocols() {
-        let block_store = BlockStoreImpl::new();
-        let alice = keystore::new_keyring();
+//     #[tokio::test]
+//     async fn query_protocols() {
+//         let block_store = BlockStoreImpl::new();
+//         let alice = keystore::new_keyring();
 
-        let configure = ConfigureBuilder::new()
-            .definition(Definition::new("http://minimal.xyz"))
-            .sign(&alice)
-            .build()
-            .await
-            .expect("should build");
+//         let configure = ConfigureBuilder::new()
+//             .definition(Definition::new("http://minimal.xyz"))
+//             .sign(&alice)
+//             .build()
+//             .await
+//             .expect("should build");
 
-        // add message
-        let message_cid = configure.cid().unwrap();
-        let block = ipfs::encode_block(&configure).unwrap();
-        block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
+//         // add message
+//         let message_cid = configure.cid().unwrap();
+//         let block = ipfs::encode_block(&configure).unwrap();
+//         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
 
-        // update indexes
-        super::insert(&alice.did, PARTITION, &configure, &block_store).await.unwrap();
+//         // update indexes
+//         super::insert(&alice.did, PARTITION, &configure, &block_store).await.unwrap();
 
-        // execute query
-        let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();
-        let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
-    }
+//         // execute query
+//         let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();
+//         let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
+//     }
 
-    struct BlockStoreImpl {
-        blockstore: InMemoryBlockstore<64>,
-    }
+//     struct BlockStoreImpl {
+//         blockstore: InMemoryBlockstore<64>,
+//     }
 
-    impl BlockStoreImpl {
-        pub fn new() -> Self {
-            Self {
-                blockstore: InMemoryBlockstore::<64>::new(),
-            }
-        }
-    }
+//     impl BlockStoreImpl {
+//         pub fn new() -> Self {
+//             Self {
+//                 blockstore: InMemoryBlockstore::<64>::new(),
+//             }
+//         }
+//     }
 
-    impl BlockStore for BlockStoreImpl {
-        async fn put(&self, owner: &str, partition: &str, cid: &str, data: &[u8]) -> Result<()> {
-            // convert libipld CID to blockstore CID
-            let block_cid = ::cid::Cid::from_str(cid)?;
-            self.blockstore.put_keyed(&block_cid, data).await.map_err(Into::into)
-        }
+//     impl BlockStore for BlockStoreImpl {
+//         async fn put(&self, owner: &str, partition: &str, cid: &str, data: &[u8]) -> Result<()> {
+//             // convert libipld CID to blockstore CID
+//             let block_cid = ::cid::Cid::from_str(cid)?;
+//             self.blockstore.put_keyed(&block_cid, data).await.map_err(Into::into)
+//         }
 
-        async fn get(&self, owner: &str, partition: &str, cid: &str) -> Result<Option<Vec<u8>>> {
-            // convert libipld CID to blockstore CID
-            let block_cid = ::cid::Cid::try_from(cid)?;
-            let Some(bytes) = self.blockstore.get(&block_cid).await? else {
-                return Ok(None);
-            };
-            Ok(Some(bytes))
-        }
+//         async fn get(&self, owner: &str, partition: &str, cid: &str) -> Result<Option<Vec<u8>>> {
+//             // convert libipld CID to blockstore CID
+//             let block_cid = ::cid::Cid::try_from(cid)?;
+//             let Some(bytes) = self.blockstore.get(&block_cid).await? else {
+//                 return Ok(None);
+//             };
+//             Ok(Some(bytes))
+//         }
 
-        async fn delete(&self, owner: &str, partition: &str, cid: &str) -> Result<()> {
-            let cid = ::cid::Cid::from_str(cid)?;
-            self.blockstore.remove(&cid).await?;
-            Ok(())
-        }
+//         async fn delete(&self, owner: &str, partition: &str, cid: &str) -> Result<()> {
+//             let cid = ::cid::Cid::from_str(cid)?;
+//             self.blockstore.remove(&cid).await?;
+//             Ok(())
+//         }
 
-        async fn purge(&self, owner: &str, partition: &str) -> Result<()> {
-            unimplemented!()
-        }
-    }
-}
+//         async fn purge(&self, owner: &str, partition: &str) -> Result<()> {
+//             unimplemented!()
+//         }
+//     }
+// }

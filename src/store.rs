@@ -14,77 +14,93 @@
 
 pub mod data;
 pub(crate) mod event_log;
-pub(crate) mod index;
 pub(crate) mod message;
 pub(crate) mod task;
 
-use std::collections::HashMap;
-
-use chrono::DateTime;
+pub use datastore::index;
+pub use datastore::query::{
+    Cursor, DateRange, Lower, MatchOn, MatchSet, Matcher, Pagination, Query, Range, Sort, Upper,
+};
+pub use datastore::store::{Document, Storable};
 
 pub use self::data::MAX_ENCODED_SIZE;
-use crate::interfaces::records::{self, RecordsFilter, Sort, TagFilter};
-use crate::interfaces::{DateRange, Document, Pagination, Range, messages};
-use crate::{Interface, Method, Result, bad};
+use crate::interfaces::records::{self, RecordsFilter, TagFilter};
+use crate::interfaces::{self, messages};
+use crate::{Interface, Method};
 
-/// The `Storable` trait is used to wrap each message with a unifying type used
-/// for all stored messages (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
-pub trait Storable: Clone + Send + Sync {
-    /// The message to store as a `Document`.
-    ///
-    /// # Errors
-    ///
-    /// The underlying CID computation is not infallible and may fail if the
-    /// message cannot be serialized to CBOR.
-    fn document(&self) -> Document;
-
-    /// Indexes for this entry.
-    fn indexes(&self) -> HashMap<String, String>;
-
-    /// Adds a index item to the entry's indexes.
-    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>);
+impl<T: PartialEq> From<interfaces::Lower<T>> for Lower<T> {
+    fn from(lower: interfaces::Lower<T>) -> Self {
+        match lower {
+            interfaces::Lower::Inclusive(value) => Self::Inclusive(value),
+            interfaces::Lower::Exclusive(value) => Self::Exclusive(value),
+        }
+    }
 }
 
-/// The top-level query data structure used for both
-/// [`crate::provider::MessageStore`] and [`crate::provider::EventLog`] 
-/// queries.
-///
-/// The query is composed of one or more [`MatchSet`]s derived from filters
-/// associated with the messagetype being queried. [`MatchSet`]s are 'OR-ed'
-/// together to form the query.
-///
-/// Sorting and pagination options are also included although not always
-/// used.
-#[derive(Clone, Debug, Default)]
-pub struct Query {
-    /// One or more sets of events to match.
-    pub(crate) match_sets: Vec<MatchSet>,
-
-    /// Sort options.
-    pub(crate) sort: Sort,
-
-    /// Pagination options.
-    pub(crate) pagination: Option<Pagination>,
+impl<T: PartialEq> From<interfaces::Upper<T>> for Upper<T> {
+    fn from(lower: interfaces::Upper<T>) -> Self {
+        match lower {
+            interfaces::Upper::Inclusive(value) => Self::Inclusive(value),
+            interfaces::Upper::Exclusive(value) => Self::Exclusive(value),
+        }
+    }
 }
 
-impl Query {
-    /// Determine whether the query can be expressed in a concise form.
-    #[must_use]
-    pub(crate) fn is_concise(&self) -> bool {
-        if self.match_sets.is_empty() {
-            return false;
+impl<T: PartialEq> From<interfaces::Range<T>> for Range<T> {
+    fn from(range: interfaces::Range<T>) -> Self {
+        Self {
+            lower: range.lower.map(Into::into),
+            upper: range.upper.map(Into::into),
         }
+    }
+}
 
-        for ms in &self.match_sets {
-            let Some((_, value)) = &ms.index else {
-                return false;
-            };
-            if value.is_empty() {
-                return false;
-            }
+impl From<interfaces::DateRange> for DateRange {
+    fn from(date_range: interfaces::DateRange) -> Self {
+        Self {
+            lower: date_range.lower,
+            upper: date_range.upper,
         }
+    }
+}
 
-        true
+impl From<interfaces::Pagination> for Pagination {
+    fn from(pagination: interfaces::Pagination) -> Self {
+        Self {
+            limit: pagination.limit,
+            cursor: pagination.cursor.map(Into::into),
+        }
+    }
+}
+
+impl From<interfaces::Cursor> for Cursor {
+    fn from(cursor: interfaces::Cursor) -> Self {
+        Self {
+            message_cid: cursor.message_cid,
+            value: cursor.value,
+        }
+    }
+}
+
+impl From<Cursor> for interfaces::Cursor {
+    fn from(cursor: Cursor) -> Self {
+        Self {
+            message_cid: cursor.message_cid,
+            value: cursor.value,
+        }
+    }
+}
+
+impl From<records::Sort> for Sort {
+    fn from(sort: records::Sort) -> Self {
+        match sort {
+            records::Sort::TimestampAsc => Self::Ascending("messageTimestamp".to_string()),
+            records::Sort::TimestampDesc => Self::Descending("messageTimestamp".to_string()),
+            records::Sort::PublishedAsc => Self::Ascending("published".to_string()),
+            records::Sort::PublishedDesc => Self::Descending("published".to_string()),
+            records::Sort::CreatedAsc => Self::Ascending("dateCreated".to_string()),
+            records::Sort::CreatedDesc => Self::Descending("dateCreated".to_string()),
+        }
     }
 }
 
@@ -106,8 +122,8 @@ impl From<records::Query> for Query {
 
         Self {
             match_sets: vec![match_set],
-            sort: query.descriptor.date_sort.unwrap_or_default(),
-            pagination: query.descriptor.pagination,
+            sort: query.descriptor.date_sort.unwrap_or_default().into(),
+            pagination: query.descriptor.pagination.map(Into::into),
         }
     }
 }
@@ -150,7 +166,7 @@ impl From<messages::Query> for Query {
             if let Some(message_timestamp) = &filter.message_timestamp {
                 match_set.inner.push(Matcher {
                     field: "messageTimestamp".to_string(),
-                    value: MatchOn::DateRange(message_timestamp.clone()),
+                    value: MatchOn::DateRange(message_timestamp.clone().into()),
                 });
             }
 
@@ -175,80 +191,10 @@ impl From<messages::Query> for Query {
 
         Self {
             match_sets,
-            sort: Sort::TimestampAsc,
+            sort: Sort::Ascending("messageTimestamp".to_string()),
             pagination: None,
         }
     }
-}
-
-/// A `MatchSet` contains a set of [`Matcher`]s derived from the underlying
-/// filter object. [`Matcher`]s are 'AND-ed' together for a successful match.
-#[derive(Clone, Debug, Default)]
-pub struct MatchSet {
-    /// The set of matchers.
-    pub inner: Vec<Matcher>,
-
-    /// The index to use for the query.
-    pub index: Option<(String, String)>,
-}
-
-/// A `Matcher` is used to match the `field`/`value` pair to a proovided index
-/// value during the process of executing a query.
-#[derive(Clone, Debug)]
-pub struct Matcher {
-    /// The name of the field this matcher applies to.
-    pub(crate) field: String,
-
-    /// The value and strategy to use for a successful match.
-    pub(crate) value: MatchOn,
-}
-
-impl Matcher {
-    /// Check if the field value matches the filter value.
-    ///
-    /// # Errors
-    ///
-    /// The `Matcher` may fail to parse the provided value to the correct type
-    /// and will return an error in this case.
-    pub(crate) fn is_match(&self, value: &str) -> Result<bool> {
-        let matched = match &self.value {
-            MatchOn::Equal(filter_val) => value == filter_val,
-            MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
-            MatchOn::OneOf(values) => values.contains(&value.to_string()),
-            MatchOn::Range(range) => {
-                let int_val = value
-                    .parse()
-                    .map_err(|e| bad!("issue converting match value to usize: {e}"))?;
-                range.contains(&int_val)
-            }
-            MatchOn::DateRange(range) => {
-                let date_val = DateTime::parse_from_rfc3339(value)
-                    .map_err(|e| bad!("issue converting match value to date: {e}"))?;
-                range.contains(&date_val.into())
-            }
-        };
-        Ok(matched)
-    }
-}
-
-/// The [`MatchOn`] enum is used to specify the matching strategy to be
-/// employed by the `Matcher`.
-#[derive(Clone, Debug)]
-pub enum MatchOn {
-    /// The match must be equal.
-    Equal(String),
-
-    /// The match must start with the specified value.
-    StartsWith(String),
-
-    /// The match must be with at least one of the items specified.
-    OneOf(Vec<String>),
-
-    /// The match must be in the specified range.
-    Range(Range<usize>),
-
-    /// The match must be in the specified date range.
-    DateRange(DateRange),
 }
 
 impl From<&RecordsFilter> for MatchSet {
@@ -328,7 +274,7 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(data_size) = &filter.data_size {
             match_set.inner.push(Matcher {
                 field: "dataSize".to_string(),
-                value: MatchOn::Range(data_size.clone()),
+                value: MatchOn::Range(data_size.clone().into()),
             });
         }
         if let Some(data_cid) = &filter.data_cid {
@@ -340,19 +286,19 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(date_created) = &filter.date_created {
             match_set.inner.push(Matcher {
                 field: "dateCreated".to_string(),
-                value: MatchOn::DateRange(date_created.clone()),
+                value: MatchOn::DateRange(date_created.clone().into()),
             });
         }
         if let Some(date_published) = &filter.date_published {
             match_set.inner.push(Matcher {
                 field: "datePublished".to_string(),
-                value: MatchOn::DateRange(date_published.clone()),
+                value: MatchOn::DateRange(date_published.clone().into()),
             });
         }
         if let Some(date_updated) = &filter.date_updated {
             match_set.inner.push(Matcher {
                 field: "messageTimestamp".to_string(),
-                value: MatchOn::DateRange(date_updated.clone()),
+                value: MatchOn::DateRange(date_updated.clone().into()),
             });
         }
         if let Some(attester) = &filter.attester {
@@ -382,7 +328,7 @@ impl From<&RecordsFilter> for MatchSet {
                     TagFilter::Range(range) => {
                         match_set.inner.push(Matcher {
                             field: format!("tag.{property}"),
-                            value: MatchOn::Range(range.clone()),
+                            value: MatchOn::Range(range.clone().into()),
                         });
                     }
                 }
@@ -497,15 +443,15 @@ impl RecordsQueryBuilder {
 
     /// Set the sort order of the returned records.
     #[must_use]
-    pub const fn sort(mut self, sort: Sort) -> Self {
-        self.sort = sort;
+    pub fn sort(mut self, sort: impl Into<Sort>) -> Self {
+        self.sort = sort.into();
         self
     }
 
     /// Set the pagination options.
     #[must_use]
-    pub fn pagination(mut self, pagination: Pagination) -> Self {
-        self.pagination = Some(pagination);
+    pub fn pagination(mut self, pagination: impl Into<Pagination>) -> Self {
+        self.pagination = Some(pagination.into());
         self
     }
 
@@ -573,8 +519,8 @@ impl GrantedQueryBuilder {
 
     /// Include archived records in the query.
     #[must_use]
-    pub const fn date_created(mut self, date_created: DateRange) -> Self {
-        self.date_created = Some(date_created);
+    pub fn date_created(mut self, date_created: impl Into<DateRange>) -> Self {
+        self.date_created = Some(date_created.into());
         self
     }
 

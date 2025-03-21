@@ -101,4 +101,3 @@ pub struct Status {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
-

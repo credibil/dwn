@@ -103,7 +103,7 @@ pub async fn handle(
     // save the message and log the event
     MessageStore::put(provider, owner, &storable).await?;
     EventLog::append(provider, owner, &storable).await?;
-    EventStream::emit(provider, owner, &storable.document()).await?;
+    EventStream::emit(provider, owner, &Document::Write(storable.clone())).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
     if let Some(document) = initial_entry {
@@ -167,7 +167,7 @@ impl Message for Write {
 }
 
 impl Storable for Write {
-    fn document(&self) -> Document {
+    fn document(&self) -> impl crate::store::Document {
         Document::Write(self.clone())
     }
 

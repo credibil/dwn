@@ -1,10 +1,10 @@
 //! # Message Store
 
-use crate::interfaces::{Cursor, Document};
+use crate::interfaces::Document;
 use crate::provider::BlockStore;
-use crate::store::{Query, Storable, index};
+use crate::store::{Cursor, Document as _, Query, Storable, index};
 use crate::utils::ipfs;
-use crate::{Result, bad};
+use crate::{Result, bad, interfaces};
 
 const PARTITION: &str = "MESSAGE";
 
@@ -18,13 +18,13 @@ pub async fn put(owner: &str, entry: &impl Storable, store: &impl BlockStore) ->
     store.put(owner, PARTITION, &message_cid, &ipfs::encode_block(&document)?).await?;
 
     // index entry
-    index::insert(owner, PARTITION, entry, store).await
+    index::insert(owner, PARTITION, entry, store).await.map_err(Into::into)
 }
 
 /// Queries the underlying store for matches to the provided query.
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
-) -> Result<(Vec<Document>, Option<Cursor>)> {
+) -> Result<(Vec<Document>, Option<interfaces::Cursor>)> {
     let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used
@@ -49,7 +49,7 @@ pub async fn query(
         entries.push(ipfs::decode_block(&bytes)?);
     }
 
-    Ok((entries, cursor))
+    Ok((entries, cursor.map(Into::into)))
 }
 
 /// Fetch a single message by CID from the underlying store, returning

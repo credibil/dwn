@@ -1,11 +1,10 @@
 //! # Event Log
 
 use crate::event::Event;
-use crate::interfaces::{Cursor, Pagination};
 use crate::provider::BlockStore;
-use crate::store::{Query, Sort, Storable, index};
+use crate::store::{Cursor, Document as _, Pagination, Query, Sort, Storable, index};
 use crate::utils::ipfs;
-use crate::{Result, bad};
+use crate::{Result, bad, interfaces};
 
 const PARTITION: &str = "EVENTLOG";
 
@@ -23,19 +22,19 @@ pub async fn append(owner: &str, event: &impl Storable, store: &impl BlockStore)
     let watermark = ulid::Ulid::new().to_string();
     event.add_index("watermark".to_string(), watermark);
 
-    index::insert(owner, PARTITION, &event, store).await
+    index::insert(owner, PARTITION, &event, store).await.map_err(Into::into)
 }
 
 pub async fn events(
-    owner: &str, cursor: Option<Cursor>, store: &impl BlockStore,
-) -> Result<(Vec<Event>, Option<Cursor>)> {
+    owner: &str, cursor: Option<interfaces::Cursor>, store: &impl BlockStore,
+) -> Result<(Vec<Event>, Option<interfaces::Cursor>)> {
     let q = Query {
         match_sets: vec![],
         pagination: Some(Pagination {
             limit: Some(100),
-            cursor,
+            cursor: cursor.map(Into::into),
         }),
-        sort: Sort::TimestampAsc,
+        sort: Sort::Ascending("messageTimestamp".to_string()),
     };
 
     query(owner, &q, store).await
@@ -49,7 +48,7 @@ pub async fn events(
 /// Returns an array of `message_cid`s that represent the events.
 pub async fn query(
     owner: &str, query: &Query, store: &impl BlockStore,
-) -> Result<(Vec<Event>, Option<Cursor>)> {
+) -> Result<(Vec<Event>, Option<interfaces::Cursor>)> {
     let mut results = index::query(owner, PARTITION, query, store).await?;
 
     // return cursor when paging is used
@@ -72,7 +71,7 @@ pub async fn query(
         entries.push(ipfs::decode_block(&bytes)?);
     }
 
-    Ok((entries, cursor))
+    Ok((entries, cursor.map(Into::into)))
 }
 
 /// Deletes event for the specified `message_cid`.

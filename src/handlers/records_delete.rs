@@ -100,7 +100,7 @@ impl Message for Delete {
 }
 
 impl Storable for Delete {
-    fn document(&self) -> Document {
+    fn document(&self) -> impl crate::store::Document {
         Document::Delete(self.clone())
     }
 
@@ -222,7 +222,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 
     MessageStore::put(provider, owner, &delete).await?;
     EventLog::append(provider, owner, &delete).await?;
-    EventStream::emit(provider, owner, &delete.document()).await?;
+    EventStream::emit(provider, owner, &Document::Delete(delete.clone())).await?;
 
     // purge/hard-delete all descendent documents
     if delete.descriptor.prune {
