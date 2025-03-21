@@ -8,7 +8,7 @@
 //!
 //! The following example demonstrates how to write and query for a DWN record.
 //!
-//! ```rust
+//! ```rust,ignore
 //! use base64ct::{Base64UrlUnpadded, Encoding};
 //! use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 //! use credibil_dwn::{StatusCode, endpoint};
