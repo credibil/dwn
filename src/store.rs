@@ -96,8 +96,8 @@ impl From<records::Sort> for Sort {
         match sort {
             records::Sort::TimestampAsc => Self::Ascending("messageTimestamp".to_string()),
             records::Sort::TimestampDesc => Self::Descending("messageTimestamp".to_string()),
-            records::Sort::PublishedAsc => Self::Ascending("published".to_string()),
-            records::Sort::PublishedDesc => Self::Descending("published".to_string()),
+            records::Sort::PublishedAsc => Self::Ascending("datePublished".to_string()),
+            records::Sort::PublishedDesc => Self::Descending("datePublished".to_string()),
             records::Sort::CreatedAsc => Self::Ascending("dateCreated".to_string()),
             records::Sort::CreatedDesc => Self::Descending("dateCreated".to_string()),
         }
