@@ -2,12 +2,13 @@
 //!
 //! Block storage support and default implementation.
 
-pub mod cid;
 pub mod data;
-pub mod index;
-pub mod ipfs;
 pub mod query;
 pub mod store;
+
+mod cid;
+mod index;
+mod ipfs;
 
 /// `BlockStore` is used by implementers to provide data storage
 /// capability.

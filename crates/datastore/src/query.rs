@@ -18,6 +18,8 @@ use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::serde::rfc3339_micros_opt;
+
 /// The top-level query data structure used for both
 /// [`crate::provider::MessageStore`] and [`crate::provider::EventLog`]
 /// queries.
@@ -240,8 +242,6 @@ impl<T: PartialEq> Range<T> {
         }
     }
 }
-
-use crate::serde::rfc3339_micros_opt;
 
 /// Range filter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

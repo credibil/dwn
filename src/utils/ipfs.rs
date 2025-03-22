@@ -74,30 +74,6 @@ fn root_cid(record_id: &str, data_cid: &str) -> Result<String> {
     Ok(root.cid().to_string())
 }
 
-// /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
-// #[cfg(feature = "server")]
-// pub fn encode_block<T>(payload: &T) -> Result<Vec<u8>>
-// where
-//     T: Serialize + for<'a> Deserialize<'a>,
-// {
-//     // encode payload
-//     let data =
-//         DagCborCodec::encode_to_vec(payload).map_err(|e| bad!("issue encoding block: {e}"))?;
-//     if data.len() > MAX_BLOCK_SIZE {
-//         return Err(bad!("block is too large"));
-//     }
-//     Ok(data)
-// }
-
-// /// Decodes a block.
-// #[cfg(feature = "server")]
-// pub fn decode_block<T>(data: &[u8]) -> Result<T>
-// where
-//     T: Serialize + for<'a> Deserialize<'a>,
-// {
-//     DagCborCodec::decode_from_slice(data).map_err(|e| bad!("issue decoding block: {e}"))
-// }
-
 /// Block represents a unit of data uniquely identified by a content identifier
 pub struct Block {
     data: Vec<u8>,

@@ -13,9 +13,9 @@
 //! store.
 
 pub use datastore::data::MAX_ENCODED_SIZE;
-pub use datastore::index;
 pub use datastore::query::{
-    Cursor, DateRange, Lower, MatchOn, MatchSet, Matcher, Pagination, Query, Range, Sort, Upper,
+    self, Cursor, DateRange, Lower, MatchOn, MatchSet, Matcher, Pagination, Query, Range, Sort,
+    Upper,
 };
 pub use datastore::store::{Document, Storable};
 
@@ -23,7 +23,7 @@ use crate::interfaces::messages;
 use crate::interfaces::records::{self, RecordsFilter, TagFilter};
 use crate::{Interface, Method};
 
-impl From<records::Sort> for Sort {
+impl From<records::Sort> for query::Sort {
     fn from(sort: records::Sort) -> Self {
         match sort {
             records::Sort::TimestampAsc => Self::Ascending("messageTimestamp".to_string()),

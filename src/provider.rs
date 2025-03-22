@@ -27,7 +27,7 @@ pub trait Provider:
 pub trait MessageStore: BlockStore + Sized + Send + Sync {
     /// Store a message in the underlying store.
     fn put(&self, owner: &str, entry: &impl Storable) -> impl Future<Output = Result<()>> + Send {
-        async { store::put(owner, entry, self).await }
+        async { store::put(owner, "MESSAGE", entry, self).await }
     }
 
     /// Queries the underlying store for matches to the provided query.
@@ -35,8 +35,9 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Document>, Option<Cursor>)>> + Send {
         async {
-            let (entries, cursor) =
-                store::query(owner, query, self).await.map_err(|e| bad!("issue querying: {e}"))?;
+            let (entries, cursor) = store::query(owner, "MESSAGE", query, self)
+                .await
+                .map_err(|e| bad!("issue querying: {e}"))?;
             Ok((entries, cursor))
         }
     }
@@ -46,12 +47,12 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     fn get(
         &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = Result<Option<Document>>> + Send {
-        async { store::get(owner, message_cid, self).await }
+        async { store::get(owner, "MESSAGE", message_cid, self).await }
     }
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async { store::delete(owner, message_cid, self).await }
+        async { store::delete(owner, "MESSAGE", message_cid, self).await }
     }
 
     /// Purge all records from the store.
@@ -104,7 +105,7 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     fn register(
         &self, _owner: &str, _task: &ResumableTask, _timeout_secs: u64,
     ) -> impl Future<Output = Result<()>> + Send {
-        async move { Ok(()) }
+        async { Ok(()) }
     }
 
     /// Grabs `count` unhandled tasks from the store.
@@ -164,9 +165,8 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
         async {
             // add a 'watermark' index entry for sorting and pagination
             let mut event = event.clone();
-            let watermark = Ulid::new().to_string();
-            event.add_index("watermark".to_string(), watermark);
-            store::put(owner, &event, self).await
+            event.add_index("watermark".to_string(), Ulid::new().to_string());
+            store::put(owner, "EVENTLOG", &event, self).await
         }
     }
 
@@ -200,15 +200,16 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
         async {
-            let (entries, cursor) =
-                store::query(owner, query, self).await.map_err(|e| bad!("issue querying: {e}"))?;
+            let (entries, cursor) = store::query(owner, "EVENTLOG", query, self)
+                .await
+                .map_err(|e| bad!("issue querying: {e}"))?;
             Ok((entries, cursor))
         }
     }
 
     /// Deletes event for the specified `message_cid`.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async { store::delete(owner, message_cid, self).await }
+        async { store::delete(owner, "EVENTLOG", message_cid, self).await }
     }
 
     /// Purge all data from the store.
