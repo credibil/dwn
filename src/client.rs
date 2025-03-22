@@ -39,4 +39,4 @@ pub mod messages;
 pub mod protocols;
 pub mod records;
 
-pub use crate::interfaces::{DateRange, Pagination, Range};
+pub use crate::store::{DateRange, Pagination, Range};

@@ -725,23 +725,14 @@ name = "datastore"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "async-nats",
- "base64ct",
- "blockstore",
  "chrono",
  "ciborium",
  "cid",
- "ed25519-dalek",
  "futures",
  "ipld-core",
- "multibase",
  "multihash-codetable",
- "rand 0.8.5",
  "serde",
  "serde_ipld_dagcbor",
- "serde_json",
- "sha2 0.10.8",
- "x25519-dalek",
 ]
 
 [[package]]

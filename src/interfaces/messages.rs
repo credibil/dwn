@@ -8,9 +8,10 @@ use std::io;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Cursor, DateRange, Descriptor, Document};
 use crate::authorization::Authorization;
 use crate::event::Subscriber;
+use crate::interfaces::{Descriptor, Document};
+use crate::store::{Cursor, DateRange};
 use crate::{Interface, Method};
 
 /// The [`Query`] message expected by the handler.

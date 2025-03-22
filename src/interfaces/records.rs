@@ -19,11 +19,12 @@ use credibil_infosec::jose::{Curve, Jws, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use super::{Cursor, DateRange, Descriptor, Pagination, Range};
 use crate::authorization::{Authorization, JwsPayload};
 use crate::event::Subscriber;
 use crate::hd_key::DerivationScheme;
+use crate::interfaces::Descriptor;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
+use crate::store::{Cursor, DateRange, Pagination, Range};
 use crate::utils::cid;
 use crate::{OneOrMany, Result, bad, utils};
 

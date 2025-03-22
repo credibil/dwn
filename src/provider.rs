@@ -12,8 +12,8 @@ use ulid::Ulid;
 
 use crate::bad;
 use crate::event::{Event, Subscriber};
-use crate::interfaces::{Cursor, Document};
-use crate::store::{Pagination, Query, Sort, Storable};
+use crate::interfaces::Document;
+use crate::store::{Cursor, Pagination, Query, Sort, Storable};
 use crate::tasks::ResumableTask;
 
 /// Provider trait.
@@ -37,7 +37,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
         async {
             let (entries, cursor) =
                 store::query(owner, query, self).await.map_err(|e| bad!("issue querying: {e}"))?;
-            Ok((entries, cursor.map(Into::into)))
+            Ok((entries, cursor))
         }
     }
 
@@ -182,7 +182,7 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
                 match_sets: vec![],
                 pagination: Some(Pagination {
                     limit: Some(100),
-                    cursor: cursor.map(Into::into),
+                    cursor,
                 }),
                 sort: Sort::Ascending("watermark".to_string()),
             };
@@ -202,7 +202,7 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
         async {
             let (entries, cursor) =
                 store::query(owner, query, self).await.map_err(|e| bad!("issue querying: {e}"))?;
-            Ok((entries, cursor.map(Into::into)))
+            Ok((entries, cursor))
         }
     }
 

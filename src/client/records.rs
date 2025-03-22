@@ -18,6 +18,7 @@ use credibil_infosec::jose::{Jws, JwsBuilder};
 use crate::authorization::{Authorization, AuthorizationBuilder, JwsPayload};
 pub use crate::client::encryption::decrypt;
 use crate::hd_key::DerivationScheme;
+use crate::interfaces::Descriptor;
 pub use crate::interfaces::records::{
     Attestation, DelegatedGrant, DeleteDescriptor, EncryptOptions, Recipient, RecordsFilter,
     SignaturePayload, Sort,
@@ -26,7 +27,7 @@ use crate::interfaces::records::{
     Delete, EncryptionProperty, Query, QueryDescriptor, Read, ReadDescriptor, Subscribe,
     SubscribeDescriptor, Tag, Write, WriteDescriptor,
 };
-use crate::interfaces::{Descriptor, Pagination};
+use crate::store::Pagination;
 use crate::utils::cid;
 use crate::{Interface, Method, utils};
 

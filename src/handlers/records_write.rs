@@ -21,9 +21,11 @@ use crate::interfaces::protocols::{
 use crate::interfaces::records::{
     DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteReply,
 };
-use crate::interfaces::{DateRange, Descriptor, Document};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::store::{GrantedQueryBuilder, MAX_ENCODED_SIZE, RecordsQueryBuilder, Storable};
+use crate::store::{
+    DateRange, GrantedQueryBuilder, MAX_ENCODED_SIZE, RecordsQueryBuilder, Storable,
+};
 use crate::utils::cid;
 use crate::{Error, Method, Result, bad, forbidden, schema};
 

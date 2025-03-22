@@ -65,7 +65,7 @@ test-node.workspace = true
 
 [workspace]
 members = ["crates/*", "examples/*"]
-resolver = "3"
+# resolver = "3"
 
 [workspace.package]
 authors = ["Credibil"]

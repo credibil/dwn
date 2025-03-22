@@ -19,72 +19,9 @@ pub use datastore::query::{
 };
 pub use datastore::store::{Document, Storable};
 
+use crate::interfaces::messages;
 use crate::interfaces::records::{self, RecordsFilter, TagFilter};
-use crate::interfaces::{self, messages};
 use crate::{Interface, Method};
-
-impl<T: PartialEq> From<interfaces::Lower<T>> for Lower<T> {
-    fn from(lower: interfaces::Lower<T>) -> Self {
-        match lower {
-            interfaces::Lower::Inclusive(value) => Self::Inclusive(value),
-            interfaces::Lower::Exclusive(value) => Self::Exclusive(value),
-        }
-    }
-}
-
-impl<T: PartialEq> From<interfaces::Upper<T>> for Upper<T> {
-    fn from(lower: interfaces::Upper<T>) -> Self {
-        match lower {
-            interfaces::Upper::Inclusive(value) => Self::Inclusive(value),
-            interfaces::Upper::Exclusive(value) => Self::Exclusive(value),
-        }
-    }
-}
-
-impl<T: PartialEq> From<interfaces::Range<T>> for Range<T> {
-    fn from(range: interfaces::Range<T>) -> Self {
-        Self {
-            lower: range.lower.map(Into::into),
-            upper: range.upper.map(Into::into),
-        }
-    }
-}
-
-impl From<interfaces::DateRange> for DateRange {
-    fn from(date_range: interfaces::DateRange) -> Self {
-        Self {
-            lower: date_range.lower,
-            upper: date_range.upper,
-        }
-    }
-}
-
-impl From<interfaces::Pagination> for Pagination {
-    fn from(pagination: interfaces::Pagination) -> Self {
-        Self {
-            limit: pagination.limit,
-            cursor: pagination.cursor.map(Into::into),
-        }
-    }
-}
-
-impl From<interfaces::Cursor> for Cursor {
-    fn from(cursor: interfaces::Cursor) -> Self {
-        Self {
-            message_cid: cursor.message_cid,
-            value: cursor.value,
-        }
-    }
-}
-
-impl From<Cursor> for interfaces::Cursor {
-    fn from(cursor: Cursor) -> Self {
-        Self {
-            message_cid: cursor.message_cid,
-            value: cursor.value,
-        }
-    }
-}
 
 impl From<records::Sort> for Sort {
     fn from(sort: records::Sort) -> Self {
@@ -118,7 +55,7 @@ impl From<records::Query> for Query {
         Self {
             match_sets: vec![match_set],
             sort: query.descriptor.date_sort.unwrap_or_default().into(),
-            pagination: query.descriptor.pagination.map(Into::into),
+            pagination: query.descriptor.pagination,
         }
     }
 }
@@ -161,7 +98,7 @@ impl From<messages::Query> for Query {
             if let Some(message_timestamp) = &filter.message_timestamp {
                 match_set.inner.push(Matcher {
                     field: "messageTimestamp".to_string(),
-                    value: MatchOn::DateRange(message_timestamp.clone().into()),
+                    value: MatchOn::DateRange(message_timestamp.clone()),
                 });
             }
 
@@ -269,7 +206,7 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(data_size) = &filter.data_size {
             match_set.inner.push(Matcher {
                 field: "dataSize".to_string(),
-                value: MatchOn::Range(data_size.clone().into()),
+                value: MatchOn::Range(data_size.clone()),
             });
         }
         if let Some(data_cid) = &filter.data_cid {
@@ -281,19 +218,19 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(date_created) = &filter.date_created {
             match_set.inner.push(Matcher {
                 field: "dateCreated".to_string(),
-                value: MatchOn::DateRange(date_created.clone().into()),
+                value: MatchOn::DateRange(date_created.clone()),
             });
         }
         if let Some(date_published) = &filter.date_published {
             match_set.inner.push(Matcher {
                 field: "datePublished".to_string(),
-                value: MatchOn::DateRange(date_published.clone().into()),
+                value: MatchOn::DateRange(date_published.clone()),
             });
         }
         if let Some(date_updated) = &filter.date_updated {
             match_set.inner.push(Matcher {
                 field: "messageTimestamp".to_string(),
-                value: MatchOn::DateRange(date_updated.clone().into()),
+                value: MatchOn::DateRange(date_updated.clone()),
             });
         }
         if let Some(attester) = &filter.attester {
@@ -323,7 +260,7 @@ impl From<&RecordsFilter> for MatchSet {
                     TagFilter::Range(range) => {
                         match_set.inner.push(Matcher {
                             field: format!("tag.{property}"),
-                            value: MatchOn::Range(range.clone().into()),
+                            value: MatchOn::Range(range.clone()),
                         });
                     }
                 }
@@ -555,3 +492,66 @@ impl GrantedQueryBuilder {
         }
     }
 }
+
+// impl<T: PartialEq> From<interfaces::Lower<T>> for Lower<T> {
+//     fn from(lower: interfaces::Lower<T>) -> Self {
+//         match lower {
+//             interfaces::Lower::Inclusive(value) => Self::Inclusive(value),
+//             interfaces::Lower::Exclusive(value) => Self::Exclusive(value),
+//         }
+//     }
+// }
+
+// impl<T: PartialEq> From<interfaces::Upper<T>> for Upper<T> {
+//     fn from(lower: interfaces::Upper<T>) -> Self {
+//         match lower {
+//             interfaces::Upper::Inclusive(value) => Self::Inclusive(value),
+//             interfaces::Upper::Exclusive(value) => Self::Exclusive(value),
+//         }
+//     }
+// }
+
+// impl<T: PartialEq> From<interfaces::Range<T>> for Range<T> {
+//     fn from(range: interfaces::Range<T>) -> Self {
+//         Self {
+//             lower: range.lower.map(Into::into),
+//             upper: range.upper.map(Into::into),
+//         }
+//     }
+// }
+
+// impl From<interfaces::DateRange> for DateRange {
+//     fn from(date_range: interfaces::DateRange) -> Self {
+//         Self {
+//             lower: date_range.lower,
+//             upper: date_range.upper,
+//         }
+//     }
+// }
+
+// impl From<interfaces::Pagination> for Pagination {
+//     fn from(pagination: interfaces::Pagination) -> Self {
+//         Self {
+//             limit: pagination.limit,
+//             cursor: pagination.cursor.map(Into::into),
+//         }
+//     }
+// }
+
+// impl From<interfaces::Cursor> for Cursor {
+//     fn from(cursor: interfaces::Cursor) -> Self {
+//         Self {
+//             message_cid: cursor.message_cid,
+//             value: cursor.value,
+//         }
+//     }
+// }
+
+// impl From<Cursor> for interfaces::Cursor {
+//     fn from(cursor: Cursor) -> Self {
+//         Self {
+//             message_cid: cursor.message_cid,
+//             value: cursor.value,
+//         }
+//     }
+// }
