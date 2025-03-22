@@ -12,15 +12,13 @@
 //! [`Query`] wraps store-specific query options for querying the underlying
 //! store.
 
-pub mod data;
-
+pub use datastore::data::MAX_ENCODED_SIZE;
 pub use datastore::index;
 pub use datastore::query::{
     Cursor, DateRange, Lower, MatchOn, MatchSet, Matcher, Pagination, Query, Range, Sort, Upper,
 };
 pub use datastore::store::{Document, Storable};
 
-pub use self::data::MAX_ENCODED_SIZE;
 use crate::interfaces::records::{self, RecordsFilter, TagFilter};
 use crate::interfaces::{self, messages};
 use crate::{Interface, Method};

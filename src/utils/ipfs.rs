@@ -89,14 +89,14 @@ fn root_cid(record_id: &str, data_cid: &str) -> Result<String> {
 //     Ok(data)
 // }
 
-/// Decodes a block.
-#[cfg(feature = "server")]
-pub fn decode_block<T>(data: &[u8]) -> Result<T>
-where
-    T: Serialize + for<'a> Deserialize<'a>,
-{
-    DagCborCodec::decode_from_slice(data).map_err(|e| bad!("issue decoding block: {e}"))
-}
+// /// Decodes a block.
+// #[cfg(feature = "server")]
+// pub fn decode_block<T>(data: &[u8]) -> Result<T>
+// where
+//     T: Serialize + for<'a> Deserialize<'a>,
+// {
+//     DagCborCodec::decode_from_slice(data).map_err(|e| bad!("issue decoding block: {e}"))
+// }
 
 /// Block represents a unit of data uniquely identified by a content identifier
 pub struct Block {

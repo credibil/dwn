@@ -7,13 +7,13 @@ use std::io::Read;
 
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document as DidDocument};
-pub use datastore::{BlockStore, store};
+pub use datastore::{BlockStore, data, store};
 use ulid::Ulid;
 
 use crate::bad;
 use crate::event::{Event, Subscriber};
 use crate::interfaces::{Cursor, Document};
-use crate::store::{Pagination, Query, Sort, Storable, data};
+use crate::store::{Pagination, Query, Sort, Storable};
 use crate::tasks::ResumableTask;
 
 /// Provider trait.
@@ -70,21 +70,21 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     fn put(
         &self, owner: &str, record_id: &str, data_cid: &str, reader: impl Read + Send,
     ) -> impl Future<Output = anyhow::Result<(String, usize)>> + Send {
-        async { data::put(owner, record_id, data_cid, reader, self).await.map_err(Into::into) }
+        async { data::put(owner, record_id, data_cid, reader, self).await }
     }
 
     /// Fetches a single message by CID from an underlying block store.
     fn get(
         &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send {
-        async { data::get(owner, record_id, data_cid, self).await.map_err(Into::into) }
+        async { data::get(owner, record_id, data_cid, self).await }
     }
 
     /// Delete data associated with the specified id.
     fn delete(
         &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send {
-        async { data::delete(owner, record_id, data_cid, self).await.map_err(Into::into) }
+        async { data::delete(owner, record_id, data_cid, self).await }
     }
 
     /// Purge all data from the store.

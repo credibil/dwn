@@ -21,6 +21,7 @@ use crate::query::{Cursor, Query};
 use crate::{BlockStore, index, ipfs};
 
 const PARTITION: &str = "MESSAGE";
+// const PARTITION: &str = "EVENTLOG";
 
 /// The `Storable` trait is used to wrap each message with a unifying type used
 /// for all stored messages (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).

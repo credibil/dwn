@@ -23,7 +23,7 @@ use crate::interfaces::records::{
 };
 use crate::interfaces::{DateRange, Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::store::{GrantedQueryBuilder, RecordsQueryBuilder, Storable, data};
+use crate::store::{GrantedQueryBuilder, MAX_ENCODED_SIZE, RecordsQueryBuilder, Storable};
 use crate::utils::cid;
 use crate::{Error, Method, Result, bad, forbidden, schema};
 
@@ -694,7 +694,7 @@ impl Write {
         &mut self, owner: &str, stream: &mut Cursor<Vec<u8>>, store: &impl DataStore,
     ) -> Result<()> {
         // when data is below the threshold, store it within MessageStore
-        if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {
+        if self.descriptor.data_size <= MAX_ENCODED_SIZE {
             // verify data integrity
             let (data_cid, data_size) = cid::from_reader(stream.clone())?;
             if self.descriptor.data_cid != data_cid {
@@ -749,7 +749,7 @@ impl Write {
         }
 
         // if bigger than encoding threshold, ensure data exists for this record
-        if latest.descriptor.data_size > data::MAX_ENCODED_SIZE {
+        if latest.descriptor.data_size > MAX_ENCODED_SIZE {
             let result =
                 DataStore::get(store, owner, &self.record_id, &self.descriptor.data_cid).await?;
             if result.is_none() {
