@@ -32,7 +32,7 @@ anyhow.workspace = true
 async-recursion = { version = "1.1.1", optional = true }
 base64ct.workspace = true
 cfg-if = "1.0.0"
-chrono = { version = "0.4.39", features = ["serde"] }
+chrono = { version = "0.4.40", features = ["serde"] }
 ciborium = "0.2.2"
 cid.workspace = true
 credibil-did.workspace = true
@@ -43,25 +43,26 @@ ed25519-dalek.workspace = true
 futures.workspace = true
 hkdf = "0.12.4"
 http.workspace = true
-ipld-core = "0.4.1"
+ipld-core = "0.4.2"
 jsonschema = { version = "0.29.0", default-features = false, features = ["resolve-file"] }
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 rand.workspace = true
 serde.workspace = true
-serde_ipld_dagcbor = "0.6.1"
+serde_ipld_dagcbor = "0.6.2"
 serde_json.workspace = true
 sha2.workspace = true
-thiserror = "2.0.11"
+thiserror = "2.0.12"
 tokio = { workspace = true, optional = true }
-ulid = "1.2.0"
-uuid = { version = "1.13.1", features = ["fast-rng", "v4"] }
+ulid = "1.2.1"
+uuid = { version = "1.16.0", features = ["fast-rng", "v4"] }
 x25519-dalek.workspace = true
 zeroize = "1.8.1"
 
 [dev-dependencies]
+async-nats = "0.39.0"
 blockstore = "0.7.1"
-reqwest = { version = "0.12.12", features = ["json"] }
-test-node.workspace = true
+multibase.workspace = true
+reqwest = { version = "0.12.15", features = ["json"] }
 
 [workspace]
 members = ["crates/*", "examples/*"]
@@ -89,8 +90,8 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.96"
-base64ct = { version = "1.6.0", features = ["std"] }
+anyhow = "1.0.97"
+base64ct = { version = "1.7.3", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-did = "0.1.2"
 credibil-dwn = { path = "." }
@@ -98,14 +99,14 @@ credibil-infosec = "0.1.1"
 datastore = { path = "./crates/datastore" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
-http = "1.2.0"
+http = "1.3.1"
 multibase = "0.9.1"
 rand = "0.8.5"
-serde = { version = "1.0.218", features = ["derive"] }
-serde_json = { version = "1.0.139", features = ["alloc"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1.0.140", features = ["alloc"] }
 sha2 = "0.10.8"
 test-node = { path = "crates/test-node" }
-tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.44.1", features = ["macros", "rt-multi-thread", "time"] }
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 
 # [patch."https://github.com/credibil/infosec.git"]

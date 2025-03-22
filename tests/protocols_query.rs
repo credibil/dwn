@@ -5,6 +5,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+mod web_node;
+
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -16,9 +18,9 @@ use credibil_dwn::client::protocols::{
 };
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::jose::jws::{Jws, Protected, Signature};
-use test_node::ProviderImpl;
-use test_node::keystore::{self, Keyring};
 use tokio::time;
+use web_node::ProviderImpl;
+use web_node::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);

@@ -2,6 +2,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+mod web_node;
+
 use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
@@ -21,8 +23,8 @@ use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 use rand::RngCore;
-use test_node::ProviderImpl;
-use test_node::keystore::{self, Keyring};
+use web_node::ProviderImpl;
+use web_node::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);

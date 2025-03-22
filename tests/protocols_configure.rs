@@ -5,6 +5,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+mod web_node;
+
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
@@ -15,9 +17,9 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::ProtocolsQueryBuilder;
 use credibil_dwn::{Error, Message, Method, StatusCode, endpoint};
-use test_node::ProviderImpl;
-use test_node::keystore::{self, Keyring};
 use tokio::time;
+use web_node::ProviderImpl;
+use web_node::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
