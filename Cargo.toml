@@ -64,6 +64,9 @@ blockstore = "0.7.1"
 multibase.workspace = true
 reqwest = { version = "0.12.15", features = ["json"] }
 
+# -----------------------------------------------
+# Workspace
+# -----------------------------------------------
 [workspace]
 members = ["crates/*", "examples/*"]
 # resolver = "3"
