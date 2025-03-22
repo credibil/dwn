@@ -13,9 +13,6 @@
 //! store.
 
 pub mod data;
-pub(crate) mod event_log;
-pub(crate) mod message;
-pub(crate) mod task;
 
 pub use datastore::index;
 pub use datastore::query::{

@@ -7,11 +7,13 @@ use std::io::Read;
 
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document as DidDocument};
-pub use datastore::BlockStore;
+pub use datastore::{BlockStore, store};
+use ulid::Ulid;
 
+use crate::bad;
 use crate::event::{Event, Subscriber};
 use crate::interfaces::{Cursor, Document};
-use crate::store::{Query, Storable, data, event_log, message, task};
+use crate::store::{Pagination, Query, Sort, Storable, data};
 use crate::tasks::ResumableTask;
 
 /// Provider trait.
@@ -25,14 +27,18 @@ pub trait Provider:
 pub trait MessageStore: BlockStore + Sized + Send + Sync {
     /// Store a message in the underlying store.
     fn put(&self, owner: &str, entry: &impl Storable) -> impl Future<Output = Result<()>> + Send {
-        async move { message::put(owner, entry, self).await.map_err(Into::into) }
+        async { store::put(owner, entry, self).await }
     }
 
     /// Queries the underlying store for matches to the provided query.
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Document>, Option<Cursor>)>> + Send {
-        async { message::query(owner, query, self).await.map_err(Into::into) }
+        async {
+            let (entries, cursor) =
+                store::query(owner, query, self).await.map_err(|e| bad!("issue querying: {e}"))?;
+            Ok((entries, cursor.map(Into::into)))
+        }
     }
 
     /// Fetch a single message by CID from the underlying store, returning
@@ -40,29 +46,23 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
     fn get(
         &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = Result<Option<Document>>> + Send {
-        async move { message::get(owner, message_cid, self).await.map_err(Into::into) }
+        async { store::get(owner, message_cid, self).await }
     }
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async move { message::delete(owner, message_cid, self).await.map_err(Into::into) }
+        async { store::delete(owner, message_cid, self).await }
     }
 
     /// Purge all records from the store.
     fn purge(&self) -> impl Future<Output = Result<()>> + Send {
-        async move { todo!("implement purge") }
+        async { todo!("implement purge") }
     }
 }
 
 /// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
 pub trait DataStore: BlockStore + Sized + Send + Sync {
-    // /// Open a connection to the underlying store.
-    // fn open(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
-
-    // /// Close the connection to the underlying store.
-    // fn close(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
-
     /// Store data in an underlying block store.
     ///
     /// The default implementation uses the `BlockStore` provider for storage.
@@ -70,26 +70,26 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     fn put(
         &self, owner: &str, record_id: &str, data_cid: &str, reader: impl Read + Send,
     ) -> impl Future<Output = anyhow::Result<(String, usize)>> + Send {
-        async move { data::put(owner, record_id, data_cid, reader, self).await.map_err(Into::into) }
+        async { data::put(owner, record_id, data_cid, reader, self).await.map_err(Into::into) }
     }
 
     /// Fetches a single message by CID from an underlying block store.
     fn get(
         &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send {
-        async move { data::get(owner, record_id, data_cid, self).await.map_err(Into::into) }
+        async { data::get(owner, record_id, data_cid, self).await.map_err(Into::into) }
     }
 
     /// Delete data associated with the specified id.
     fn delete(
         &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send {
-        async move { data::delete(owner, record_id, data_cid, self).await.map_err(Into::into) }
+        async { data::delete(owner, record_id, data_cid, self).await.map_err(Into::into) }
     }
 
     /// Purge all data from the store.
     fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send {
-        async move { todo!("implement purge") }
+        async { todo!("implement purge") }
     }
 }
 
@@ -102,9 +102,9 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// If the task has timed out, a client will be able to grab it through the
     /// `grab()` method and resume the task.
     fn register(
-        &self, owner: &str, task: &ResumableTask, timeout_secs: u64,
+        &self, _owner: &str, _task: &ResumableTask, _timeout_secs: u64,
     ) -> impl Future<Output = Result<()>> + Send {
-        async move { task::register(owner, task, timeout_secs, self).await.map_err(Into::into) }
+        async move { Ok(()) }
     }
 
     /// Grabs `count` unhandled tasks from the store.
@@ -116,9 +116,9 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// tis timeout must be updated so that it is considered in-flight/under processing
     /// and cannot be grabbed by another client until it is timed-out.
     fn grab(
-        &self, owner: &str, count: u64,
+        &self, _owner: &str, _count: u64,
     ) -> impl Future<Output = Result<Vec<ResumableTask>>> + Send {
-        async move { task::grab(owner, count, self).await.map_err(Into::into) }
+        async { unimplemented!("implement grab") }
     }
 
     /// Reads the task associated with the task ID provided regardless of whether
@@ -127,9 +127,9 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// This is mainly introduced for testing purposes: ie. to check the status of
     /// a task for easy test verification.
     fn read(
-        &self, owner: &str, task_id: &str,
+        &self, _owner: &str, _task_id: &str,
     ) -> impl Future<Output = Result<Option<ResumableTask>>> + Send {
-        async move { task::read(owner, task_id, self).await.map_err(Into::into) }
+        async { unimplemented!("implement read") }
     }
 
     /// Extends the timeout of the task associated with the task ID provided.
@@ -138,19 +138,19 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
     /// been completed. This allows the client that is executing the task to
     /// continue working on it before the task is considered timed out.
     fn extend(
-        &self, owner: &str, task_id: &str, timeout_secs: u64,
+        &self, _owner: &str, _task_id: &str, _timeout_secs: u64,
     ) -> impl Future<Output = Result<()>> + Send {
-        async move { task::extend(owner, task_id, timeout_secs, self).await.map_err(Into::into) }
+        async move { unimplemented!("implement extend") }
     }
 
     /// Delete data associated with the specified id.
-    fn delete(&self, owner: &str, task_id: &str) -> impl Future<Output = Result<()>> + Send {
-        async move { task::delete(owner, task_id, self).await.map_err(Into::into) }
+    fn delete(&self, _owner: &str, _task_id: &str) -> impl Future<Output = Result<()>> + Send {
+        async { unimplemented!("implement delete") }
     }
 
     /// Purge all data from the store.
     fn purge(&self, _owner: &str) -> impl Future<Output = Result<()>> + Send {
-        async move { todo!() }
+        async { unimplemented!("implement purge") }
     }
 }
 
@@ -161,7 +161,13 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     fn append(
         &self, owner: &str, event: &impl Storable,
     ) -> impl Future<Output = Result<()>> + Send {
-        async move { event_log::append(owner, event, self).await.map_err(Into::into) }
+        async {
+            // add a 'watermark' index entry for sorting and pagination
+            let mut event = event.clone();
+            let watermark = Ulid::new().to_string();
+            event.add_index("watermark".to_string(), watermark);
+            store::put(owner, &event, self).await
+        }
     }
 
     /// Retrieves all of a owner's events that occurred after the cursor provided.
@@ -171,7 +177,17 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     fn events(
         &self, owner: &str, cursor: Option<Cursor>,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async move { event_log::events(owner, cursor, self).await.map_err(Into::into) }
+        async {
+            let q = Query {
+                match_sets: vec![],
+                pagination: Some(Pagination {
+                    limit: Some(100),
+                    cursor: cursor.map(Into::into),
+                }),
+                sort: Sort::Ascending("watermark".to_string()),
+            };
+            self.query(owner, &q).await
+        }
     }
 
     /// Retrieves a filtered set of events that occurred after a the cursor
@@ -183,17 +199,21 @@ pub trait EventLog: BlockStore + Sized + Send + Sync {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async move { event_log::query(owner, query, self).await.map_err(Into::into) }
+        async {
+            let (entries, cursor) =
+                store::query(owner, query, self).await.map_err(|e| bad!("issue querying: {e}"))?;
+            Ok((entries, cursor.map(Into::into)))
+        }
     }
 
     /// Deletes event for the specified `message_cid`.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async move { event_log::delete(owner, message_cid, self).await.map_err(Into::into) }
+        async { store::delete(owner, message_cid, self).await }
     }
 
     /// Purge all data from the store.
     fn purge(&self) -> impl Future<Output = Result<()>> + Send {
-        async move { todo!() }
+        async { todo!() }
     }
 }
 
