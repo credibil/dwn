@@ -3,11 +3,13 @@
 //! Provider traits are required of implementers in order to provide data
 //! storage, DID resolution, and cryptographic capabilities to the library.
 
+use std::collections::BTreeMap;
 use std::io::Read;
 
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document as DidDocument};
 pub use datastore::{BlockStore, data, store};
+use ipld_core::ipld::Ipld;
 use ulid::Ulid;
 
 use crate::bad;
@@ -71,27 +73,44 @@ pub trait DataStore: BlockStore + Sized + Send + Sync {
     fn put(
         &self, owner: &str, record_id: &str, data_cid: &str, reader: impl Read + Send,
     ) -> impl Future<Output = anyhow::Result<(String, usize)>> + Send {
-        async { data::put(owner, record_id, data_cid, reader, self).await }
+        async {
+            let cid = safe_cid(record_id, data_cid)?;
+            data::put(owner, "DATA", &cid, reader, self).await
+        }
     }
 
     /// Fetches a single message by CID from an underlying block store.
     fn get(
         &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send {
-        async { data::get(owner, record_id, data_cid, self).await }
+        async move {
+            let cid = safe_cid(record_id, data_cid)?;
+            data::get(owner, "DATA", &cid, self).await
+        }
     }
 
     /// Delete data associated with the specified id.
     fn delete(
         &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send {
-        async { data::delete(owner, record_id, data_cid, self).await }
+        async {
+            let cid = safe_cid(record_id, data_cid)?;
+            data::delete(owner, "DATA", &cid, self).await
+        }
     }
 
     /// Purge all data from the store.
     fn purge(&self) -> impl Future<Output = anyhow::Result<()>> + Send {
         async { todo!("implement purge") }
     }
+}
+
+fn safe_cid(record_id: &str, data_cid: &str) -> anyhow::Result<String> {
+    let block = crate::utils::ipfs::Block::encode(&Ipld::Map(BTreeMap::from([
+        (String::from("record_id"), Ipld::String(record_id.to_string())),
+        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
+    ])))?;
+    Ok(block.cid().to_string())
 }
 
 /// The `TaskStore` trait is used by implementers to provide data storage

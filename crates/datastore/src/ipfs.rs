@@ -1,6 +1,5 @@
 //! # IPFS-like Utilities
 
-use std::collections::BTreeMap;
 use std::io::Read;
 use std::str::FromStr;
 
@@ -17,13 +16,12 @@ use crate::{BlockStore, cid};
 // pub const MAX_ENCODED_SIZE: usize = 30000;
 const CHUNK_SIZE: usize = 64;
 const MAX_BLOCK_SIZE: usize = 1_048_576; // 1 MiB
-const PARTITION: &str = "DATA";
 
 // TODO: simplify import to only use `reader` and `store` args
 // see: https://www.npmjs.com/package/ipfs-unixfs-importer
 
 pub async fn import(
-    owner: &str, record_id: &str, data_cid: &str, reader: impl Read, store: &impl BlockStore,
+    owner: &str, partition: &str, data_cid: &str, reader: impl Read, store: &impl BlockStore,
 ) -> Result<(String, usize)> {
     let mut links = vec![];
     let mut byte_count = 0;
@@ -43,7 +41,7 @@ pub async fn import(
             // insert into the blockstore
             let cid = block.cid();
             store
-                .put(owner, PARTITION, cid, block.data())
+                .put(owner, partition, cid, block.data())
                 .await
                 .map_err(|e| anyhow!("issue storing data: {e}"))?;
 
@@ -59,18 +57,9 @@ pub async fn import(
 
     // use a 'partition' CID to ensure the root data block is stored
     // by the owner, record_id, and data_cid
-    let root_cid = root_cid(record_id, data_cid)?;
-    store.put(owner, PARTITION, &root_cid, root.data()).await?;
+    store.put(owner, partition, data_cid, root.data()).await?;
 
     Ok((root.cid().to_string(), byte_count))
-}
-
-fn root_cid(record_id: &str, data_cid: &str) -> Result<String> {
-    let root = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("record_id"), Ipld::String(record_id.to_string())),
-        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
-    ])))?;
-    Ok(root.cid().to_string())
 }
 
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
