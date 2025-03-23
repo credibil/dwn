@@ -27,7 +27,6 @@
 //!    tasks in the queue.
 
 use chrono::Utc;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::time::{Duration, sleep};
 
@@ -71,9 +70,9 @@ async fn extend_timeout(owner: &str, task_id: &str, provider: &impl Provider) ->
 }
 
 /// The Task trait required to be implemented by resumable tasks.
-pub trait Task: Serialize + DeserializeOwned + Send + Sync
+pub trait Task
 where
-    Self: Sized,
+    Self: Serialize + for<'a> Deserialize<'a> + Send + Sync + Sized,
 {
     /// Runs the task.
     fn run(&self, owner: &str, provider: &impl Provider)

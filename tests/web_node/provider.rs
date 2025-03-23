@@ -5,8 +5,8 @@
 //!
 //! Implementation of the `Provider` trait for testing and examples.
 
-pub mod block_store;
-pub mod event_stream;
+mod block_store;
+mod event_stream;
 pub mod keystore;
 
 use anyhow::Result;

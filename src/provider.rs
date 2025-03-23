@@ -8,7 +8,8 @@ use std::io::Read;
 
 use anyhow::Result;
 pub use credibil_did::{DidResolver, Document as DidDocument};
-pub use datastore::{BlockStore, data, store};
+pub use datastore::BlockStore;
+use datastore::{data, store};
 use ipld_core::ipld::Ipld;
 use ulid::Ulid;
 
@@ -26,7 +27,7 @@ pub trait Provider:
 
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.
-pub trait MessageStore: BlockStore + Sized + Send + Sync {
+pub trait MessageStore: BlockStore {
     /// Store a message in the underlying store.
     fn put(&self, owner: &str, entry: &impl Storable) -> impl Future<Output = Result<()>> + Send {
         async { store::put(owner, "MESSAGE", entry, self).await }
@@ -65,7 +66,7 @@ pub trait MessageStore: BlockStore + Sized + Send + Sync {
 
 /// The `DataStore` trait is used by implementers to provide data storage
 /// capability.
-pub trait DataStore: BlockStore + Sized + Send + Sync {
+pub trait DataStore: BlockStore {
     /// Store data in an underlying block store.
     ///
     /// The default implementation uses the `BlockStore` provider for storage.
@@ -115,7 +116,7 @@ fn safe_cid(record_id: &str, data_cid: &str) -> anyhow::Result<String> {
 
 /// The `TaskStore` trait is used by implementers to provide data storage
 /// capability.
-pub trait TaskStore: BlockStore + Sized + Send + Sync {
+pub trait TaskStore: BlockStore {
     /// Registers a new resumable task that is currently in-flight/under
     /// processing to the store.
     ///
@@ -176,7 +177,7 @@ pub trait TaskStore: BlockStore + Sized + Send + Sync {
 
 /// The `Metadata` trait is used by implementers to provide `Client`, `Issuer`,
 /// and `Server` metadata to the library.
-pub trait EventLog: BlockStore + Sized + Send + Sync {
+pub trait EventLog: BlockStore {
     /// Adds a message event to a owner's event log.
     fn append(
         &self, owner: &str, event: &impl Storable,
