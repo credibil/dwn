@@ -13,7 +13,6 @@ use datastore::{data, store};
 use ipld_core::ipld::Ipld;
 use ulid::Ulid;
 
-use crate::bad;
 use crate::event::{Event, Subscriber};
 use crate::interfaces::Document;
 use crate::store::{Cursor, Pagination, Query, Sort, Storable};
@@ -21,7 +20,7 @@ use crate::tasks::ResumableTask;
 
 /// Provider trait.
 pub trait Provider:
-    MessageStore + DataStore + TaskStore + EventLog + BlockStore + EventStream + DidResolver
+    MessageStore + DataStore + TaskStore + EventLog + EventStream + DidResolver
 {
 }
 
@@ -37,12 +36,7 @@ pub trait MessageStore: BlockStore {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Document>, Option<Cursor>)>> + Send {
-        async {
-            let (entries, cursor) = store::query(owner, "MESSAGE", query, self)
-                .await
-                .map_err(|e| bad!("issue querying: {e}"))?;
-            Ok((entries, cursor))
-        }
+        async { store::query(owner, "MESSAGE", query, self).await }
     }
 
     /// Fetch a single message by CID from the underlying store, returning
@@ -219,12 +213,7 @@ pub trait EventLog: BlockStore {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async {
-            let (entries, cursor) = store::query(owner, "EVENTLOG", query, self)
-                .await
-                .map_err(|e| bad!("issue querying: {e}"))?;
-            Ok((entries, cursor))
-        }
+        async { store::query(owner, "EVENTLOG", query, self).await }
     }
 
     /// Deletes event for the specified `message_cid`.
