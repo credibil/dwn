@@ -14,25 +14,37 @@ mod ipfs;
 /// capability.
 pub trait BlockStore: Sized + Send + Sync {
     /// Store a data block in the underlying block store.
+    #[allow(unused_variables)]
     fn put(
         &self, owner: &str, partition: &str, cid: &str, data: &[u8],
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        async { unimplemented!("BlockStore::put") }
+    }
 
     /// Fetches a single block by CID from the underlying store, returning
     /// `None` if no match was found.
+    #[allow(unused_variables)]
     fn get(
         &self, owner: &str, partition: &str, cid: &str,
-    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send {
+        async { unimplemented!("BlockStore::get") }
+    }
 
     /// Delete the data block associated with the specified CID.
+    #[allow(unused_variables)]
     fn delete(
         &self, owner: &str, partition: &str, cid: &str,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        async { unimplemented!("BlockStore::delete") }
+    }
 
     /// Purge all blocks from the store.
+    #[allow(unused_variables)]
     fn purge(
         &self, owner: &str, partition: &str,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    ) -> impl Future<Output = anyhow::Result<()>> + Send {
+        async { unimplemented!("BlockStore::purge") }
+    }
 }
 
 // Custom serialization functions.
