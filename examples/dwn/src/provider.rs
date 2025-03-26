@@ -1,11 +1,7 @@
-#![allow(missing_docs)]
-#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
-//! # Provider
-//!
-//! Implementation of the `Provider` trait for testing and examples.
-
-pub mod block_store;
+mod block_store;
 mod event_stream;
 pub mod keystore;
 
@@ -37,7 +33,7 @@ impl EventLog for ProviderImpl {}
 impl TaskStore for ProviderImpl {}
 
 impl DidResolver for ProviderImpl {
-    async fn resolve(&self, url: &str) -> Result<DidDocument> {
+    async fn resolve(&self, _url: &str) -> Result<DidDocument> {
         unimplemented!("DidResolver::resolve")
     }
 }

@@ -14,7 +14,7 @@ const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
 #[derive(Default, Clone, Debug)]
 pub struct Keyring {
     pub did: String,
-    pub public_key: String,
+    public_key: String,
     pub secret_key: String,
 }
 
