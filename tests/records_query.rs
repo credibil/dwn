@@ -14,7 +14,7 @@ use credibil_dwn::client::records::{
 };
 use credibil_dwn::client::{DateRange, Pagination, Range};
 use credibil_dwn::store::MAX_ENCODED_SIZE;
-use credibil_dwn::{Error, StatusCode, endpoint};
+use credibil_dwn::{Error, StatusCode, authorization, endpoint};
 use rand::RngCore;
 use web_node::ProviderImpl;
 use web_node::keystore::{self, Keyring};
@@ -307,7 +307,8 @@ async fn attester() {
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
 
-    let attester = entry.write.attestation.as_ref().unwrap().did().expect("should have attester");
+    let attester = authorization::kid_did(entry.write.attestation.as_ref().unwrap())
+        .expect("should have attester");
     assert_eq!(attester, ALICE.did);
 
     // --------------------------------------------------
@@ -326,7 +327,8 @@ async fn attester() {
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
 
-    let attester = entry.write.attestation.as_ref().unwrap().did().expect("should have attester");
+    let attester = authorization::kid_did(entry.write.attestation.as_ref().unwrap())
+        .expect("should have attester");
     assert_eq!(attester, BOB.did);
 
     // --------------------------------------------------
@@ -3611,7 +3613,7 @@ async fn paginate_non_owner() {
     let bob_sorted = sorted_writes
         .iter()
         .filter(|w| {
-            w.authorization.signature.did().unwrap() == BOB.did
+            authorization::kid_did(&w.authorization.signature).unwrap() == BOB.did
                 || w.descriptor.recipient.clone().unwrap_or_default() == BOB.did
                 || w.descriptor.published.unwrap_or_default()
         })

@@ -11,7 +11,7 @@ use chrono::format::SecondsFormat::Micros;
 use http::StatusCode;
 use serde_json::json;
 
-use crate::authorization::Authorization;
+use crate::authorization::{self, Authorization};
 use crate::endpoint::{Message, Reply, Status};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
 use crate::handlers::{protocols_configure, verify_grant, verify_protocol};
@@ -538,7 +538,7 @@ impl Write {
             }
         }
         if let Some(attestation) = &self.attestation {
-            let attester = attestation.did().unwrap_or_default();
+            let attester = authorization::kid_did(attestation).unwrap_or_default();
             indexes.insert("attester".to_string(), attester);
         }
 

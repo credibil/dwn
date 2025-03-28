@@ -14,11 +14,12 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod authorization;
-mod error;
 pub mod event;
-mod grants;
 pub mod hd_key;
 pub mod interfaces;
+
+mod error;
+mod grants;
 mod utils;
 
 cfg_if::cfg_if! {
@@ -30,10 +31,11 @@ cfg_if::cfg_if! {
 cfg_if::cfg_if! {
     if #[cfg(feature = "server")] {
         pub mod endpoint;
-        mod handlers;
         pub mod provider;
-        mod schema;
         pub mod store;
+
+        mod handlers;
+        mod schema;
         mod tasks;
 
         // re-exports

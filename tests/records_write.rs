@@ -20,7 +20,7 @@ use credibil_dwn::client::records::{
 use credibil_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use credibil_dwn::provider::EventLog;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
-use credibil_dwn::{Error, Interface, Method, StatusCode, client, endpoint, store};
+use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, endpoint, store};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 use rand::RngCore;
@@ -5691,7 +5691,7 @@ async fn context_id_mismatch() {
     // alter the signature context ID
     let payload = SignaturePayload {
         base: JwsPayload {
-            descriptor_cid: credibil_dwn::cid::from_value(&write.descriptor).unwrap(),
+            descriptor_cid: cid::from_value(&write.descriptor).unwrap(),
             ..JwsPayload::default()
         },
         record_id: write.record_id.clone(),
@@ -5726,7 +5726,7 @@ async fn invalid_attestation() {
     // alter the signature attestation CID
     let payload = SignaturePayload {
         base: JwsPayload {
-            descriptor_cid: credibil_dwn::cid::from_value(&write.descriptor).unwrap(),
+            descriptor_cid: cid::from_value(&write.descriptor).unwrap(),
             ..JwsPayload::default()
         },
         record_id: write.record_id.clone(),
@@ -5769,20 +5769,19 @@ async fn attestation_descriptor_cid() {
 
     // alter the attestation descriptor_cid
     let payload = Attestation {
-        descriptor_cid: credibil_dwn::cid::from_value(&"somerandomrecordid")
-            .expect("should create CID"),
+        descriptor_cid: cid::from_value(&"somerandomrecordid").expect("should create CID"),
     };
     let attestation =
         JwsBuilder::new().payload(payload).add_signer(&*ALICE).build().await.expect("should sign");
 
     let payload = SignaturePayload {
         base: JwsPayload {
-            descriptor_cid: credibil_dwn::cid::from_value(&write.descriptor).unwrap(),
+            descriptor_cid: cid::from_value(&write.descriptor).unwrap(),
             ..JwsPayload::default()
         },
         record_id: write.record_id.clone(),
         context_id: write.context_id.clone(),
-        attestation_cid: Some(credibil_dwn::cid::from_value(&attestation).unwrap()),
+        attestation_cid: Some(cid::from_value(&attestation).unwrap()),
         ..SignaturePayload::default()
     };
     write.authorization.signature =
