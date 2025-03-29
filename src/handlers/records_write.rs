@@ -141,10 +141,7 @@ pub async fn handle(
     }
 
     Ok(Reply {
-        status: Status {
-            code: code.as_u16(),
-            detail: None,
-        },
+        status: Status { code, detail: None },
         body: None,
     })
 }

@@ -3,6 +3,8 @@
 //! The protocols query endpoint handles `ProtocolsQuery` messages — requests
 //! to query the [`MessageStore`] for protocols configured for the DWN.
 
+use http::StatusCode;
+
 use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::handlers::verify_grant;
 use crate::interfaces::protocols::{Access, Configure, Query, QueryReply};
@@ -45,8 +47,8 @@ pub async fn handle(
 
     Ok(Reply {
         status: Status {
-            code: 200,
-            detail: Some("OK".to_string()),
+            code: StatusCode::OK,
+            detail: None,
         },
         body: Some(ReplyBody::ProtocolsQuery(QueryReply {
             entries: Some(entries),

@@ -1,7 +1,7 @@
 mod provider;
 
 use axum::extract::State;
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
@@ -45,5 +45,9 @@ async fn handle(
 ) -> impl IntoResponse {
     let reply =
         endpoint::handle("did:web:credibil.io", req, &provider).await.expect("should handle");
-    (StatusCode::OK, Json(json!(reply.body))).into_response()
+
+    // let x = serde_json::to_string_pretty(&reply).expect("should serialize");
+    // println!("reply: {x}");
+
+    (reply.status.code, Json(json!(reply.body))).into_response()
 }

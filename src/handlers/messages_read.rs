@@ -65,7 +65,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     Ok(Reply {
         status: Status {
-            code: StatusCode::OK.as_u16(),
+            code: StatusCode::OK,
             detail: None,
         },
         body: Some(ReplyBody::MessagesRead(ReadReply {

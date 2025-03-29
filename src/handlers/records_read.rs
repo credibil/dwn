@@ -53,7 +53,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
         return Ok(Reply {
             status: Status {
-                code: StatusCode::NOT_FOUND.as_u16(),
+                code: StatusCode::NOT_FOUND,
                 detail: None,
             },
             body: Some(ReplyBody::RecordsRead(ReadReply {
@@ -115,7 +115,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     Ok(Reply {
         status: Status {
-            code: StatusCode::OK.as_u16(),
+            code: StatusCode::OK,
             detail: None,
         },
         body: Some(ReplyBody::RecordsRead(ReadReply {

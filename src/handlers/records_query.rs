@@ -50,7 +50,7 @@ pub async fn handle(
     if documents.is_empty() {
         return Ok(Reply {
             status: Status {
-                code: StatusCode::OK.as_u16(),
+                code: StatusCode::OK,
                 detail: None,
             },
             body: None,
@@ -88,7 +88,7 @@ pub async fn handle(
 
     Ok(Reply {
         status: Status {
-            code: StatusCode::OK.as_u16(),
+            code: StatusCode::OK,
             detail: None,
         },
         body: Some(ReplyBody::RecordsQuery(QueryReply {

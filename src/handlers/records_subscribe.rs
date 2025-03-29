@@ -48,7 +48,7 @@ pub async fn handle(
 
     Ok(Reply {
         status: Status {
-            code: StatusCode::OK.as_u16(),
+            code: StatusCode::OK,
             detail: None,
         },
         body: Some(ReplyBody::RecordsSubscribe(SubscribeReply {

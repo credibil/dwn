@@ -75,7 +75,7 @@ pub async fn handle(
 
     Ok(Reply {
         status: Status {
-            code: StatusCode::ACCEPTED.as_u16(),
+            code: StatusCode::ACCEPTED,
             detail: None,
         },
         body: None,

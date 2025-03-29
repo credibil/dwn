@@ -6,6 +6,7 @@
 
 use std::fmt::Debug;
 
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
@@ -175,26 +176,22 @@ impl Message {
 }
 
 /// Top-level reply data structure common to all handler.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default)]
 pub struct Reply<ReplyBody> {
     /// The status message to accompany the reply.
     pub status: Status,
 
     /// The endpoint-specific reply.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
     pub body: Option<ReplyBody>,
 }
 
 /// Reply status.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default)]
 pub struct Status {
     /// Status code.
-    pub code: u16,
+    pub code: StatusCode,
 
     /// Status detail.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
 
