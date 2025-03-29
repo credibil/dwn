@@ -44,6 +44,6 @@ async fn main() {
 async fn handle(
     State(provider): State<ProviderImpl>, Json(req): Json<Message>,
 ) -> impl IntoResponse {
-    endpoint::handle("did:web:credibil.io", req, &provider).await.into_http();
+    endpoint::handle("did:web:credibil.io", req, &provider).await.into_http()
     // (reply.status.code, Json(json!(reply.body))).into_response()
 }
