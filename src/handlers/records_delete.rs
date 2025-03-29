@@ -14,11 +14,10 @@ use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::handlers::verify_protocol;
-use crate::interfaces::records::{Delete, DeleteReply, RecordsFilter, Write};
-use crate::interfaces::{Descriptor, Document};
+use crate::interfaces::Document;
+use crate::interfaces::records::{Delete, RecordsFilter, Write};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{RecordsQueryBuilder, Storable};
 use crate::tasks::{self, Task, TaskType};
@@ -33,7 +32,7 @@ use crate::{Error, Interface, Method, Result, bad, forbidden};
 /// [`MessageStore`].
 pub async fn handle(
     owner: &str, delete: Delete, provider: &impl Provider,
-) -> Result<Reply<DeleteReply>> {
+) -> Result<Reply<ReplyBody>> {
     // a `RecordsWrite` record is required for delete processing
     let query = RecordsQueryBuilder::new()
         .method(None)
@@ -65,7 +64,7 @@ pub async fn handle(
     delete.authorize(owner, &Write::try_from(latest)?, provider).await?;
 
     // ensure the delete request does not pre-date the latest existing version
-    if delete.descriptor().message_timestamp.timestamp_micros()
+    if delete.descriptor.base.message_timestamp.timestamp_micros()
         < latest.descriptor().message_timestamp.timestamp_micros()
     {
         return Err(Error::Conflict("newer record version exists".to_string()));
@@ -81,22 +80,6 @@ pub async fn handle(
         },
         body: None,
     })
-}
-
-impl Message for Delete {
-    type Reply = DeleteReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Storable for Delete {
@@ -204,7 +187,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
 
     // delete message should be the most recent message
     let latest = &entries[entries.len() - 1];
-    if delete.descriptor().message_timestamp < latest.descriptor().message_timestamp {
+    if delete.descriptor.base.message_timestamp < latest.descriptor().message_timestamp {
         return Err(Error::Conflict("newer record already exists".to_string()));
     }
 

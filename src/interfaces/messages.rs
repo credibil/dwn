@@ -122,7 +122,7 @@ pub struct SubscribeDescriptor {
 
 /// [`SubscribeReply`] is returned by the handler in the
 /// [`crate::endpoint::Reply`] `body` field.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.
     #[serde(skip)]

@@ -3,10 +3,8 @@
 //! The protocols query endpoint handles `ProtocolsQuery` messages — requests
 //! to query the [`MessageStore`] for protocols configured for the DWN.
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::handlers::verify_grant;
-use crate::interfaces::Descriptor;
 use crate::interfaces::protocols::{Access, Configure, Query, QueryReply};
 use crate::provider::{MessageStore, Provider};
 use crate::store::ProtocolsQueryBuilder;
@@ -20,7 +18,7 @@ use crate::{Result, utils};
 /// an issue occurs querying the [`MessageStore`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply<QueryReply>> {
+) -> Result<Reply<ReplyBody>> {
     // validate query
     if let Some(filter) = &query.descriptor.filter {
         utils::uri::validate(&filter.protocol)?;
@@ -50,27 +48,11 @@ pub async fn handle(
             code: 200,
             detail: Some("OK".to_string()),
         },
-        body: Some(QueryReply {
+        body: Some(ReplyBody::ProtocolsQuery(QueryReply {
             entries: Some(entries),
             cursor,
-        }),
+        })),
     })
-}
-
-impl Message for Query {
-    type Reply = QueryReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        self.authorization.as_ref()
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Query {

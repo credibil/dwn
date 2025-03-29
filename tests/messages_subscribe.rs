@@ -14,6 +14,7 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use futures::StreamExt;
 use tokio::time;
@@ -60,7 +61,10 @@ async fn owner_events() {
         .expect("should build");
     let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut event_stream = reply.body.expect("should have body").subscription;
+
+    let body: SubscribeReply =
+        reply.body.expect("should have body").try_into().expect("should convert");
+    let mut event_stream = body.subscription;
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -85,7 +89,8 @@ async fn owner_events() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should be records read").try_into().expect("should be query reply");
     let entries = query_reply.entries.expect("should have entries");
     let Some(entry_cid) = entries.first() else {
         panic!("should have entry");
@@ -169,7 +174,10 @@ async fn interface_scope() {
 
     let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut alice_events = reply.body.expect("should have body").subscription;
+
+    let body: SubscribeReply =
+        reply.body.expect("should have body").try_into().expect("should convert");
+    let mut alice_events = body.subscription;
 
     // --------------------------------------------------
     // Alice writes a number of messages.
@@ -415,7 +423,10 @@ async fn protocol_filter() {
 
     let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut alice_events = reply.body.expect("should have body").subscription;
+
+    let body: SubscribeReply =
+        reply.body.expect("should have body").try_into().expect("should convert");
+    let mut alice_events = body.subscription;
 
     // --------------------------------------------------
     // Alice writes 2 records, the first to `protocol1` and the second to `protocol2`.

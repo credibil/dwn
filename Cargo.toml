@@ -126,3 +126,7 @@ credibil-infosec = { path = "../infosec" }
 lto = true
 opt-level = "s"
 strip = true
+
+[profile.test]
+opt-level = 1
+# debug-assertions = true

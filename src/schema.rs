@@ -15,7 +15,7 @@ use crate::{Result, bad};
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
-pub fn validate(message: &impl Message) -> Result<()> {
+pub fn validate(message: &Message) -> Result<()> {
     let descriptor = message.descriptor();
     let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
     validate_value(&schema_name, message)

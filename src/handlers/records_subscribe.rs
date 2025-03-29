@@ -6,12 +6,10 @@
 use futures::{StreamExt, future};
 use http::StatusCode;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::event::SubscribeFilter;
 use crate::grants::Grant;
 use crate::handlers::verify_protocol;
-use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, Provider};
 use crate::{OneOrMany, Result, forbidden};
@@ -24,7 +22,7 @@ use crate::{OneOrMany, Result, forbidden};
 /// an issue occurs creating the subscription [`Subscriber`].
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
-) -> Result<Reply<SubscribeReply>> {
+) -> Result<Reply<ReplyBody>> {
     // authorize subscription
     subscribe.authorize(owner, provider).await?;
 
@@ -53,26 +51,10 @@ pub async fn handle(
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        body: Some(SubscribeReply {
+        body: Some(ReplyBody::RecordsSubscribe(SubscribeReply {
             subscription: subscriber,
-        }),
+        })),
     })
-}
-
-impl Message for Subscribe {
-    type Reply = SubscribeReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        self.authorization.as_ref()
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Subscribe {

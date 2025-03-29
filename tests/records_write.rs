@@ -18,6 +18,7 @@ use credibil_dwn::client::records::{
     Recipient, RecordsFilter, SignaturePayload, WriteBuilder,
 };
 use credibil_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
+use credibil_dwn::interfaces::records::{QueryReply, ReadReply};
 use credibil_dwn::provider::EventLog;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, endpoint, store};
@@ -69,8 +70,9 @@ async fn update_older() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(data)));
 
@@ -101,8 +103,9 @@ async fn update_older() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(data)));
 
@@ -126,8 +129,9 @@ async fn update_older() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(data)));
 }
@@ -194,8 +198,9 @@ async fn update_smaller_cid() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_cid, sorted[0].descriptor.data_cid);
 
@@ -216,8 +221,9 @@ async fn update_smaller_cid() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_cid, sorted[1].descriptor.data_cid);
 
@@ -275,8 +281,9 @@ async fn update_flat_space() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_format, update.descriptor.data_format);
 }
@@ -378,8 +385,9 @@ async fn inherit_data() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
 }
@@ -435,8 +443,9 @@ async fn initial_no_data() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -490,8 +499,9 @@ async fn update_no_data() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
 }
@@ -545,9 +555,10 @@ async fn retain_large_data() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
-    let read_stream = body.entry.data.expect("should have data");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
+    let read_stream = read_reply.entry.data.expect("should have data");
     assert_eq!(read_stream.into_inner(), data.to_vec());
 }
 
@@ -600,9 +611,10 @@ async fn retain_small_data() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
-    let read_stream = body.entry.data.expect("should have data");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
+    let read_stream = read_reply.entry.data.expect("should have data");
     assert_eq!(read_stream.into_inner(), data.to_vec());
 }
 
@@ -924,8 +936,9 @@ async fn alter_data_cid_larger() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let data = body.entry.data.expect("should have data");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let data = read_reply.entry.data.expect("should have data");
     assert_eq!(data.into_inner(), data_2.to_vec());
 }
 
@@ -995,8 +1008,9 @@ async fn alter_data_cid_smaller() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let data = body.entry.data.expect("should have data");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let data = read_reply.entry.data.expect("should have data");
     assert_eq!(data.into_inner(), data_2.to_vec());
 }
 
@@ -1041,8 +1055,9 @@ async fn update_published_no_date() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -1094,8 +1109,9 @@ async fn update_published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.published, Some(true));
     assert_eq!(
@@ -1312,8 +1328,9 @@ async fn anyone_create() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -1468,8 +1485,9 @@ async fn ancestor_create() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -1736,8 +1754,9 @@ async fn block_non_author() {
     let reply = endpoint::handle(&BOB.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -2988,8 +3007,9 @@ async fn initial_author_update() {
     let reply = endpoint::handle(&ALICE.did, query.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -3015,8 +3035,9 @@ async fn initial_author_update() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -3077,8 +3098,9 @@ async fn no_author_update() {
     let reply = endpoint::handle(&ALICE.did, query.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -3162,8 +3184,9 @@ async fn no_recipient_update() {
     let reply = endpoint::handle(&ALICE.did, query.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
         entries[0].write.encoded_data,
@@ -3507,9 +3530,10 @@ async fn invalid_data_format() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
-    let write = body.entry.records_write.expect("should exist");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
+    let write = read_reply.entry.records_write.expect("should exist");
     assert_eq!(write.descriptor.data_format, "image/gif");
 }
 
@@ -3580,9 +3604,10 @@ async fn any_data_format() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
-    let write = body.entry.records_write.expect("should exist");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
+    let write = read_reply.entry.records_write.expect("should exist");
     assert_eq!(write.descriptor.data_format, "any-new-data-format");
 }
 
@@ -3876,8 +3901,9 @@ async fn deep_nesting() {
     let reply = endpoint::handle(&PFI.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_cid, fulfillment.descriptor.data_cid);
 }
@@ -4402,8 +4428,9 @@ async fn protocol_schema() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 }
 
@@ -5613,8 +5640,9 @@ async fn cross_tenant_data() {
     let reply = endpoint::handle(&ALICE.did, query.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
 

@@ -8,10 +8,8 @@ use std::io::Cursor;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::handlers::{records_write, verify_grant, verify_protocol};
-use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
@@ -24,7 +22,7 @@ use crate::{Error, Method, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReplyBody>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = store::Query::from(read.clone());
 
@@ -58,14 +56,14 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
                 code: StatusCode::NOT_FOUND.as_u16(),
                 detail: None,
             },
-            body: Some(ReadReply {
+            body: Some(ReplyBody::RecordsRead(ReadReply {
                 entry: ReadReplyEntry {
                     records_delete: Some(delete.clone()),
                     initial_write: Some(write),
                     records_write: None,
                     data: None,
                 },
-            }),
+            })),
         });
     }
 
@@ -120,31 +118,15 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        body: Some(ReadReply {
+        body: Some(ReplyBody::RecordsRead(ReadReply {
             entry: ReadReplyEntry {
                 records_write: Some(write.clone()),
                 records_delete: None,
                 initial_write,
                 data,
             },
-        }),
+        })),
     })
-}
-
-impl Message for Read {
-    type Reply = ReadReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        self.authorization.as_ref()
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Read {

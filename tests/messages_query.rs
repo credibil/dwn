@@ -14,6 +14,7 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::messages::{MessagesFilter, QueryBuilder, ReadBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use credibil_dwn::interfaces::messages::QueryReply;
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use web_node::ProviderImpl;
 use web_node::keystore::{self, Keyring};
@@ -83,7 +84,8 @@ async fn owner_messages() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should be records read");
+    let query_reply: QueryReply =
+        reply.body.expect("should be records read").try_into().expect("should convert");
     let cids = query_reply.entries.expect("should have entries");
     assert_eq!(cids.len(), 6);
 
@@ -121,7 +123,8 @@ async fn owner_messages() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should be records read");
+    let query_reply: QueryReply =
+        reply.body.expect("should be records read").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 7);
 
@@ -289,7 +292,8 @@ async fn match_grant_scope() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should be records read");
+    let query_reply: QueryReply =
+        reply.body.expect("should be records read").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 5);
 
@@ -409,7 +413,8 @@ async fn match_protocol_scope() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should be records read");
+    let query_reply: QueryReply =
+        reply.body.expect("should be records read").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // expect protocol1 Configure message and Bob's grant

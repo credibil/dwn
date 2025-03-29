@@ -17,6 +17,8 @@ use credibil_dwn::client::records::{
 use credibil_dwn::hd_key::{
     self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk,
 };
+use credibil_dwn::interfaces::protocols::QueryReply;
+use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{DataStore, MessageStore};
 use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
@@ -59,8 +61,9 @@ async fn owner() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let record = body.entry.records_write.expect("should have records_write");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let record = read_reply.entry.records_write.expect("should have records_write");
     assert_eq!(record.record_id, write.record_id);
 }
 
@@ -121,8 +124,9 @@ async fn published_anonymous() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 }
 
 // Should allow authenticated users to read published records.
@@ -155,8 +159,9 @@ async fn published_authenticated() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 }
 
 // Should allow non-owners to read records they have received.
@@ -189,8 +194,9 @@ async fn non_owner_recipient() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 }
 
 // Should return BadRequest (400) when attempting to fetch a deleted record
@@ -383,8 +389,9 @@ async fn non_owner_author() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 
     // --------------------------------------------------
     // Carol attempts to read the record.
@@ -441,8 +448,9 @@ async fn initial_write_included() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.initial_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.initial_write.is_some());
 }
 
 // Should allow anyone to read when using `allow-anyone` rule.
@@ -497,8 +505,9 @@ async fn allow_anyone() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 }
 
 // Should not allow anonymous reads when there is no `allow-anyone` rule.
@@ -604,8 +613,9 @@ async fn allow_recipient() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 
     // --------------------------------------------------
     // Carol attempts to read the email.
@@ -675,8 +685,9 @@ async fn allow_author() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 
     // --------------------------------------------------
     // Carol attempts to read the email.
@@ -746,8 +757,9 @@ async fn filter_one() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
 }
 
 // Should return a status of BadRequest (400) when using a filter returns multiple results.
@@ -1974,9 +1986,10 @@ async fn block_data() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert!(body.entry.records_write.is_some());
-    let Some(read_stream) = body.entry.data else {
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert!(read_reply.entry.records_write.is_some());
+    let Some(read_stream) = read_reply.entry.data else {
         panic!("should have data");
     };
 
@@ -2082,10 +2095,11 @@ async fn decrypt_schema() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let write = body.entry.records_write.expect("should have write");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let write = read_reply.entry.records_write.expect("should have write");
 
-    let mut read_stream = body.entry.data.expect("should have data");
+    let mut read_stream = read_reply.entry.data.expect("should have data");
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
@@ -2199,10 +2213,11 @@ async fn decrypt_schemaless() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let write = body.entry.records_write.expect("should have write");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let write = read_reply.entry.records_write.expect("should have write");
 
-    let mut read_stream = body.entry.data.expect("should have data");
+    let mut read_stream = read_reply.entry.data.expect("should have data");
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
@@ -2298,8 +2313,9 @@ async fn decrypt_context() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].authorization.author().unwrap(), ALICE.did);
 
@@ -2386,10 +2402,11 @@ async fn decrypt_context() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let write = body.entry.records_write.expect("should have write");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let write = read_reply.entry.records_write.expect("should have write");
 
-    let mut read_stream = body.entry.data.expect("should have data");
+    let mut read_stream = read_reply.entry.data.expect("should have data");
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
@@ -2461,10 +2478,11 @@ async fn decrypt_context() {
     let reply = endpoint::handle(&BOB.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let write = body.entry.records_write.expect("should have write");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let write = read_reply.entry.records_write.expect("should have write");
 
-    let mut read_stream = body.entry.data.expect("should have data");
+    let mut read_stream = read_reply.entry.data.expect("should have data");
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 
@@ -2526,8 +2544,9 @@ async fn decrypt_protocol() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].authorization.author().unwrap(), ALICE.did);
 
@@ -2586,10 +2605,11 @@ async fn decrypt_protocol() {
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let write = body.entry.records_write.expect("should have write");
+    let read_reply: ReadReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let write = read_reply.entry.records_write.expect("should have write");
 
-    let mut read_stream = body.entry.data.expect("should have data");
+    let mut read_stream = read_reply.entry.data.expect("should have data");
     let mut encrypted = Vec::new();
     read_stream.read_to_end(&mut encrypted).expect("should read data");
 

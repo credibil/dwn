@@ -14,6 +14,7 @@ use credibil_dwn::client::grants::{GrantBuilder, RequestBuilder, RevocationBuild
 use credibil_dwn::client::messages::ReadBuilder;
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use credibil_dwn::client::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
+use credibil_dwn::interfaces::messages::ReadReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
@@ -81,7 +82,7 @@ async fn read_message() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, message_cid);
 }
@@ -237,7 +238,7 @@ async fn data_lt_threshold() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, write_cid);
 
@@ -283,7 +284,7 @@ async fn data_gt_threshold() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, write_cid);
 
@@ -345,7 +346,7 @@ async fn no_data_after_update() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, initial_write_cid);
 
@@ -432,7 +433,7 @@ async fn owner_not_author() {
 
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, unpublished_cid);
 
@@ -446,7 +447,7 @@ async fn owner_not_author() {
 
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, published_cid);
 }
@@ -587,7 +588,7 @@ async fn permissive_grant() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, write_cid);
 }
@@ -784,7 +785,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, alice_configure_cid);
 
@@ -793,7 +794,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_request_cid);
 
@@ -802,7 +803,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_grant_cid);
 
@@ -811,7 +812,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, alice_write_cid);
 
@@ -820,7 +821,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, alice_delete_cid);
 
@@ -829,7 +830,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_write_cid);
 
@@ -838,7 +839,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_revocation_cid);
 

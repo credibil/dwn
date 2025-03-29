@@ -10,6 +10,7 @@ use std::time::Duration;
 use credibil_dwn::client::records::{
     Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
 };
+use credibil_dwn::interfaces::records::{QueryReply, SubscribeReply};
 use credibil_dwn::{StatusCode, endpoint};
 use futures::StreamExt;
 use tokio::time;
@@ -33,7 +34,8 @@ async fn owner_events() {
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut subscribe_reply = reply.body.expect("should have body");
+    let mut subscribe_reply: SubscribeReply =
+        reply.body.expect("should have body").try_into().expect("should convert");
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -65,7 +67,8 @@ async fn owner_events() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should have reply").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     // assert_eq!(entries[0], message_cid);

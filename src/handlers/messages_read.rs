@@ -13,13 +13,12 @@ use ::cid::Cid;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::grants::Scope;
 use crate::handlers::{records_write, verify_grant};
+use crate::interfaces::Document;
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
-use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::{Error, Interface, Result, bad, forbidden};
 
@@ -30,7 +29,7 @@ use crate::{Error, Interface, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReadReply>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReplyBody>> {
     // validate message CID
     let cid = Cid::from_str(&read.descriptor.message_cid).map_err(|e| bad!("invalid CID: {e}"))?;
 
@@ -69,30 +68,14 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        body: Some(ReadReply {
+        body: Some(ReplyBody::MessagesRead(ReadReply {
             entry: Some(ReadReplyEntry {
                 message_cid: read.descriptor.message_cid,
                 message: document,
                 data,
             }),
-        }),
+        })),
     })
-}
-
-impl Message for Read {
-    type Reply = ReadReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Read {

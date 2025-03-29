@@ -11,23 +11,20 @@ use chrono::format::SecondsFormat::Micros;
 use http::StatusCode;
 use serde_json::json;
 
-use crate::authorization::{self, Authorization};
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
 use crate::handlers::{protocols_configure, verify_grant, verify_protocol};
+use crate::interfaces::Document;
 use crate::interfaces::protocols::{
     self, GRANT_PATH, PROTOCOL_URI, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
-use crate::interfaces::records::{
-    DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteReply,
-};
-use crate::interfaces::{Descriptor, Document};
+use crate::interfaces::records::{DelegatedGrant, RecordsFilter, SignaturePayload, Write};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{
     DateRange, GrantedQueryBuilder, MAX_ENCODED_SIZE, RecordsQueryBuilder, Storable,
 };
 use crate::utils::cid;
-use crate::{Error, Method, Result, bad, forbidden, schema};
+use crate::{Error, Method, Result, authorization, bad, forbidden, schema};
 
 /// Handle — or process — a [`Write`] message.
 ///
@@ -37,7 +34,7 @@ use crate::{Error, Method, Result, bad, forbidden, schema};
 /// an issue occurs attempting to save the [`Write`] message or attendant data.
 pub async fn handle(
     owner: &str, write: Write, provider: &impl Provider,
-) -> Result<Reply<WriteReply>> {
+) -> Result<Reply<ReplyBody>> {
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 
@@ -150,22 +147,6 @@ pub async fn handle(
         },
         body: None,
     })
-}
-
-impl Message for Write {
-    type Reply = WriteReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Storable for Write {

@@ -9,14 +9,13 @@ use std::sync::LazyLock;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::handlers::verify_grant;
+use crate::interfaces::Document;
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
     ProtocolType, RuleSet, Size,
 };
-use crate::interfaces::{Descriptor, Document};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::Storable;
 use crate::utils::cid;
@@ -97,7 +96,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 /// an issue occurs attempting to save the [`Configure`] message.
 pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
-) -> Result<Reply<ConfigureReply>> {
+) -> Result<Reply<ReplyBody>> {
     configure.authorize(owner, provider).await?;
 
     // validate the message
@@ -146,24 +145,8 @@ pub async fn handle(
             code: StatusCode::ACCEPTED.as_u16(),
             detail: None,
         },
-        body: Some(ConfigureReply { message: configure }),
+        body: Some(ReplyBody::ProtocolsConfigure(ConfigureReply { message: configure })),
     })
-}
-
-impl Message for Configure {
-    type Reply = ConfigureReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Storable for Configure {

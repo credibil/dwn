@@ -6,11 +6,9 @@
 
 use http::StatusCode;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::grants::Grant;
 use crate::handlers::verify_protocol;
-use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
@@ -24,7 +22,7 @@ use crate::{Result, bad, forbidden, utils};
 /// an issue occurs querying the [`MessageStore`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply<QueryReply>> {
+) -> Result<Reply<ReplyBody>> {
     query.validate()?;
 
     let store_query = if query.only_published() {
@@ -93,27 +91,11 @@ pub async fn handle(
             code: StatusCode::OK.as_u16(),
             detail: None,
         },
-        body: Some(QueryReply {
+        body: Some(ReplyBody::RecordsQuery(QueryReply {
             entries: Some(entries),
             cursor,
-        }),
+        })),
     })
-}
-
-impl Message for Query {
-    type Reply = QueryReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        self.authorization.as_ref()
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Query {

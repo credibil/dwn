@@ -72,7 +72,7 @@ pub struct DeleteDescriptor {
 
 /// [`DeleteReply`] is returned by the handler in the
 /// [`crate::endpoint::Reply`] `body` field.
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DeleteReply;
 
 /// The [`Query`] message expected by the handler.
@@ -805,7 +805,7 @@ impl Tag {
 
 /// For consistency, [`WriteReply`] is returned by the handler in the
 /// [`crate::endpoint::Reply`] `body` field, but contains no data.
-#[derive(Clone, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct WriteReply;
 
 /// Encryption settings.
