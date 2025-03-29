@@ -14,7 +14,7 @@ use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
+use crate::endpoint::{Reply, Status};
 use crate::handlers::verify_protocol;
 use crate::interfaces::Document;
 use crate::interfaces::records::{Delete, RecordsFilter, Write};
@@ -30,9 +30,7 @@ use crate::{Error, Interface, Method, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to delete the specified record from the
 /// [`MessageStore`].
-pub async fn handle(
-    owner: &str, delete: Delete, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+pub async fn handle(owner: &str, delete: Delete, provider: &impl Provider) -> Result<Reply> {
     // a `RecordsWrite` record is required for delete processing
     let query = RecordsQueryBuilder::new()
         .method(None)

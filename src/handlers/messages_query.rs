@@ -17,9 +17,7 @@ use crate::{Result, forbidden, store};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs querying the [`EventLog`].
-pub async fn handle(
-    owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
     query.authorize(owner, provider).await?;
 
     let query = store::Query::from(query);

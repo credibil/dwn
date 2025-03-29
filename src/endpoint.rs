@@ -30,7 +30,7 @@ use crate::{Error, Result, bad, schema, unauthorized};
 /// information on the reason for failure.
 pub async fn handle(
     owner: &str, message: impl Into<Message>, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+) -> Result<Reply> {
     let message = message.into();
     message.validate(owner, provider).await?;
     message.handle(owner, provider).await
@@ -136,7 +136,7 @@ impl Message {
         }
     }
 
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<ReplyBody>> {
+    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply> {
         match self {
             Self::MessagesQuery(m) => messages_query::handle(owner, m, provider).await,
             Self::MessagesRead(m) => messages_read::handle(owner, m, provider).await,
@@ -177,12 +177,50 @@ impl Message {
 
 /// Top-level reply data structure common to all handler.
 #[derive(Debug, Default)]
-pub struct Reply<ReplyBody> {
+pub struct Reply {
     /// The status message to accompany the reply.
     pub status: Status,
 
     /// The endpoint-specific reply.
     pub body: Option<ReplyBody>,
+}
+
+use axum::body::Bytes;
+use http::Response;
+
+/// Trait for converting a `Result` into an HTTP response.
+pub trait IntoHttp {
+    /// The body type of the HTTP response.
+    type Body: http_body::Body<Data = Bytes> + Send + 'static;
+
+    /// Convert into an HTTP response.
+    fn into_http(self) -> Response<Self::Body>;
+}
+
+impl IntoHttp for Result<Reply> {
+    type Body = axum::body::Body;
+
+    /// Create a new reply with the given status code and body.
+    fn into_http(self) -> Response<Self::Body> {
+        // TODO: handle errors and return StatusCode::SERVER_ERROR
+        let result = match self {
+            Ok(r) => {
+                let body = serde_json::to_vec(&r.body).unwrap_or_default();
+                Response::builder()
+                    .status(r.status.code)
+                    .header("Content-Type", "application/json")
+                    .body(Self::Body::from(body))
+            }
+            Err(e) => {
+                let body = serde_json::to_vec(&e).unwrap_or_default();
+                Response::builder()
+                    .status(StatusCode::BAD_REQUEST)
+                    .header("Content-Type", "application/json")
+                    .body(Self::Body::from(body))
+            }
+        };
+        result.unwrap_or_default()
+    }
 }
 
 /// Reply status.

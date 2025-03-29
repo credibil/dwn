@@ -11,7 +11,7 @@ use chrono::format::SecondsFormat::Micros;
 use http::StatusCode;
 use serde_json::json;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
+use crate::endpoint::{Reply, Status};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
 use crate::handlers::{protocols_configure, verify_grant, verify_protocol};
 use crate::interfaces::Document;
@@ -32,9 +32,7 @@ use crate::{Error, Method, Result, authorization, bad, forbidden, schema};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to save the [`Write`] message or attendant data.
-pub async fn handle(
-    owner: &str, write: Write, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+pub async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Result<Reply> {
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 

@@ -20,7 +20,7 @@ use crate::{Result, utils};
 /// an issue occurs querying the [`MessageStore`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+) -> Result<Reply> {
     // validate query
     if let Some(filter) = &query.descriptor.filter {
         utils::uri::validate(&filter.protocol)?;

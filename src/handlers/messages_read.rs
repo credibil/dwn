@@ -29,7 +29,7 @@ use crate::{Error, Interface, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReplyBody>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
     // validate message CID
     let cid = Cid::from_str(&read.descriptor.message_cid).map_err(|e| bad!("invalid CID: {e}"))?;
 

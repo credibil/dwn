@@ -21,7 +21,7 @@ use crate::{Result, forbidden};
 /// an issue occurs creating the subscription [`Subscriber`].
 pub async fn handle(
     owner: &str, subscribe: Subscribe, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+) -> Result<Reply> {
     // authorize the subscriber
     subscribe.authorize(owner, provider).await?;
 

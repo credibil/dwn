@@ -22,7 +22,7 @@ use crate::{Result, bad, forbidden, utils};
 /// an issue occurs querying the [`MessageStore`].
 pub async fn handle(
     owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+) -> Result<Reply> {
     query.validate()?;
 
     let store_query = if query.only_published() {

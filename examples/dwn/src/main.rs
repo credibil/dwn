@@ -5,8 +5,9 @@ use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
+// use serde_json::json;
+use credibil_dwn::endpoint::IntoHttp;
 use credibil_dwn::endpoint::{self, Message};
-use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -43,11 +44,6 @@ async fn main() {
 async fn handle(
     State(provider): State<ProviderImpl>, Json(req): Json<Message>,
 ) -> impl IntoResponse {
-    let reply =
-        endpoint::handle("did:web:credibil.io", req, &provider).await.expect("should handle");
-
-    // let x = serde_json::to_string_pretty(&reply).expect("should serialize");
-    // println!("reply: {x}");
-
-    (reply.status.code, Json(json!(reply.body))).into_response()
+    endpoint::handle("did:web:credibil.io", req, &provider).await.into_http();
+    // (reply.status.code, Json(json!(reply.body))).into_response()
 }

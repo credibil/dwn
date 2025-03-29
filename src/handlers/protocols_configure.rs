@@ -96,7 +96,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 /// an issue occurs attempting to save the [`Configure`] message.
 pub async fn handle(
     owner: &str, configure: Configure, provider: &impl Provider,
-) -> Result<Reply<ReplyBody>> {
+) -> Result<Reply> {
     configure.authorize(owner, provider).await?;
 
     // validate the message

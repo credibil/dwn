@@ -30,6 +30,7 @@ server = ["dep:async-recursion", "dep:tokio"]
 aes-gcm = "0.10.3"
 anyhow.workspace = true
 async-recursion = { version = "1.1.1", optional = true }
+axum = "0.8.1"
 base64ct.workspace = true
 cfg-if = "1.0.0"
 chrono = { version = "0.4.40", features = ["serde"] }
@@ -43,6 +44,7 @@ ed25519-dalek.workspace = true
 futures.workspace = true
 hkdf = "0.12.4"
 http.workspace = true
+http-body = "1.0.1"
 ipld-core = "0.4.2"
 jsonschema = { version = "0.29.0", default-features = false, features = ["resolve-file"] }
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
@@ -57,7 +59,6 @@ ulid = "1.2.1"
 uuid = { version = "1.16.0", features = ["fast-rng", "v4"] }
 x25519-dalek.workspace = true
 zeroize = "1.8.1"
-
 [dev-dependencies]
 async-nats.workspace = true
 blockstore.workspace = true

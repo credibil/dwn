@@ -22,7 +22,7 @@ use crate::{Error, Method, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply<ReplyBody>> {
+pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = store::Query::from(read.clone());
 
