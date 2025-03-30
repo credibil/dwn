@@ -5,6 +5,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::sync::LazyLock;
@@ -19,8 +22,8 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::jose::jws::{Jws, Protected, Signature};
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
 use tokio::time;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);

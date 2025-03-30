@@ -45,8 +45,8 @@ async fn handle(
 ) -> Result<Response<Full<Bytes>>, Infallible> {
     let did = req.uri().path().trim_start_matches('/').to_string();
 
-    let body = req.into_body();
-    let collected = body.collect().await.unwrap();
+    // let body = req.into_body();
+    let collected = req.into_body().collect().await.unwrap();
     let req: Message = serde_json::from_slice(&collected.to_bytes()).unwrap();
 
     Ok(endpoint::handle(&did, req, provider).await.into_http())

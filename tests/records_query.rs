@@ -2,6 +2,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::io::Cursor;
@@ -16,9 +19,9 @@ use credibil_dwn::client::{DateRange, Pagination, Range};
 use credibil_dwn::interfaces::records::QueryReply;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, StatusCode, authorization, endpoint};
-use rand::RngCore;
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
+use rand::RngCore;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
@@ -362,7 +365,7 @@ async fn author() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -495,7 +498,7 @@ async fn owner_recipient() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -2670,7 +2673,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -3054,7 +3057,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -3438,7 +3441,7 @@ async fn paginate_non_owner() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -3892,7 +3895,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice configures a nested protocol (foo->bar->baz).
     // --------------------------------------------------
-    let nested = include_bytes!("protocols/nested.json");
+    let nested = include_bytes!("../examples/protocols/nested.json");
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4085,7 +4088,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     // Alice configures a thread protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4203,7 +4206,7 @@ async fn protocol_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("protocols/friend-role.json");
+    let friend_role = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4307,7 +4310,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4413,7 +4416,7 @@ async fn no_protocol_path() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("protocols/friend-role.json");
+    let friend_role = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4491,7 +4494,7 @@ async fn no_context_id() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4593,7 +4596,7 @@ async fn no_root_role_record() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("protocols/friend-role.json");
+    let friend_role = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4652,7 +4655,7 @@ async fn no_context_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())

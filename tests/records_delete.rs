@@ -2,6 +2,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::io::Read;
@@ -18,8 +21,8 @@ use credibil_dwn::client::records::{
 use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{EventLog, MessageStore};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint, store};
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
@@ -350,7 +353,7 @@ async fn anyone_delete() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/anyone-collaborate.json");
+    let allow_any = include_bytes!("../examples/protocols/anyone-collaborate.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -406,7 +409,7 @@ async fn ancestor_recipient() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let recipient_can = include_bytes!("protocols/recipient-can.json");
+    let recipient_can = include_bytes!("../examples/protocols/recipient-can.json");
     let definition: Definition = serde_json::from_slice(recipient_can).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -498,7 +501,7 @@ async fn direct_recipient() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let recipient_can = include_bytes!("protocols/recipient-can.json");
+    let recipient_can = include_bytes!("../examples/protocols/recipient-can.json");
     let definition: Definition = serde_json::from_slice(recipient_can).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -570,7 +573,7 @@ async fn ancestor_author() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let author_can = include_bytes!("protocols/author-can.json");
+    let author_can = include_bytes!("../examples/protocols/author-can.json");
     let definition: Definition = serde_json::from_slice(author_can).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -661,7 +664,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -778,7 +781,7 @@ async fn root_role() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("protocols/friend-role.json");
+    let friend_role = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()

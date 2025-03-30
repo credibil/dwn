@@ -20,9 +20,7 @@ use crate::{Result, bad, forbidden, utils};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs querying the [`MessageStore`].
-pub async fn handle(
-    owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply> {
+pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
     query.validate()?;
 
     let store_query = if query.only_published() {

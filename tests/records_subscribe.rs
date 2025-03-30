@@ -2,6 +2,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::sync::LazyLock;
@@ -13,9 +16,9 @@ use credibil_dwn::client::records::{
 use credibil_dwn::interfaces::records::{QueryReply, SubscribeReply};
 use credibil_dwn::{StatusCode, endpoint};
 use futures::StreamExt;
-use tokio::time;
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
+use tokio::time;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 

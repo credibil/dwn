@@ -5,6 +5,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::io::Cursor;
@@ -16,8 +19,8 @@ use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::QueryReply;
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
@@ -30,7 +33,7 @@ async fn owner_messages() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -208,7 +211,7 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     // Alice configures a `free_for_all` protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure_any = ConfigureBuilder::new()
@@ -353,7 +356,7 @@ async fn match_protocol_scope() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let mut definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     definition.protocol = "http://protocol1".to_string();
 
@@ -429,7 +432,7 @@ async fn mismatched_protocol_scope() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let mut definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     definition.protocol = "http://protocol1".to_string();
 

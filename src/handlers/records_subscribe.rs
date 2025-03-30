@@ -20,9 +20,7 @@ use crate::{OneOrMany, Result, forbidden};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs creating the subscription [`Subscriber`].
-pub async fn handle(
-    owner: &str, subscribe: Subscribe, provider: &impl Provider,
-) -> Result<Reply> {
+pub async fn handle(owner: &str, subscribe: Subscribe, provider: &impl Provider) -> Result<Reply> {
     // authorize subscription
     subscribe.authorize(owner, provider).await?;
 

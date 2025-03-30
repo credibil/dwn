@@ -1,3 +1,5 @@
+#![allow(missing_docs, dead_code)]
+
 //! # Keystore
 
 use anyhow::{Result, anyhow};

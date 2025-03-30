@@ -18,9 +18,7 @@ use crate::{Result, utils};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs querying the [`MessageStore`].
-pub async fn handle(
-    owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply> {
+pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
     // validate query
     if let Some(filter) = &query.descriptor.filter {
         utils::uri::validate(&filter.protocol)?;

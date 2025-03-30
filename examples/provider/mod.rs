@@ -3,6 +3,8 @@
 //! This example implements a simple in-memory provider for the Credibil DWN.
 //! It uses an in-memory blockstore and a NATS client for message transport.
 
+#![allow(dead_code)]
+
 mod block_store;
 mod event_stream;
 

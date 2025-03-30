@@ -69,7 +69,7 @@ credibil-dwn.workspace = true
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 multibase.workspace = true
-# reqwest = { version = "0.12.15", features = ["json"] }
+reqwest = { version = "0.12.15", features = ["json"] }
 
 [[example]]
 name = "axum"

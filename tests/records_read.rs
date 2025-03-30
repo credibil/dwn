@@ -2,6 +2,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::io::{Cursor, Read};
@@ -24,9 +27,9 @@ use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
-use rand::RngCore;
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
+use rand::RngCore;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
@@ -461,7 +464,7 @@ async fn allow_anyone() {
     // --------------------------------------------------
     // Alice configures a social media protocol.
     // --------------------------------------------------
-    let social_media = include_bytes!("protocols/social-media.json");
+    let social_media = include_bytes!("../examples/protocols/social-media.json");
     let definition: Definition = serde_json::from_slice(social_media).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -518,7 +521,7 @@ async fn no_anonymous() {
     // --------------------------------------------------
     // Alice configures an email protocol.
     // --------------------------------------------------
-    let email = include_bytes!("protocols/email.json");
+    let email = include_bytes!("../examples/protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -568,7 +571,7 @@ async fn allow_recipient() {
     // --------------------------------------------------
     // Alice configures an email protocol.
     // --------------------------------------------------
-    let email = include_bytes!("protocols/email.json");
+    let email = include_bytes!("../examples/protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -640,7 +643,7 @@ async fn allow_author() {
     // --------------------------------------------------
     // Alice configures an email protocol.
     // --------------------------------------------------
-    let email = include_bytes!("protocols/email.json");
+    let email = include_bytes!("../examples/protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -712,7 +715,7 @@ async fn filter_one() {
     // --------------------------------------------------
     // Alice configures a nested protocol.
     // --------------------------------------------------
-    let nested = include_bytes!("protocols/nested.json");
+    let nested = include_bytes!("../examples/protocols/nested.json");
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -770,7 +773,7 @@ async fn filter_many() {
     // --------------------------------------------------
     // Alice configures a nested protocol.
     // --------------------------------------------------
-    let nested = include_bytes!("protocols/nested.json");
+    let nested = include_bytes!("../examples/protocols/nested.json");
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -829,7 +832,7 @@ async fn root_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend = include_bytes!("protocols/friend-role.json");
+    let friend = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -899,7 +902,7 @@ async fn invalid_protocol_path() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend = include_bytes!("protocols/friend-role.json");
+    let friend = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -954,7 +957,7 @@ async fn no_recipient_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend = include_bytes!("protocols/friend-role.json");
+    let friend = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1009,7 +1012,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice configures a thread protocol.
     // --------------------------------------------------
-    let thread = include_bytes!("protocols/thread-role.json");
+    let thread = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1132,7 +1135,7 @@ async fn invalid_context_role() {
     // --------------------------------------------------
     // Alice configures a thread protocol.
     // --------------------------------------------------
-    let thread = include_bytes!("protocols/thread-role.json");
+    let thread = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1291,7 +1294,7 @@ async fn unrestricted_grant() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("protocols/minimal.json");
+    let minimal = include_bytes!("../examples/protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1376,7 +1379,7 @@ async fn grant_protocol() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("protocols/minimal.json");
+    let minimal = include_bytes!("../examples/protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1461,7 +1464,7 @@ async fn invalid_grant_protocol() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("protocols/minimal.json");
+    let minimal = include_bytes!("../examples/protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1533,7 +1536,7 @@ async fn grant_context() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("protocols/minimal.json");
+    let minimal = include_bytes!("../examples/protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1603,7 +1606,7 @@ async fn invalid_grant_context() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("protocols/minimal.json");
+    let minimal = include_bytes!("../examples/protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1675,7 +1678,7 @@ async fn grant_protocol_path() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("protocols/minimal.json");
+    let minimal = include_bytes!("../examples/protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -1745,7 +1748,7 @@ async fn invalid_grant_protocol_path() {
     // --------------------------------------------------
     // Alice configures a minimal protocol.
     // --------------------------------------------------
-    let minimal = include_bytes!("protocols/minimal.json");
+    let minimal = include_bytes!("../examples/protocols/minimal.json");
     let definition: Definition = serde_json::from_slice(minimal).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -2264,7 +2267,7 @@ async fn decrypt_context() {
     // --------------------------------------------------
     // Alice configures the chat protocol with encryption.
     // --------------------------------------------------
-    let chat = include_bytes!("protocols/chat.json");
+    let chat = include_bytes!("../examples/protocols/chat.json");
     let definition: Definition = serde_json::from_slice(chat).expect("should deserialize");
     let definition = definition
         .with_encryption(&alice_kid, alice_private_jwk.clone())
@@ -2515,7 +2518,7 @@ async fn decrypt_protocol() {
     // --------------------------------------------------
     // Alice configures the email protocol with encryption.
     // --------------------------------------------------
-    let email = include_bytes!("protocols/email.json");
+    let email = include_bytes!("../examples/protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
     let definition = definition
         .with_encryption(&alice_kid, alice_private_jwk.clone())

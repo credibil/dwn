@@ -2,6 +2,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use core::panic;
@@ -17,8 +20,8 @@ use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use futures::StreamExt;
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
 use tokio::time;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
@@ -185,7 +188,7 @@ async fn interface_scope() {
     let mut message_cids = vec![];
 
     // 1. configure 'allow-any' protocol
-    let bytes = include_bytes!("protocols/allow-any.json");
+    let bytes = include_bytes!("../examples/protocols/allow-any.json");
     let definition = serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -358,7 +361,7 @@ async fn protocol_filter() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let bytes = include_bytes!("protocols/allow-any.json");
+    let bytes = include_bytes!("../examples/protocols/allow-any.json");
     let mut definition =
         serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
 
@@ -501,7 +504,7 @@ async fn invalid_protocol() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let bytes = include_bytes!("protocols/allow-any.json");
+    let bytes = include_bytes!("../examples/protocols/allow-any.json");
     let mut definition =
         serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
 

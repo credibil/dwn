@@ -5,6 +5,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::io::{Cursor, Read};
@@ -18,9 +21,9 @@ use credibil_dwn::interfaces::messages::ReadReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
-use rand::RngCore;
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
+use rand::RngCore;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);

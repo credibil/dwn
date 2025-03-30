@@ -5,6 +5,9 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/keystore/mod.rs"]
+mod keystore;
+#[path = "../examples/provider/mod.rs"]
 mod provider;
 
 use std::collections::BTreeMap;
@@ -18,9 +21,9 @@ use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::ProtocolsQueryBuilder;
 use credibil_dwn::{Error, Method, StatusCode, endpoint};
-use tokio::time;
+use keystore::Keyring;
 use provider::ProviderImpl;
-use provider::keystore::{self, Keyring};
+use tokio::time;
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
