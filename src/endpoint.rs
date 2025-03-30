@@ -6,7 +6,8 @@
 
 use std::fmt::Debug;
 
-use http::StatusCode;
+use bytes::Bytes;
+use http::{Response, StatusCode};
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
@@ -185,9 +186,6 @@ pub struct Reply {
     pub body: Option<ReplyBody>,
 }
 
-use axum::body::Bytes;
-use http::Response;
-
 /// Trait for converting a `Result` into an HTTP response.
 pub trait IntoHttp {
     /// The body type of the HTTP response.
@@ -198,7 +196,7 @@ pub trait IntoHttp {
 }
 
 impl IntoHttp for Result<Reply> {
-    type Body = axum::body::Body;
+    type Body = http_body_util::Full<Bytes>;
 
     /// Create a new reply with the given status code and body.
     fn into_http(self) -> Response<Self::Body> {

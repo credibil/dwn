@@ -1,0 +1,27 @@
+[package]
+name = "hyper"
+edition.workspace = true
+publish = false
+
+# [lib]
+# crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+async-nats.workspace = true
+base64ct.workspace = true
+blockstore.workspace = true
+cid.workspace = true
+credibil-dwn.workspace = true
+credibil-infosec.workspace = true
+ed25519-dalek.workspace = true
+futures.workspace = true
+http-body-util = "0.1"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+multibase.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+x25519-dalek.workspace = true

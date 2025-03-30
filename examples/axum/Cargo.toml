@@ -1,5 +1,5 @@
 [package]
-name = "dwn"
+name = "axum"
 edition.workspace = true
 publish = false
 
@@ -10,7 +10,6 @@ publish = false
 anyhow.workspace = true
 async-nats.workspace = true
 axum.workspace = true
-axum-extra.workspace = true
 base64ct.workspace = true
 blockstore.workspace = true
 cid.workspace = true
@@ -20,11 +19,7 @@ ed25519-dalek.workspace = true
 futures.workspace = true
 multibase.workspace = true
 rand.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
-tower-http = { version = "0.6.2", features = ["cors", "set-header", "trace"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 x25519-dalek.workspace = true
