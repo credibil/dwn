@@ -1,7 +1,8 @@
+//! A simple Hyper HTTP server that handles DWN messages.
+
 mod provider;
 
 use std::convert::Infallible;
-use std::net::SocketAddr;
 
 use anyhow::Result;
 use credibil_dwn::endpoint::{self, IntoHttp, Message};

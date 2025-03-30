@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-mod web_node;
+mod provider;
 
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -14,8 +14,8 @@ use credibil_dwn::interfaces::records::{QueryReply, SubscribeReply};
 use credibil_dwn::{StatusCode, endpoint};
 use futures::StreamExt;
 use tokio::time;
-use web_node::ProviderImpl;
-use web_node::keystore::{self, Keyring};
+use provider::ProviderImpl;
+use provider::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 

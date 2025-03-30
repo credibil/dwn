@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-mod web_node;
+mod provider;
 
 use core::panic;
 use std::io::Cursor;
@@ -17,9 +17,9 @@ use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use futures::StreamExt;
+use provider::ProviderImpl;
+use provider::keystore::{self, Keyring};
 use tokio::time;
-use web_node::ProviderImpl;
-use web_node::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);

@@ -1,9 +1,12 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
+//! # Example Provider
+//!
+//! This example implements a simple in-memory provider for the Credibil DWN.
+//! It uses an in-memory blockstore and a NATS client for message transport.
 
 mod block_store;
 mod event_stream;
-pub mod keystore;
+
+use std::sync::Arc;
 
 use anyhow::Result;
 use blockstore::InMemoryBlockstore;
@@ -13,15 +16,15 @@ use credibil_dwn::provider::{
 
 #[derive(Clone)]
 pub struct ProviderImpl {
-    blockstore: InMemoryBlockstore<64>,
-    pub nats_client: async_nats::Client,
+    blockstore: Arc<InMemoryBlockstore<64>>,
+    pub nats_client: Arc<async_nats::Client>,
 }
 
 impl ProviderImpl {
     pub async fn new() -> Result<Self> {
         Ok(Self {
-            blockstore: InMemoryBlockstore::<64>::new(),
-            nats_client: async_nats::connect("demo.nats.io").await?,
+            blockstore: Arc::new(InMemoryBlockstore::<64>::new()),
+            nats_client: Arc::new(async_nats::connect("demo.nats.io").await?),
         })
     }
 }

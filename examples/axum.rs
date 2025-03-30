@@ -1,3 +1,5 @@
+//! A simple Axum HTTP server that handles DWN messages.
+
 mod provider;
 
 use axum::extract::{Path, State};

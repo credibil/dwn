@@ -30,7 +30,6 @@ server = ["dep:async-recursion", "dep:tokio"]
 aes-gcm = "0.10.3"
 anyhow.workspace = true
 async-recursion = { version = "1.1.1", optional = true }
-# axum = "0.8.1"
 base64ct.workspace = true
 bytes = "1.10.1"
 cfg-if = "1.0.0"
@@ -64,16 +63,30 @@ zeroize = "1.8.1"
 
 [dev-dependencies]
 async-nats.workspace = true
+axum.workspace = true
 blockstore.workspace = true
+credibil-dwn.workspace = true
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
 multibase.workspace = true
-reqwest = { version = "0.12.15", features = ["json"] }
+# reqwest = { version = "0.12.15", features = ["json"] }
+
+[[example]]
+name = "axum"
+path = "examples/axum.rs"
+# required-features = ["client", "server"]
+
+[[example]]
+name = "hyper"
+path = "examples/hyper.rs"
+# required-features = ["client", "server"]
 
 # -----------------------------------------------
 # Workspace
 # -----------------------------------------------
 [workspace]
-members = ["crates/*", "examples/*"]
-# resolver = "3"
+members = ["crates/*"]
+resolver = "3"
 
 [workspace.package]
 authors = ["Credibil"]
@@ -100,7 +113,6 @@ nursery = "warn"
 anyhow = "1.0.97"
 async-nats = "0.40.0"
 axum = { version = "0.8.1", features = ["macros"] }
-axum-extra = { version = "0.10.0", features = ["typed-header"] }
 base64ct = { version = "1.7.3", features = ["std"] }
 blockstore = "0.7.1"
 cid = { version = "0.11.1", features = ["alloc"] }

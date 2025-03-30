@@ -5,7 +5,7 @@
 
 #![cfg(feature = "client")]
 
-mod web_node;
+mod provider;
 
 use std::io::Cursor;
 use std::sync::LazyLock;
@@ -15,7 +15,7 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::messages::{QueryBuilder, ReadBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
-use web_node::keystore::{self, Keyring};
+use provider::keystore::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
 static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
