@@ -27,8 +27,6 @@ async fn main() {
 
     let response = reqwest::Client::new()
         .post(format!("http://0.0.0.0:8080/{}", alice.did()))
-        // .header("Content-Type", "application/json")
-        // .header("Accept", "application/json")
         .json(&configure)
         .send()
         .await
@@ -54,10 +52,11 @@ async fn main() {
         .await
         .expect("should create write");
 
+    let js= serde_json::to_string(&write).expect("should serialize");
+    println!("Write: {js}");
+
     let response = reqwest::Client::new()
         .post(format!("http://0.0.0.0:8080/{}", alice.did()))
-        // .header("Content-Type", "application/json")
-        // .header("Accept", "application/json")
         .json(&write)
         .send()
         .await

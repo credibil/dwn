@@ -7,7 +7,7 @@
 use std::fmt::Debug;
 
 use bytes::Bytes;
-use http::{Response, StatusCode};
+use http::{Response, StatusCode, header};
 use serde::{Deserialize, Serialize};
 
 use crate::authorization::Authorization;
@@ -200,20 +200,19 @@ impl IntoHttp for Result<Reply> {
 
     /// Create a new reply with the given status code and body.
     fn into_http(self) -> Response<Self::Body> {
-        // TODO: handle errors and return StatusCode::SERVER_ERROR
         let result = match self {
             Ok(r) => {
                 let body = serde_json::to_vec(&r.body).unwrap_or_default();
                 Response::builder()
                     .status(r.status.code)
-                    .header("Content-Type", "application/json")
+                    .header(header::CONTENT_TYPE, "application/json")
                     .body(Self::Body::from(body))
             }
             Err(e) => {
                 let body = serde_json::to_vec(&e).unwrap_or_default();
                 Response::builder()
-                    .status(StatusCode::BAD_REQUEST)
-                    .header("Content-Type", "application/json")
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .header(header::CONTENT_TYPE, "application/json")
                     .body(Self::Body::from(body))
             }
         };
