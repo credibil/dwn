@@ -17,10 +17,6 @@ use crate::{Result, bad};
 pub fn validate(message: &Message) -> Result<()> {
     let descriptor = message.descriptor();
     let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
-
-    let m = serde_json::to_string(message).unwrap();
-    println!("Message: {m}");
-
     validate_value(&schema_name, message)
 }
 

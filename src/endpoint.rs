@@ -39,7 +39,7 @@ pub async fn handle(
 
 /// `Message` unifies all DWN messages into a single type for use with the
 /// [`handle`] method.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 #[allow(missing_docs)]
 pub enum Message {
@@ -53,6 +53,114 @@ pub enum Message {
     RecordsRead(records::Read),
     RecordsSubscribe(records::Subscribe),
     RecordsWrite(records::Write),
+}
+
+use std::fmt;
+
+// use std::sync::Arc;
+use serde::de::value::MapAccessDeserializer;
+use serde::de::{self, Deserializer, MapAccess, Visitor};
+use serde_json::Value;
+
+impl<'de> Deserialize<'de> for Message {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct VisitorImpl;
+
+        impl<'de> Visitor<'de> for VisitorImpl {
+            type Value = Message;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a Message object")
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                // deserialize into Value to determine interface and method
+                let value = Value::deserialize(MapAccessDeserializer::new(map))?;
+                let Some(interface) = value.pointer("/descriptor/interface") else {
+                    return Err(de::Error::custom("missing interface"));
+                };
+                let Some(method) = value.pointer("/descriptor/method") else {
+                    return Err(de::Error::custom("missing method"));
+                };
+
+                let message = match (interface.as_str(), method.as_str()) {
+                    (Some("Messages"), Some("Query")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::MessagesQuery(message)
+                    }
+                    (Some("Messages"), Some("Read")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::MessagesRead(message)
+                    }
+                    (Some("Messages"), Some("Subscribe")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::MessagesSubscribe(message)
+                    }
+                    (Some("Protocols"), Some("Configure")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::ProtocolsConfigure(message)
+                    }
+                    (Some("Protocols"), Some("Query")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::ProtocolsQuery(message)
+                    }
+                    (Some("Records"), Some("Delete")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::RecordsDelete(message)
+                    }
+                    (Some("Records"), Some("Query")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::RecordsQuery(message)
+                    }
+                    (Some("Records"), Some("Read")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::RecordsRead(message)
+                    }
+                    (Some("Records"), Some("Subscribe")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::RecordsSubscribe(message)
+                    }
+                    (Some("Records"), Some("Write")) => {
+                        let message = serde_json::from_value(value).map_err(|e| {
+                            de::Error::custom(format!("failed to deserialize message: {e}"))
+                        })?;
+                        Message::RecordsWrite(message)
+                    }
+                    _ => {
+                        return Err(de::Error::custom("unknown type"));
+                    }
+                };
+
+                Ok(message)
+            }
+        }
+
+        deserializer.deserialize_any(VisitorImpl)
+    }
 }
 
 impl From<messages::Query> for Message {

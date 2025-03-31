@@ -52,9 +52,6 @@ async fn main() {
         .await
         .expect("should create write");
 
-    let js= serde_json::to_string(&write).expect("should serialize");
-    println!("Write: {js}");
-
     let response = reqwest::Client::new()
         .post(format!("http://0.0.0.0:8080/{}", alice.did()))
         .json(&write)
@@ -62,8 +59,8 @@ async fn main() {
         .await
         .expect("should send");
 
-    // assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
-    let body: serde_json::Value = response.json().await.expect("should deserialize");
-    println!("Body: {body}");
+    // let body: serde_json::Value = response.json().await.expect("should deserialize");
+    // println!("Body: {body}");
 }
