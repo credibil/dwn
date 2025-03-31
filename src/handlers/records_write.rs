@@ -668,6 +668,7 @@ impl Write {
         Ok(entry_id == self.record_id)
     }
 
+    // Update the record's data.
     async fn update_data(
         &mut self, owner: &str, stream: &mut Cursor<Vec<u8>>, store: &impl DataStore,
     ) -> Result<()> {
