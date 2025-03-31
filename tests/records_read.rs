@@ -2666,5 +2666,5 @@ async fn invalid_message() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, read, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 }

@@ -44,7 +44,7 @@ async fn invalid_message() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 }
 
 // Should allow owner to subscribe their own event stream.
@@ -129,7 +129,7 @@ async fn unauthorized() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 
     // --------------------------------------------------
     // Bob attempts to subscribe to Alice's event stream.

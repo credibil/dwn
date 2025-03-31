@@ -3865,10 +3865,10 @@ async fn bad_date_published() {
         .build()
         .await
         .expect("should create query");
-    let Err(Error::BadRequest(msg)) = endpoint::handle(&ALICE.did, query, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, query, &provider).await else {
         panic!("should return BadRequest");
     };
-    assert!(msg.starts_with("validation failed for"));
+    assert!(e.contains("validation failed:"));
 }
 
 // Should return a status of Forbidden (403) when anonymous query has filter
@@ -4769,5 +4769,5 @@ async fn bad_message() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, query, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 }

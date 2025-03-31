@@ -168,7 +168,7 @@ async fn invalid_request() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, query, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 }
 
 // Should return a status of BadRequest (400) if an empty filter is provided.
@@ -182,7 +182,7 @@ async fn empty_filter() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, query, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 }
 
 // Should allow querying of messages with matching interface and method grant scope.

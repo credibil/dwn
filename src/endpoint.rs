@@ -4,11 +4,14 @@
 //! to the appropriate handler for processing, returning a reply that can be
 //! serialized to a JSON object.
 
-use std::fmt::Debug;
+use std::fmt;
 
 use bytes::Bytes;
 use http::{Response, StatusCode, header};
+use serde::de::value::MapAccessDeserializer;
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::authorization::Authorization;
 use crate::handlers::{
@@ -54,13 +57,6 @@ pub enum Message {
     RecordsSubscribe(records::Subscribe),
     RecordsWrite(records::Write),
 }
-
-use std::fmt;
-
-// use std::sync::Arc;
-use serde::de::value::MapAccessDeserializer;
-use serde::de::{self, Deserializer, MapAccess, Visitor};
-use serde_json::Value;
 
 impl<'de> Deserialize<'de> for Message {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

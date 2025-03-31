@@ -32,7 +32,8 @@ pub fn validate_value<T: Serialize + ?Sized>(schema_name: &str, value: &T) -> Re
     if !errors.is_empty() {
         let mut buffer = String::new();
         for e in errors {
-            buffer.push_str(&format!("{e}, "));
+            buffer.push_str(&e.to_string());
+            buffer.push_str(", ");
         }
         let buffer = buffer.replace('"', "'");
         let buffer = buffer.trim_end_matches(", ");
