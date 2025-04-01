@@ -9,7 +9,7 @@ use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
 pub use crate::grants::{Conditions, Publication, RecordsScope, Scope};
 use crate::grants::{GrantData, RequestData, RevocationData};
 use crate::interfaces::protocols;
-use crate::interfaces::records::{self, Tag, Write};
+use crate::interfaces::records::{self, Write};
 use crate::{Interface, utils};
 
 /// Options to use when creating a permission grant.
@@ -203,7 +203,7 @@ impl<S: Signer> GrantBuilder<Grantee, Scoped, Signed<'_, S>> {
         // filter will return associated grants
         if let Some(protocol) = scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
-            builder = builder.add_tag("protocol", Tag::String(protocol));
+            builder = builder.add_tag("protocol", protocol);
         }
 
         let mut write = builder.sign(self.signer.0).build().await?;
@@ -326,7 +326,7 @@ impl<S: Signer> RequestBuilder<Scoped, Signed<'_, S>> {
         // filter will return this request
         if let Some(protocol) = scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
-            builder = builder.add_tag("protocol", Tag::String(protocol));
+            builder = builder.add_tag("protocol", protocol);
         }
 
         let mut write = builder.sign(self.signer.0).build().await?;
@@ -438,7 +438,7 @@ impl<S: Signer> RevocationBuilder<Grant, Signed<'_, S>> {
         // filter will return this request
         if let Some(protocol) = grant_data.scope.protocol() {
             let protocol = utils::uri::clean(protocol)?;
-            builder = builder.add_tag("protocol", Tag::String(protocol));
+            builder = builder.add_tag("protocol", protocol);
         }
 
         let mut write = builder.sign(self.signer.0).build().await?;

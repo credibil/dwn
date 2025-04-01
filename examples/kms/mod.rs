@@ -11,7 +11,6 @@ use rand::rngs::OsRng;
 use sha2::Digest;
 
 const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
-// const X25519_CODEC: [u8; 2] = [0xec, 0x01];
 
 #[derive(Default, Clone, Debug)]
 pub struct Keyring {

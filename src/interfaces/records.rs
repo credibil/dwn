@@ -803,6 +803,27 @@ impl Tag {
     }
 }
 
+impl From<String> for Tag {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+impl From<&str> for Tag {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+impl From<u64> for Tag {
+    fn from(value: u64) -> Self {
+        Self::Number(value)
+    }
+}
+impl From<bool> for Tag {
+    fn from(value: bool) -> Self {
+        Self::Boolean(value)
+    }
+}
+
 /// For consistency, [`WriteReply`] is returned by the handler in the
 /// [`crate::endpoint::Reply`] `body` field, but contains no data.
 #[derive(Debug, Deserialize, Serialize)]

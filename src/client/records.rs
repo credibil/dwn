@@ -848,8 +848,8 @@ impl<O> WriteBuilder<'_, O, Unattested, Unsigned> {
 
     /// Add a tag to the record.
     #[must_use]
-    pub fn add_tag(mut self, name: impl Into<String>, tag: Tag) -> Self {
-        self.tags.get_or_insert_with(HashMap::new).insert(name.into(), tag);
+    pub fn add_tag(mut self, name: impl Into<String>, tag: impl Into<Tag>) -> Self {
+        self.tags.get_or_insert_with(HashMap::new).insert(name.into(), tag.into());
         self
     }
 
