@@ -5,8 +5,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/keystore/mod.rs"]
-mod keystore;
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 #[path = "../examples/provider/mod.rs"]
 mod provider;
 
@@ -21,13 +21,13 @@ use credibil_dwn::interfaces::messages::ReadReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
-use keystore::Keyring;
+use kms::Keyring;
 use provider::ProviderImpl;
 use rand::RngCore;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]
@@ -94,7 +94,7 @@ async fn read_message() {
 #[tokio::test]
 async fn invalid_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let mut invalid = keystore::new_keyring();
+    let mut invalid = Keyring::new();
     invalid.secret_key = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo".to_string();
 
     let read = ReadBuilder::new()

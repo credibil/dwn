@@ -2,8 +2,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/keystore/mod.rs"]
-mod keystore;
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 #[path = "../examples/provider/mod.rs"]
 mod provider;
 
@@ -20,12 +20,12 @@ use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use futures::StreamExt;
-use keystore::Keyring;
+use kms::Keyring;
 use provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // TODO: implement fake provider with no subscription support for this test.
 // // Should respond with a status of NotImplemented (501) if subscriptions are

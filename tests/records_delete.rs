@@ -2,8 +2,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/keystore/mod.rs"]
-mod keystore;
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 #[path = "../examples/provider/mod.rs"]
 mod provider;
 
@@ -21,12 +21,12 @@ use credibil_dwn::client::records::{
 use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{EventLog, MessageStore};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint, store};
-use keystore::Keyring;
+use kms::Keyring;
 use provider::ProviderImpl;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]

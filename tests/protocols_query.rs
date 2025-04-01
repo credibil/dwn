@@ -5,8 +5,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/keystore/mod.rs"]
-mod keystore;
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 #[path = "../examples/provider/mod.rs"]
 mod provider;
 
@@ -22,13 +22,13 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::jose::jws::{Jws, Protected, Signature};
-use keystore::Keyring;
+use kms::Keyring;
 use provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should return protocols matching the query.
 #[tokio::test]

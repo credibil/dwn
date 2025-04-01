@@ -3,17 +3,18 @@
 //! This example demonstrates a DWN client interacting with a Decentralized Web
 //! Node (DWN).
 
-mod keystore;
+mod kms;
 
 use std::io::Cursor;
 
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use http::StatusCode;
+use kms::Keyring;
 
 #[tokio::main]
 async fn main() {
-    let alice = keystore::new_keyring();
+    let alice = Keyring::new();
 
     let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");

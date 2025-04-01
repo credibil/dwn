@@ -20,7 +20,7 @@ use test_node::ProviderImpl;
 async fn main() {
     // create a provider for the DWN library
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice = keystore::new_keyring();
+    let alice = Keyring::new();
 
     // create a request to write a new record (and serialize to JSON)
     let write = WriteBuilder::new()

@@ -2,8 +2,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/keystore/mod.rs"]
-mod keystore;
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 #[path = "../examples/provider/mod.rs"]
 mod provider;
 
@@ -16,11 +16,11 @@ use credibil_dwn::client::records::{
 use credibil_dwn::interfaces::records::{QueryReply, SubscribeReply};
 use credibil_dwn::{StatusCode, endpoint};
 use futures::StreamExt;
-use keystore::Keyring;
+use kms::Keyring;
 use provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]

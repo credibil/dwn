@@ -5,8 +5,8 @@
 
 #![cfg(feature = "client")]
 
-#[path = "../examples/keystore/mod.rs"]
-mod keystore;
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 #[path = "../examples/provider/mod.rs"]
 mod provider;
 
@@ -18,10 +18,10 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::messages::{QueryBuilder, ReadBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
-use keystore::Keyring;
+use kms::Keyring;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]

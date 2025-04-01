@@ -16,7 +16,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let alice = keystore::new_keyring();
+//!     let alice = Keyring::new();
 //!
 //!     // create a message to write a record
 //!     let write = WriteBuilder::new()

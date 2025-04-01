@@ -2,8 +2,8 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/keystore/mod.rs"]
-mod keystore;
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 #[path = "../examples/provider/mod.rs"]
 mod provider;
 
@@ -27,13 +27,13 @@ use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
-use keystore::Keyring;
+use kms::Keyring;
 use provider::ProviderImpl;
 use rand::RngCore;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should allow an owner to read their own records.
 #[tokio::test]

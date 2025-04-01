@@ -392,7 +392,7 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
 //     #[tokio::test]
 //     async fn query_records() {
 //         let block_store = BlockStoreImpl::new();
-//         let alice = keystore::new_keyring();
+//         let alice = Keyring::new();
 
 //         let mut data = [0u8; 10];
 //         rand::thread_rng().fill_bytes(&mut data);
@@ -430,7 +430,7 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
 //     #[tokio::test]
 //     async fn query_protocols() {
 //         let block_store = BlockStoreImpl::new();
-//         let alice = keystore::new_keyring();
+//         let alice = Keyring::new();
 
 //         let configure = ConfigureBuilder::new()
 //             .definition(Definition::new("http://minimal.xyz"))
