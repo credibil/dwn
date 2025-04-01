@@ -62,9 +62,9 @@ x25519-dalek.workspace = true
 zeroize = "1.8.1"
 
 [dev-dependencies]
-async-nats.workspace = true
-axum.workspace = true
-blockstore.workspace = true
+async-nats = "0.40.0"
+axum = { version = "0.8.3", features = ["macros"] }
+blockstore = "0.7.1"
 credibil-dwn.workspace = true
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
@@ -112,10 +112,7 @@ nursery = "warn"
 
 [workspace.dependencies]
 anyhow = "1.0.97"
-async-nats = "0.40.0"
-axum = { version = "0.8.3", features = ["macros"] }
 base64ct = { version = "1.7.3", features = ["std"] }
-blockstore = "0.7.1"
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-did = { git = "https://github.com/credibil/did.git" }
 credibil-dwn = { path = "." }
