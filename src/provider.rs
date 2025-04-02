@@ -38,14 +38,14 @@ impl<T> EventLog for T where T: BlockStore {}
 pub trait MessageStore: BlockStore {
     /// Store a message in the underlying store.
     fn put(&self, owner: &str, entry: &impl Storable) -> impl Future<Output = Result<()>> + Send {
-        async { store::put(owner, "MESSAGE", entry, self).await }
+        store::put(owner, "MESSAGE", entry, self)
     }
 
     /// Queries the underlying store for matches to the provided query.
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Document>, Option<Cursor>)>> + Send {
-        async { store::query(owner, "MESSAGE", query, self).await }
+        store::query(owner, "MESSAGE", query, self)
     }
 
     /// Fetch a single message by CID from the underlying store, returning
@@ -53,12 +53,12 @@ pub trait MessageStore: BlockStore {
     fn get(
         &self, owner: &str, message_cid: &str,
     ) -> impl Future<Output = Result<Option<Document>>> + Send {
-        async { store::get(owner, "MESSAGE", message_cid, self).await }
+        store::get(owner, "MESSAGE", message_cid, self)
     }
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async { store::delete(owner, "MESSAGE", message_cid, self).await }
+        store::delete(owner, "MESSAGE", message_cid, self)
     }
 
     /// Purge all records from the store.
@@ -87,7 +87,7 @@ pub trait DataStore: BlockStore {
     fn get(
         &self, owner: &str, record_id: &str, data_cid: &str,
     ) -> impl Future<Output = anyhow::Result<Option<impl Read>>> + Send {
-        async move {
+        async {
             let cid = safe_cid(record_id, data_cid)?;
             data::get(owner, "DATA", &cid, self).await
         }
@@ -164,7 +164,7 @@ pub trait TaskStore: BlockStore {
     fn extend(
         &self, _owner: &str, _task_id: &str, _timeout_secs: u64,
     ) -> impl Future<Output = Result<()>> + Send {
-        async move { unimplemented!("implement extend") }
+        async { unimplemented!("implement extend") }
     }
 
     /// Delete data associated with the specified id.
@@ -222,12 +222,12 @@ pub trait EventLog: BlockStore {
     fn query(
         &self, owner: &str, query: &Query,
     ) -> impl Future<Output = Result<(Vec<Event>, Option<Cursor>)>> + Send {
-        async { store::query(owner, "EVENTLOG", query, self).await }
+        store::query(owner, "EVENTLOG", query, self)
     }
 
     /// Deletes event for the specified `message_cid`.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send {
-        async { store::delete(owner, "EVENTLOG", message_cid, self).await }
+        store::delete(owner, "EVENTLOG", message_cid, self)
     }
 
     /// Purge all data from the store.
