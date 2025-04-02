@@ -24,6 +24,15 @@ pub trait Provider:
 {
 }
 
+impl<T> Provider for T where
+    T: MessageStore + DataStore + TaskStore + EventLog + EventStream + DidResolver
+{
+}
+impl<T> MessageStore for T where T: BlockStore {}
+impl<T> DataStore for T where T: BlockStore {}
+impl<T> TaskStore for T where T: BlockStore {}
+impl<T> EventLog for T where T: BlockStore {}
+
 /// The `MessageStore` trait is used by implementers to provide message
 /// storage capability.
 pub trait MessageStore: BlockStore {
