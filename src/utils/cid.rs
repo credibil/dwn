@@ -14,7 +14,7 @@ use crate::utils::ipfs;
 const RAW: u64 = 0x55;
 // const DAG_CBOR: u64 = 0x71;
 
-/// Compute a CID from provided payload, serialized to CBOR.
+/// Compute a CID for provided payload.
 ///
 /// # Errors
 ///
