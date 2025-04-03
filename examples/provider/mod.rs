@@ -5,14 +5,18 @@
 
 #![allow(dead_code)]
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
 use blockstore::{Blockstore as _, InMemoryBlockstore};
+use cid::Cid;
 use credibil_dwn::event::{Event, Subscriber};
 use credibil_dwn::provider::{BlockStore, DidDocument, DidResolver, EventStream};
 use futures::stream::StreamExt;
+use multihash_codetable::MultihashDigest;
+use serde::{Deserialize, Serialize};
+
+const RAW: u64 = 0x55;
 
 #[derive(Clone)]
 pub struct ProviderImpl {
@@ -29,24 +33,46 @@ impl ProviderImpl {
     }
 }
 
-impl BlockStore for ProviderImpl {
-    async fn put(&self, _owner: &str, _partition: &str, cid: &str, block: &[u8]) -> Result<()> {
-        // convert libipld CID to blockstore CID
-        let block_cid = cid::Cid::from_str(cid)?;
-        self.blockstore.put_keyed(&block_cid, block).await.map_err(Into::into)
+#[derive(Serialize, Deserialize)]
+struct Identitifier<'a> {
+    owner: &'a str,
+    partition: &'a str,
+    key: &'a str,
+}
+
+impl<'a> Identitifier<'a> {
+    fn new(owner: &'a str, partition: &'a str, key: &'a str) -> Self {
+        Self {
+            owner,
+            partition,
+            key,
+        }
     }
 
-    async fn get(&self, _owner: &str, _partition: &str, cid: &str) -> Result<Option<Vec<u8>>> {
-        // convert libipld CID to blockstore CID
-        let block_cid = cid::Cid::try_from(cid)?;
-        let Some(bytes) = self.blockstore.get(&block_cid).await? else {
+    fn to_cid(&self) -> anyhow::Result<Cid> {
+        let mut buf = Vec::new();
+        ciborium::into_writer(self, &mut buf)?;
+        let hash = multihash_codetable::Code::Sha2_256.digest(&buf);
+        Ok(Cid::new_v1(RAW, hash))
+    }
+}
+
+impl BlockStore for ProviderImpl {
+    async fn put(&self, owner: &str, partition: &str, key: &str, block: &[u8]) -> Result<()> {
+        let cid = Identitifier::new(owner, partition, key).to_cid()?;
+        self.blockstore.put_keyed(&cid, block).await.map_err(Into::into)
+    }
+
+    async fn get(&self, owner: &str, partition: &str, key: &str) -> Result<Option<Vec<u8>>> {
+        let cid = Identitifier::new(owner, partition, key).to_cid()?;
+        let Some(bytes) = self.blockstore.get(&cid).await? else {
             return Ok(None);
         };
         Ok(Some(bytes))
     }
 
-    async fn delete(&self, _owner: &str, _partition: &str, cid: &str) -> Result<()> {
-        let cid = cid::Cid::from_str(cid)?;
+    async fn delete(&self, owner: &str, partition: &str, key: &str) -> Result<()> {
+        let cid = Identitifier::new(owner, partition, key).to_cid()?;
         self.blockstore.remove(&cid).await?;
         Ok(())
     }
