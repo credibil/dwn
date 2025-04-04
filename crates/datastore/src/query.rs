@@ -1,13 +1,4 @@
-//! # Store
-//!
-//! The `store` module provides utilities for storing and retrieving messages
-//! and associated data.
-//!
-//! The two primary types exposed by this module are [`Storable`] and [`Query`].
-//!
-//! [`Storable`] wraps each message with a unifying type used to simplify storage
-//! and retrieval as well as providing a vehicle for attaching addtional data
-//! alongside the message (i.e. indexes).
+//! # Query
 //!
 //! [`Query`] wraps store-specific query options for querying the underlying
 //! store.

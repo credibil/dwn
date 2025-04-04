@@ -8,9 +8,6 @@
 //! [`Storable`] wraps each message with a unifying type used to simplify storage
 //! and retrieval as well as providing a vehicle for attaching addtional data
 //! alongside the message (i.e. indexes).
-//!
-//! [`Query`] wraps store-specific query options for querying the underlying
-//! store.
 
 use std::collections::HashMap;
 
