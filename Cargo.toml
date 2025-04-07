@@ -114,9 +114,9 @@ nursery = "warn"
 anyhow = "1.0.97"
 base64ct = { version = "1.7.3", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
-credibil-did = { git = "https://github.com/credibil/did.git" }
+credibil-did = "0.1.2"
 credibil-dwn = { path = "." }
-credibil-infosec = { git = "https://github.com/credibil/infosec.git" }
+credibil-infosec = "0.1.2"
 datastore = { path = "./crates/datastore" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
@@ -126,14 +126,14 @@ rand = "0.8.5"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["alloc"] }
 sha2 = "0.10.8"
-tokio = { version = "1.44.1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread", "time"] }
 x25519-dalek = "2.0.1"
 
-[patch."https://github.com/credibil/did.git"]
+[patch.crates-io]
 credibil-did = { path = "../did" }
-
-[patch."https://github.com/credibil/infosec.git"]
+# credibil-did = { git = "https://github.com/credibil/did.git" }
 credibil-infosec = { path = "../infosec" }
+# credibil-infosec = { git = "https://github.com/credibil/infosec.git" }
 
 [profile.release]
 # optimize for small code size

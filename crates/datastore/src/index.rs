@@ -149,7 +149,7 @@ impl<S: BlockStore> Indexes<'_, S> {
                 }
 
                 // a set of matchers are 'AND-ed' together
-                for matcher in &match_set.inner {
+                for matcher in &match_set.matchers {
                     let Some(index_value) = item.fields.get(&matcher.field) else {
                         continue 'next_item;
                     };
@@ -226,7 +226,7 @@ impl<S: BlockStore> Indexes<'_, S> {
             // match sets are 'OR-ed' together
             'next_set: for match_set in &query.match_sets {
                 // a set of matchers are 'AND-ed' together
-                for matcher in &match_set.inner {
+                for matcher in &match_set.matchers {
                     let Some(index_value) = item.fields.get(&matcher.field) else {
                         continue 'next_set;
                     };

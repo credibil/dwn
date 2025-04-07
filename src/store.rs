@@ -40,14 +40,11 @@ impl From<records::Query> for Query {
     fn from(query: records::Query) -> Self {
         let mut match_set = MatchSet::from(&query.descriptor.filter);
 
-        match_set.inner.insert(
-            0,
-            Matcher {
-                field: "method".to_string(),
-                value: MatchOn::Equal(Method::Write.to_string()),
-            },
-        );
-        match_set.inner.push(Matcher {
+        match_set.add(Matcher {
+            field: "method".to_string(),
+            value: MatchOn::Equal(Method::Write.to_string()),
+        });
+        match_set.add(Matcher {
             field: "initial".to_string(),
             value: MatchOn::Equal(false.to_string()),
         });
@@ -64,7 +61,7 @@ impl From<records::Read> for Query {
     fn from(read: records::Read) -> Self {
         let mut match_set = MatchSet::from(&read.descriptor.filter);
 
-        match_set.inner.push(Matcher {
+        match_set.add(Matcher {
             field: "initial".to_string(),
             value: MatchOn::Equal(false.to_string()),
         });
@@ -84,19 +81,19 @@ impl From<messages::Query> for Query {
             let mut match_set = MatchSet::default();
 
             if let Some(interface) = &filter.interface {
-                match_set.inner.push(Matcher {
+                match_set.add(Matcher {
                     field: "interface".to_string(),
                     value: MatchOn::Equal(interface.to_string()),
                 });
             }
             if let Some(method) = &filter.method {
-                match_set.inner.push(Matcher {
+                match_set.add(Matcher {
                     field: "method".to_string(),
                     value: MatchOn::Equal(method.to_string()),
                 });
             }
             if let Some(message_timestamp) = &filter.message_timestamp {
-                match_set.inner.push(Matcher {
+                match_set.add(Matcher {
                     field: "messageTimestamp".to_string(),
                     value: MatchOn::DateRange(message_timestamp.clone()),
                 });
@@ -106,13 +103,13 @@ impl From<messages::Query> for Query {
             if let Some(protocol) = &filter.protocol {
                 // clone and create an OR `MatchSet`
                 let mut ms = match_set.clone();
-                ms.inner.push(Matcher {
+                ms.add(Matcher {
                     field: "tag.protocol".to_string(),
                     value: MatchOn::Equal(protocol.to_string()),
                 });
                 match_sets.push(ms);
 
-                match_set.inner.push(Matcher {
+                match_set.add(Matcher {
                     field: "protocol".to_string(),
                     value: MatchOn::Equal(protocol.to_string()),
                 });
@@ -138,103 +135,103 @@ impl From<&RecordsFilter> for MatchSet {
             match_set.index = filter.as_concise();
         }
 
-        match_set.inner.push(Matcher {
+        match_set.add(Matcher {
             field: "interface".to_string(),
             value: MatchOn::Equal(Interface::Records.to_string()),
         });
 
         if let Some(record_id) = &filter.record_id {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "recordId".to_string(),
                 value: MatchOn::Equal(record_id.to_string()),
             });
         }
         if let Some(published) = &filter.published {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "published".to_string(),
                 value: MatchOn::Equal(published.to_string()),
             });
         }
         if let Some(author) = &filter.author {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "author".to_string(),
                 value: MatchOn::OneOf(author.to_vec()),
             });
         }
         if let Some(recipient) = &filter.recipient {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "recipient".to_string(),
                 value: MatchOn::OneOf(recipient.to_vec()),
             });
         }
         if let Some(protocol) = &filter.protocol {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "protocol".to_string(),
                 value: MatchOn::Equal(protocol.to_string()),
             });
         }
         if let Some(protocol_path) = &filter.protocol_path {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "protocolPath".to_string(),
                 value: MatchOn::Equal(protocol_path.to_string()),
             });
         }
         if let Some(context_id) = &filter.context_id {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "contextId".to_string(),
                 value: MatchOn::StartsWith(context_id.to_string()),
             });
         }
         if let Some(schema) = &filter.schema {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "schema".to_string(),
                 value: MatchOn::Equal(schema.to_string()),
             });
         }
         if let Some(parent_id) = &filter.parent_id {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "parentId".to_string(),
                 value: MatchOn::Equal(parent_id.to_string()),
             });
         }
         if let Some(data_format) = &filter.data_format {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "dataFormat".to_string(),
                 value: MatchOn::Equal(data_format.to_string()),
             });
         }
         if let Some(data_size) = &filter.data_size {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "dataSize".to_string(),
                 value: MatchOn::Range(data_size.clone()),
             });
         }
         if let Some(data_cid) = &filter.data_cid {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "dataCid".to_string(),
                 value: MatchOn::Equal(data_cid.to_string()),
             });
         }
         if let Some(date_created) = &filter.date_created {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "dateCreated".to_string(),
                 value: MatchOn::DateRange(date_created.clone()),
             });
         }
         if let Some(date_published) = &filter.date_published {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "datePublished".to_string(),
                 value: MatchOn::DateRange(date_published.clone()),
             });
         }
         if let Some(date_updated) = &filter.date_updated {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "messageTimestamp".to_string(),
                 value: MatchOn::DateRange(date_updated.clone()),
             });
         }
         if let Some(attester) = &filter.attester {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "attester".to_string(),
                 value: MatchOn::Equal(attester.to_string()),
             });
@@ -245,20 +242,20 @@ impl From<&RecordsFilter> for MatchSet {
                 match tag_filter {
                     TagFilter::Equal(value) => {
                         if let Some(val_str) = value.as_str() {
-                            match_set.inner.push(Matcher {
+                            match_set.add(Matcher {
                                 field: format!("tag.{property}"),
                                 value: MatchOn::Equal(val_str.to_string()),
                             });
                         }
                     }
                     TagFilter::StartsWith(value) => {
-                        match_set.inner.push(Matcher {
+                        match_set.add(Matcher {
                             field: format!("tag.{property}"),
                             value: MatchOn::Equal(value.to_string()),
                         });
                     }
                     TagFilter::Range(range) => {
-                        match_set.inner.push(Matcher {
+                        match_set.add(Matcher {
                             field: format!("tag.{property}"),
                             value: MatchOn::Range(range.clone()),
                         });
@@ -307,19 +304,19 @@ impl ProtocolsQueryBuilder {
             ..MatchSet::default()
         };
 
-        match_set.inner.push(Matcher {
+        match_set.add(Matcher {
             field: "interface".to_string(),
             value: MatchOn::Equal(Interface::Protocols.to_string()),
         });
 
         if let Some(protocol) = &self.protocol {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "protocol".to_string(),
                 value: MatchOn::Equal(protocol.to_string()),
             });
         }
         if let Some(published) = &self.published {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "published".to_string(),
                 value: MatchOn::Equal(published.to_string()),
             });
@@ -397,20 +394,20 @@ impl RecordsQueryBuilder {
             let mut match_set = MatchSet::default();
 
             if let Some(method) = &self.method {
-                match_set.inner.push(Matcher {
+                match_set.add(Matcher {
                     field: "method".to_string(),
                     value: MatchOn::Equal(method.to_string()),
                 });
             }
             if !self.include_archived {
-                match_set.inner.push(Matcher {
+                match_set.add(Matcher {
                     field: "initial".to_string(),
                     value: MatchOn::Equal(false.to_string()),
                 });
             }
 
             let ms = MatchSet::from(filter);
-            match_set.inner.extend(ms.inner);
+            match_set.matchers.extend(ms.matchers);
             match_set.index = ms.index;
 
             match_sets.push(match_set);
@@ -464,23 +461,23 @@ impl GrantedQueryBuilder {
             ..MatchSet::default()
         };
 
-        match_set.inner.push(Matcher {
+        match_set.add(Matcher {
             field: "interface".to_string(),
             value: MatchOn::Equal(Interface::Records.to_string()),
         });
-        match_set.inner.push(Matcher {
+        match_set.add(Matcher {
             field: "method".to_string(),
             value: MatchOn::Equal(Method::Write.to_string()),
         });
 
         if let Some(permission_grant_id) = &self.permission_grant_id {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "permissionGrantId".to_string(),
                 value: MatchOn::Equal(permission_grant_id.to_string()),
             });
         }
         if let Some(date_created) = &self.date_created {
-            match_set.inner.push(Matcher {
+            match_set.add(Matcher {
                 field: "dateCreated".to_string(),
                 value: MatchOn::DateRange(date_created.clone()),
             });

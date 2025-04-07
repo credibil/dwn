@@ -21,7 +21,7 @@ use crate::serde::rfc3339_micros_opt;
 ///
 /// Sorting and pagination options are also included although not always
 /// used.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Query {
     /// One or more sets of events to match.
     pub match_sets: Vec<MatchSet>,
@@ -56,18 +56,33 @@ impl Query {
 
 /// A `MatchSet` contains a set of [`Matcher`]s derived from the underlying
 /// filter object. [`Matcher`]s are 'AND-ed' together for a successful match.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct MatchSet {
     /// The set of matchers.
-    pub inner: Vec<Matcher>,
+    pub matchers: Vec<Matcher>,
 
     /// The index to use for the query.
     pub index: Option<(String, String)>,
+
+    /// The nested match set.
+    pub nested: Option<Box<MatchSet>>,
+}
+
+impl MatchSet {
+    /// Create a new `MatchSet` instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a matcher to the set.
+    pub fn add(&mut self, matcher: Matcher) {
+        self.matchers.push(matcher);
+    }
 }
 
 /// A `Matcher` is used to match the `field`/`value` pair to a proovided index
 /// value during the process of executing a query.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Matcher {
     /// The name of the field this matcher applies to.
     pub field: String,
@@ -106,7 +121,7 @@ impl Matcher {
 
 /// The [`MatchOn`] enum is used to specify the matching strategy to be
 /// employed by the `Matcher`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum MatchOn {
     /// The match must be equal.
     Equal(String),
