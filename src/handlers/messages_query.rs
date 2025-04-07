@@ -5,10 +5,8 @@
 
 use http::StatusCode;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::handlers::verify_grant;
-use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Query, QueryReply};
 use crate::provider::{EventLog, Provider};
 use crate::{Result, forbidden, store};
@@ -19,9 +17,7 @@ use crate::{Result, forbidden, store};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs querying the [`EventLog`].
-pub async fn handle(
-    owner: &str, query: Query, provider: &impl Provider,
-) -> Result<Reply<QueryReply>> {
+pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
     query.authorize(owner, provider).await?;
 
     let query = store::Query::from(query);
@@ -32,27 +28,11 @@ pub async fn handle(
 
     Ok(Reply {
         status: Status {
-            code: StatusCode::OK.as_u16(),
+            code: StatusCode::OK,
             detail: None,
         },
-        body: Some(QueryReply { entries, cursor }),
+        body: Some(ReplyBody::MessagesQuery(QueryReply { entries, cursor })),
     })
-}
-
-impl Message for Query {
-    type Reply = QueryReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
 }
 
 impl Query {

@@ -3,7 +3,6 @@
 //! This module validates messages against their JSON schemas.
 
 use std::error::Error;
-use std::fmt::Write as _;
 
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
@@ -15,7 +14,7 @@ use crate::{Result, bad};
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
-pub fn validate(message: &impl Message) -> Result<()> {
+pub fn validate(message: &Message) -> Result<()> {
     let descriptor = message.descriptor();
     let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
     validate_value(&schema_name, message)
@@ -23,21 +22,22 @@ pub fn validate(message: &impl Message) -> Result<()> {
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
-pub fn validate_value<T: Serialize + ?Sized>(schema: &str, value: &T) -> Result<()> {
-    let retriever = Retriever {};
-    let schema = precompiled(schema)?;
-    let validator = jsonschema::options().with_retriever(retriever).build(&schema)?;
+pub fn validate_value<T: Serialize + ?Sized>(schema_name: &str, value: &T) -> Result<()> {
+    let schema = precompiled(schema_name)?;
+    let validator = jsonschema::options().with_retriever(Retriever).build(&schema)?;
     let instance = serde_json::to_value(value)?;
+    let errors = validator.iter_errors(&instance).collect::<Vec<ValidationError>>();
 
     // check for validation errors
-    let errors: Vec<ValidationError> = validator.iter_errors(&instance).collect();
     if !errors.is_empty() {
-        let mut error = String::new();
+        let mut buffer = String::new();
         for e in errors {
-            write!(&mut error, "\n - {e} at {}", e.instance_path)
-                .map_err(|e| bad!("issue capturing errors: {e}"))?;
+            buffer.push_str(&e.to_string());
+            buffer.push_str(", ");
         }
-        return Err(bad!("validation failed for {schema}: {error}"));
+        let buffer = buffer.replace('"', "'");
+        let buffer = buffer.trim_end_matches(", ");
+        return Err(bad!("{schema_name} validation failed: {buffer}"));
     }
 
     Ok(())

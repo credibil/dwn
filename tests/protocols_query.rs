@@ -5,6 +5,11 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/kms/mod.rs"]
+mod kms;
+#[path = "../examples/provider/mod.rs"]
+mod provider;
+
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -14,15 +19,16 @@ use credibil_dwn::client::grants::{GrantBuilder, RevocationBuilder, Scope};
 use credibil_dwn::client::protocols::{
     ConfigureBuilder, Definition, ProtocolType, ProtocolsFilter, QueryBuilder,
 };
+use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_infosec::jose::jws::{Jws, Protected, Signature};
-use test_node::keystore::{self, Keyring};
-use test_node::ProviderImpl;
+use kms::Keyring;
+use provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should return protocols matching the query.
 #[tokio::test]
@@ -56,8 +62,9 @@ async fn authorized() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 1);
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert_eq!(query_reply.entries.unwrap().len(), 1);
 
     // --------------------------------------------------
     // Execute a 'fetch-all' query without filter.
@@ -66,8 +73,9 @@ async fn authorized() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 3);
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert_eq!(query_reply.entries.unwrap().len(), 3);
 }
 
 // Should return published protocols matching the query if query is unauthenticated or unauthorized.
@@ -101,8 +109,9 @@ async fn unauthorized() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 1);
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert_eq!(query_reply.entries.unwrap().len(), 1);
 
     // --------------------------------------------------
     // Query for a protocol as an unauthorized user.
@@ -116,8 +125,9 @@ async fn unauthorized() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 1);
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert_eq!(query_reply.entries.unwrap().len(), 1);
 
     // --------------------------------------------------
     // Query all published protocols as an anonymous (unauthenticated) user.
@@ -126,8 +136,9 @@ async fn unauthorized() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 2);
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert_eq!(query_reply.entries.unwrap().len(), 2);
 
     // --------------------------------------------------
     // Query all published protocols as an unauthorized user.
@@ -136,8 +147,9 @@ async fn unauthorized() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 2);
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert_eq!(query_reply.entries.unwrap().len(), 2);
 }
 
 // Should fail with a status of BadRequest (400) if protocol is not normalized.
@@ -256,8 +268,9 @@ async fn valid_grant() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    assert_eq!(body.entries.unwrap().len(), 2);
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    assert_eq!(query_reply.entries.unwrap().len(), 2);
 
     // --------------------------------------------------
     // Carol attempts to query Alice's protocols but fails.
@@ -361,8 +374,9 @@ async fn valid_scope() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-1.xyz");
 
@@ -380,8 +394,9 @@ async fn valid_scope() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 0);
 
     // --------------------------------------------------
@@ -398,8 +413,9 @@ async fn valid_scope() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-3.xyz");
 
@@ -416,8 +432,9 @@ async fn valid_scope() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should match");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
-    let entries = body.entries.expect("should have entries");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
+    let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-3.xyz");
 }

@@ -7,13 +7,14 @@ use futures::executor::block_on;
 use multihash_codetable::MultihashDigest;
 use serde::Serialize;
 
+use crate::Result;
+use crate::provider::BlockStore;
 use crate::utils::ipfs;
-use crate::{BlockStore, Result};
 
 const RAW: u64 = 0x55;
 // const DAG_CBOR: u64 = 0x71;
 
-/// Compute a CID from provided payload, serialized to CBOR.
+/// Compute a CID for provided payload.
 ///
 /// # Errors
 ///

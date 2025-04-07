@@ -5,6 +5,11 @@
 
 #![cfg(feature = "client")]
 
+#[path = "../examples/kms/mod.rs"]
+mod kms;
+#[path = "../examples/provider/mod.rs"]
+mod provider;
+
 use std::io::Cursor;
 use std::sync::LazyLock;
 
@@ -13,15 +18,15 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::messages::{QueryBuilder, ReadBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
-use test_node::keystore::{self, Keyring};
+use kms::Keyring;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
 async fn configure_builder() {
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let configure = ConfigureBuilder::new()
@@ -37,7 +42,7 @@ async fn configure_builder() {
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
 async fn write_builder() {
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
 
     let write = WriteBuilder::new()

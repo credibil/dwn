@@ -11,10 +11,10 @@ use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, QueryBuilder
 use credibil_dwn::{Method, endpoint};
 use http::StatusCode;
 use test_node::ProviderImpl;
-use test_node::keystore::{self, Keyring};
+use test_node::kms::{self, Keyring};
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]

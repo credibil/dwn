@@ -1,30 +1,27 @@
 //! # IPFS-like Utilities
 
-use std::collections::BTreeMap;
 use std::io::Read;
 use std::str::FromStr;
 
 use ::cid::Cid;
+use anyhow::{Result, anyhow};
 use ipld_core::codec::Codec; // Links
 use ipld_core::ipld::Ipld;
 use serde::{Deserialize, Serialize};
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
-use crate::provider::BlockStore;
-use crate::utils::cid;
-use crate::{Result, bad};
+use crate::{BlockStore, cid};
 
 /// The maximum size of a message.
 // pub const MAX_ENCODED_SIZE: usize = 30000;
 const CHUNK_SIZE: usize = 64;
 const MAX_BLOCK_SIZE: usize = 1_048_576; // 1 MiB
-const PARTITION: &str = "DATA";
 
 // TODO: simplify import to only use `reader` and `store` args
 // see: https://www.npmjs.com/package/ipfs-unixfs-importer
 
 pub async fn import(
-    owner: &str, record_id: &str, data_cid: &str, reader: impl Read, store: &impl BlockStore,
+    owner: &str, partition: &str, data_cid: &str, reader: impl Read, store: &impl BlockStore,
 ) -> Result<(String, usize)> {
     let mut links = vec![];
     let mut byte_count = 0;
@@ -44,12 +41,12 @@ pub async fn import(
             // insert into the blockstore
             let cid = block.cid();
             store
-                .put(owner, PARTITION, cid, block.data())
+                .put(owner, partition, cid, block.data())
                 .await
-                .map_err(|e| bad!("issue storing data: {e}"))?;
+                .map_err(|e| anyhow!("issue storing data: {e}"))?;
 
             // save link to block
-            let cid = Cid::from_str(cid).map_err(|e| bad!("issue parsing CID: {e}"))?;
+            let cid = Cid::from_str(cid).map_err(|e| anyhow!("issue parsing CID: {e}"))?;
             links.push(Ipld::Link(cid));
             byte_count += bytes_read;
         }
@@ -60,18 +57,31 @@ pub async fn import(
 
     // use a 'partition' CID to ensure the root data block is stored
     // by the owner, record_id, and data_cid
-    let root_cid = root_cid(record_id, data_cid)?;
-    store.put(owner, PARTITION, &root_cid, root.data()).await?;
+    store.put(owner, partition, data_cid, root.data()).await?;
 
     Ok((root.cid().to_string(), byte_count))
 }
 
-fn root_cid(record_id: &str, data_cid: &str) -> Result<String> {
-    let root = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("record_id"), Ipld::String(record_id.to_string())),
-        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
-    ])))?;
-    Ok(root.cid().to_string())
+/// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
+pub fn encode_block<T>(payload: &T) -> Result<Vec<u8>>
+where
+    T: Serialize + for<'a> Deserialize<'a>,
+{
+    // encode payload
+    let data =
+        DagCborCodec::encode_to_vec(payload).map_err(|e| anyhow!("issue encoding block: {e}"))?;
+    if data.len() > MAX_BLOCK_SIZE {
+        return Err(anyhow!("block is too large"));
+    }
+    Ok(data)
+}
+
+/// Decodes a block.
+pub fn decode_block<T>(data: &[u8]) -> Result<T>
+where
+    T: Serialize + for<'a> Deserialize<'a>,
+{
+    DagCborCodec::decode_from_slice(data).map_err(|e| anyhow!("issue decoding block: {e}"))
 }
 
 /// Block represents a unit of data uniquely identified by a content identifier
@@ -87,10 +97,10 @@ impl Block {
         T: Serialize + for<'a> Deserialize<'a>,
     {
         // encode payload
-        let data =
-            DagCborCodec::encode_to_vec(payload).map_err(|e| bad!("issue encoding block: {e}"))?;
+        let data = DagCborCodec::encode_to_vec(payload)
+            .map_err(|e| anyhow!("issue encoding block: {e}"))?;
         if data.len() > MAX_BLOCK_SIZE {
-            return Err(bad!("block is too large"));
+            return Err(anyhow!("block is too large"));
         }
         let cid = cid::from_value(payload)?;
 

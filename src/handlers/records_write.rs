@@ -11,21 +11,20 @@ use chrono::format::SecondsFormat::Micros;
 use http::StatusCode;
 use serde_json::json;
 
-use crate::authorization::Authorization;
-use crate::endpoint::{Message, Reply, Status};
+use crate::endpoint::{Reply, Status};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
 use crate::handlers::{protocols_configure, verify_grant, verify_protocol};
+use crate::interfaces::Document;
 use crate::interfaces::protocols::{
     self, GRANT_PATH, PROTOCOL_URI, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
-use crate::interfaces::records::{
-    DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteReply,
-};
-use crate::interfaces::{DateRange, Descriptor, Document};
+use crate::interfaces::records::{DelegatedGrant, RecordsFilter, SignaturePayload, Write};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
-use crate::store::{GrantedQueryBuilder, RecordsQueryBuilder, Storable, data};
+use crate::store::{
+    DateRange, GrantedQueryBuilder, MAX_ENCODED_SIZE, RecordsQueryBuilder, Storable,
+};
 use crate::utils::cid;
-use crate::{Error, Method, Result, bad, forbidden, schema};
+use crate::{Error, Method, Result, authorization, bad, forbidden, schema};
 
 /// Handle — or process — a [`Write`] message.
 ///
@@ -33,9 +32,7 @@ use crate::{Error, Method, Result, bad, forbidden, schema};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to save the [`Write`] message or attendant data.
-pub async fn handle(
-    owner: &str, write: Write, provider: &impl Provider,
-) -> Result<Reply<WriteReply>> {
+pub async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Result<Reply> {
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 
@@ -103,7 +100,7 @@ pub async fn handle(
     // save the message and log the event
     MessageStore::put(provider, owner, &storable).await?;
     EventLog::append(provider, owner, &storable).await?;
-    EventStream::emit(provider, owner, &storable.document()).await?;
+    EventStream::emit(provider, owner, &Document::Write(storable.clone())).await?;
 
     // when this is an update, archive the initial write (and delete its data?)
     if let Some(document) = initial_entry {
@@ -142,32 +139,13 @@ pub async fn handle(
     }
 
     Ok(Reply {
-        status: Status {
-            code: code.as_u16(),
-            detail: None,
-        },
+        status: Status { code, detail: None },
         body: None,
     })
 }
 
-impl Message for Write {
-    type Reply = WriteReply;
-
-    fn descriptor(&self) -> &Descriptor {
-        &self.descriptor.base
-    }
-
-    fn authorization(&self) -> Option<&Authorization> {
-        Some(&self.authorization)
-    }
-
-    async fn handle(self, owner: &str, provider: &impl Provider) -> Result<Reply<Self::Reply>> {
-        handle(owner, self, provider).await
-    }
-}
-
 impl Storable for Write {
-    fn document(&self) -> Document {
+    fn document(&self) -> impl crate::store::Document {
         Document::Write(self.clone())
     }
 
@@ -536,7 +514,7 @@ impl Write {
             }
         }
         if let Some(attestation) = &self.attestation {
-            let attester = attestation.did().unwrap_or_default();
+            let attester = authorization::kid_did(attestation).unwrap_or_default();
             indexes.insert("attester".to_string(), attester);
         }
 
@@ -690,11 +668,12 @@ impl Write {
         Ok(entry_id == self.record_id)
     }
 
+    // Update the record's data.
     async fn update_data(
         &mut self, owner: &str, stream: &mut Cursor<Vec<u8>>, store: &impl DataStore,
     ) -> Result<()> {
         // when data is below the threshold, store it within MessageStore
-        if self.descriptor.data_size <= data::MAX_ENCODED_SIZE {
+        if self.descriptor.data_size <= MAX_ENCODED_SIZE {
             // verify data integrity
             let (data_cid, data_size) = cid::from_reader(stream.clone())?;
             if self.descriptor.data_cid != data_cid {
@@ -749,7 +728,7 @@ impl Write {
         }
 
         // if bigger than encoding threshold, ensure data exists for this record
-        if latest.descriptor.data_size > data::MAX_ENCODED_SIZE {
+        if latest.descriptor.data_size > MAX_ENCODED_SIZE {
             let result =
                 DataStore::get(store, owner, &self.record_id, &self.descriptor.data_cid).await?;
             if result.is_none() {

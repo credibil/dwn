@@ -165,7 +165,7 @@ impl<S: Signer> ConfigureBuilder<Defined, Signed<'_, S>> {
         //         authorization,
         //     })
         // } else {
-        #[allow(clippy::needless_update)]
+        // #[allow(clippy::needless_update)]
         Ok(Configure {
             descriptor,
             authorization,

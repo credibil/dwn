@@ -2,6 +2,11 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/kms/mod.rs"]
+mod kms;
+#[path = "../examples/provider/mod.rs"]
+mod provider;
+
 use std::io::Cursor;
 use std::sync::LazyLock;
 
@@ -11,15 +16,16 @@ use credibil_dwn::client::records::{
     Data, ProtocolBuilder, QueryBuilder, RecordsFilter, Sort, WriteBuilder,
 };
 use credibil_dwn::client::{DateRange, Pagination, Range};
+use credibil_dwn::interfaces::records::QueryReply;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
-use credibil_dwn::{Error, StatusCode, endpoint};
+use credibil_dwn::{Error, StatusCode, authorization, endpoint};
+use kms::Keyring;
+use provider::ProviderImpl;
 use rand::RngCore;
-use test_node::keystore::{self, Keyring};
-use test_node::ProviderImpl;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should return a status of BadRequest (400) when querying for unpublished records
 // with sort date set to `Sort::Publishedxxx`.
@@ -82,7 +88,8 @@ async fn response() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write.record_id);
@@ -122,7 +129,8 @@ async fn matches() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -138,7 +146,8 @@ async fn matches() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 }
@@ -174,7 +183,8 @@ async fn encoded_data() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
     assert!(entry.write.encoded_data.is_some());
@@ -212,7 +222,8 @@ async fn no_encoded_data() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
     assert!(entry.write.encoded_data.is_none());
@@ -253,7 +264,8 @@ async fn initial_write() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
     assert!(entry.initial_write.is_some());
@@ -301,11 +313,13 @@ async fn attester() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
 
-    let attester = entry.write.attestation.as_ref().unwrap().did().expect("should have attester");
+    let attester = authorization::kid_did(entry.write.attestation.as_ref().unwrap())
+        .expect("should have attester");
     assert_eq!(attester, ALICE.did);
 
     // --------------------------------------------------
@@ -320,11 +334,13 @@ async fn attester() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     let entry = &entries[0];
 
-    let attester = entry.write.attestation.as_ref().unwrap().did().expect("should have attester");
+    let attester = authorization::kid_did(entry.write.attestation.as_ref().unwrap())
+        .expect("should have attester");
     assert_eq!(attester, BOB.did);
 
     // --------------------------------------------------
@@ -349,7 +365,7 @@ async fn author() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -418,7 +434,8 @@ async fn author() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -441,7 +458,8 @@ async fn author() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, bob_write.record_id);
@@ -466,7 +484,8 @@ async fn author() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 }
@@ -479,7 +498,7 @@ async fn owner_recipient() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -549,7 +568,8 @@ async fn owner_recipient() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -572,7 +592,8 @@ async fn owner_recipient() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, alice_bob.record_id);
@@ -596,7 +617,8 @@ async fn owner_recipient() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, alice_carol.record_id);
@@ -621,7 +643,8 @@ async fn owner_recipient() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 }
@@ -669,7 +692,8 @@ async fn published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, published.record_id);
@@ -686,7 +710,8 @@ async fn published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, published.record_id);
@@ -701,7 +726,8 @@ async fn published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, published.record_id);
@@ -731,7 +757,8 @@ async fn published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -745,7 +772,8 @@ async fn published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 }
@@ -793,7 +821,8 @@ async fn unpublished() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 
@@ -836,7 +865,8 @@ async fn unpublished() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -852,7 +882,8 @@ async fn unpublished() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -902,7 +933,8 @@ async fn data_cid() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 }
@@ -966,7 +998,8 @@ async fn data_size_part_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -982,7 +1015,8 @@ async fn data_size_part_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -998,7 +1032,8 @@ async fn data_size_part_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 
@@ -1014,7 +1049,8 @@ async fn data_size_part_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 }
@@ -1078,7 +1114,8 @@ async fn data_size_full_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 
@@ -1094,7 +1131,8 @@ async fn data_size_full_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -1110,7 +1148,8 @@ async fn data_size_full_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 
@@ -1126,7 +1165,8 @@ async fn data_size_full_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 }
@@ -1193,7 +1233,8 @@ async fn date_created_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1214,7 +1255,8 @@ async fn date_created_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2022.record_id);
@@ -1238,7 +1280,8 @@ async fn date_created_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2024.record_id);
@@ -1259,7 +1302,8 @@ async fn date_created_range() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1333,7 +1377,8 @@ async fn published_unpublished() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1365,7 +1410,8 @@ async fn published_unpublished() {
         .expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 
@@ -1379,7 +1425,8 @@ async fn published_unpublished() {
         endpoint::handle(&ALICE.did, anon_range.clone(), &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1394,7 +1441,8 @@ async fn published_unpublished() {
         endpoint::handle(&ALICE.did, anon_range.clone(), &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1409,7 +1457,8 @@ async fn published_unpublished() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 
@@ -1542,7 +1591,8 @@ async fn date_published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1562,7 +1612,8 @@ async fn date_published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2022.record_id);
@@ -1585,7 +1636,8 @@ async fn date_published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2024.record_id);
@@ -1606,7 +1658,8 @@ async fn date_published() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1623,7 +1676,8 @@ async fn date_published() {
         endpoint::handle(&ALICE.did, anon_range.clone(), &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1642,7 +1696,8 @@ async fn date_published() {
         endpoint::handle(&ALICE.did, anon_range.clone(), &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1757,7 +1812,8 @@ async fn date_updated() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 
@@ -1774,7 +1830,8 @@ async fn date_updated() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2022.record_id);
@@ -1796,7 +1853,8 @@ async fn date_updated() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2024.record_id);
@@ -1817,7 +1875,8 @@ async fn date_updated() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1891,7 +1950,8 @@ async fn range_and_match() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_2023.record_id);
@@ -1927,7 +1987,8 @@ async fn authorization() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.authorization.author().unwrap(), ALICE.did);
@@ -1964,7 +2025,8 @@ async fn attestation() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 
@@ -2015,7 +2077,8 @@ async fn exclude_unpublished() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, published.record_id);
@@ -2088,7 +2151,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].write.record_id, write_1.record_id);
@@ -2108,7 +2172,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_1.record_id);
@@ -2127,7 +2192,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2.record_id);
@@ -2145,7 +2211,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].write.record_id, write_3.record_id);
@@ -2165,7 +2232,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_3.record_id);
@@ -2184,7 +2252,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2.record_id);
@@ -2202,7 +2271,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].write.record_id, write_1.record_id);
@@ -2222,7 +2292,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_1.record_id);
@@ -2241,7 +2312,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2.record_id);
@@ -2259,7 +2331,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].write.record_id, write_3.record_id);
@@ -2279,7 +2352,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_3.record_id);
@@ -2298,7 +2372,8 @@ async fn date_sort() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].write.record_id, write_2.record_id);
@@ -2374,7 +2449,8 @@ async fn sort_identical() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].write.cid().unwrap(), sorted_write[2].cid().unwrap());
@@ -2393,7 +2469,8 @@ async fn sort_identical() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].write.record_id, sorted_write[0].record_id);
@@ -2451,7 +2528,8 @@ async fn paginate_ascending() {
         let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
         assert_eq!(reply.status.code, StatusCode::OK);
 
-        let query_reply = reply.body.expect("should have reply");
+        let query_reply: QueryReply =
+            reply.body.expect("should exist").try_into().expect("should convert");
         let entries = query_reply.entries.expect("should have entries");
 
         all_entries.extend(entries.clone());
@@ -2519,7 +2597,8 @@ async fn paginate_descending() {
         let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
         assert_eq!(reply.status.code, StatusCode::OK);
 
-        let query_reply = reply.body.expect("should have reply");
+        let query_reply: QueryReply =
+            reply.body.expect("should exist").try_into().expect("should convert");
         let entries = query_reply.entries.expect("should have entries");
 
         all_entries.extend(entries.clone());
@@ -2579,7 +2658,8 @@ async fn anonymous() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, write_1.record_id);
@@ -2593,7 +2673,7 @@ async fn recipient_query() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -2867,7 +2947,8 @@ async fn recipient_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Bob should be able to see 7 messages
@@ -2897,7 +2978,8 @@ async fn recipient_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Carol should be able to see 4 messages
@@ -2926,7 +3008,8 @@ async fn recipient_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Carol should be able to see 4 messages
@@ -2955,7 +3038,8 @@ async fn recipient_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Carol should be able to see 3 messages
@@ -2973,7 +3057,7 @@ async fn author_query() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -3247,7 +3331,8 @@ async fn author_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Bob should be able to see 7 messages
@@ -3277,7 +3362,8 @@ async fn author_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Carol should be able to see 4 messages
@@ -3306,7 +3392,8 @@ async fn author_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Carol should be able to see 4 messages
@@ -3335,7 +3422,8 @@ async fn author_query() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
 
     // Carol should be able to see 3 messages
@@ -3353,7 +3441,7 @@ async fn paginate_non_owner() {
     // --------------------------------------------------
     // Alice configures a protocol.
     // --------------------------------------------------
-    let allow_any = include_bytes!("protocols/allow-any.json");
+    let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -3520,7 +3608,8 @@ async fn paginate_non_owner() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 10);
     all_entries.extend(entries);
@@ -3537,7 +3626,8 @@ async fn paginate_non_owner() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 10);
     all_entries.extend(entries);
@@ -3554,7 +3644,8 @@ async fn paginate_non_owner() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 5);
     all_entries.extend(entries);
@@ -3581,7 +3672,8 @@ async fn paginate_non_owner() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 10);
     all_entries.extend(entries);
@@ -3598,7 +3690,8 @@ async fn paginate_non_owner() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 10);
     all_entries.extend(entries);
@@ -3609,7 +3702,7 @@ async fn paginate_non_owner() {
     let bob_sorted = sorted_writes
         .iter()
         .filter(|w| {
-            w.authorization.signature.did().unwrap() == BOB.did
+            authorization::kid_did(&w.authorization.signature).unwrap() == BOB.did
                 || w.descriptor.recipient.clone().unwrap_or_default() == BOB.did
                 || w.descriptor.published.unwrap_or_default()
         })
@@ -3652,7 +3745,8 @@ async fn published_false() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 
@@ -3710,7 +3804,8 @@ async fn tenant_bound() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 }
@@ -3770,10 +3865,10 @@ async fn bad_date_published() {
         .build()
         .await
         .expect("should create query");
-    let Err(Error::BadRequest(msg)) = endpoint::handle(&ALICE.did, query, &provider).await else {
+    let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, query, &provider).await else {
         panic!("should return BadRequest");
     };
-    assert!(msg.starts_with("validation failed for"));
+    assert!(e.contains("validation failed:"));
 }
 
 // Should return a status of Forbidden (403) when anonymous query has filter
@@ -3800,7 +3895,7 @@ async fn context_id() {
     // --------------------------------------------------
     // Alice configures a nested protocol (foo->bar->baz).
     // --------------------------------------------------
-    let nested = include_bytes!("protocols/nested.json");
+    let nested = include_bytes!("../examples/protocols/nested.json");
     let definition: Definition = serde_json::from_slice(nested).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -3930,7 +4025,8 @@ async fn context_id() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 5);
 
@@ -3953,7 +4049,8 @@ async fn context_id() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 
@@ -3974,7 +4071,8 @@ async fn context_id() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 
@@ -3990,7 +4088,7 @@ async fn protocol_no_role() {
     // --------------------------------------------------
     // Alice configures a thread protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4075,7 +4173,8 @@ async fn protocol_no_role() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, chat_bob.record_id);
@@ -4092,7 +4191,8 @@ async fn protocol_no_role() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.record_id, chat_bob.record_id);
@@ -4106,7 +4206,7 @@ async fn protocol_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("protocols/friend-role.json");
+    let friend_role = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4173,7 +4273,8 @@ async fn protocol_role() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 
@@ -4195,7 +4296,8 @@ async fn protocol_role() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 }
@@ -4208,7 +4310,7 @@ async fn context_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4300,7 +4402,8 @@ async fn context_role() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 3);
 }
@@ -4313,7 +4416,7 @@ async fn no_protocol_path() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("protocols/friend-role.json");
+    let friend_role = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4391,7 +4494,7 @@ async fn no_context_id() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4493,7 +4596,7 @@ async fn no_root_role_record() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let friend_role = include_bytes!("protocols/friend-role.json");
+    let friend_role = include_bytes!("../examples/protocols/friend-role.json");
     let definition: Definition = serde_json::from_slice(friend_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4552,7 +4655,7 @@ async fn no_context_role() {
     // --------------------------------------------------
     // Alice configures a friend protocol.
     // --------------------------------------------------
-    let thread_role = include_bytes!("protocols/thread-role.json");
+    let thread_role = include_bytes!("../examples/protocols/thread-role.json");
     let definition: Definition = serde_json::from_slice(thread_role).expect("should deserialize");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -4666,5 +4769,5 @@ async fn bad_message() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, query, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 }

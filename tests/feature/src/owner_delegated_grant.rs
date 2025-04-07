@@ -10,11 +10,11 @@ use credibil_dwn::Method;
 use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::records::{Data, DelegatedGrant, WriteBuilder};
 use rand::RngCore;
-use test_node::keystore::{self, Keyring};
+use test_node::kms::{self, Keyring};
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static APP: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static APP: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 #[tokio::test]
 async fn configure() {

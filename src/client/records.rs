@@ -15,9 +15,10 @@ use chrono::{DateTime, Utc};
 use credibil_infosec::Signer;
 use credibil_infosec::jose::{Jws, JwsBuilder};
 
-use crate::authorization::{Authorization, AuthorizationBuilder, JwsPayload};
+use crate::authorization::{self, Authorization, AuthorizationBuilder, JwsPayload};
 pub use crate::client::encryption::decrypt;
 use crate::hd_key::DerivationScheme;
+use crate::interfaces::Descriptor;
 pub use crate::interfaces::records::{
     Attestation, DelegatedGrant, DeleteDescriptor, EncryptOptions, Recipient, RecordsFilter,
     SignaturePayload, Sort,
@@ -26,7 +27,7 @@ use crate::interfaces::records::{
     Delete, EncryptionProperty, Query, QueryDescriptor, Read, ReadDescriptor, Subscribe,
     SubscribeDescriptor, Tag, Write, WriteDescriptor,
 };
-use crate::interfaces::{Descriptor, Pagination};
+use crate::store::Pagination;
 use crate::utils::cid;
 use crate::{Interface, Method, utils};
 
@@ -847,8 +848,8 @@ impl<O> WriteBuilder<'_, O, Unattested, Unsigned> {
 
     /// Add a tag to the record.
     #[must_use]
-    pub fn add_tag(mut self, name: impl Into<String>, tag: Tag) -> Self {
-        self.tags.get_or_insert_with(HashMap::new).insert(name.into(), tag);
+    pub fn add_tag(mut self, name: impl Into<String>, tag: impl Into<Tag>) -> Self {
+        self.tags.get_or_insert_with(HashMap::new).insert(name.into(), tag.into());
         self
     }
 
@@ -1136,7 +1137,7 @@ impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
     /// This method will fail when there is an issue authorizing the message.
     pub async fn build(self) -> Result<Write> {
         let author_did = if let Some(grant) = &self.delegated_grant {
-            grant.authorization.signature.did()?
+            authorization::kid_did(&grant.authorization.signature)?
         } else {
             did_from_kid(&self.signer.0.verification_method().await?)?
         };
@@ -1157,7 +1158,7 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a
     /// authorizing the message.
     pub async fn build(self) -> Result<Write> {
         let author_did = if let Some(grant) = &self.delegated_grant {
-            grant.authorization.signature.did()?
+            authorization::kid_did(&grant.authorization.signature)?
         } else {
             did_from_kid(&self.signer.0.verification_method().await?)?
         };

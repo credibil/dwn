@@ -8,9 +8,10 @@ use std::io;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Cursor, DateRange, Descriptor, Document};
 use crate::authorization::Authorization;
 use crate::event::Subscriber;
+use crate::interfaces::{Descriptor, Document};
+use crate::store::{Cursor, DateRange};
 use crate::{Interface, Method};
 
 /// The [`Query`] message expected by the handler.
@@ -121,7 +122,7 @@ pub struct SubscribeDescriptor {
 
 /// [`SubscribeReply`] is returned by the handler in the
 /// [`crate::endpoint::Reply`] `body` field.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.
     #[serde(skip)]

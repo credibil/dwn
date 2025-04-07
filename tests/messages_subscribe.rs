@@ -2,6 +2,11 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/kms/mod.rs"]
+mod kms;
+#[path = "../examples/provider/mod.rs"]
+mod provider;
+
 use core::panic;
 use std::io::Cursor;
 use std::sync::LazyLock;
@@ -12,14 +17,15 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::messages::{MessagesFilter, QueryBuilder, SubscribeBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
+use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
 use futures::StreamExt;
-use test_node::keystore::{self, Keyring};
-use test_node::ProviderImpl;
+use kms::Keyring;
+use provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // TODO: implement fake provider with no subscription support for this test.
 // // Should respond with a status of NotImplemented (501) if subscriptions are
@@ -38,7 +44,7 @@ async fn invalid_message() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 }
 
 // Should allow owner to subscribe their own event stream.
@@ -58,7 +64,10 @@ async fn owner_events() {
         .expect("should build");
     let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut event_stream = reply.body.expect("should have body").subscription;
+
+    let body: SubscribeReply =
+        reply.body.expect("should have body").try_into().expect("should convert");
+    let mut event_stream = body.subscription;
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -83,7 +92,8 @@ async fn owner_events() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should have reply");
+    let query_reply: QueryReply =
+        reply.body.expect("should be records read").try_into().expect("should be query reply");
     let entries = query_reply.entries.expect("should have entries");
     let Some(entry_cid) = entries.first() else {
         panic!("should have entry");
@@ -119,7 +129,7 @@ async fn unauthorized() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, subscribe, &provider).await else {
         panic!("should be BadRequest");
     };
-    assert!(e.starts_with("validation failed for "));
+    assert!(e.contains("validation failed:"));
 
     // --------------------------------------------------
     // Bob attempts to subscribe to Alice's event stream.
@@ -167,7 +177,10 @@ async fn interface_scope() {
 
     let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut alice_events = reply.body.expect("should have body").subscription;
+
+    let body: SubscribeReply =
+        reply.body.expect("should have body").try_into().expect("should convert");
+    let mut alice_events = body.subscription;
 
     // --------------------------------------------------
     // Alice writes a number of messages.
@@ -175,7 +188,7 @@ async fn interface_scope() {
     let mut message_cids = vec![];
 
     // 1. configure 'allow-any' protocol
-    let bytes = include_bytes!("protocols/allow-any.json");
+    let bytes = include_bytes!("../examples/protocols/allow-any.json");
     let definition = serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
@@ -348,7 +361,7 @@ async fn protocol_filter() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let bytes = include_bytes!("protocols/allow-any.json");
+    let bytes = include_bytes!("../examples/protocols/allow-any.json");
     let mut definition =
         serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
 
@@ -413,7 +426,10 @@ async fn protocol_filter() {
 
     let reply = endpoint::handle(&ALICE.did, subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let mut alice_events = reply.body.expect("should have body").subscription;
+
+    let body: SubscribeReply =
+        reply.body.expect("should have body").try_into().expect("should convert");
+    let mut alice_events = body.subscription;
 
     // --------------------------------------------------
     // Alice writes 2 records, the first to `protocol1` and the second to `protocol2`.
@@ -488,7 +504,7 @@ async fn invalid_protocol() {
     // --------------------------------------------------
     // Alice configures 2 protocols.
     // --------------------------------------------------
-    let bytes = include_bytes!("protocols/allow-any.json");
+    let bytes = include_bytes!("../examples/protocols/allow-any.json");
     let mut definition =
         serde_json::from_slice::<Definition>(bytes).expect("should parse protocol");
 

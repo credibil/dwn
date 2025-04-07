@@ -12,9 +12,10 @@ use credibil_infosec::jose::jwk::PublicKeyJwk;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{Cursor, Descriptor};
 use crate::authorization::Authorization;
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
+use crate::interfaces::Descriptor;
+use crate::store::Cursor;
 use crate::utils::cid;
 use crate::{Result, bad};
 

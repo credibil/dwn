@@ -19,11 +19,12 @@ use credibil_infosec::jose::{Curve, Jws, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use super::{Cursor, DateRange, Descriptor, Pagination, Range};
 use crate::authorization::{Authorization, JwsPayload};
 use crate::event::Subscriber;
 use crate::hd_key::DerivationScheme;
+use crate::interfaces::Descriptor;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
+use crate::store::{Cursor, DateRange, Pagination, Range};
 use crate::utils::cid;
 use crate::{OneOrMany, Result, bad, utils};
 
@@ -71,7 +72,7 @@ pub struct DeleteDescriptor {
 
 /// [`DeleteReply`] is returned by the handler in the
 /// [`crate::endpoint::Reply`] `body` field.
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DeleteReply;
 
 /// The [`Query`] message expected by the handler.
@@ -802,9 +803,30 @@ impl Tag {
     }
 }
 
+impl From<String> for Tag {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+impl From<&str> for Tag {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+impl From<u64> for Tag {
+    fn from(value: u64) -> Self {
+        Self::Number(value)
+    }
+}
+impl From<bool> for Tag {
+    fn from(value: bool) -> Self {
+        Self::Boolean(value)
+    }
+}
+
 /// For consistency, [`WriteReply`] is returned by the handler in the
 /// [`crate::endpoint::Reply`] `body` field, but contains no data.
-#[derive(Clone, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct WriteReply;
 
 /// Encryption settings.

@@ -5,6 +5,11 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/kms/mod.rs"]
+mod kms;
+#[path = "../examples/provider/mod.rs"]
+mod provider;
+
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
@@ -12,16 +17,17 @@ use credibil_dwn::client::grants::{GrantBuilder, RevocationBuilder, Scope};
 use credibil_dwn::client::protocols::{
     Action, ActionRule, Actor, ConfigureBuilder, Definition, ProtocolType, QueryBuilder, RuleSet,
 };
+use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::ProtocolsQueryBuilder;
-use credibil_dwn::{Error, Message, Method, StatusCode, endpoint};
-use test_node::ProviderImpl;
-use test_node::keystore::{self, Keyring};
+use credibil_dwn::{Error, Method, StatusCode, endpoint};
+use kms::Keyring;
+use provider::ProviderImpl;
 use tokio::time;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]
@@ -138,7 +144,8 @@ async fn overwrite_older() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should exist");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 }
@@ -196,7 +203,7 @@ async fn overwrite_smaller() {
     ];
 
     // change timestamp before sorting (CID is recalculated)
-    let timestamp = messages[0].descriptor().message_timestamp;
+    let timestamp = messages[0].descriptor.base.message_timestamp;
     messages[1].descriptor.base.message_timestamp = timestamp;
     messages[2].descriptor.base.message_timestamp = timestamp;
 
@@ -238,7 +245,8 @@ async fn overwrite_smaller() {
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should query");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let query_reply = reply.body.expect("should exist");
+    let query_reply: QueryReply =
+        reply.body.expect("should exist").try_into().expect("should convert");
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 }
@@ -456,7 +464,7 @@ async fn duplicate_role() {
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, configure, &provider).await else {
         panic!("should not configure protocol");
     };
-    assert!(e.starts_with("validation failed for"));
+    assert!(e.contains("validation failed:"));
 }
 
 // Should reject request when role action rule does not contain all read actions

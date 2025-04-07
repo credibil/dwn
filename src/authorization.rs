@@ -7,46 +7,14 @@
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
 #[cfg(feature = "server")]
-use credibil_did::{DidResolver, Resource, dereference};
-use credibil_infosec::jose::JwsBuilder;
-use credibil_infosec::{Jws, Signer};
+use credibil_did::{DidResolver, Resource};
+use credibil_infosec::jose::{JwsBuilder, PublicKeyJwk};
+use credibil_infosec::{Jws, Jwt, Signer};
 use serde::{Deserialize, Serialize};
 
 use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
 use crate::{Result, bad};
-
-/// Creates a closure to resolve pub key material required by `Jws::decode`.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use credibil_infosec::{verify_key, SecOps};
-///
-/// let resolver = SecOps::resolver(&provider, &request.credential_issuer)?;
-/// let jwt = jws::decode(proof_jwt, verify_key!(resolver)).await?;
-/// ...
-/// ```
-#[doc(hidden)]
-#[cfg(feature = "server")]
-macro_rules! verify_key {
-    ($resolver:expr) => {{
-        // create local reference before moving into closure
-        let resolver = $resolver;
-        move |kid: String| {
-            let local_resolver = resolver.clone();
-            async move {
-                let resp = dereference(&kid, None, local_resolver)
-                    .await
-                    .map_err(|e| anyhow!("issue dereferencing DID: {e}"))?;
-                let Some(Resource::VerificationMethod(vm)) = resp.content_stream else {
-                    return Err(anyhow!("Verification method not found"));
-                };
-                vm.method_type.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
-            }
-        }
-    }};
-}
 
 /// JWS signature payload for message authorization.
 ///
@@ -104,18 +72,35 @@ pub struct Authorization {
 impl Authorization {
     /// Verify message signature.
     #[cfg(feature = "server")]
-    pub(crate) async fn verify(&self, resolver: impl DidResolver) -> Result<()> {
-        let verifier = verify_key!(resolver);
+    pub(crate) async fn verify(&self, resolver: impl DidResolver + Sync) -> Result<()> {
+        let resolver = async |kid: String| did_jwk(&kid, &resolver).await;
 
-        self.signature.verify(verifier.clone()).await?;
+        let _: Jwt<JwsPayload> = self
+            .signature
+            .verify(resolver)
+            .await
+            .map_err(|e| bad!("issue verifying signature: {e}"))?;
         if let Some(signature) = &self.owner_signature {
-            signature.verify(verifier.clone()).await?;
+            let _: Jwt<JwsPayload> = signature
+                .verify(resolver)
+                .await
+                .map_err(|e| bad!("issue verifying owner signature: {e}"))?;
         }
         if let Some(grant) = &self.author_delegated_grant {
-            grant.authorization.signature.verify(verifier.clone()).await?;
+            let _: Jwt<JwsPayload> = grant
+                .authorization
+                .signature
+                .verify(resolver)
+                .await
+                .map_err(|e| bad!("issue verifying author delegate signature: {e}"))?;
         }
         if let Some(grant) = &self.owner_delegated_grant {
-            grant.authorization.signature.verify(verifier).await?;
+            let _: Jwt<DelegatedGrant> = grant
+                .authorization
+                .signature
+                .verify(resolver)
+                .await
+                .map_err(|e| bad!("issue verifying owner delegate signature: {e}"))?;
         }
 
         Ok(())
@@ -131,7 +116,10 @@ impl Authorization {
     pub fn author(&self) -> Result<String> {
         self.author_delegated_grant
             .as_ref()
-            .map_or_else(|| self.signature.did(), |grant| grant.authorization.signature.did())
+            .map_or_else(
+                || kid_did(&self.signature),
+                |grant| kid_did(&grant.authorization.signature),
+            )
             .map_err(|e| bad!("issue getting author's DID: {e}"))
     }
 
@@ -139,19 +127,19 @@ impl Authorization {
     #[cfg(feature = "server")]
     pub(crate) fn owner(&self) -> Result<Option<String>> {
         let signer = if let Some(grant) = self.owner_delegated_grant.as_ref() {
-            grant.authorization.signature.did()?
+            kid_did(&grant.authorization.signature)?
         } else {
             let Some(signature) = &self.owner_signature else {
                 return Ok(None);
             };
-            signature.did()?
+            kid_did(signature)?
         };
         Ok(Some(signer))
     }
 
     /// Get message signer's DID from the message authorization.
     pub(crate) fn signer(&self) -> Result<String> {
-        self.signature.did().map_err(|e| bad!("issue getting signer's DID: {e}"))
+        kid_did(&self.signature).map_err(|e| bad!("issue getting signer's DID: {e}"))
     }
 
     /// Get the owner's signing DID from the owner signature.
@@ -160,7 +148,7 @@ impl Authorization {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
             return Err(bad!("owner delegated grant not found"));
         };
-        grant.authorization.signature.did().map_err(|e| bad!("issue getting owner's DID: {e}"))
+        kid_did(&grant.authorization.signature).map_err(|e| bad!("issue getting owner's DID: {e}"))
     }
 
     /// Extract the JWS payload from the authorization's signature.
@@ -174,6 +162,40 @@ impl Authorization {
         serde_json::from_slice(&decoded)
             .map_err(|e| bad!("issue deserializing signature payload: {e}"))
     }
+}
+
+/// Extract the DID from the provided JWS.
+///
+/// # Errors
+///
+/// Will return an error if the `kid` cannot be extracted from the JWS or if
+/// the `kid` is not a valid DID.
+pub fn kid_did(jws: &Jws) -> Result<String> {
+    let Some(kid) = jws.signatures[0].protected.kid() else {
+        return Err(bad!("Invalid `kid`"));
+    };
+    let Some(did) = kid.split('#').next() else {
+        return Err(bad!("Invalid DID"));
+    };
+    Ok(did.to_owned())
+}
+
+/// Retrieve the JWK specified by the provided DID URL.
+///
+/// # Errors
+///
+/// TODO: Document errors
+pub async fn did_jwk<R>(did_url: &str, resolver: &R) -> anyhow::Result<PublicKeyJwk>
+where
+    R: DidResolver + Send + Sync,
+{
+    let deref = credibil_did::dereference(did_url, None, resolver.clone())
+        .await
+        .map_err(|e| anyhow!("issue dereferencing DID URL: {e}"))?;
+    let Some(Resource::VerificationMethod(vm)) = deref.content_stream else {
+        return Err(anyhow!("Verification method not found"));
+    };
+    vm.key.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
 }
 
 /// Options to use when creating a permission grant.

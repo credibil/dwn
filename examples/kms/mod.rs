@@ -1,3 +1,5 @@
+#![allow(missing_docs, dead_code)]
+
 //! # Keystore
 
 use anyhow::{Result, anyhow};
@@ -9,35 +11,34 @@ use rand::rngs::OsRng;
 use sha2::Digest;
 
 const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
-// const X25519_CODEC: [u8; 2] = [0xec, 0x01];
 
 #[derive(Default, Clone, Debug)]
 pub struct Keyring {
     pub did: String,
-    pub public_key: String,
+    public_key: String,
     pub secret_key: String,
 }
 
-pub fn new_keyring() -> Keyring {
-    let signing_key = SigningKey::generate(&mut OsRng);
-
-    // verifying key (Ed25519)
-    let verifying_key = signing_key.verifying_key();
-    let mut multi_bytes = ED25519_CODEC.to_vec();
-    multi_bytes.extend_from_slice(&verifying_key.to_bytes());
-    let verifying_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
-
-    // public key (X25519)
-    let public_key = verifying_key.to_montgomery();
-
-    Keyring {
-        did: format!("did:key:{verifying_multi}"),
-        public_key: Base64UrlUnpadded::encode_string(public_key.as_bytes()),
-        secret_key: Base64UrlUnpadded::encode_string(signing_key.as_bytes()),
-    }
-}
-
 impl Keyring {
+    pub fn new() -> Keyring {
+        let signing_key = SigningKey::generate(&mut OsRng);
+
+        // verifying key (Ed25519)
+        let verifying_key = signing_key.verifying_key();
+        let mut multi_bytes = ED25519_CODEC.to_vec();
+        multi_bytes.extend_from_slice(&verifying_key.to_bytes());
+        let verifying_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
+
+        // public key (X25519)
+        let public_key = verifying_key.to_montgomery();
+
+        Keyring {
+            did: format!("did:key:{verifying_multi}"),
+            public_key: Base64UrlUnpadded::encode_string(public_key.as_bytes()),
+            secret_key: Base64UrlUnpadded::encode_string(signing_key.as_bytes()),
+        }
+    }
+
     pub fn did(&self) -> String {
         self.did.clone()
     }

@@ -5,6 +5,11 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
+#[path = "../examples/kms/mod.rs"]
+mod kms;
+#[path = "../examples/provider/mod.rs"]
+mod provider;
+
 use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
@@ -12,16 +17,17 @@ use credibil_dwn::client::grants::{GrantBuilder, RequestBuilder, RevocationBuild
 use credibil_dwn::client::messages::ReadBuilder;
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
 use credibil_dwn::client::records::{Data, DeleteBuilder, ProtocolBuilder, WriteBuilder};
+use credibil_dwn::interfaces::messages::ReadReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, endpoint};
+use kms::Keyring;
+use provider::ProviderImpl;
 use rand::RngCore;
-use test_node::keystore::{self, Keyring};
-use test_node::ProviderImpl;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static CAROL: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static CAROL: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]
@@ -79,7 +85,7 @@ async fn read_message() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, message_cid);
 }
@@ -88,7 +94,7 @@ async fn read_message() {
 #[tokio::test]
 async fn invalid_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let mut invalid = keystore::new_keyring();
+    let mut invalid = Keyring::new();
     invalid.secret_key = "n8Rcm64tLob0nveDUuXzP-CnLmn3V11vRqk6E3FuKCo".to_string();
 
     let read = ReadBuilder::new()
@@ -235,7 +241,7 @@ async fn data_lt_threshold() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, write_cid);
 
@@ -281,7 +287,7 @@ async fn data_gt_threshold() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, write_cid);
 
@@ -343,7 +349,7 @@ async fn no_data_after_update() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, initial_write_cid);
 
@@ -430,7 +436,7 @@ async fn owner_not_author() {
 
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, unpublished_cid);
 
@@ -444,7 +450,7 @@ async fn owner_not_author() {
 
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, published_cid);
 }
@@ -585,7 +591,7 @@ async fn permissive_grant() {
     let reply = endpoint::handle(&ALICE.did, read, &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
 
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, write_cid);
 }
@@ -782,7 +788,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, alice_configure_cid);
 
@@ -791,7 +797,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_request_cid);
 
@@ -800,7 +806,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_grant_cid);
 
@@ -809,7 +815,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, alice_write_cid);
 
@@ -818,7 +824,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, alice_delete_cid);
 
@@ -827,7 +833,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_write_cid);
 
@@ -836,7 +842,7 @@ async fn protocol_grant() {
 
     let reply = endpoint::handle(&ALICE.did, read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status.code, StatusCode::OK);
-    let body = reply.body.expect("should have body");
+    let body: ReadReply = reply.body.expect("should have body").try_into().expect("should convert");
     let entry = body.entry.expect("should have entry");
     assert_eq!(entry.message_cid, carol_revocation_cid);
 

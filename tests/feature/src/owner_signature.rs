@@ -12,10 +12,10 @@ use credibil_dwn::endpoint;
 use http::StatusCode;
 use serde_json::{Value, json};
 use test_node::ProviderImpl;
-use test_node::keystore::{self, Keyring};
+use test_node::kms::{self, Keyring};
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
-static BOB: LazyLock<Keyring> = LazyLock::new(keystore::new_keyring);
+static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 
 // Use owner signature for authorization when it is provided.
 #[tokio::test]

@@ -10,6 +10,7 @@ use std::task::{Context, Poll};
 use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 
+use crate::authorization;
 use crate::interfaces::Document;
 use crate::interfaces::messages::MessagesFilter;
 use crate::interfaces::records::{RecordsFilter, Tag, TagFilter};
@@ -23,6 +24,7 @@ pub type Event = Document;
 
 /// Filter to use when subscribing to events.
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SubscribeFilter {
     /// Filter events using a Messages filter.
     Messages(Vec<MessagesFilter>),
@@ -119,7 +121,7 @@ impl RecordsFilter {
             let Some(attestation) = &write.attestation else {
                 return false;
             };
-            if attester != attestation.did().unwrap_or_default() {
+            if attester != authorization::kid_did(attestation).unwrap_or_default() {
                 return false;
             }
         }
