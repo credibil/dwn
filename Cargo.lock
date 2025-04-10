@@ -571,6 +571,7 @@ dependencies = [
 [[package]]
 name = "credibil-did"
 version = "0.1.2"
+source = "git+https://github.com/credibil/did.git#58d0da2aa865031dba2f3466d1886f0ea95d6e70"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -641,6 +642,7 @@ dependencies = [
 [[package]]
 name = "credibil-infosec"
 version = "0.1.2"
+source = "git+https://github.com/credibil/infosec.git#8643815b8691e519fbe48e26bc60faad5f169b36"
 dependencies = [
  "aes-gcm",
  "aes-kw",
@@ -2698,9 +2700,9 @@ dependencies = [
 
 [[package]]
 name = "serde_ipld_dagcbor"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6851dcd54a7271dd9013195fdccbdaba70c8e71014364e396d4b938d0e67f324"
+checksum = "99600723cf53fb000a66175555098db7e75217c415bdd9a16a65d52a19dcc4fc"
 dependencies = [
  "cbor4ii",
  "ipld-core",

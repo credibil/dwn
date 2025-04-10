@@ -14,7 +14,7 @@ use std::io;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
-use credibil_infosec::jose::jwe::{self, ContentAlgorithm, KeyAlgorithm, Protected};
+use credibil_infosec::jose::jwe::{self, AlgAlgorithm, EncAlgorithm, Protected};
 use credibil_infosec::jose::{Curve, Jws, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -833,11 +833,11 @@ pub struct WriteReply;
 #[derive(Clone, Debug, Default)]
 pub struct EncryptOptions<'a> {
     /// The algorithm to use to encrypt the message data.
-    content_algorithm: ContentAlgorithm,
+    content_algorithm: EncAlgorithm,
 
     /// The algorithm to use to encrypt (or derive) the content encryption key
     /// (CEK).
-    key_algorithm: KeyAlgorithm,
+    key_algorithm: AlgAlgorithm,
 
     /// The data to encrypt.
     data: &'a [u8],
@@ -852,12 +852,12 @@ pub struct EncryptOptions<'a> {
 pub struct Encrypted {
     /// The algorithm to use to encrypt the message data.
     #[zeroize(skip)]
-    content_algorithm: ContentAlgorithm,
+    content_algorithm: EncAlgorithm,
 
     /// The algorithm to use to encrypt (or derive) the content encryption key
     /// (CEK).
     #[zeroize(skip)]
-    key_algorithm: KeyAlgorithm,
+    key_algorithm: AlgAlgorithm,
 
     /// An array of inputs specifying how the CEK key is to be encrypted. Each
     /// entry in the array will result in a unique ciphertext for the CEK.
@@ -896,8 +896,8 @@ impl<'a> EncryptOptions<'a> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            content_algorithm: ContentAlgorithm::A256Gcm,
-            key_algorithm: KeyAlgorithm::EcdhEsA256Kw,
+            content_algorithm: EncAlgorithm::A256Gcm,
+            key_algorithm: AlgAlgorithm::EcdhEsA256Kw,
             data: &[],
             recipients: vec![],
         }
@@ -905,14 +905,14 @@ impl<'a> EncryptOptions<'a> {
 
     /// Set the content encryption algorithm.
     #[must_use]
-    pub const fn content_algorithm(mut self, algorithm: ContentAlgorithm) -> Self {
+    pub const fn content_algorithm(mut self, algorithm: EncAlgorithm) -> Self {
         self.content_algorithm = algorithm;
         self
     }
 
     /// Set the key encryption algorithm.
     #[must_use]
-    pub const fn key_algorithm(mut self, algorithm: KeyAlgorithm) -> Self {
+    pub const fn key_algorithm(mut self, algorithm: AlgAlgorithm) -> Self {
         self.key_algorithm = algorithm;
         self
     }
@@ -951,8 +951,8 @@ impl<'a> EncryptOptions<'a> {
         let aad = serde_json::to_vec(&protected)?;
 
         let encrypted = match self.content_algorithm {
-            ContentAlgorithm::A256Gcm => jwe::a256gcm(self.data, &cek.into(), &aad)?,
-            ContentAlgorithm::XChaCha20Poly1305 => {
+            EncAlgorithm::A256Gcm => jwe::a256gcm(self.data, &cek.into(), &aad)?,
+            EncAlgorithm::XChaCha20Poly1305 => {
                 jwe::xchacha20_poly1305(self.data, &cek.into(), &aad)?
             }
         };
@@ -1015,9 +1015,9 @@ impl Encrypted {
 
             // encrypt cek
             let ke = match self.key_algorithm {
-                KeyAlgorithm::EcdhEsA256Kw => jwe::ecdh_a256kw(&cek, &recip)?,
-                KeyAlgorithm::EciesEs256K => jwe::ecies_es256k(&cek, &recip)?,
-                KeyAlgorithm::EcdhEs => {
+                AlgAlgorithm::EcdhEsA256Kw => jwe::ecdh_a256kw(&cek, &recip)?,
+                AlgAlgorithm::EciesEs256K => jwe::ecies_es256k(&cek, &recip)?,
+                AlgAlgorithm::EcdhEs => {
                     return Err(bad!("ECDH-ES requires a single recipient"));
                 }
             };
@@ -1058,7 +1058,7 @@ impl Encrypted {
 pub struct EncryptionProperty {
     /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
     /// Algorithm (JWE header `enc` property).
-    pub algorithm: ContentAlgorithm,
+    pub algorithm: EncAlgorithm,
 
     /// The initialization vector used to encrypt the data.
     pub initialization_vector: String,
@@ -1092,7 +1092,7 @@ pub struct EncryptedKey {
 
     /// The algorithm used to encrypt the data. Equivalent to the JWE Encryption
     /// Algorithm (JWE header `alg` property).
-    pub algorithm: KeyAlgorithm,
+    pub algorithm: AlgAlgorithm,
 
     /// The ephemeral public key used to encrypt the data.
     pub ephemeral_public_key: PublicKeyJwk,
