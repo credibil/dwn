@@ -12,7 +12,9 @@ use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
+use credibil_did::SignerExt;
 use credibil_infosec::Signer;
+use credibil_infosec::jose::jws::Key;
 use credibil_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder, JwsPayload};
@@ -112,7 +114,7 @@ impl DeleteBuilder<RecordId, Unsigned> {
     /// At this point, the builder simply captures the signer for use in the
     /// final build step.
     #[must_use]
-    pub fn sign<S: Signer>(self, signer: &S) -> DeleteBuilder<RecordId, Signed<'_, S>> {
+    pub fn sign<S: SignerExt>(self, signer: &S) -> DeleteBuilder<RecordId, Signed<'_, S>> {
         DeleteBuilder {
             signer: Signed(signer),
 
@@ -125,7 +127,7 @@ impl DeleteBuilder<RecordId, Unsigned> {
     }
 }
 
-impl<S: Signer> DeleteBuilder<RecordId, Signed<'_, S>> {
+impl<S: SignerExt> DeleteBuilder<RecordId, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
@@ -178,7 +180,7 @@ pub struct QueryBuilder<F, S> {
 pub struct Unsigned;
 /// Builder state is signed.
 #[doc(hidden)]
-pub struct Signed<'a, S: Signer>(pub &'a S);
+pub struct Signed<'a, S: SignerExt>(pub &'a S);
 
 /// Builder state is unfiltered.
 #[doc(hidden)]
@@ -267,7 +269,7 @@ impl<'a, F> QueryBuilder<F, Unsigned> {
     /// At this point, the builder simply captures the signer for use in the
     /// final build step.
     #[must_use]
-    pub fn sign<S: Signer>(self, signer: &'a S) -> QueryBuilder<F, Signed<'a, S>> {
+    pub fn sign<S: SignerExt>(self, signer: &'a S) -> QueryBuilder<F, Signed<'a, S>> {
         QueryBuilder {
             signer: Signed(signer),
 
@@ -307,7 +309,7 @@ impl QueryBuilder<Filtered, Unsigned> {
 }
 
 // Build includes signing
-impl<S: Signer> QueryBuilder<Filtered, Signed<'_, S>> {
+impl<S: SignerExt> QueryBuilder<Filtered, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
@@ -425,7 +427,7 @@ impl<'a, F> ReadBuilder<F, Unsigned> {
     /// At this point, the builder simply captures the signer for use in the
     /// final build step.
     #[must_use]
-    pub fn sign<S: Signer>(self, signer: &'a S) -> ReadBuilder<F, Signed<'a, S>> {
+    pub fn sign<S: SignerExt>(self, signer: &'a S) -> ReadBuilder<F, Signed<'a, S>> {
         ReadBuilder {
             message_timestamp: self.message_timestamp,
             filter: self.filter,
@@ -457,7 +459,7 @@ impl ReadBuilder<Filtered, Unsigned> {
     }
 }
 
-impl<S: Signer> ReadBuilder<Filtered, Signed<'_, S>> {
+impl<S: SignerExt> ReadBuilder<Filtered, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
@@ -575,7 +577,7 @@ impl<'a, F> SubscribeBuilder<F, Unsigned> {
     /// At this point, the builder simply captures the signer for use in the
     /// final build step.
     #[must_use]
-    pub fn sign<S: Signer>(self, signer: &'a S) -> SubscribeBuilder<F, Signed<'a, S>> {
+    pub fn sign<S: SignerExt>(self, signer: &'a S) -> SubscribeBuilder<F, Signed<'a, S>> {
         SubscribeBuilder {
             signer: Signed(signer),
 
@@ -590,7 +592,7 @@ impl<'a, F> SubscribeBuilder<F, Unsigned> {
 }
 
 // State: Signer set
-impl<S: Signer> SubscribeBuilder<Filtered, Signed<'_, S>> {
+impl<S: SignerExt> SubscribeBuilder<Filtered, Signed<'_, S>> {
     /// Build the write message.
     ///
     /// # Errors
@@ -958,7 +960,9 @@ impl<'a, O, A> WriteBuilder<'a, O, A, Unsigned> {
     /// At this point, the builder simply captures the signer for use in the final
     /// build step. Can only be done if the content hasn't been signed yet.
     #[must_use]
-    pub fn sign(self, signer: &'a impl Signer) -> WriteBuilder<'a, O, A, Signed<'a, impl Signer>> {
+    pub fn sign(
+        self, signer: &'a impl SignerExt,
+    ) -> WriteBuilder<'a, O, A, Signed<'a, impl SignerExt>> {
         WriteBuilder {
             signer: Signed(signer),
 
@@ -988,7 +992,7 @@ impl<'a, O, A> WriteBuilder<'a, O, A, Unsigned> {
 
 /// Builder is ready to build once the `sign` step is complete (i.e. the Signer
 /// is set).
-impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
+impl<O, A, S: SignerExt> WriteBuilder<'_, O, A, Signed<'_, S>> {
     // TODO: break into separate functions
     fn to_write(&self, author_did: &str) -> Result<Write> {
         let mut write = if let Some(write) = &self.existing {
@@ -1116,7 +1120,7 @@ impl<O, A, S: Signer> WriteBuilder<'_, O, A, Signed<'_, S>> {
     }
 }
 
-impl<O, A: Signer, S: Signer> WriteBuilder<'_, O, Attested<'_, A>, Signed<'_, S>> {
+impl<O, A: SignerExt, S: SignerExt> WriteBuilder<'_, O, Attested<'_, A>, Signed<'_, S>> {
     async fn attestation(self, descriptor: &WriteDescriptor) -> Result<Jws> {
         let payload = Attestation {
             descriptor_cid: cid::from_value(descriptor)?,
@@ -1124,12 +1128,13 @@ impl<O, A: Signer, S: Signer> WriteBuilder<'_, O, Attested<'_, A>, Signed<'_, S>
         let Some(attester) = self.attesters.0.first() else {
             return Err(anyhow!("attesters is empty"));
         };
-        JwsBuilder::new().payload(payload).add_signer(*attester).build().await
+        let key_ref = attester.verification_method().await?;
+        JwsBuilder::new().payload(payload).add_signer(*attester).key_ref(&key_ref).build().await
     }
 }
 
 /// State: Unattested, Unencrypted, and Signed.
-impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
+impl<O, S: SignerExt> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1139,7 +1144,11 @@ impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
         let author_did = if let Some(grant) = &self.delegated_grant {
             authorization::kid_did(&grant.authorization.signature)?
         } else {
-            did_from_kid(&self.signer.0.verification_method().await?)?
+            let key_ref = self.signer.0.verification_method().await?;
+            let Key::KeyId(kid) = &key_ref else {
+                return Err(anyhow!("key reference is not a DID"));
+            };
+            did_from_kid(kid)?
         };
 
         let mut write = self.to_write(&author_did)?;
@@ -1149,7 +1158,7 @@ impl<O, S: Signer> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
 }
 
 /// State: Attested, and Signed.
-impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a, S>> {
+impl<'a, O, A: SignerExt, S: SignerExt> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a, S>> {
     /// Build the `Write` message.
     ///
     /// # Errors
@@ -1160,7 +1169,11 @@ impl<'a, O, A: Signer, S: Signer> WriteBuilder<'a, O, Attested<'a, A>, Signed<'a
         let author_did = if let Some(grant) = &self.delegated_grant {
             authorization::kid_did(&grant.authorization.signature)?
         } else {
-            did_from_kid(&self.signer.0.verification_method().await?)?
+            let key_ref = self.signer.0.verification_method().await?;
+            let Key::KeyId(kid) = &key_ref else {
+                return Err(anyhow!("key reference is not a DID"));
+            };
+            did_from_kid(kid)?
         };
 
         let signer = self.signer.0;
@@ -1194,7 +1207,7 @@ impl Write {
     /// error.
     pub async fn sign_as_author(
         &mut self, permission_grant_id: Option<String>, protocol_role: Option<String>,
-        signer: &impl Signer,
+        signer: &impl SignerExt,
     ) -> Result<()> {
         let delegated_grant_id = if let Some(grant) = &self.authorization.author_delegated_grant {
             Some(cid::from_value(&grant)?)
@@ -1219,8 +1232,10 @@ impl Write {
             encryption_cid,
         };
 
+        let key_ref = signer.verification_method().await?;
+
         self.authorization.signature =
-            JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
 
         Ok(())
     }
@@ -1237,7 +1252,7 @@ impl Write {
     /// by the author or there is an issue issue signing the message.
     /// The returned [`crate::Error`] will contain a brief clarifying
     /// description of the error.
-    pub async fn sign_as_owner(&mut self, signer: &impl Signer) -> Result<()> {
+    pub async fn sign_as_owner(&mut self, signer: &impl SignerExt) -> Result<()> {
         if self.authorization.author().is_err() {
             return Err(anyhow!("message signature is required in order to sign as owner"));
         }
@@ -1246,7 +1261,9 @@ impl Write {
             descriptor_cid: cid::from_value(&self.descriptor)?,
             ..JwsPayload::default()
         };
-        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+        let key_ref = signer.verification_method().await?;
+        let owner_jws =
+            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
         self.authorization.owner_signature = Some(owner_jws);
 
         Ok(())
@@ -1265,7 +1282,7 @@ impl Write {
     /// The returned [`crate::Error`] will contain a brief clarifying
     /// description of the error.
     pub async fn sign_as_delegate(
-        &mut self, delegated_grant: DelegatedGrant, signer: &impl Signer,
+        &mut self, delegated_grant: DelegatedGrant, signer: &impl SignerExt,
     ) -> Result<()> {
         if self.authorization.author().is_err() {
             return Err(anyhow!("signature is required in order to sign as owner delegate"));
@@ -1281,7 +1298,9 @@ impl Write {
             delegated_grant_id: Some(delegated_grant_id),
             ..JwsPayload::default()
         };
-        let owner_jws = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+        let key_ref = signer.verification_method().await?;
+        let owner_jws =
+            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
 
         self.authorization.owner_signature = Some(owner_jws);
         self.authorization.owner_delegated_grant = Some(delegated_grant);

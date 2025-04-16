@@ -11,6 +11,7 @@ use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_did::SignerExt;
 use credibil_dwn::client::grants::{GrantBuilder, RecordsScope, Scope};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use credibil_dwn::client::records::{
@@ -25,7 +26,7 @@ use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{DataStore, MessageStore};
 use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
-use credibil_infosec::Signer;
+use credibil_infosec::jose::jws::Key;
 use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 use kms::Keyring;
 use provider::ProviderImpl;
@@ -2006,7 +2007,10 @@ async fn block_data() {
 #[tokio::test]
 async fn decrypt_schema() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let alice_kid = ALICE.verification_method().await.expect("should get kid");
+    let alice_key_ref = ALICE.verification_method().await.expect("should get kid");
+    let Key::KeyId(alice_kid) = alice_key_ref else {
+        panic!("should be KeyId");
+    };
 
     let schema = String::from("https://some-schema.com");
     let data_format = String::from("some/format");
@@ -2147,7 +2151,10 @@ async fn decrypt_schemaless() {
     // --------------------------------------------------
     // Alice derives participants' keys.
     // --------------------------------------------------
-    let alice_kid = ALICE.verification_method().await.expect("should get kid");
+    let alice_key_ref = ALICE.verification_method().await.expect("should get kid");
+    let Key::KeyId(alice_kid) = alice_key_ref else {
+        panic!("should be KeyId");
+    };
     let data_format = String::from("image/jpg");
 
     // encryption key
@@ -2239,7 +2246,10 @@ async fn decrypt_context() {
     // --------------------------------------------------
     // Alice's keys.
     // --------------------------------------------------
-    let alice_kid = ALICE.verification_method().await.expect("should get kid");
+    let alice_key_ref = ALICE.verification_method().await.expect("should get kid");
+    let Key::KeyId(alice_kid) = alice_key_ref else {
+        panic!("should be KeyId");
+    };
     let alice_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
@@ -2253,7 +2263,10 @@ async fn decrypt_context() {
     // --------------------------------------------------
     // Bob's keys.
     // --------------------------------------------------
-    let bob_kid = BOB.verification_method().await.expect("should get kid");
+    let bob_key_ref = BOB.verification_method().await.expect("should get kid");
+    let Key::KeyId(bob_kid) = bob_key_ref else {
+        panic!("should be KeyId");
+    };
     let bob_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
@@ -2503,7 +2516,10 @@ async fn decrypt_protocol() {
     // --------------------------------------------------
     // Alice's keys.
     // --------------------------------------------------
-    let alice_kid = ALICE.verification_method().await.expect("should get kid");
+    let alice_key_ref = ALICE.verification_method().await.expect("should get kid");
+    let Key::KeyId(alice_kid) = alice_key_ref else {
+        panic!("should be KeyId");
+    };
 
     let alice_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {

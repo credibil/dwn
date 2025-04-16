@@ -20,6 +20,7 @@
 #![cfg(feature = "client")]
 
 use chrono::{DateTime, Utc};
+use credibil_did::SignerExt;
 use credibil_infosec::Signer;
 
 use crate::authorization::AuthorizationBuilder;
@@ -121,7 +122,7 @@ impl<D> ConfigureBuilder<D, Unsigned> {
     }
 }
 
-impl<S: Signer> ConfigureBuilder<Defined, Signed<'_, S>> {
+impl<S: SignerExt> ConfigureBuilder<Defined, Signed<'_, S>> {
     /// Generate the Configure message.
     ///
     /// # Errors
@@ -250,7 +251,7 @@ impl QueryBuilder<Unsigned> {
     }
 }
 
-impl<S: Signer> QueryBuilder<Signed<'_, S>> {
+impl<S: SignerExt> QueryBuilder<Signed<'_, S>> {
     /// Build the query.
     ///
     /// # Errors

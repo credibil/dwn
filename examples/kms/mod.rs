@@ -4,7 +4,8 @@
 
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
+use credibil_did::SignerExt;
+use credibil_infosec::{jose::jws::Key, Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
 use multibase::Base;
 use rand::rngs::OsRng;
@@ -72,10 +73,12 @@ impl Signer for Keyring {
     fn algorithm(&self) -> Algorithm {
         Algorithm::EdDSA
     }
+}
 
-    async fn verification_method(&self) -> Result<String> {
+impl SignerExt for Keyring {
+    async fn verification_method(&self) -> Result<Key> {
         let verify_key = self.did.strip_prefix("did:key:").unwrap_or_default();
-        Ok(format!("{}#{}", self.did, verify_key))
+        Ok(Key::KeyId(format!("{}#{}", self.did, verify_key)))
     }
 }
 

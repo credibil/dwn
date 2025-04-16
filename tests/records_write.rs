@@ -12,6 +12,7 @@ use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
+use credibil_did::SignerExt;
 use credibil_dwn::authorization::JwsPayload;
 use credibil_dwn::client::grants::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
 use credibil_dwn::client::messages::MessagesFilter;
@@ -25,7 +26,7 @@ use credibil_dwn::interfaces::records::{QueryReply, ReadReply};
 use credibil_dwn::provider::EventLog;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, endpoint, store};
-use credibil_infosec::Signer;
+use credibil_infosec::jose::jws::Key;
 use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 use kms::Keyring;
 use provider::ProviderImpl;
@@ -3984,7 +3985,10 @@ async fn invalid_encryption_cid() {
     // --------------------------------------------------
     // Setup: Alice's keys.
     // --------------------------------------------------
-    let alice_kid = ALICE.verification_method().await.expect("should get kid");
+    let alice_key_ref = ALICE.verification_method().await.expect("should get kid");
+    let Key::KeyId(alice_kid) = alice_key_ref else {
+        panic!("should be KeyId");
+    };
 
     let alice_private_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
@@ -5729,8 +5733,14 @@ async fn context_id_mismatch() {
         context_id: Some("somerandomrecordid".to_string()),
         ..SignaturePayload::default()
     };
-    write.authorization.signature =
-        JwsBuilder::new().payload(payload).add_signer(&*ALICE).build().await.expect("should sign");
+    let key_ref = ALICE.verification_method().await.expect("should get key reference");
+    write.authorization.signature = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&*ALICE)
+        .key_ref(&key_ref)
+        .build()
+        .await
+        .expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, write, &provider).await else {
         panic!("should be BadRequest");
@@ -5765,8 +5775,14 @@ async fn invalid_attestation() {
         attestation_cid: Some("somerandomrecordid".to_string()),
         ..SignaturePayload::default()
     };
-    write.authorization.signature =
-        JwsBuilder::new().payload(payload).add_signer(&*ALICE).build().await.expect("should sign");
+    let key_ref = ALICE.verification_method().await.expect("should get key reference");
+    write.authorization.signature = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&*ALICE)
+        .key_ref(&key_ref)
+        .build()
+        .await
+        .expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, write, &provider).await else {
         panic!("should be BadRequest");
@@ -5802,8 +5818,14 @@ async fn attestation_descriptor_cid() {
     let payload = Attestation {
         descriptor_cid: cid::from_value(&"somerandomrecordid").expect("should create CID"),
     };
-    let attestation =
-        JwsBuilder::new().payload(payload).add_signer(&*ALICE).build().await.expect("should sign");
+    let key_ref = ALICE.verification_method().await.expect("should get key reference");
+    let attestation = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&*ALICE)
+        .key_ref(&key_ref)
+        .build()
+        .await
+        .expect("should sign");
 
     let payload = SignaturePayload {
         base: JwsPayload {
@@ -5815,8 +5837,14 @@ async fn attestation_descriptor_cid() {
         attestation_cid: Some(cid::from_value(&attestation).unwrap()),
         ..SignaturePayload::default()
     };
-    write.authorization.signature =
-        JwsBuilder::new().payload(payload).add_signer(&*ALICE).build().await.expect("should sign");
+    let key_ref = ALICE.verification_method().await.expect("should get key reference");
+    write.authorization.signature = JwsBuilder::new()
+        .payload(payload)
+        .add_signer(&*ALICE)
+        .key_ref(&key_ref)
+        .build()
+        .await
+        .expect("should sign");
 
     let Err(Error::BadRequest(e)) = endpoint::handle(&ALICE.did, write, &provider).await else {
         panic!("should be BadRequest");

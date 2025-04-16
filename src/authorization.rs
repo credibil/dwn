@@ -6,10 +6,11 @@
 #[cfg(feature = "server")]
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_did::SignerExt;
 #[cfg(feature = "server")]
 use credibil_did::{DidResolver, Resource};
 use credibil_infosec::jose::{JwsBuilder, PublicKeyJwk};
-use credibil_infosec::{Jws, Jwt, Signer};
+use credibil_infosec::{Jws, Jwt};
 use serde::{Deserialize, Serialize};
 
 use crate::interfaces::records::DelegatedGrant;
@@ -249,7 +250,7 @@ impl AuthorizationBuilder {
     ///
     /// Will return an error when an incorrect value has been provided or when
     /// there was an issue signing the Authorization
-    pub async fn build(self, signer: &impl Signer) -> Result<Authorization> {
+    pub async fn build(self, signer: &impl SignerExt) -> Result<Authorization> {
         let descriptor_cid = self.descriptor_cid.ok_or_else(|| bad!("descriptor not found"))?;
         let delegated_grant_id = if let Some(grant) = &self.delegated_grant {
             Some(cid::from_value(grant)?)
@@ -263,7 +264,9 @@ impl AuthorizationBuilder {
             delegated_grant_id,
             protocol_role: self.protocol_role,
         };
-        let signature = JwsBuilder::new().payload(payload).add_signer(signer).build().await?;
+        let key_ref = signer.verification_method().await?;
+        let signature =
+            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
 
         Ok(Authorization {
             signature,
