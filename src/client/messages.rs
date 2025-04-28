@@ -8,7 +8,7 @@ use std::str::FromStr;
 use ::cid::Cid;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
-use credibil_did::SignerExt;
+use credibil_identity::SignerExt;
 use credibil_infosec::Signer;
 
 use crate::authorization::AuthorizationBuilder;

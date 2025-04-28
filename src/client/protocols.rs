@@ -20,7 +20,7 @@
 #![cfg(feature = "client")]
 
 use chrono::{DateTime, Utc};
-use credibil_did::SignerExt;
+use credibil_identity::SignerExt;
 use credibil_infosec::Signer;
 
 use crate::authorization::AuthorizationBuilder;
