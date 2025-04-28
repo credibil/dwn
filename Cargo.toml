@@ -115,10 +115,8 @@ anyhow = "1.0.97"
 base64ct = { version = "1.7.3", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-dwn = { path = "." }
-credibil-identity = { path = "../identity" }
-# credibil-identity = { git = "https://github.com/credibil/identity.git" }
-credibil-jose = { path = "../jose" }
-# credibil-jose = { git = "https://github.com/credibil/jose.git" }
+credibil-identity = { git = "https://github.com/credibil/identity.git" }
+credibil-jose = { git = "https://github.com/credibil/jose.git" }
 datastore = { path = "./crates/datastore" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
