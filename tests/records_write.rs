@@ -26,7 +26,7 @@ use credibil_dwn::provider::EventLog;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, endpoint, store};
 use credibil_identity::{Key, SignerExt};
-use credibil_infosec::jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
+use credibil_jose::{Curve, JwsBuilder, KeyType, PublicKeyJwk};
 use kms::Keyring;
 use provider::ProviderImpl;
 use rand::RngCore;

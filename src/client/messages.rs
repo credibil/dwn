@@ -9,7 +9,7 @@ use ::cid::Cid;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use credibil_identity::SignerExt;
-use credibil_infosec::Signer;
+use credibil_jose::Signer;
 
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;

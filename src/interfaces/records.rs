@@ -14,8 +14,8 @@ use std::io;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
-use credibil_infosec::jose::jwe::{self, AlgAlgorithm, EncAlgorithm, Protected};
-use credibil_infosec::jose::{Curve, Jws, PublicKeyJwk};
+use credibil_jose::jwe::{self, AlgAlgorithm, EncAlgorithm, Protected};
+use credibil_jose::{Curve, Jws, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 

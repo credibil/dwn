@@ -13,8 +13,7 @@ use std::io::Cursor;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use credibil_identity::{Key, SignerExt};
-use credibil_infosec::Signer;
-use credibil_infosec::jose::{Jws, JwsBuilder};
+use credibil_jose::{Jws, JwsBuilder, Signer};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder, JwsPayload};
 pub use crate::client::encryption::decrypt;
