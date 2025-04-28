@@ -12,9 +12,8 @@ use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
-use credibil_did::SignerExt;
+use credibil_identity::{Key, SignerExt};
 use credibil_infosec::Signer;
-use credibil_infosec::jose::jws::Key;
 use credibil_infosec::jose::{Jws, JwsBuilder};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder, JwsPayload};
@@ -1128,7 +1127,7 @@ impl<O, A: SignerExt, S: SignerExt> WriteBuilder<'_, O, Attested<'_, A>, Signed<
         let Some(attester) = self.attesters.0.first() else {
             return Err(anyhow!("attesters is empty"));
         };
-        let key_ref = attester.verification_method().await?;
+        let key_ref = attester.verification_method().await?.try_into()?;
         JwsBuilder::new().payload(payload).add_signer(*attester).key_ref(&key_ref).build().await
     }
 }
@@ -1232,7 +1231,7 @@ impl Write {
             encryption_cid,
         };
 
-        let key_ref = signer.verification_method().await?;
+        let key_ref = signer.verification_method().await?.try_into()?;
 
         self.authorization.signature =
             JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
@@ -1261,7 +1260,7 @@ impl Write {
             descriptor_cid: cid::from_value(&self.descriptor)?,
             ..JwsPayload::default()
         };
-        let key_ref = signer.verification_method().await?;
+        let key_ref = signer.verification_method().await?.try_into()?;
         let owner_jws =
             JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
         self.authorization.owner_signature = Some(owner_jws);
@@ -1298,7 +1297,7 @@ impl Write {
             delegated_grant_id: Some(delegated_grant_id),
             ..JwsPayload::default()
         };
-        let key_ref = signer.verification_method().await?;
+        let key_ref = signer.verification_method().await?.try_into()?;
         let owner_jws =
             JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
 

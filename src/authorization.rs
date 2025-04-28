@@ -6,9 +6,9 @@
 #[cfg(feature = "server")]
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_did::SignerExt;
+use credibil_identity::{did, SignerExt};
 #[cfg(feature = "server")]
-use credibil_did::{DidResolver, Resource};
+use credibil_identity::{IdentityResolver, did::Resource};
 use credibil_infosec::jose::{JwsBuilder, PublicKeyJwk};
 use credibil_infosec::{Jws, Jwt};
 use serde::{Deserialize, Serialize};
@@ -73,7 +73,7 @@ pub struct Authorization {
 impl Authorization {
     /// Verify message signature.
     #[cfg(feature = "server")]
-    pub(crate) async fn verify(&self, resolver: impl DidResolver) -> Result<()> {
+    pub(crate) async fn verify(&self, resolver: impl IdentityResolver) -> Result<()> {
         let resolver = async |kid: String| did_jwk(&kid, &resolver).await;
 
         let _: Jwt<JwsPayload> = self
@@ -188,9 +188,9 @@ pub fn kid_did(jws: &Jws) -> Result<String> {
 /// TODO: Document errors
 pub async fn did_jwk<R>(did_url: &str, resolver: &R) -> anyhow::Result<PublicKeyJwk>
 where
-    R: DidResolver + Send + Sync,
+    R: IdentityResolver + Send + Sync,
 {
-    let deref = credibil_did::dereference(did_url, resolver)
+    let deref = did::dereference(did_url, resolver)
         .await
         .map_err(|e| anyhow!("issue dereferencing DID URL: {e}"))?;
     let Resource::VerificationMethod(vm) = deref else {
@@ -264,7 +264,8 @@ impl AuthorizationBuilder {
             delegated_grant_id,
             protocol_role: self.protocol_role,
         };
-        let key_ref = signer.verification_method().await?;
+        let key = signer.verification_method().await?;
+        let key_ref = key.try_into()?;
         let signature =
             JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
 

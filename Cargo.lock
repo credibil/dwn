@@ -559,31 +559,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "credibil-did"
-version = "0.1.2"
-source = "git+https://github.com/credibil/did.git#8930da6081ed45ecc8f263eb8602cb05cbcccffa"
-dependencies = [
- "anyhow",
- "base64ct",
- "chrono",
- "credibil-infosec",
- "curve25519-dalek",
- "ed25519-dalek",
- "multibase",
- "nom",
- "rand 0.8.5",
- "regex",
- "serde",
- "serde-querystring",
- "serde_json",
- "serde_json_canonicalizer",
- "sha2",
- "thiserror 2.0.12",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "credibil-dwn"
 version = "0.1.2"
 dependencies = [
@@ -599,8 +574,8 @@ dependencies = [
  "chrono",
  "ciborium",
  "cid",
- "credibil-did",
  "credibil-dwn",
+ "credibil-identity",
  "credibil-infosec",
  "datastore",
  "derive_more",
@@ -628,6 +603,31 @@ dependencies = [
  "uuid",
  "x25519-dalek",
  "zeroize",
+]
+
+[[package]]
+name = "credibil-identity"
+version = "0.1.2"
+source = "git+https://github.com/credibil/identity.git#b5a2c39fa9e0dffd36c716f88b7df869e07475e8"
+dependencies = [
+ "anyhow",
+ "base64ct",
+ "chrono",
+ "credibil-infosec",
+ "curve25519-dalek",
+ "ed25519-dalek",
+ "multibase",
+ "nom",
+ "rand 0.8.5",
+ "regex",
+ "serde",
+ "serde-querystring",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
+ "thiserror 2.0.12",
+ "url",
+ "uuid",
 ]
 
 [[package]]

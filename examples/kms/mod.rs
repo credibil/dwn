@@ -4,8 +4,8 @@
 
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_did::SignerExt;
-use credibil_infosec::{jose::jws::Key, Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
+use credibil_identity::{Key, SignerExt};
+use credibil_infosec::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
 use multibase::Base;
 use rand::rngs::OsRng;

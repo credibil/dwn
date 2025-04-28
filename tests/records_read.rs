@@ -11,7 +11,6 @@ use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_did::SignerExt;
 use credibil_dwn::client::grants::{GrantBuilder, RecordsScope, Scope};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use credibil_dwn::client::records::{
@@ -26,7 +25,7 @@ use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{DataStore, MessageStore};
 use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
-use credibil_infosec::jose::jws::Key;
+use credibil_identity::{Key, SignerExt};
 use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
 use kms::Keyring;
 use provider::ProviderImpl;
