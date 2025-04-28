@@ -9,8 +9,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_identity::{did, SignerExt};
 #[cfg(feature = "server")]
 use credibil_identity::{IdentityResolver, did::Resource};
-use credibil_infosec::jose::{JwsBuilder, PublicKeyJwk};
-use credibil_infosec::{Jws, Jwt};
+use credibil_jose::{Jws, JwsBuilder, Jwt, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 
 use crate::interfaces::records::DelegatedGrant;

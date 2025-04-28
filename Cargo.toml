@@ -37,7 +37,7 @@ chrono = { version = "0.4.40", features = ["serde"] }
 ciborium = "0.2.2"
 cid.workspace = true
 credibil-identity.workspace = true
-credibil-infosec.workspace = true
+credibil-jose.workspace = true
 datastore.workspace = true
 derive_more = { version = "2.0.1", features = ["display"] }
 ed25519-dalek.workspace = true
@@ -116,7 +116,7 @@ base64ct = { version = "1.7.3", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-dwn = { path = "." }
 credibil-identity = { git = "https://github.com/credibil/identity.git" }
-credibil-infosec = "0.1.2"
+credibil-jose = { git = "https://github.com/credibil/jose.git" }
 datastore = { path = "./crates/datastore" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
@@ -131,8 +131,7 @@ x25519-dalek = "2.0.1"
 
 [patch.crates-io]
 # credibil-identity = { path = "../identity" }
-# credibil-infosec = { path = "../infosec" }
-credibil-infosec = { git = "https://github.com/credibil/infosec.git" }
+# credibil-jose = { path = "../jose" }
 
 [profile.release]
 # optimize for small code size

@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
 use credibil_identity::SignerExt;
-use credibil_infosec::Signer;
+use credibil_jose::Signer;
 
 use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
 pub use crate::grants::{Conditions, Publication, RecordsScope, Scope};

@@ -17,8 +17,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_infosec::jose::PublicKeyJwk;
-use credibil_infosec::{Curve, KeyType};
+use credibil_jose::{Curve, KeyType, PublicKeyJwk};
 use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};

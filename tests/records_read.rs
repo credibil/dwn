@@ -26,7 +26,7 @@ use credibil_dwn::provider::{DataStore, MessageStore};
 use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
 use credibil_identity::{Key, SignerExt};
-use credibil_infosec::jose::{Curve, KeyType, PublicKeyJwk};
+use credibil_jose::{Curve, KeyType, PublicKeyJwk};
 use kms::Keyring;
 use provider::ProviderImpl;
 use rand::RngCore;

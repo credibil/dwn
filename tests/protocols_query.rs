@@ -21,7 +21,7 @@ use credibil_dwn::client::protocols::{
 };
 use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::{Error, Method, StatusCode, cid, endpoint};
-use credibil_infosec::jose::jws::{Jws, Protected, Signature};
+use credibil_jose::{Jws, Protected, Signature};
 use kms::Keyring;
 use provider::ProviderImpl;
 use tokio::time;

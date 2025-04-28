@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 #[cfg(feature = "server")]
 use std::collections::HashMap;
 
-use credibil_infosec::jose::jwk::PublicKeyJwk;
+use credibil_jose::PublicKeyJwk;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
