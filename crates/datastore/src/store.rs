@@ -9,42 +9,12 @@
 //! and retrieval as well as providing a vehicle for attaching addtional data
 //! alongside the message (i.e. indexes).
 
-use std::collections::HashMap;
-
 use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::query::{Cursor, Query};
-use crate::{BlockStore, index, ipfs};
-
-/// The `Storable` trait is used to wrap each message with a unifying type used
-/// for all stored messages (`RecordsWrite`, `RecordsDelete`, and `ProtocolsConfigure`).
-#[allow(refining_impl_trait)]
-pub trait Storable: Clone + Send + Sync {
-    /// The message to store as a `Document`.
-    ///
-    /// # Errors
-    ///
-    /// The underlying CID computation is not infallible and may fail if the
-    /// message cannot be serialized to CBOR.
-    fn document(&self) -> impl Document;
-
-    /// Indexes for this entry.
-    fn indexes(&self) -> HashMap<String, String>;
-
-    /// Adds a index item to the entry's indexes.
-    fn add_index(&mut self, key: impl Into<String>, value: impl Into<String>);
-}
-
-pub trait Document: Serialize + for<'a> Deserialize<'a> + Send + Sync {
-    /// The message's CID.
-    ///
-    /// # Errors
-    ///
-    /// The underlying CID computation is not infallible and may fail if the
-    /// message cannot be serialized to CBOR.
-    fn cid(&self) -> Result<String>;
-}
+use crate::{BlockStore, Document, Storable, index, ipfs};
 
 /// Store a message in the underlying store.
 pub async fn put(
@@ -66,7 +36,7 @@ pub async fn query<T>(
     owner: &str, partition: &str, query: &Query, store: &impl BlockStore,
 ) -> Result<(Vec<T>, Option<Cursor>)>
 where
-    T: Serialize + for<'a> Deserialize<'a>,
+    T: Serialize + DeserializeOwned,
 {
     let mut results = index::query(owner, partition, query, store).await?;
 
@@ -101,7 +71,7 @@ pub async fn get<T>(
     owner: &str, partition: &str, message_cid: &str, store: &impl BlockStore,
 ) -> Result<Option<T>>
 where
-    T: Serialize + for<'a> Deserialize<'a>,
+    T: Serialize + DeserializeOwned,
 {
     let Some(bytes) = store.get(owner, partition, message_cid).await? else {
         return Ok(None);

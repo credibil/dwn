@@ -7,7 +7,8 @@ use std::str::FromStr;
 use ::cid::Cid;
 use ipld_core::codec::Codec; // Links
 use ipld_core::ipld::Ipld;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
 use crate::provider::BlockStore;
@@ -84,7 +85,7 @@ impl Block {
     /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
     pub fn encode<T>(payload: &T) -> Result<Self>
     where
-        T: Serialize + for<'a> Deserialize<'a>,
+        T: Serialize + DeserializeOwned,
     {
         // encode payload
         let data =

@@ -13,8 +13,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::query::Query;
-use crate::store::{Document, Storable};
-use crate::{BlockStore, cid, ipfs};
+use crate::{BlockStore, Document, Storable, cid, ipfs};
 
 const NULL: char = '\u{100000}'; // u8 = 0x00;
 const MAX: char = '\u{10ffff}'; // u8 = 0x7E;
