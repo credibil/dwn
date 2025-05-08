@@ -112,7 +112,7 @@ impl Document {
     }
 }
 
-impl datastore::store::Document for Document {
+impl datastore::Document for Document {
     fn cid(&self) -> anyhow::Result<String> {
         self.cid().map_err(Into::into)
     }

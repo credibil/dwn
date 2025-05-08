@@ -7,7 +7,8 @@ use ::cid::Cid;
 use anyhow::{Result, anyhow};
 use ipld_core::codec::Codec; // Links
 use ipld_core::ipld::Ipld;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_ipld_dagcbor::codec::DagCborCodec;
 
 use crate::{BlockStore, cid};
@@ -65,7 +66,7 @@ pub async fn import(
 /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
 pub fn encode_block<T>(payload: &T) -> Result<Vec<u8>>
 where
-    T: Serialize + for<'a> Deserialize<'a>,
+    T: Serialize + DeserializeOwned,
 {
     // encode payload
     let data =
@@ -79,7 +80,7 @@ where
 /// Decodes a block.
 pub fn decode_block<T>(data: &[u8]) -> Result<T>
 where
-    T: Serialize + for<'a> Deserialize<'a>,
+    T: Serialize + DeserializeOwned,
 {
     DagCborCodec::decode_from_slice(data).map_err(|e| anyhow!("issue decoding block: {e}"))
 }
@@ -94,7 +95,7 @@ impl Block {
     /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
     pub fn encode<T>(payload: &T) -> Result<Self>
     where
-        T: Serialize + for<'a> Deserialize<'a>,
+        T: Serialize + DeserializeOwned,
     {
         // encode payload
         let data = DagCborCodec::encode_to_vec(payload)

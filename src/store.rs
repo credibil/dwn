@@ -17,7 +17,7 @@ pub use datastore::query::{
     self, Cursor, DateRange, Lower, MatchOn, MatchSet, Matcher, Pagination, Query, Range, Sort,
     Upper,
 };
-pub use datastore::store::{Document, Storable};
+pub use datastore::{Document, Storable};
 
 use crate::interfaces::messages;
 use crate::interfaces::records::{self, RecordsFilter, TagFilter};
