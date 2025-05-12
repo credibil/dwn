@@ -944,7 +944,7 @@ impl<'a> EncryptOptions<'a> {
         // use aes_gcm::Aes256Gcm;
         // use aes_gcm::aead::KeyInit;
 
-        // let cek = Aes256Gcm::generate_key(&mut rand::thread_rng());
+        // let cek = Aes256Gcm::generate_key(&mut rand::thread_rng()).into();
         let (cek, _) = self.key_algorithm.generate_cek(&PublicKey::empty());
         let protected = Protected {
             enc: self.content_algorithm.clone(),
@@ -952,13 +952,14 @@ impl<'a> EncryptOptions<'a> {
         };
         let aad = serde_json::to_vec(&protected)?;
 
-        // let encrypted = self.content_algorithm {
-        //     EncAlgorithm::A256Gcm => jwe::a256gcm(self.data, &cek.into(), &aad)?,
+        // let encrypted = match self.content_algorithm {
+        //     EncAlgorithm::A256Gcm => jwe::a256gcm(self.data, &cek, &aad)?,
         //     EncAlgorithm::XChaCha20Poly1305 => {
-        //         jwe::xchacha20_poly1305(self.data, &cek.into(), &aad)?
+        //         jwe::xchacha20_poly1305(self.data, &cek, &aad)?
         //     }
         // };
-        let encrypted = self.content_algorithm.encrypt(self.data, &cek, &aad)?;
+        let payload = serde_json::to_vec(&self.data)?;
+        let encrypted = self.content_algorithm.encrypt(&payload, &cek, &aad)?;
 
         Ok(Encrypted {
             content_algorithm: self.content_algorithm.clone(),
