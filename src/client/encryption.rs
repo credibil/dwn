@@ -4,7 +4,7 @@
 //! and decrypting of [`Write`] data.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_jose::Receiver;
+use credibil_se::Receiver;
 use credibil_jose::jwe::{self, Header, Jwe, KeyEncryption, Protected, Recipients};
 
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
@@ -117,7 +117,7 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
 }
 
 use anyhow::anyhow;
-use credibil_jose::jwe::{PublicKey, SecretKey, SharedSecret};
+use credibil_se::{PublicKey, SecretKey, SharedSecret};
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SigningKey};
 use sha2::Digest;
 

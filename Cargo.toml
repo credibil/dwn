@@ -38,6 +38,7 @@ ciborium = "0.2.2"
 cid.workspace = true
 credibil-identity.workspace = true
 credibil-jose.workspace = true
+credibil-se.workspace = true
 datastore.workspace = true
 derive_more = { version = "2.0.1", features = ["display"] }
 ed25519-dalek.workspace = true
@@ -115,8 +116,9 @@ anyhow = "1.0.97"
 base64ct = { version = "1.7.3", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-dwn = { path = "." }
-credibil-identity = { git = "https://github.com/credibil/identity.git" }
-credibil-jose = { git = "https://github.com/credibil/jose.git" }
+credibil-identity = { git = "https://github.com/credibil/identity.git", branch = "ose" }
+credibil-jose = { git = "https://github.com/credibil/jose.git", branch = "ose" }
+credibil-se = { git = "https://github.com/credibil/jose.git", branch = "ose" } 
 datastore = { path = "./crates/datastore" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
