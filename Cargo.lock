@@ -660,6 +660,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
+ "sha2",
  "tracing",
  "x25519-dalek",
  "zeroize",
