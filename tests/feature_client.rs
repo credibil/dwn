@@ -11,7 +11,6 @@ mod kms;
 mod provider;
 
 use std::io::Cursor;
-use std::sync::LazyLock;
 
 use credibil_dwn::Method;
 use credibil_dwn::client::grants::{GrantBuilder, Scope};
@@ -19,19 +18,37 @@ use credibil_dwn::client::messages::{QueryBuilder, ReadBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use kms::Keyring;
+use tokio::sync::OnceCell;
 
-static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
-static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
+static ALICE: OnceCell<Keyring> = OnceCell::const_new();
+static BOB: OnceCell<Keyring> = OnceCell::const_new();
+
+async fn alice() -> &'static Keyring {
+    ALICE.get_or_init(|| async {
+        let keyring = Keyring::new("feature_client_alice").await.expect("create keyring");
+        keyring
+    })
+    .await
+}
+
+async fn bob() -> &'static Keyring {
+    BOB.get_or_init(|| async {
+        let keyring = Keyring::new("feature_client_bob").await.expect("create keyring");
+        keyring
+    })
+    .await
+}
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
 async fn configure_builder() {
     let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let alice = alice().await;
 
     let configure = ConfigureBuilder::new()
         .definition(definition.clone())
-        .sign(&*ALICE)
+        .sign(alice)
         .build()
         .await
         .expect("should build");
@@ -44,6 +61,7 @@ async fn configure_builder() {
 async fn write_builder() {
     let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
+    let alice = alice().await;
 
     let write = WriteBuilder::new()
         .protocol(ProtocolBuilder {
@@ -54,7 +72,7 @@ async fn write_builder() {
         .schema(definition.types["post"].schema.as_ref().unwrap())
         .data(Data::Stream(Cursor::new(br#"{"message": "test record write"}"#.to_vec())))
         .published(true)
-        .sign(&*ALICE)
+        .sign(alice)
         .build()
         .await
         .expect("should create write");
@@ -65,16 +83,18 @@ async fn write_builder() {
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
 async fn query_builder() {
-    let query = QueryBuilder::new().sign(&*ALICE).build().await.expect("should create query");
+    let query = QueryBuilder::new().sign(alice().await).build().await.expect("should create query");
     assert!(query.descriptor.filters.is_empty());
 }
 
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
 async fn read() {
+    let alice = alice().await;
+
     let read = ReadBuilder::new()
         .message_cid("bafkreidmebcej4sqoz6lolq3zuyd6ijs7ciouylornny3y5sdx7tiuegwm")
-        .sign(&*ALICE)
+        .sign(alice)
         .build()
         .await
         .expect("should create read");
@@ -88,13 +108,16 @@ async fn read() {
 // Should allow querying of messages with matching interface and method grant scope.
 #[tokio::test]
 async fn grant_builder() {
+    let alice = alice().await;
+    let bob = bob().await;
+
     let grant = GrantBuilder::new()
-        .granted_to(&BOB.did)
+        .granted_to(&bob.did().await.expect("did"))
         .scope(Scope::Messages {
             method: Method::Query,
             protocol: None,
         })
-        .sign(&*ALICE)
+        .sign(alice)
         .build()
         .await
         .expect("should create grant");

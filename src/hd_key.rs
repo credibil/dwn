@@ -17,8 +17,8 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_jose::{Curve, KeyType, PublicKeyJwk};
-use ed25519_dalek::PUBLIC_KEY_LENGTH;
+use credibil_jose::PublicKeyJwk;
+use credibil_se::{derive_x25519_public_from_secret, Curve, KeyType, PUBLIC_KEY_LENGTH};
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -148,16 +148,14 @@ pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<
 
     // FIXME: don't assume we are using Ed25519 with need to convert to X25519
     //        !!check `Curve` value
-    let derived_signing = ed25519_dalek::SigningKey::from_bytes(&derived_secret);
-    let derived_public =
-        x25519_dalek::PublicKey::from(derived_signing.verifying_key().to_montgomery().to_bytes());
+    let derived_public = derive_x25519_public_from_secret(&derived_secret);
 
     // convert to JWK
     let derived_jwk = PrivateKeyJwk {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(derived_public.as_bytes()),
+            x: Base64UrlUnpadded::encode_string(&derived_public.to_bytes()),
             ..PublicKeyJwk::default()
         },
         d: Base64UrlUnpadded::encode_string(&derived_secret),

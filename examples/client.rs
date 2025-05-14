@@ -14,7 +14,7 @@ use kms::Keyring;
 
 #[tokio::main]
 async fn main() {
-    let alice = Keyring::new();
+    let alice = Keyring::new("alice").await.expect("create keyring");
 
     let allow_any = include_bytes!("../examples/protocols/allow-any.json");
     let definition: Definition = serde_json::from_slice(allow_any).expect("should deserialize");
@@ -27,7 +27,7 @@ async fn main() {
         .expect("should build");
 
     let response = reqwest::Client::new()
-        .post(format!("http://0.0.0.0:8080/{}", alice.did()))
+        .post(format!("http://0.0.0.0:8080/{}", alice.did().await.expect("did")))
         .json(&configure)
         .send()
         .await
@@ -54,7 +54,7 @@ async fn main() {
         .expect("should create write");
 
     let response = reqwest::Client::new()
-        .post(format!("http://0.0.0.0:8080/{}", alice.did()))
+        .post(format!("http://0.0.0.0:8080/{}", alice.did().await.expect("did")))
         .json(&write)
         .send()
         .await

@@ -48,7 +48,7 @@ cfg_if::cfg_if! {
 }
 
 use ::serde::{Deserialize, Serialize};
-pub use credibil_jose::{Receiver, Signer};
+pub use credibil_se::{Receiver, Signer};
 use derive_more::Display;
 
 pub use crate::error::Error;

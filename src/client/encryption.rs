@@ -4,7 +4,7 @@
 //! and decrypting of [`Write`] data.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_jose::Receiver;
+use credibil_se::{derive_x25519_secret, Receiver};
 use credibil_jose::jwe::{self, Header, Jwe, KeyEncryption, Protected, Recipients};
 
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
@@ -117,15 +117,13 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
 }
 
 use anyhow::anyhow;
-use credibil_jose::jwe::{PublicKey, SecretKey, SharedSecret};
-use ed25519_dalek::{PUBLIC_KEY_LENGTH, SigningKey};
-use sha2::Digest;
+use credibil_se::{PublicKey, PUBLIC_KEY_LENGTH, SharedSecret};
 
 struct ReceiverImpl(String);
 
 impl Receiver for ReceiverImpl {
-    fn key_id(&self) -> String {
-        String::new()
+    async fn key_id(&self) -> anyhow::Result<String> {
+        Ok(String::new())
     }
 
     async fn shared_secret(
@@ -135,15 +133,6 @@ impl Receiver for ReceiverImpl {
         let decoded = Base64UrlUnpadded::decode_vec(&self.0)?;
         let bytes: [u8; PUBLIC_KEY_LENGTH] =
             decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
-        let signing_key = SigningKey::from_bytes(&bytes);
-
-        // derive X25519 secret for Diffie-Hellman from Ed25519 secret
-        let hash = sha2::Sha512::digest(signing_key.as_bytes());
-        let mut hashed = [0u8; PUBLIC_KEY_LENGTH];
-        hashed.copy_from_slice(&hash[..PUBLIC_KEY_LENGTH]);
-        let secret_key = x25519_dalek::StaticSecret::from(hashed);
-
-        let secret_key = SecretKey::from(secret_key.to_bytes());
-        secret_key.shared_secret(sender_public)
+        derive_x25519_secret(&bytes, &sender_public)
     }
 }

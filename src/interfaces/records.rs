@@ -14,8 +14,9 @@ use std::io;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
-use credibil_jose::jwe::{self, AlgAlgorithm, EncAlgorithm, Protected};
-use credibil_jose::{Curve, Jws, PublicKeyJwk};
+use credibil_jose::jwe::{self, Protected};
+use credibil_jose::{Jws, PublicKeyJwk};
+use credibil_se::{AlgAlgorithm, Curve, EncAlgorithm, PublicKey};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -940,30 +941,23 @@ impl<'a> EncryptOptions<'a> {
     /// if the provided data cannot be encrypted using the specified content
     /// encryption algorithm.
     pub fn encrypt(&mut self) -> Result<Encrypted> {
-        use aes_gcm::Aes256Gcm;
-        use aes_gcm::aead::KeyInit;
-
-        let cek = Aes256Gcm::generate_key(&mut rand::thread_rng());
+        let (cek, _) = self.key_algorithm.generate_cek(&PublicKey::empty());
         let protected = Protected {
             enc: self.content_algorithm.clone(),
             alg: None,
         };
         let aad = serde_json::to_vec(&protected)?;
 
-        let encrypted = match self.content_algorithm {
-            EncAlgorithm::A256Gcm => jwe::a256gcm(self.data, &cek.into(), &aad)?,
-            EncAlgorithm::XChaCha20Poly1305 => {
-                jwe::xchacha20_poly1305(self.data, &cek.into(), &aad)?
-            }
-        };
+        let plaintext = serde_json::to_vec(self.data)?;
+        let encrypted = self.content_algorithm.encrypt(&plaintext, &cek, &aad)?;
 
         Ok(Encrypted {
             content_algorithm: self.content_algorithm.clone(),
             key_algorithm: self.key_algorithm.clone(),
             recipients: self.recipients.clone(),
             cek: cek.to_vec(),
-            iv: encrypted.iv,
-            tag: encrypted.tag,
+            iv: Base64UrlUnpadded::encode_string(&encrypted.iv),
+            tag: Base64UrlUnpadded::encode_string(&encrypted.tag),
             ciphertext: encrypted.ciphertext,
         })
     }
@@ -1009,7 +1003,7 @@ impl Encrypted {
             // create `jwe::Recipient` for call to jwe key wrapping function
             let recip = jwe::Recipient {
                 key_id: recipient.key_id.clone(),
-                public_key: jwe::PublicKey::try_from(decoded)?,
+                public_key: PublicKey::try_from(decoded)?,
             };
             let cek: [u8; 32] = self.cek.clone().try_into().map_err(|_| bad!("invalid CEK key"))?;
 
