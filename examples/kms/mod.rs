@@ -2,108 +2,96 @@
 
 //! # Keystore
 
-use anyhow::{Result, anyhow};
-use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_identity::{Key, SignerExt};
-use credibil_se::{Algorithm, PublicKey, Receiver, SecretKey, SharedSecret, Signer};
-use ed25519_dalek::{PUBLIC_KEY_LENGTH, Signer as _, SigningKey};
+use credibil_se::{
+    Algorithm, Curve, ED25519_CODEC, PublicKey, Receiver, SharedSecret, Signer,
+    derive_x25519_secret,
+};
 use multibase::Base;
-use rand::rngs::OsRng;
-use sha2::Digest;
+use test_kms::Keyring as BaseKeyring;
 
-const ED25519_CODEC: [u8; 2] = [0xed, 0x01];
-
-#[derive(Default, Clone, Debug)]
+#[derive(Clone)]
 pub struct Keyring {
-    pub did: String,
-    public_key: String,
-    pub secret_key: String,
+    // The owner of the keyring.
+    pub owner: String,
+
+    // Underlying key store.
+    keys: BaseKeyring,
+
+    // Set to true to sign with a private key that does not match the
+    // verifying key to test verification is catching bad signatures.
+    pub bad_signing: bool,
 }
 
 impl Keyring {
-    pub fn new() -> Keyring {
-        let signing_key = SigningKey::generate(&mut OsRng);
+    pub async fn new(owner: &str) -> anyhow::Result<Self> {
+        let mut keys = BaseKeyring::new(owner).await?;
+        keys.add(&Curve::Ed25519, "signing").await?;
 
-        // verifying key (Ed25519)
-        let verifying_key = signing_key.verifying_key();
+
+        Ok(Keyring { owner: owner.to_string(), keys, bad_signing: false })
+    }
+
+    pub async fn did(&self) -> anyhow::Result<String> {
+        let verifying_key = self.keys.verifying_key("signing").await?;
         let mut multi_bytes = ED25519_CODEC.to_vec();
-        multi_bytes.extend_from_slice(&verifying_key.to_bytes());
+        multi_bytes.extend_from_slice(&verifying_key);
         let verifying_multi = multibase::encode(Base::Base58Btc, &multi_bytes);
-
-        // public key (X25519)
-        let public_key = verifying_key.to_montgomery();
-
-        Keyring {
-            did: format!("did:key:{verifying_multi}"),
-            public_key: Base64UrlUnpadded::encode_string(public_key.as_bytes()),
-            secret_key: Base64UrlUnpadded::encode_string(signing_key.as_bytes()),
-        }
+        Ok(format!("did:key:{verifying_multi}"))
     }
 
-    pub fn did(&self) -> String {
-        self.did.clone()
+    pub async fn public_key(&self) -> anyhow::Result<PublicKey> {
+        self.keys.public_key("signing").await
     }
 
-    pub fn public_key(&self) -> x25519_dalek::PublicKey {
-        let public_bytes: [u8; 32] =
-            Base64UrlUnpadded::decode_vec(&self.public_key).unwrap().try_into().unwrap();
-        x25519_dalek::PublicKey::from(public_bytes)
+    pub async fn replace(&mut self, key: &str) -> anyhow::Result<()> {
+        self.keys.replace(key).await
+    }
+
+    // Sign with a private key that does not match the verifying key to test
+    // verification is catching bad signatures.
+    async fn bad_sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let mut bad_keyring = BaseKeyring::new(&self.owner).await?;
+        bad_keyring.add_or_replace(&Curve::Ed25519, "bad_signing").await?;
+        bad_keyring.sign("bad_signing", msg).await
     }
 }
 
 impl Signer for Keyring {
-    async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
-        let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
-        let secret_key: ed25519_dalek::SecretKey =
-            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
-        let signing_key: SigningKey = SigningKey::from_bytes(&secret_key);
-
-        Ok(signing_key.sign(msg).to_bytes().to_vec())
+    async fn try_sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
+        if self.bad_signing {
+            return self.bad_sign(msg).await
+        }
+        self.keys.sign("signing", msg).await
     }
 
-    async fn verifying_key(&self) -> Result<Vec<u8>> {
-        let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
-        let secret_key: ed25519_dalek::SecretKey =
-            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
-        let signing_key: SigningKey = SigningKey::from_bytes(&secret_key);
-
-        Ok(signing_key.verifying_key().as_bytes().to_vec())
+    async fn verifying_key(&self) -> anyhow::Result<Vec<u8>> {
+        self.keys.verifying_key("signing").await
     }
 
-    async fn algorithm(&self) -> Result<Algorithm> {
+    async fn algorithm(&self) -> anyhow::Result<Algorithm> {
         Ok(Algorithm::EdDSA)
     }
 }
 
 impl SignerExt for Keyring {
-    async fn verification_method(&self) -> Result<Key> {
-        let verify_key = self.did.strip_prefix("did:key:").unwrap_or_default();
-        Ok(Key::KeyId(format!("{}#{}", self.did, verify_key)))
+    async fn verification_method(&self) -> anyhow::Result<Key> {
+        let did = self.did().await?;
+        let verify_key = did.strip_prefix("did:key:").unwrap_or_default();
+        Ok(Key::KeyId(format!("{}#{}", did, verify_key)))
     }
 }
 
 impl Receiver for Keyring {
-    fn key_id(&self) -> String {
-        self.did.clone()
+    async fn key_id(&self) -> anyhow::Result<String> {
+        self.did().await
     }
 
     // As we're using `did:key`, we only have a single private key for EdDSA
     // signing and X25519 ECDH. We can derive an X25519 secret from the Ed25519
     // signing key.
-    async fn shared_secret(&self, sender_public: PublicKey) -> Result<SharedSecret> {
-        // EdDSA signing key
-        let decoded = Base64UrlUnpadded::decode_vec(&self.secret_key)?;
-        let bytes: [u8; PUBLIC_KEY_LENGTH] =
-            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
-        let signing_key = SigningKey::from_bytes(&bytes);
-
-        // *** derive X25519 secret for Diffie-Hellman from Ed25519 secret ***
-        let hash = sha2::Sha512::digest(signing_key.as_bytes());
-        let mut hashed = [0u8; PUBLIC_KEY_LENGTH];
-        hashed.copy_from_slice(&hash[..PUBLIC_KEY_LENGTH]);
-        let secret_key = x25519_dalek::StaticSecret::from(hashed);
-
-        let secret_key = SecretKey::from(secret_key.to_bytes());
-        secret_key.shared_secret(sender_public)
+    async fn shared_secret(&self, sender_public: PublicKey) -> anyhow::Result<SharedSecret> {
+        let secret = self.keys.private_key("signing").await?;
+        derive_x25519_secret(secret.as_bytes(), &sender_public)
     }
 }

@@ -122,8 +122,8 @@ use credibil_se::{PublicKey, PUBLIC_KEY_LENGTH, SharedSecret};
 struct ReceiverImpl(String);
 
 impl Receiver for ReceiverImpl {
-    fn key_id(&self) -> String {
-        String::new()
+    async fn key_id(&self) -> anyhow::Result<String> {
+        Ok(String::new())
     }
 
     async fn shared_secret(

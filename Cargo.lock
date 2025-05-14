@@ -598,6 +598,7 @@ dependencies = [
  "serde_ipld_dagcbor",
  "serde_json",
  "sha2",
+ "test-kms",
  "thiserror 2.0.12",
  "tokio",
  "ulid",
@@ -609,6 +610,7 @@ dependencies = [
 [[package]]
 name = "credibil-identity"
 version = "0.1.2"
+source = "git+https://github.com/credibil/identity.git?branch=ose#4b4e2fcb272e95f89ee1ac90c4a17fbc93bc0f07"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -628,6 +630,7 @@ dependencies = [
 [[package]]
 name = "credibil-jose"
 version = "0.1.2"
+source = "git+https://github.com/credibil/jose.git?branch=ose#668cfddf2f8d9faf126a99b7d62e3acf9b038d09"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -644,6 +647,7 @@ dependencies = [
 [[package]]
 name = "credibil-se"
 version = "0.1.2"
+source = "git+https://github.com/credibil/jose.git?branch=ose#668cfddf2f8d9faf126a99b7d62e3acf9b038d09"
 dependencies = [
  "aes-gcm",
  "aes-kw",
@@ -2886,6 +2890,25 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "test-kms"
+version = "0.1.2"
+source = "git+https://github.com/credibil/jose.git?branch=ose#668cfddf2f8d9faf126a99b7d62e3acf9b038d09"
+dependencies = [
+ "anyhow",
+ "blockstore",
+ "ciborium",
+ "cid",
+ "credibil-se",
+ "ecies",
+ "ed25519-dalek",
+ "multihash-codetable",
+ "rand 0.8.5",
+ "serde",
+ "sha2",
+ "x25519-dalek",
 ]
 
 [[package]]

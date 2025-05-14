@@ -55,6 +55,7 @@ serde.workspace = true
 serde_ipld_dagcbor = "0.6.3"
 serde_json.workspace = true
 sha2.workspace = true
+test-kms.workspace = true
 thiserror = "2.0.12"
 tokio = { workspace = true, optional = true }
 ulid = "1.2.1"
@@ -116,14 +117,9 @@ anyhow = "1.0.97"
 base64ct = { version = "1.7.3", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-dwn = { path = "." }
-
-# credibil-identity = { git = "https://github.com/credibil/identity.git", branch = "ose" }
-# credibil-jose = { git = "https://github.com/credibil/jose.git", branch = "ose" }
-# credibil-se = { git = "https://github.com/credibil/jose.git", branch = "ose" } 
-credibil-identity = { path = "../identity" }
-credibil-jose = { path = "../jose/jose" }
-credibil-se = { path = "../jose/se" } 
-
+credibil-identity = { git = "https://github.com/credibil/identity.git", branch = "ose" }
+credibil-jose = { git = "https://github.com/credibil/jose.git", branch = "ose" }
+credibil-se = { git = "https://github.com/credibil/jose.git", branch = "ose" } 
 datastore = { path = "./crates/datastore" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.31"
@@ -133,7 +129,10 @@ rand = "0.8.5"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["alloc"] }
 sha2 = "0.10.8"
-tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread", "time"] }
+
+test-kms = { git = "https://github.com/credibil/jose.git", branch = "ose" }
+
+tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread", "sync", "time"] }
 x25519-dalek = "2.0.1"
 
 [patch.crates-io]
