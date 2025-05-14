@@ -580,7 +580,6 @@ dependencies = [
  "credibil-se",
  "datastore",
  "derive_more",
- "ed25519-dalek",
  "futures",
  "hkdf",
  "http",
@@ -603,7 +602,6 @@ dependencies = [
  "tokio",
  "ulid",
  "uuid",
- "x25519-dalek",
  "zeroize",
 ]
 
