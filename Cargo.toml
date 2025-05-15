@@ -115,9 +115,9 @@ anyhow = "1.0.97"
 base64ct = { version = "1.7.3", features = ["std"] }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-dwn = { path = "." }
-credibil-identity = { git = "https://github.com/credibil/identity.git", branch = "ose" }
-credibil-jose = { git = "https://github.com/credibil/jose.git", branch = "ose" }
-credibil-se = { git = "https://github.com/credibil/jose.git", branch = "ose" }
+credibil-identity = { git = "https://github.com/credibil/identity.git" }
+credibil-jose = { git = "https://github.com/credibil/se.git" }
+credibil-se = { git = "https://github.com/credibil/se.git" } 
 datastore = { path = "./crates/datastore" }
 futures = "0.3.31"
 http = "1.3.1"
@@ -126,12 +126,12 @@ rand = "0.8.5"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["alloc"] }
 sha2 = "0.10.8"
-test-kms = { git = "https://github.com/credibil/jose.git", branch = "ose" }
+test-kms = { git = "https://github.com/credibil/se.git" }
 tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread", "sync", "time"] }
 
 [patch.crates-io]
 # credibil-identity = { path = "../identity" }
-# credibil-jose = { path = "../jose" }
+# credibil-jose = { path = "../se" }
 
 [profile.release]
 # optimize for small code size
