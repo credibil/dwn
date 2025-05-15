@@ -3,14 +3,12 @@
 //! The protocols query endpoint handles `ProtocolsQuery` messages — requests
 //! to query the [`MessageStore`] for protocols configured for the DWN.
 
-use http::StatusCode;
-
-use crate::endpoint::{Reply, ReplyBody, Status};
-use crate::handlers::verify_grant;
+use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
+use crate::interfaces::Descriptor;
 use crate::interfaces::protocols::{Access, Configure, Query, QueryReply};
 use crate::provider::{MessageStore, Provider};
 use crate::store::ProtocolsQueryBuilder;
-use crate::{Result, utils};
+use crate::utils;
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -18,7 +16,7 @@ use crate::{Result, utils};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs querying the [`MessageStore`].
-pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Result<QueryReply> {
     // validate query
     if let Some(filter) = &query.descriptor.filter {
         utils::uri::validate(&filter.protocol)?;
@@ -43,16 +41,28 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
         entries.push(Configure::try_from(record)?);
     }
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::ProtocolsQuery(QueryReply {
-            entries: Some(entries),
-            cursor,
-        })),
+    Ok(QueryReply {
+        entries: Some(entries),
+        cursor,
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Query> {
+    type Error = Error;
+    type Provider = P;
+    type Response = QueryReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Query {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Query {

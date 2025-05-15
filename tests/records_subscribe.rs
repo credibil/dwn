@@ -13,7 +13,7 @@ use credibil_dwn::client::records::{
     Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
 };
 use credibil_dwn::interfaces::records::{QueryReply, SubscribeReply};
-use credibil_dwn::{StatusCode, endpoint};
+use credibil_dwn::{StatusCode,};
 use futures::StreamExt;
 use kms::Keyring;
 use provider::ProviderImpl;
@@ -43,12 +43,11 @@ async fn owner_events() {
     let filter = RecordsFilter::new().add_author(&alice.did().await.expect("did"));
     let subscribe =
         SubscribeBuilder::new().filter(filter).sign(alice).build().await.expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), subscribe, &provider)
+    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    let mut subscribe_reply: SubscribeReply =
-        reply.body.expect("should have body").try_into().expect("should convert");
+    assert_eq!(reply.status, StatusCode::OK);
+    let mut subscribe_reply: SubscribeReply = reply.body;
 
     // --------------------------------------------------
     // Alice writes a record.
@@ -64,24 +63,23 @@ async fn owner_events() {
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply = endpoint::handle(&alice.did().await.expect("did"), write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Ensure the RecordsWrite event exists.
     // --------------------------------------------------
     let filter = RecordsFilter::new().record_id(&write.record_id);
-    let query = QueryBuilder::new()
-        .filter(filter)
-        .sign(alice)
-        .build()
+    let query =
+        QueryBuilder::new().filter(filter).sign(alice).build().await.expect("should create query");
+    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
         .await
-        .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should query");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        .expect("should query");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should have reply").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     // assert_eq!(entries[0], message_cid);

@@ -8,12 +8,14 @@ use std::io::Cursor;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
-use crate::handlers::{records_write, verify_grant, verify_protocol};
+use crate::handlers::{
+    Body, Error, Handler, Request, Response, Result, records_write, verify_grant, verify_protocol,
+};
+use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Error, Method, Result, bad, forbidden};
+use crate::{Method, bad, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -22,7 +24,9 @@ use crate::{Error, Method, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(
+    owner: &str, provider: &impl Provider, read: Read,
+) -> Result<Response<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = store::Query::from(read.clone());
 
@@ -51,19 +55,17 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         // TODO: return optional body for NotFound error
         // return Err(Error::NotFound("record is deleted".to_string()));
 
-        return Ok(Reply {
-            status: Status {
-                code: StatusCode::NOT_FOUND,
-                detail: None,
-            },
-            body: Some(ReplyBody::RecordsRead(ReadReply {
+        return Ok(Response {
+            status: StatusCode::NOT_FOUND,
+            headers: None,
+            body: ReadReply {
                 entry: ReadReplyEntry {
                     records_delete: Some(delete.clone()),
                     initial_write: Some(write),
                     records_write: None,
                     data: None,
                 },
-            })),
+            },
         });
     }
 
@@ -113,20 +115,36 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         Some(initial_write)
     };
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::RecordsRead(ReadReply {
+    Ok(Response {
+        status: StatusCode::OK,
+        headers: None,
+        body: ReadReply {
             entry: ReadReplyEntry {
                 records_write: Some(write.clone()),
                 records_delete: None,
                 initial_write,
                 data,
             },
-        })),
+        },
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Read> {
+    type Error = Error;
+    type Provider = P;
+    type Response = ReadReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Read {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Read {

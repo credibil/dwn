@@ -600,6 +600,7 @@ dependencies = [
  "test-kms",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
  "ulid",
  "uuid",
  "zeroize",

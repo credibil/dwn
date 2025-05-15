@@ -34,7 +34,7 @@ async fn main() {
     // ... deserialize request and pass to the endpoint
     let reply =
         endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // find and read the previously written record
     let query = QueryBuilder::new()
@@ -45,7 +45,7 @@ async fn main() {
         .expect("should create read");
 
     let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    assert_eq!(reply.status, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
     let entries = body.entries.expect("should have entries");

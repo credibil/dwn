@@ -4,15 +4,13 @@
 //! to query the [`MessageStore`] for matching [`Write`] (and possibly
 //! [`Delete`]) messages.
 
-use http::StatusCode;
-
-use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::grants::Grant;
-use crate::handlers::verify_protocol;
+use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
+use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Result, bad, forbidden, utils};
+use crate::{bad, forbidden, utils};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -20,7 +18,7 @@ use crate::{Result, bad, forbidden, utils};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs querying the [`MessageStore`].
-pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Result<QueryReply> {
     query.validate()?;
 
     let store_query = if query.only_published() {
@@ -46,13 +44,7 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
 
     // short-circuit when no documents found
     if documents.is_empty() {
-        return Ok(Reply {
-            status: Status {
-                code: StatusCode::OK,
-                detail: None,
-            },
-            body: None,
-        });
+        return Ok(QueryReply::default());
     }
 
     // build reply
@@ -84,16 +76,28 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
         });
     }
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::RecordsQuery(QueryReply {
-            entries: Some(entries),
-            cursor,
-        })),
+    Ok(QueryReply {
+        entries: Some(entries),
+        cursor,
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Query> {
+    type Error = Error;
+    type Provider = P;
+    type Response = QueryReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Query {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Query {
@@ -123,7 +127,7 @@ impl Query {
             // verify protocol role is authorized
             let verifier = verify_protocol::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
-            return verifier.permit_query(owner, self, provider).await;
+            return Ok(verifier.permit_query(owner, self, provider).await?);
         }
 
         Ok(())

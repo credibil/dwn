@@ -39,7 +39,7 @@ async fn flat_space() {
         .expect("should create write");
 
     let reply = endpoint::handle(&BOB.did, bob_msg.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice fetches the message from Bob's web node
@@ -50,7 +50,7 @@ async fn flat_space() {
 
     let reply =
         endpoint::handle(&BOB.did, alice_read.clone(), &provider).await.expect("should read");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply = reply.body.expect("should be records read");
     let mut read_bob_msg = read_reply.entry.records_write.expect("should have records write entry");
@@ -64,13 +64,13 @@ async fn flat_space() {
     read_bob_msg.with_stream(alice_data);
 
     let reply = endpoint::handle(&ALICE.did, read_bob_msg, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob's message can be read from Alice's web node
     // --------------------------------------------------
     let reply = endpoint::handle(&BOB.did, alice_read, &provider).await.expect("should read");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply = reply.body.expect("should be records read");
     let mut reader = read_reply.entry.data.expect("should have data");

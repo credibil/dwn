@@ -13,11 +13,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::authorization::Authorization;
+use crate::bad;
+use crate::handlers::Result;
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use crate::interfaces::Descriptor;
 use crate::store::Cursor;
 use crate::utils::cid;
-use crate::{Result, bad};
 
 /// Default protocol for managing web node permission grants.
 pub const PROTOCOL_URI: &str = "https://credibil.website/dwn/permissions";
@@ -52,7 +53,7 @@ impl Configure {
     /// # Errors
     ///
     /// This method will fail if the message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
+    pub fn cid(&self) -> anyhow::Result<String> {
         cid::from_value(self)
     }
 }

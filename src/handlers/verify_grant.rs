@@ -10,13 +10,14 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 
+use crate::forbidden;
 use crate::grants::{Grant, GrantData, Publication, RecordsScope, RequestData, Scope};
+use crate::handlers::Result;
 use crate::interfaces::Descriptor;
 use crate::interfaces::protocols::{GRANT_PATH, PROTOCOL_URI, REQUEST_PATH, REVOCATION_PATH};
 use crate::interfaces::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write};
 use crate::provider::MessageStore;
 use crate::store::RecordsQueryBuilder;
-use crate::{Result, forbidden};
 
 /// Fetches the grant specified by `grant_id`.
 pub async fn fetch_grant(owner: &str, grant_id: &str, store: &impl MessageStore) -> Result<Grant> {

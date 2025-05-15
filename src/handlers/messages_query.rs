@@ -3,13 +3,11 @@
 //! The messages query endpoint handles `MessagesQuery` messages — requests
 //! to query the [`EventLog`] for matching persisted messages (of any type).
 
-use http::StatusCode;
-
-use crate::endpoint::{Reply, ReplyBody, Status};
-use crate::handlers::verify_grant;
+use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
+use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Query, QueryReply};
 use crate::provider::{EventLog, Provider};
-use crate::{Result, forbidden, store};
+use crate::{forbidden, store};
 
 /// Handle — or process — a [`Query`] message.
 ///
@@ -17,7 +15,7 @@ use crate::{Result, forbidden, store};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs querying the [`EventLog`].
-pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Result<Reply> {
+async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Result<QueryReply> {
     query.authorize(owner, provider).await?;
 
     let query = store::Query::from(query);
@@ -26,13 +24,25 @@ pub async fn handle(owner: &str, query: Query, provider: &impl Provider) -> Resu
     let events = events.iter().map(|e| e.cid().unwrap_or_default()).collect::<Vec<String>>();
     let entries = if events.is_empty() { None } else { Some(events) };
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::MessagesQuery(QueryReply { entries, cursor })),
-    })
+    Ok(QueryReply { entries, cursor })
+}
+
+impl<P: Provider> Handler<P> for Request<Query> {
+    type Error = Error;
+    type Provider = P;
+    type Response = QueryReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Query {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Query {

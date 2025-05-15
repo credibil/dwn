@@ -5,6 +5,7 @@ use std::io::Read;
 use std::str::FromStr;
 
 use ::cid::Cid;
+use anyhow::{Result, anyhow};
 use ipld_core::codec::Codec; // Links
 use ipld_core::ipld::Ipld;
 use serde::Serialize;
@@ -13,7 +14,6 @@ use serde_ipld_dagcbor::codec::DagCborCodec;
 
 use crate::provider::BlockStore;
 use crate::utils::cid;
-use crate::{Result, bad};
 
 /// The maximum size of a message.
 // pub const MAX_ENCODED_SIZE: usize = 30000;
@@ -47,10 +47,10 @@ pub async fn import(
             store
                 .put(owner, PARTITION, cid, block.data())
                 .await
-                .map_err(|e| bad!("issue storing data: {e}"))?;
+                .map_err(|e| anyhow!("issue storing data: {e}"))?;
 
             // save link to block
-            let cid = Cid::from_str(cid).map_err(|e| bad!("issue parsing CID: {e}"))?;
+            let cid = Cid::from_str(cid).map_err(|e| anyhow!("issue parsing CID: {e}"))?;
             links.push(Ipld::Link(cid));
             byte_count += bytes_read;
         }
@@ -89,9 +89,9 @@ impl Block {
     {
         // encode payload
         let data =
-            DagCborCodec::encode_to_vec(payload).map_err(|e| bad!("issue encoding block: {e}"))?;
+            DagCborCodec::encode_to_vec(payload).map_err(|e| anyhow!("issue encoding block: {e}"))?;
         if data.len() > MAX_BLOCK_SIZE {
-            return Err(bad!("block is too large"));
+            return Err(anyhow!("block is too large"));
         }
         let cid = cid::from_value(payload)?;
 

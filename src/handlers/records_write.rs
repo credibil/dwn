@@ -11,20 +11,22 @@ use chrono::format::SecondsFormat::Micros;
 use http::StatusCode;
 use serde_json::json;
 
-use crate::endpoint::{Reply, Status};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
-use crate::handlers::{protocols_configure, verify_grant, verify_protocol};
-use crate::interfaces::Document;
+use crate::handlers::{
+    Body, Error, Handler, Request, Response, Result, protocols_configure, verify_grant,
+    verify_protocol,
+};
 use crate::interfaces::protocols::{
     self, GRANT_PATH, PROTOCOL_URI, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
 use crate::interfaces::records::{DelegatedGrant, RecordsFilter, SignaturePayload, Write};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{
     DateRange, GrantedQueryBuilder, MAX_ENCODED_SIZE, RecordsQueryBuilder, Storable,
 };
 use crate::utils::cid;
-use crate::{Error, Method, Result, authorization, bad, forbidden, schema};
+use crate::{Method, authorization, bad, forbidden, schema};
 
 /// Handle — or process — a [`Write`] message.
 ///
@@ -32,7 +34,7 @@ use crate::{Error, Method, Result, authorization, bad, forbidden, schema};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to save the [`Write`] message or attendant data.
-pub async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(owner: &str, provider: &impl Provider, write: Write) -> Result<Response<()>> {
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 
@@ -138,10 +140,29 @@ pub async fn handle(owner: &str, write: Write, provider: &impl Provider) -> Resu
         write.revoke_grants(owner, provider).await?;
     }
 
-    Ok(Reply {
-        status: Status { code, detail: None },
-        body: None,
+    Ok(Response {
+        status: code,
+        headers: None,
+        body: (),
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Write> {
+    type Error = Error;
+    type Provider = P;
+    type Response = ();
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Write {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Storable for Write {
@@ -161,7 +182,7 @@ impl Storable for Write {
 }
 
 impl TryFrom<Document> for Write {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: Document) -> Result<Self> {
         match document {
@@ -172,7 +193,7 @@ impl TryFrom<Document> for Write {
 }
 
 impl TryFrom<&Document> for Write {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: &Document) -> Result<Self> {
         match &document {
@@ -237,7 +258,7 @@ impl Write {
             }
             REVOCATION_PATH => {
                 let revocation_data: RevocationData = serde_json::from_slice(data)?;
-                schema::validate_value("PermissionRevocationData", &revocation_data)
+                Ok(schema::validate_value("PermissionRevocationData", &revocation_data)?)
             }
             _ => Err(forbidden!("unexpected permission record: {protocol_path}")),
         }
@@ -578,7 +599,7 @@ impl Write {
         let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = verify_grant::fetch_grant(owner, permission_grant_id, store).await?;
-            return grant.permit_write(owner, &author, self, store).await;
+            return Ok(grant.permit_write(owner, &author, self, store).await?);
         }
 
         // protocol-specific authorization

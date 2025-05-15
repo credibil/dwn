@@ -14,14 +14,13 @@ use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
-use crate::endpoint::{Reply, Status};
-use crate::handlers::verify_protocol;
-use crate::interfaces::Document;
+use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
 use crate::interfaces::records::{Delete, RecordsFilter, Write};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{RecordsQueryBuilder, Storable};
 use crate::tasks::{self, Task, TaskType};
-use crate::{Error, Interface, Method, Result, bad, forbidden};
+use crate::{Interface, Method, bad, forbidden};
 
 /// Handle — or process — a [`Delete`] message.
 ///
@@ -30,7 +29,7 @@ use crate::{Error, Interface, Method, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to delete the specified record from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, delete: Delete, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Result<Response<()>> {
     // a `RecordsWrite` record is required for delete processing
     let query = RecordsQueryBuilder::new()
         .method(None)
@@ -71,13 +70,29 @@ pub async fn handle(owner: &str, delete: Delete, provider: &impl Provider) -> Re
     // run the delete task as a resumable task
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::ACCEPTED,
-            detail: None,
-        },
-        body: None,
+    Ok(Response {
+        status: StatusCode::ACCEPTED,
+        headers: None,
+        body: (),
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Delete> {
+    type Error = Error;
+    type Provider = P;
+    type Response = ();
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Delete {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Storable for Delete {
@@ -97,7 +112,7 @@ impl Storable for Delete {
 }
 
 impl TryFrom<Document> for Delete {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: Document) -> Result<Self> {
         match document {
@@ -108,7 +123,7 @@ impl TryFrom<Document> for Delete {
 }
 
 impl TryFrom<&Document> for Delete {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: &Document) -> Result<Self> {
         match document {
@@ -119,8 +134,8 @@ impl TryFrom<&Document> for Delete {
 }
 
 impl Task for Delete {
-    async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
-        delete(owner, self, provider).await
+    async fn run(&self, owner: &str, provider: &impl Provider) -> anyhow::Result<()> {
+        Ok(delete(owner, self, provider).await?)
     }
 }
 
@@ -160,7 +175,7 @@ impl Delete {
             let protocol = verify_protocol::Authorizer::new(protocol)
                 .context_id(write.context_id.as_ref())
                 .initial_write(write);
-            return protocol.permit_delete(owner, self, store).await;
+            return Ok(protocol.permit_delete(owner, self, store).await?);
         }
 
         Err(forbidden!("delete request failed authorization"))

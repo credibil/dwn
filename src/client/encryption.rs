@@ -4,12 +4,13 @@
 //! and decrypting of [`Write`] data.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_se::{derive_x25519_secret, Receiver};
 use credibil_jose::jwe::{self, Header, Jwe, KeyEncryption, Protected, Recipients};
+use credibil_se::{Receiver, derive_x25519_secret};
 
+use crate::bad;
+use crate::handlers::Result;
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
 use crate::interfaces::records::{EncryptedKey, Write};
-use crate::{Result, bad};
 
 /// Decrypt the provided data using the encryption properties specified in the
 /// `Write` message.
@@ -117,7 +118,7 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
 }
 
 use anyhow::anyhow;
-use credibil_se::{PublicKey, PUBLIC_KEY_LENGTH, SharedSecret};
+use credibil_se::{PUBLIC_KEY_LENGTH, PublicKey, SharedSecret};
 
 struct ReceiverImpl(String);
 
@@ -126,9 +127,7 @@ impl Receiver for ReceiverImpl {
         Ok(String::new())
     }
 
-    async fn shared_secret(
-        &self, sender_public: PublicKey,
-    ) -> anyhow::Result<SharedSecret> {
+    async fn shared_secret(&self, sender_public: PublicKey) -> anyhow::Result<SharedSecret> {
         // EdDSA signing key
         let decoded = Base64UrlUnpadded::decode_vec(&self.0)?;
         let bytes: [u8; PUBLIC_KEY_LENGTH] =

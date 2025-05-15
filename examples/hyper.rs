@@ -5,7 +5,7 @@ mod provider;
 use std::convert::Infallible;
 
 use anyhow::Result;
-use credibil_dwn::endpoint::{self, IntoHttp, Message};
+use credibil_dwn::{self, IntoHttp, Message};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
@@ -47,5 +47,5 @@ async fn handle(
     let collected = req.into_body().collect().await.unwrap();
     let req: Message = serde_json::from_slice(&collected.to_bytes()).unwrap();
 
-    Ok(endpoint::handle(&did, req, provider).await.into_http())
+    Ok(credibil_dwn::handle(&did, req, provider).await.into_http())
 }

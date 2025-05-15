@@ -57,6 +57,7 @@ sha2.workspace = true
 test-kms.workspace = true
 thiserror = "2.0.12"
 tokio = { workspace = true, optional = true }
+tracing = "0.1.41"
 ulid = "1.2.1"
 uuid = { version = "1.16.0", features = ["fast-rng", "v4"] }
 zeroize = "1.8.1"
@@ -116,7 +117,7 @@ cid = { version = "0.11.1", features = ["alloc"] }
 credibil-dwn = { path = "." }
 credibil-identity = { git = "https://github.com/credibil/identity.git", branch = "ose" }
 credibil-jose = { git = "https://github.com/credibil/jose.git", branch = "ose" }
-credibil-se = { git = "https://github.com/credibil/jose.git", branch = "ose" } 
+credibil-se = { git = "https://github.com/credibil/jose.git", branch = "ose" }
 datastore = { path = "./crates/datastore" }
 futures = "0.3.31"
 http = "1.3.1"

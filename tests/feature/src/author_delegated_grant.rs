@@ -53,7 +53,7 @@ async fn configure_any() {
     let reply = endpoint::handle(&ALICE.did, configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice fetches the email protocol configured by Bob
@@ -66,7 +66,7 @@ async fn configure_any() {
         .expect("should build");
 
     let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should find protocol");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    assert_eq!(reply.status, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
     let entries = &body.entries.expect("should have entries");

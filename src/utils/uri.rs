@@ -1,8 +1,7 @@
 //! URI utilities.
 
+use anyhow::{Result, anyhow};
 use http::uri::Uri;
-
-use crate::{Result, bad};
 
 pub fn clean(uri: &str) -> Result<String> {
     let stripped = uri.strip_suffix('/').unwrap_or(uri);
@@ -10,7 +9,7 @@ pub fn clean(uri: &str) -> Result<String> {
 
     let scheme = parsed.scheme().map_or_else(|| "http://".to_string(), |s| format!("{s}://"));
     let Some(authority) = parsed.authority() else {
-        return Err(bad!("protocol URI {uri} must have an authority"));
+        return Err(anyhow!("protocol URI {uri} must have an authority"));
     };
     let path = parsed.path().trim_end_matches('/');
 
@@ -19,7 +18,7 @@ pub fn clean(uri: &str) -> Result<String> {
 
 #[cfg(feature = "server")]
 pub fn validate(uri: &str) -> Result<()> {
-    uri.parse::<Uri>().map_or_else(|_| Err(bad!("invalid URL: {uri}")), |_| Ok(()))
+    uri.parse::<Uri>().map_or_else(|_| Err(anyhow!("invalid URL: {uri}")), |_| Ok(()))
 }
 
 #[cfg(test)]

@@ -11,16 +11,16 @@ use std::str::FromStr;
 
 use ::cid::Cid;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::grants::Scope;
-use crate::handlers::{records_write, verify_grant};
-use crate::interfaces::Document;
+use crate::handlers::{
+    Body, Error, Handler, Request, Response, Result, records_write, verify_grant,
+};
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::{Error, Interface, Result, bad, forbidden};
+use crate::{Interface, bad, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -29,7 +29,7 @@ use crate::{Error, Interface, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
+async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<ReadReply> {
     // validate message CID
     let cid = Cid::from_str(&read.descriptor.message_cid).map_err(|e| bad!("invalid CID: {e}"))?;
 
@@ -63,19 +63,31 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         None
     };
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::MessagesRead(ReadReply {
-            entry: Some(ReadReplyEntry {
-                message_cid: read.descriptor.message_cid,
-                message: document,
-                data,
-            }),
-        })),
+    Ok(ReadReply {
+        entry: Some(ReadReplyEntry {
+            message_cid: read.descriptor.message_cid,
+            message: document,
+            data,
+        }),
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Read> {
+    type Error = Error;
+    type Provider = P;
+    type Response = ReadReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Read {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Read {

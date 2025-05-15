@@ -7,19 +7,17 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 
 use chrono::SecondsFormat::Micros;
-use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
-use crate::handlers::verify_grant;
-use crate::interfaces::Document;
+use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
     ProtocolType, RuleSet, Size,
 };
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::Storable;
 use crate::utils::cid;
-use crate::{Error, Result, bad, forbidden, store, utils};
+use crate::{bad, forbidden, store, utils};
 
 /// Define a default protocol definition.
 pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
@@ -94,7 +92,9 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to save the [`Configure`] message.
-pub async fn handle(owner: &str, configure: Configure, provider: &impl Provider) -> Result<Reply> {
+async fn handle(
+    owner: &str, provider: &impl Provider, configure: Configure,
+) -> Result<ConfigureReply> {
     configure.authorize(owner, provider).await?;
 
     // validate the message
@@ -138,13 +138,25 @@ pub async fn handle(owner: &str, configure: Configure, provider: &impl Provider)
     EventLog::append(provider, owner, &configure).await?;
     EventStream::emit(provider, owner, &Document::Configure(configure.clone())).await?;
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::ACCEPTED,
-            detail: None,
-        },
-        body: Some(ReplyBody::ProtocolsConfigure(ConfigureReply { message: configure })),
-    })
+    Ok(ConfigureReply { message: configure })
+}
+
+impl<P: Provider> Handler<P> for Request<Configure> {
+    type Error = Error;
+    type Provider = P;
+    type Response = ConfigureReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Configure {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Storable for Configure {
@@ -164,7 +176,7 @@ impl Storable for Configure {
 }
 
 impl TryFrom<Document> for Configure {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: Document) -> Result<Self> {
         match document {

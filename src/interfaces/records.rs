@@ -22,12 +22,13 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::authorization::{Authorization, JwsPayload};
 use crate::event::Subscriber;
+use crate::handlers::Result;
 use crate::hd_key::DerivationScheme;
 use crate::interfaces::Descriptor;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Cursor, DateRange, Pagination, Range};
 use crate::utils::cid;
-use crate::{OneOrMany, Result, bad, utils};
+use crate::{OneOrMany, bad, utils};
 
 /// The [`Delete`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -51,7 +52,7 @@ impl Delete {
     /// # Errors
     ///
     /// This method will fail if the message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
+    pub fn cid(&self) -> anyhow::Result<String> {
         cid::from_value(self)
     }
 }
@@ -620,7 +621,7 @@ impl Write {
     /// # Errors
     ///
     /// This method will fail if the message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
+    pub fn cid(&self) -> anyhow::Result<String> {
         let mut write = self.clone();
         write.encoded_data = None;
         cid::from_value(&write)
@@ -638,10 +639,10 @@ impl Write {
             descriptor: &'a WriteDescriptor,
             author: &'a str,
         }
-        utils::cid::from_value(&EntryId {
+        Ok(utils::cid::from_value(&EntryId {
             descriptor: &self.descriptor,
             author,
-        })
+        })?)
     }
 }
 

@@ -7,7 +7,7 @@ use futures::executor::block_on;
 use multihash_codetable::MultihashDigest;
 use serde::Serialize;
 
-use crate::Result;
+use anyhow::Result;
 use crate::provider::BlockStore;
 use crate::utils::ipfs;
 

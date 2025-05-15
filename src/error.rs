@@ -123,13 +123,13 @@ impl From<std::io::Error> for Error {
 #[macro_export]
 macro_rules! bad {
     ($fmt:expr, $($arg:tt)*) => {
-        $crate::Error::BadRequest(format!($fmt, $($arg)*))
+        $crate::error::Error::BadRequest(format!($fmt, $($arg)*))
     };
     // ($msg:literal $(,)?) => {
     //     $crate::Error::BadRequest($msg.into())
     // };
      ($err:expr $(,)?) => {
-        $crate::Error::BadRequest(format!($err))
+        $crate::error::Error::BadRequest(format!($err))
     };
 }
 
@@ -138,13 +138,13 @@ macro_rules! bad {
 #[macro_export]
 macro_rules! forbidden {
     ($fmt:expr, $($arg:tt)*) => {
-        $crate::Error::Forbidden(format!($fmt, $($arg)*))
+        $crate::error::Error::Forbidden(format!($fmt, $($arg)*))
     };
     // ($msg:literal $(,)?) => {
     //     $crate::Error::Forbidden($msg.into())
     // };
      ($err:expr $(,)?) => {
-        $crate::Error::Forbidden(format!($err))
+        $crate::error::Error::Forbidden(format!($err))
     };
 }
 
@@ -153,13 +153,13 @@ macro_rules! forbidden {
 #[macro_export]
 macro_rules! unauthorized {
     ($fmt:expr, $($arg:tt)*) => {
-        $crate::Error::Unauthorized(format!($fmt, $($arg)*))
+        $crate::error::Error::Unauthorized(format!($fmt, $($arg)*))
     };
     // ($msg:literal $(,)?) => {
     //     $crate::Error::Unauthorized($msg.into())
     // };
      ($err:expr $(,)?) => {
-        $crate::Error::Unauthorized(format!($err))
+        $crate::error::Error::Unauthorized(format!($err))
     };
 }
 

@@ -6,15 +6,16 @@
 #[cfg(feature = "server")]
 use anyhow::anyhow;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_identity::{did, SignerExt};
 #[cfg(feature = "server")]
 use credibil_identity::{IdentityResolver, did::Resource};
+use credibil_identity::{SignerExt, did};
 use credibil_jose::{Jws, JwsBuilder, Jwt, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 
+use crate::bad;
+use crate::handlers::Result;
 use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
-use crate::{Result, bad};
 
 /// JWS signature payload for message authorization.
 ///

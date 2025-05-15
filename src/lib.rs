@@ -18,19 +18,17 @@ pub mod event;
 pub mod hd_key;
 pub mod interfaces;
 
+mod endpoint;
 mod error;
 mod grants;
 mod utils;
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "client")] {
-        pub mod client;
-    }
-}
+#[cfg(feature = "client")]
+pub mod client;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "server")] {
-        pub mod endpoint;
+        // pub mod endpoint1;
         pub mod provider;
         pub mod store;
 
@@ -41,7 +39,7 @@ cfg_if::cfg_if! {
         // re-exports
         pub use http::StatusCode;
 
-        pub use crate::endpoint::Message;
+        // pub use crate::endpoint1::Message;
         pub use crate::provider::Provider;
         pub use crate::utils::cid;
     }
@@ -51,10 +49,7 @@ use ::serde::{Deserialize, Serialize};
 pub use credibil_se::{Receiver, Signer};
 use derive_more::Display;
 
-pub use crate::error::Error;
-
-/// Result type for `DWN` handlers.
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub use self::handlers::*;
 
 /// Web node interfaces.
 #[derive(Clone, Debug, Default, Display, Deserialize, Serialize, PartialEq, Eq)]

@@ -11,9 +11,10 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::handlers::{Error, Result};
 use crate::interfaces::records::{DelegatedGrant, Write};
 use crate::serde::rfc3339_micros;
-use crate::{Interface, Method, Result, bad};
+use crate::{Interface, Method, bad};
 
 /// [`Grant`] holds permission grant information during the process of
 /// verifying an incoming message's authorization.
@@ -39,7 +40,7 @@ pub struct Grant {
 }
 
 impl TryFrom<&Write> for Grant {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(write: &Write) -> Result<Self> {
         let permission_grant = write.encoded_data.clone().unwrap_or_default();
@@ -57,7 +58,7 @@ impl TryFrom<&Write> for Grant {
 }
 
 impl TryFrom<&DelegatedGrant> for Grant {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(delegated: &DelegatedGrant) -> Result<Self> {
         let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)?;

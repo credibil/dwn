@@ -4,15 +4,14 @@
 //! requests to subscribe to records events matching the provided filter(s).
 
 use futures::{StreamExt, future};
-use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
 use crate::event::SubscribeFilter;
 use crate::grants::Grant;
-use crate::handlers::verify_protocol;
+use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
+use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, Provider};
-use crate::{OneOrMany, Result, forbidden};
+use crate::{OneOrMany, forbidden};
 
 /// Handle — or process — a [`Subscribe`] message.
 ///
@@ -20,7 +19,9 @@ use crate::{OneOrMany, Result, forbidden};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs creating the subscription [`Subscriber`].
-pub async fn handle(owner: &str, subscribe: Subscribe, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(
+    owner: &str, provider: &impl Provider, subscribe: Subscribe,
+) -> Result<SubscribeReply> {
     // authorize subscription
     subscribe.authorize(owner, provider).await?;
 
@@ -44,15 +45,27 @@ pub async fn handle(owner: &str, subscribe: Subscribe, provider: &impl Provider)
     let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
     subscriber.inner = Box::pin(filtered);
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::RecordsSubscribe(SubscribeReply {
-            subscription: subscriber,
-        })),
+    Ok(SubscribeReply {
+        subscription: subscriber,
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Subscribe> {
+    type Error = Error;
+    type Provider = P;
+    type Response = SubscribeReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Subscribe {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
 }
 
 impl Subscribe {
