@@ -2,12 +2,12 @@
 
 use std::io::Read;
 
+use anyhow::Result;
 use cid::Cid;
 use futures::executor::block_on;
 use multihash_codetable::MultihashDigest;
 use serde::Serialize;
 
-use anyhow::Result;
 use crate::provider::BlockStore;
 use crate::utils::ipfs;
 

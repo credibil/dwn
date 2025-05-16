@@ -7,7 +7,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 
 use chrono::SecondsFormat::Micros;
+use http::StatusCode;
 
+use crate::authorization::Authorization;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
@@ -94,7 +96,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 /// an issue occurs attempting to save the [`Configure`] message.
 async fn handle(
     owner: &str, provider: &impl Provider, configure: Configure,
-) -> Result<ConfigureReply> {
+) -> Result<Response<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
 
     // validate the message
@@ -138,7 +140,11 @@ async fn handle(
     EventLog::append(provider, owner, &configure).await?;
     EventStream::emit(provider, owner, &Document::Configure(configure.clone())).await?;
 
-    Ok(ConfigureReply { message: configure })
+    Ok(Response {
+        status: StatusCode::ACCEPTED,
+        headers: None,
+        body: ConfigureReply { message: configure },
+    })
 }
 
 impl<P: Provider> Handler<P> for Request<Configure> {
@@ -156,6 +162,10 @@ impl<P: Provider> Handler<P> for Request<Configure> {
 impl Body for Configure {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
     }
 }
 

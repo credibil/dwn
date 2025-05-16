@@ -15,7 +15,6 @@ pub mod messages;
 pub mod protocols;
 pub mod records;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -115,6 +114,6 @@ impl Document {
 
 impl datastore::Document for Document {
     fn cid(&self) -> anyhow::Result<String> {
-        self.cid().map_err(Into::into)
+        self.cid()
     }
 }

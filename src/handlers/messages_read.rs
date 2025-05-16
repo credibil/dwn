@@ -12,6 +12,7 @@ use std::str::FromStr;
 use ::cid::Cid;
 use base64ct::{Base64UrlUnpadded, Encoding};
 
+use crate::authorization::Authorization;
 use crate::grants::Scope;
 use crate::handlers::{
     Body, Error, Handler, Request, Response, Result, records_write, verify_grant,
@@ -87,6 +88,10 @@ impl<P: Provider> Handler<P> for Request<Read> {
 impl Body for Read {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
     }
 }
 

@@ -2393,9 +2393,10 @@ async fn decrypt_schema() {
         hd_key::derive_jwk(data_formats_root.clone(), &DerivationPath::Full(&invalid_path))
             .expect("should derive private key");
 
-    let Err(Error::BadRequest(_)) = decrypt(&encrypted, &write, &invalid_key, alice).await else {
-        panic!("should be BadRequest");
+    let Err(e) = decrypt(&encrypted, &write, &invalid_key, alice).await else {
+        panic!("should be error");
     };
+    assert_eq!(e.to_string(), "ancestor and descendant key derivation segments do not match");
 }
 
 // Should decrypt flat-space schemaless records using a derived key.

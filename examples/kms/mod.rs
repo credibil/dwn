@@ -28,8 +28,11 @@ impl Keyring {
         let mut keys = BaseKeyring::new(owner).await?;
         keys.add(&Curve::Ed25519, "signing").await?;
 
-
-        Ok(Keyring { owner: owner.to_string(), keys, bad_signing: false })
+        Ok(Keyring {
+            owner: owner.to_string(),
+            keys,
+            bad_signing: false,
+        })
     }
 
     pub async fn did(&self) -> anyhow::Result<String> {
@@ -60,7 +63,7 @@ impl Keyring {
 impl Signer for Keyring {
     async fn try_sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
         if self.bad_signing {
-            return self.bad_sign(msg).await
+            return self.bad_sign(msg).await;
         }
         self.keys.sign("signing", msg).await
     }

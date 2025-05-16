@@ -5,6 +5,7 @@
 
 use futures::{StreamExt, future};
 
+use crate::authorization::Authorization;
 use crate::event::SubscribeFilter;
 use crate::forbidden;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
@@ -55,6 +56,10 @@ impl<P: Provider> Handler<P> for Request<Subscribe> {
 impl Body for Subscribe {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
     }
 }
 

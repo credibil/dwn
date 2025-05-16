@@ -4,6 +4,7 @@
 //! to query the [`MessageStore`] for matching [`Write`] (and possibly
 //! [`Delete`]) messages.
 
+use crate::authorization::Authorization;
 use crate::grants::Grant;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
 use crate::interfaces::Descriptor;
@@ -98,6 +99,10 @@ impl Body for Query {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        self.authorization.as_ref()
+    }
 }
 
 impl Query {
@@ -127,7 +132,7 @@ impl Query {
             // verify protocol role is authorized
             let verifier = verify_protocol::Authorizer::new(protocol)
                 .context_id(self.descriptor.filter.context_id.as_ref());
-            return Ok(verifier.permit_query(owner, self, provider).await?);
+            return verifier.permit_query(owner, self, provider).await;
         }
 
         Ok(())

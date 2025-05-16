@@ -14,6 +14,7 @@ use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
+use crate::authorization::Authorization;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
 use crate::interfaces::records::{Delete, RecordsFilter, Write};
 use crate::interfaces::{Descriptor, Document};
@@ -92,6 +93,10 @@ impl<P: Provider> Handler<P> for Request<Delete> {
 impl Body for Delete {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
     }
 }
 
@@ -175,7 +180,7 @@ impl Delete {
             let protocol = verify_protocol::Authorizer::new(protocol)
                 .context_id(write.context_id.as_ref())
                 .initial_write(write);
-            return Ok(protocol.permit_delete(owner, self, store).await?);
+            return protocol.permit_delete(owner, self, store).await;
         }
 
         Err(forbidden!("delete request failed authorization"))

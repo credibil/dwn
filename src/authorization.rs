@@ -73,8 +73,8 @@ pub struct Authorization {
 impl Authorization {
     /// Verify message signature.
     #[cfg(feature = "server")]
-    pub(crate) async fn verify(&self, resolver: impl IdentityResolver) -> Result<()> {
-        let resolver = async |kid: String| did_jwk(&kid, &resolver).await;
+    pub(crate) async fn verify(&self, resolver: &impl IdentityResolver) -> Result<()> {
+        let resolver = async |kid: String| did_jwk(&kid, resolver).await;
 
         let _: Jwt<JwsPayload> = self
             .signature

@@ -4,20 +4,19 @@
 
 use std::error::Error;
 
-use anyhow::{Result, anyhow};
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
 use serde::Serialize;
 use serde_json::Value;
 
-// use crate::endpoint1::Message;
-use crate::handlers::Body;
+use crate::bad;
+use crate::handlers::{Body, Result};
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
 pub fn validate<T>(message: &T) -> Result<()>
 where
-    T: Body + Serialize,
+    T: Body,
 {
     let descriptor = message.descriptor();
     let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
@@ -41,7 +40,8 @@ pub fn validate_value<T: Serialize + ?Sized>(schema_name: &str, value: &T) -> Re
         }
         let buffer = buffer.replace('"', "'");
         let buffer = buffer.trim_end_matches(", ");
-        return Err(anyhow!("{schema_name} validation failed: {buffer}"));
+        println!("{buffer}");
+        return Err(bad!("{schema_name} validation failed: {buffer}"));
     }
 
     Ok(())
@@ -108,7 +108,7 @@ fn precompiled(schema_name: &str) -> Result<Value> {
             Ok(serde_json::from_slice(schema)?)
         }
 
-        _ => Err(anyhow!("schema not found: {schema_name}")),
+        _ => Err(bad!("schema not found: {schema_name}")),
     }
 }
 
@@ -197,7 +197,7 @@ impl Retrieve for Retriever {
                 Ok(serde_json::from_slice(schema)?)
             }
 
-            _ => Err(anyhow!("Schema not found: {uri}").into()),
+            _ => Err(bad!("Schema not found: {uri}").into()),
         }
     }
 }

@@ -3,6 +3,7 @@
 //! The protocols query endpoint handles `ProtocolsQuery` messages — requests
 //! to query the [`MessageStore`] for protocols configured for the DWN.
 
+use crate::authorization::Authorization;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
 use crate::interfaces::Descriptor;
 use crate::interfaces::protocols::{Access, Configure, Query, QueryReply};
@@ -62,6 +63,10 @@ impl<P: Provider> Handler<P> for Request<Query> {
 impl Body for Query {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        self.authorization.as_ref()
     }
 }
 

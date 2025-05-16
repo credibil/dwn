@@ -11,6 +11,7 @@ use chrono::format::SecondsFormat::Micros;
 use http::StatusCode;
 use serde_json::json;
 
+use crate::authorization::Authorization;
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
 use crate::handlers::{
     Body, Error, Handler, Request, Response, Result, protocols_configure, verify_grant,
@@ -162,6 +163,10 @@ impl<P: Provider> Handler<P> for Request<Write> {
 impl Body for Write {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
     }
 }
 
@@ -599,7 +604,7 @@ impl Write {
         let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = verify_grant::fetch_grant(owner, permission_grant_id, store).await?;
-            return Ok(grant.permit_write(owner, &author, self, store).await?);
+            return grant.permit_write(owner, &author, self, store).await;
         }
 
         // protocol-specific authorization

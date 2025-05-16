@@ -19,7 +19,7 @@ use credibil_dwn::client::protocols::{
     ConfigureBuilder, Definition, ProtocolType, ProtocolsFilter, QueryBuilder,
 };
 use credibil_dwn::interfaces::protocols::QueryReply;
-use credibil_dwn::{Error, Method, StatusCode, cid,};
+use credibil_dwn::{Error, Method, StatusCode, cid};
 use credibil_jose::{Jws, Protected, Signature};
 use kms::Keyring;
 use provider::ProviderImpl;
@@ -92,8 +92,7 @@ async fn authorized() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     assert_eq!(query_reply.entries.unwrap().len(), 1);
 
     // --------------------------------------------------
@@ -105,8 +104,7 @@ async fn authorized() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     assert_eq!(query_reply.entries.unwrap().len(), 3);
 }
 
@@ -146,8 +144,7 @@ async fn unauthorized() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     assert_eq!(query_reply.entries.unwrap().len(), 1);
 
     // --------------------------------------------------
@@ -164,8 +161,7 @@ async fn unauthorized() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     assert_eq!(query_reply.entries.unwrap().len(), 1);
 
     // --------------------------------------------------
@@ -177,8 +173,7 @@ async fn unauthorized() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     assert_eq!(query_reply.entries.unwrap().len(), 2);
 
     // --------------------------------------------------
@@ -190,8 +185,7 @@ async fn unauthorized() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     assert_eq!(query_reply.entries.unwrap().len(), 2);
 }
 
@@ -328,8 +322,7 @@ async fn valid_grant() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     assert_eq!(query_reply.entries.unwrap().len(), 2);
 
     // --------------------------------------------------
@@ -446,8 +439,7 @@ async fn valid_scope() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-1.xyz");
@@ -468,8 +460,7 @@ async fn valid_scope() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 0);
 
@@ -489,8 +480,7 @@ async fn valid_scope() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-3.xyz");
@@ -510,8 +500,7 @@ async fn valid_scope() {
         .expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body;
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].descriptor.definition.protocol, "http://protocol-3.xyz");

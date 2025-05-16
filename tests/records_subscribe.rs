@@ -9,11 +9,11 @@ mod provider;
 
 use std::time::Duration;
 
+use credibil_dwn::StatusCode;
 use credibil_dwn::client::records::{
     Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
 };
 use credibil_dwn::interfaces::records::{QueryReply, SubscribeReply};
-use credibil_dwn::{StatusCode,};
 use futures::StreamExt;
 use kms::Keyring;
 use provider::ProviderImpl;

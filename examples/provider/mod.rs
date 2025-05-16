@@ -11,7 +11,7 @@ use anyhow::Result;
 use blockstore::{Blockstore as _, InMemoryBlockstore};
 use cid::Cid;
 use credibil_dwn::event::{Event, Subscriber};
-use credibil_dwn::provider::{BlockStore, Identity, IdentityResolver, EventStream};
+use credibil_dwn::provider::{BlockStore, EventStream, Identity, IdentityResolver};
 use futures::stream::StreamExt;
 use multihash_codetable::MultihashDigest;
 use serde::{Deserialize, Serialize};

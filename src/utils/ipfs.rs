@@ -88,8 +88,8 @@ impl Block {
         T: Serialize + DeserializeOwned,
     {
         // encode payload
-        let data =
-            DagCborCodec::encode_to_vec(payload).map_err(|e| anyhow!("issue encoding block: {e}"))?;
+        let data = DagCborCodec::encode_to_vec(payload)
+            .map_err(|e| anyhow!("issue encoding block: {e}"))?;
         if data.len() > MAX_BLOCK_SIZE {
             return Err(anyhow!("block is too large"));
         }

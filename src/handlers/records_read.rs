@@ -8,6 +8,7 @@ use std::io::Cursor;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 
+use crate::authorization::Authorization;
 use crate::handlers::{
     Body, Error, Handler, Request, Response, Result, records_write, verify_grant, verify_protocol,
 };
@@ -144,6 +145,10 @@ impl<P: Provider> Handler<P> for Request<Read> {
 impl Body for Read {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        self.authorization.as_ref()
     }
 }
 

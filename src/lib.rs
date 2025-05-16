@@ -39,7 +39,6 @@ cfg_if::cfg_if! {
         // re-exports
         pub use http::StatusCode;
 
-        // pub use crate::endpoint1::Message;
         pub use crate::provider::Provider;
         pub use crate::utils::cid;
     }
