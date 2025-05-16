@@ -8,8 +8,8 @@ rust-version = "1.85"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-anyhow = "1.0.97"
-chrono = { version = "0.4.40", features = ["serde"] }
+anyhow = "1.0.98"
+chrono = { version = "0.4.41", features = ["serde"] }
 ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
 ipld-core = "0.4.2"
