@@ -5,7 +5,7 @@ use std::io::Read;
 use std::str::FromStr;
 
 use ::cid::Cid;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use ipld_core::codec::Codec; // Links
 use ipld_core::ipld::Ipld;
 use serde::Serialize;
@@ -44,13 +44,10 @@ pub async fn import(
 
             // insert into the blockstore
             let cid = block.cid();
-            store
-                .put(owner, PARTITION, cid, block.data())
-                .await
-                .map_err(|e| anyhow!("issue storing data: {e}"))?;
+            store.put(owner, PARTITION, cid, block.data()).await.context("storing data")?;
 
             // save link to block
-            let cid = Cid::from_str(cid).map_err(|e| anyhow!("issue parsing CID: {e}"))?;
+            let cid = Cid::from_str(cid).context("parsing CID")?;
             links.push(Ipld::Link(cid));
             byte_count += bytes_read;
         }
@@ -88,8 +85,7 @@ impl Block {
         T: Serialize + DeserializeOwned,
     {
         // encode payload
-        let data = DagCborCodec::encode_to_vec(payload)
-            .map_err(|e| anyhow!("issue encoding block: {e}"))?;
+        let data = DagCborCodec::encode_to_vec(payload).context("encoding block")?;
         if data.len() > MAX_BLOCK_SIZE {
             return Err(anyhow!("block is too large"));
         }

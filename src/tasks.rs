@@ -26,7 +26,7 @@
 //!    expired tasks for distributed processing when there are no resumable
 //!    tasks in the queue.
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -42,7 +42,7 @@ const EXTEND_SECS: u64 = 30;
 pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Result<()> {
     // register the task
     let timeout = (Utc::now() + Duration::from_secs(EXTEND_SECS * 2)).timestamp();
-    let timeout = u64::try_from(timeout).map_err(|e| anyhow!("issue converting timeout: {e}"))?;
+    let timeout = u64::try_from(timeout).context("converting timeout")?;
 
     let resumable = ResumableTask {
         task_id: task.cid()?,

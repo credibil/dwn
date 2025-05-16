@@ -15,7 +15,7 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use anyhow::{Error, Result, anyhow};
+use anyhow::{Context, Error, Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_jose::PublicKeyJwk;
 use credibil_se::{Curve, KeyType, PUBLIC_KEY_LENGTH, derive_x25519_public_from_secret};
@@ -189,9 +189,8 @@ pub fn derive_key(
         let mut okm = [0u8; PUBLIC_KEY_LENGTH];
         // let salt = hex!(owner); // TODO: use owner as salt
 
-        Hkdf::<Sha256>::new(None, &derived_key)
-            .expand(segment.as_bytes(), &mut okm)
-            .map_err(|e| anyhow!("issue expanding hkdf key: {e}"))?;
+        Hkdf::<Sha256>::new(None, &derived_key).expand(segment.as_bytes(), &mut okm)
+            .context("expanding hkdf key")?;
         derived_key = okm;
     }
 

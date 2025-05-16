@@ -4,7 +4,7 @@
 //! to message authorization and authentication.
 
 #[cfg(feature = "server")]
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 #[cfg(feature = "server")]
 use credibil_identity::{IdentityResolver, did::Resource};
@@ -191,13 +191,11 @@ pub async fn did_jwk<R>(did_url: &str, resolver: &R) -> anyhow::Result<PublicKey
 where
     R: IdentityResolver + Send + Sync,
 {
-    let deref = did::dereference(did_url, resolver)
-        .await
-        .map_err(|e| anyhow!("issue dereferencing DID URL: {e}"))?;
+    let deref = did::dereference(did_url, resolver).await.context("dereferencing DID URL")?;
     let Resource::VerificationMethod(vm) = deref else {
         return Err(anyhow!("Verification method not found"));
     };
-    vm.key.jwk().map_err(|e| anyhow!("JWK not found: {e}"))
+    vm.key.jwk().context("getting JWK from verification method")
 }
 
 /// Options to use when creating a permission grant.

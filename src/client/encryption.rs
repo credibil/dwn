@@ -3,7 +3,7 @@
 //! This module provides data structures and functions used in the encrypting
 //! and decrypting of [`Write`] data.
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_jose::jwe::{self, Header, Jwe, KeyEncryption, Protected, Recipients};
 use credibil_se::{Receiver, derive_x25519_secret};
@@ -66,8 +66,7 @@ pub async fn decrypt(
         ciphertext: Base64UrlUnpadded::encode_string(data),
     };
 
-    let plaintext: Vec<u8> =
-        jwe::decrypt(&jwe, &receiver).await.map_err(|e| anyhow!("failed to decrypt: {e}"))?;
+    let plaintext: Vec<u8> = jwe::decrypt(&jwe, &receiver).await.context("failed to decrypt")?;
 
     Ok(plaintext)
 }
