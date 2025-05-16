@@ -271,7 +271,7 @@ impl RecordsScope {
     /// A shortcut to unpack the context ID, if it is set.
     #[cfg(feature = "client")]
     #[must_use]
-    pub fn context_id(&self) -> Option<&str> {
+    pub const fn context_id(&self) -> Option<&str> {
         match self {
             Self::ContextId(id) => Some(id.as_str()),
             Self::ProtocolPath(_) => None,
@@ -281,7 +281,7 @@ impl RecordsScope {
     /// A shortcut to access the protocol path, if it is set.
     #[cfg(feature = "client")]
     #[must_use]
-    pub fn protocol_path(&self) -> Option<&str> {
+    pub const fn protocol_path(&self) -> Option<&str> {
         match self {
             Self::ProtocolPath(path) => Some(path.as_str()),
             Self::ContextId(_) => None,

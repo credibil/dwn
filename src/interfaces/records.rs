@@ -778,7 +778,7 @@ pub enum Tag {
 impl Tag {
     /// Attempt to convert the tag value to a string.
     #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(s) => Some(s.as_str()),
             _ => None,
@@ -948,8 +948,7 @@ impl<'a> EncryptOptions<'a> {
         };
         let aad = serde_json::to_vec(&protected)?;
 
-        let plaintext = serde_json::to_vec(self.data)?;
-        let encrypted = self.content_algorithm.encrypt(&plaintext, &cek, &aad)?;
+        let encrypted = self.content_algorithm.encrypt(self.data, &cek, &aad)?;
 
         Ok(Encrypted {
             content_algorithm: self.content_algorithm.clone(),

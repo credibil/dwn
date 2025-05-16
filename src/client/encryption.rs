@@ -67,7 +67,7 @@ pub async fn decrypt(
     };
 
     let plaintext: Vec<u8> =
-        jwe::decrypt(&jwe, &receiver).await.map_err(|e| bad!("failed to decrypt: {e}"))?;
+        jwe::decrypt_bytes(&jwe, &receiver).await.map_err(|e| bad!("failed to decrypt: {e}"))?;
 
     Ok(plaintext)
 }
