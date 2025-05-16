@@ -28,7 +28,6 @@ pub mod client;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "server")] {
-        // pub mod endpoint1;
         pub mod provider;
         pub mod store;
 
