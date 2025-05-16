@@ -8,13 +8,14 @@ use std::collections::BTreeMap;
 #[cfg(feature = "server")]
 use std::collections::HashMap;
 
+use anyhow::Context;
 use credibil_jose::PublicKeyJwk;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::api::Result;
 use crate::authorization::Authorization;
-use crate::bad_request;
+use crate::error::bad_request;
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use crate::interfaces::Descriptor;
 use crate::store::Cursor;
@@ -451,7 +452,7 @@ fn validate_rule_set(
     // validate tags schemas
     if let Some(tags) = &rule_set.tags {
         for tag in tags.undefined.keys() {
-            let schema = serde_json::from_str(tag)?;
+            let schema = serde_json::from_str(tag).context("deserializing tag")?;
             jsonschema::validator_for(&schema)
                 .map_err(|e| bad_request!("tag schema validation error: {e}"))?;
         }

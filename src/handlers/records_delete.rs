@@ -15,13 +15,14 @@ use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
 use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
 use crate::interfaces::records::{Delete, RecordsFilter, Write};
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{RecordsQueryBuilder, Storable};
 use crate::tasks::{self, Task, TaskType};
-use crate::{Interface, Method, bad_request, forbidden};
+use crate::{Interface, Method};
 
 /// Handle — or process — a [`Delete`] message.
 ///

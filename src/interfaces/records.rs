@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::io;
 
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use credibil_jose::jwe::{self, Protected};
@@ -22,13 +23,14 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::api::Result;
 use crate::authorization::{Authorization, JwsPayload};
+use crate::error::bad_request;
 use crate::event::Subscriber;
 use crate::hd_key::DerivationScheme;
 use crate::interfaces::Descriptor;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Cursor, DateRange, Pagination, Range};
 use crate::utils::cid;
-use crate::{OneOrMany, bad_request, utils};
+use crate::{OneOrMany, utils};
 
 /// The [`Delete`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -947,9 +949,9 @@ impl<'a> EncryptOptions<'a> {
             enc: self.content_algorithm.clone(),
             alg: None,
         };
-        let aad = serde_json::to_vec(&protected)?;
+        let aad = serde_json::to_vec(&protected).context("deserializing protected header")?;
 
-        let plaintext = serde_json::to_vec(self.data)?;
+        let plaintext = serde_json::to_vec(self.data).context("deserializing plaintext")?;
         let encrypted = self.content_algorithm.encrypt(&plaintext, &cek, &aad)?;
 
         Ok(Encrypted {
@@ -991,13 +993,13 @@ impl Encrypted {
             // recipient's public key
             let jwk = &recipient.public_key;
             let decoded = if jwk.crv == Curve::Ed25519 {
-                Base64UrlUnpadded::decode_vec(&jwk.x)?
+                Base64UrlUnpadded::decode_vec(&jwk.x).context("decoding `x`")?
             } else {
-                let mut decoded = Base64UrlUnpadded::decode_vec(&jwk.x)?;
+                let mut decoded = Base64UrlUnpadded::decode_vec(&jwk.x).context("decoding `x`")?;
                 let Some(y) = &jwk.y else {
                     return Err(bad_request!("missing y"));
                 };
-                decoded.extend(&Base64UrlUnpadded::decode_vec(y)?);
+                decoded.extend(&Base64UrlUnpadded::decode_vec(y).context("decoding `y`")?);
                 decoded
             };
 

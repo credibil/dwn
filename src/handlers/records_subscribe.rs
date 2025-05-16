@@ -5,14 +5,15 @@
 
 use futures::{StreamExt, future};
 
+use crate::OneOrMany;
 use crate::authorization::Authorization;
+use crate::error::forbidden;
 use crate::event::SubscribeFilter;
 use crate::grants::Grant;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, Provider};
-use crate::{OneOrMany, forbidden};
 
 /// Handle — or process — a [`Subscribe`] message.
 ///

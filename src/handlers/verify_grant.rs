@@ -7,10 +7,11 @@
 //! incoming messages to determine whether they have sufficient privileges to
 //! undertake the message's action(s).
 
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 
-use crate::forbidden;
+use crate::error::forbidden;
 use crate::grants::{Grant, GrantData, Publication, RecordsScope, RequestData, Scope};
 use crate::handlers::Result;
 use crate::interfaces::Descriptor;
@@ -38,8 +39,8 @@ pub async fn fetch_grant(owner: &str, grant_id: &str, store: &impl MessageStore)
     let Some(grant_enc) = &write.encoded_data else {
         return Err(forbidden!("missing grant data"));
     };
-    let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc)?;
-    let grant: GrantData = serde_json::from_slice(&grant_bytes)?;
+    let grant_bytes = Base64UrlUnpadded::decode_vec(grant_enc).context("decoding grant")?;
+    let grant: GrantData = serde_json::from_slice(&grant_bytes).context("deserializing grant")?;
 
     Ok(Grant {
         id: write.record_id.clone(),
@@ -62,15 +63,17 @@ pub async fn fetch_scope(owner: &str, write: &Write, store: &impl MessageStore) 
     let Some(encoded) = &write.encoded_data else {
         return Err(forbidden!("missing grant data"));
     };
-    let raw_bytes = Base64UrlUnpadded::decode_vec(encoded)?;
+    let raw_bytes = Base64UrlUnpadded::decode_vec(encoded).context("decoding grant")?;
 
     match protocol_path.as_str() {
         REQUEST_PATH => {
-            let data: RequestData = serde_json::from_slice(&raw_bytes)?;
+            let data: RequestData =
+                serde_json::from_slice(&raw_bytes).context("deserializing grant request")?;
             Ok(data.scope)
         }
         GRANT_PATH => {
-            let data: GrantData = serde_json::from_slice(&raw_bytes)?;
+            let data: GrantData =
+                serde_json::from_slice(&raw_bytes).context("deserializing grant")?;
             Ok(data.scope)
         }
         REVOCATION_PATH => {

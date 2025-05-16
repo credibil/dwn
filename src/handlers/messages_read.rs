@@ -10,9 +10,12 @@ use std::io::Cursor;
 use std::str::FromStr;
 
 use ::cid::Cid;
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 
+use crate::Interface;
 use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
 use crate::grants::Scope;
 use crate::handlers::{
     Body, Error, Handler, Request, Response, Result, records_write, verify_grant,
@@ -21,7 +24,6 @@ use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::{Interface, bad_request, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -46,7 +48,7 @@ async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<Rea
     let data = if let Document::Write(ref mut write) = document {
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
-            let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
+            let bytes = Base64UrlUnpadded::decode_vec(&encoded).context("decoding data")?;
             Some(Cursor::new(bytes))
         } else {
             use std::io::Read;
@@ -55,7 +57,7 @@ async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<Rea
                     .await?
             {
                 let mut buf = Vec::new();
-                read.read_to_end(&mut buf)?;
+                read.read_to_end(&mut buf).context("reading `write` data")?;
                 Some(Cursor::new(buf))
             } else {
                 None

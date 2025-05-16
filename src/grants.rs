@@ -7,14 +7,16 @@
 //! incoming messages to determine whether they have sufficient privileges to
 //! undertake the message's action(s).
 
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::api::{Error, Result};
+use crate::error::bad_request;
 use crate::interfaces::records::{DelegatedGrant, Write};
 use crate::serde::rfc3339_micros;
-use crate::{Interface, Method, bad_request};
+use crate::{Interface, Method};
 
 /// [`Grant`] holds permission grant information during the process of
 /// verifying an incoming message's authorization.
@@ -61,7 +63,8 @@ impl TryFrom<&DelegatedGrant> for Grant {
     type Error = Error;
 
     fn try_from(delegated: &DelegatedGrant) -> Result<Self> {
-        let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)?;
+        let bytes = Base64UrlUnpadded::decode_vec(&delegated.encoded_data)
+            .context("decoding DelegatedGrant")?;
         let grant_data = serde_json::from_slice(&bytes)
             .map_err(|e| bad_request!("issue deserializing grant: {e}"))?;
 

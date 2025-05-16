@@ -5,10 +5,13 @@
 
 use std::io::Cursor;
 
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 
+use crate::Method;
 use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
 use crate::handlers::{
     Body, Error, Handler, Request, Response, Result, records_write, verify_grant, verify_protocol,
 };
@@ -16,7 +19,6 @@ use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Method, bad_request, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -77,7 +79,7 @@ pub async fn handle(
 
     let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
-        let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
+        let buffer = Base64UrlUnpadded::decode_vec(&encoded).context("decoding data")?;
         Some(Cursor::new(buffer))
     } else {
         use std::io::Read;
@@ -89,7 +91,7 @@ pub async fn handle(
         };
 
         let mut buf = Vec::new();
-        read.read_to_end(&mut buf)?;
+        read.read_to_end(&mut buf).context("reading data")?;
         Some(Cursor::new(buf))
     };
 

@@ -4,11 +4,12 @@
 //! to query the [`EventLog`] for matching persisted messages (of any type).
 
 use crate::authorization::Authorization;
+use crate::error::forbidden;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
 use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Query, QueryReply};
 use crate::provider::{EventLog, Provider};
-use crate::{forbidden, store};
+use crate::store;
 
 /// Handle — or process — a [`Query`] message.
 ///

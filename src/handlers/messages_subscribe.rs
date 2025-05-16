@@ -6,8 +6,8 @@
 use futures::{StreamExt, future};
 
 use crate::authorization::Authorization;
+use crate::error::forbidden;
 use crate::event::SubscribeFilter;
-use crate::forbidden;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
 use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Subscribe, SubscribeReply};

@@ -11,11 +11,10 @@ use bytes::Bytes;
 use http::StatusCode;
 use serde::Serialize;
 
-
 pub use crate::error::Error;
+use crate::error::unauthorized;
 use crate::provider::Provider;
-use crate::{schema, unauthorized};
-
+use crate::schema;
 
 /// DWN handler `Result` type.
 pub type Result<T, E = Error> = anyhow::Result<T, E>;
@@ -61,9 +60,7 @@ impl<B: Body, H: Headers> Request<B, H> {
     /// # Errors
     ///
     /// Will fail if the request is invalid or if authentication fails.
-    pub async fn validate(
-        &self, _owner: &str, provider: &impl Provider,
-    ) -> Result<()> {
+    pub async fn validate(&self, _owner: &str, provider: &impl Provider) -> Result<()> {
         // if !tenant.active(owner)? {
         //     return Err(Error::Unauthorized("tenant not active"));
         // }

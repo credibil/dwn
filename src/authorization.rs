@@ -13,7 +13,7 @@ use credibil_jose::{Jws, JwsBuilder, Jwt, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 
 use crate::api::Result;
-use crate::bad_request;
+use crate::error::bad_request;
 use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
 

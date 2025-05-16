@@ -4,13 +4,14 @@
 
 use std::error::Error;
 
+use anyhow::Context;
 use jsonschema::error::ValidationError;
 use jsonschema::{Retrieve, Uri};
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::api::{Body, Result};
-use crate::bad_request;
+use crate::error::bad_request;
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
@@ -27,8 +28,11 @@ where
 /// Throws if the given payload fails validation.
 pub fn validate_value<T: Serialize + ?Sized>(schema_name: &str, value: &T) -> Result<()> {
     let schema = precompiled(schema_name)?;
-    let validator = jsonschema::options().with_retriever(Retriever).build(&schema)?;
-    let instance = serde_json::to_value(value)?;
+    let validator = jsonschema::options()
+        .with_retriever(Retriever)
+        .build(&schema)
+        .context("building schema validator")?;
+    let instance = serde_json::to_value(value).context("serializing message")?;
     let errors = validator.iter_errors(&instance).collect::<Vec<ValidationError>>();
 
     // check for validation errors
@@ -52,60 +56,60 @@ fn precompiled(schema_name: &str) -> Result<Value> {
     match schema_name {
         "messages-query" => {
             let schema = include_bytes!("../schemas/interface-methods/messages-query.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "messages-read" => {
             let schema = include_bytes!("../schemas/interface-methods/messages-read.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "messages-subscribe" => {
             let schema = include_bytes!("../schemas/interface-methods/messages-subscribe.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "protocols-configure" => {
             let schema = include_bytes!("../schemas/interface-methods/protocols-configure.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "protocols-query" => {
             let schema = include_bytes!("../schemas/interface-methods/protocols-query.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "records-write" => {
             let schema = include_bytes!("../schemas/interface-methods/records-write.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "records-write-encoded" => {
             let schema =
                 include_bytes!("../schemas/interface-methods/records-write-data-encoded.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "records-query" => {
             let schema = include_bytes!("../schemas/interface-methods/records-query.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "records-read" => {
             let schema = include_bytes!("../schemas/interface-methods/records-read.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "records-subscribe" => {
             let schema = include_bytes!("../schemas/interface-methods/records-subscribe.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "records-delete" => {
             let schema = include_bytes!("../schemas/interface-methods/records-delete.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "PermissionRequestData" => {
             let schema = include_bytes!("../schemas/permissions/permission-request-data.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "PermissionGrantData" => {
             let schema = include_bytes!("../schemas/permissions/permission-grant-data.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
         "PermissionRevocationData" => {
             let schema = include_bytes!("../schemas/permissions/permission-revocation-data.json");
-            Ok(serde_json::from_slice(schema)?)
+            Ok(serde_json::from_slice(schema).context("deserializing schema")?)
         }
 
         _ => Err(bad_request!("schema not found: {schema_name}")),

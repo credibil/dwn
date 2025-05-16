@@ -10,6 +10,7 @@ use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
 use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
@@ -19,7 +20,7 @@ use crate::interfaces::{Descriptor, Document};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::Storable;
 use crate::utils::cid;
-use crate::{bad_request, forbidden, store, utils};
+use crate::{store, utils};
 
 /// Define a default protocol definition.
 pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {

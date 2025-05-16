@@ -6,12 +6,14 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{Cursor, Read};
 
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat::Micros;
 use http::StatusCode;
 use serde_json::json;
 
 use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
 use crate::handlers::{
     Body, Error, Handler, Request, Response, Result, protocols_configure, verify_grant,
@@ -27,7 +29,7 @@ use crate::store::{
     DateRange, GrantedQueryBuilder, MAX_ENCODED_SIZE, RecordsQueryBuilder, Storable,
 };
 use crate::utils::cid;
-use crate::{Method, authorization, bad_request, forbidden, schema};
+use crate::{Method, authorization, schema};
 
 /// Handle — or process — a [`Write`] message.
 ///
@@ -252,17 +254,20 @@ impl Write {
 
         match protocol_path.as_str() {
             REQUEST_PATH => {
-                let request_data: RequestData = serde_json::from_slice(data)?;
+                let request_data: RequestData =
+                    serde_json::from_slice(data).context("deserializing grant request")?;
                 schema::validate_value("PermissionRequestData", &request_data)?;
                 self.verify_grant_scope(&request_data.scope)
             }
             GRANT_PATH => {
-                let grant_data: GrantData = serde_json::from_slice(data)?;
+                let grant_data: GrantData =
+                    serde_json::from_slice(data).context("deserializing grant")?;
                 schema::validate_value("PermissionGrantData", &grant_data)?;
                 self.verify_grant_scope(&grant_data.scope)
             }
             REVOCATION_PATH => {
-                let revocation_data: RevocationData = serde_json::from_slice(data)?;
+                let revocation_data: RevocationData =
+                    serde_json::from_slice(data).context("deserializing grant revocation")?;
                 Ok(schema::validate_value("PermissionRevocationData", &revocation_data)?)
             }
             _ => Err(forbidden!("unexpected permission record: {protocol_path}")),
@@ -443,7 +448,10 @@ impl Write {
         });
 
         // validate tags against schema
-        if !jsonschema::is_valid(&schema, &serde_json::to_value(&self.descriptor.tags)?) {
+        if !jsonschema::is_valid(
+            &schema,
+            &serde_json::to_value(&self.descriptor.tags).context("serializing tags")?,
+        ) {
             return Err(forbidden!("tags do not match schema"));
         }
 
@@ -600,8 +608,10 @@ impl Write {
         }
 
         // permission grant
-        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)?;
-        let payload: SignaturePayload = serde_json::from_slice(&decoded)?;
+        let decoded = Base64UrlUnpadded::decode_vec(&authzn.signature.payload)
+            .context("decoding signature")?;
+        let payload: SignaturePayload =
+            serde_json::from_slice(&decoded).context("deserializing signature")?;
         if let Some(permission_grant_id) = &payload.base.permission_grant_id {
             let grant = verify_grant::fetch_grant(owner, permission_grant_id, store).await?;
             return grant.permit_write(owner, &author, self, store).await;
@@ -654,13 +664,17 @@ impl Write {
         if let Some(attestation_cid) = payload.attestation_cid {
             let expected_cid = cid::from_value(&self.attestation)?;
             if attestation_cid != expected_cid {
-                return Err(bad_request!("message and authorization attestation CIDs do not match"));
+                return Err(bad_request!(
+                    "message and authorization attestation CIDs do not match"
+                ));
             }
         }
         if let Some(encryption_cid) = payload.encryption_cid {
             let expected_cid = cid::from_value(&self.encryption)?;
             if encryption_cid != expected_cid {
-                return Err(bad_request!("message and authorization `encryptionCid`s do not match"));
+                return Err(bad_request!(
+                    "message and authorization `encryptionCid`s do not match"
+                ));
             }
         }
 
@@ -711,7 +725,7 @@ impl Write {
 
             // store the stream data with the message
             let mut data_bytes = Vec::new();
-            stream.read_to_end(&mut data_bytes)?;
+            stream.read_to_end(&mut data_bytes).context("reading data")?;
             self.encoded_data = Some(Base64UrlUnpadded::encode_string(&data_bytes));
 
             // write record is a grant

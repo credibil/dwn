@@ -5,13 +5,14 @@
 //! [`Delete`]) messages.
 
 use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
 use crate::grants::Grant;
 use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{bad_request, forbidden, utils};
+use crate::utils;
 
 /// Handle — or process — a [`Query`] message.
 ///

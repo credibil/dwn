@@ -1,13 +1,14 @@
 //! URI utilities.
 
+use anyhow::Context;
 use http::uri::Uri;
 
 use crate::api::Result;
-use crate::bad_request;
+use crate::error::bad_request;
 
 pub fn clean(uri: &str) -> Result<String> {
     let stripped = uri.strip_suffix('/').unwrap_or(uri);
-    let parsed = stripped.parse::<Uri>()?;
+    let parsed = stripped.parse::<Uri>().context("parsing URL")?;
 
     let scheme = parsed.scheme().map_or_else(|| "http://".to_string(), |s| format!("{s}://"));
     let Some(authority) = parsed.authority() else {

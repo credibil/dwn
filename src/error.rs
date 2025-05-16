@@ -1,8 +1,7 @@
 //! # `DWN` Errors
 
-use base64ct::Error as Base64Error;
-use http::StatusCode;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer, ser};
+use serde_json::Value;
 use thiserror::Error;
 
 /// The Error type represents all errors that may be returned by a `DWN`.
@@ -44,83 +43,36 @@ pub enum Error {
 }
 
 impl Serialize for Error {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::Error as SerdeError;
-
-        let Ok(error) = serde_json::from_str::<DwnError>(&self.to_string()) else {
-            return Err(SerdeError::custom("issue deserializing Err"));
-        };
-        error.serialize(serializer)
-    }
-}
-
-impl Error {
-    /// Returns the error code as an [`http::StatusCode`].
-    #[must_use]
-    pub const fn code(&self) -> StatusCode {
-        match self {
-            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Unauthorized(_) => StatusCode::UNAUTHORIZED,
-            Self::Forbidden(_) => StatusCode::FORBIDDEN,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::Unimplemented(_) => StatusCode::NOT_IMPLEMENTED,
-        }
-    }
-}
-
-impl PartialEq for Error {
-    fn eq(&self, other: &Self) -> bool {
-        self.code() == other.code()
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let value: Value = serde_json::from_str(&self.to_string())
+            .map_err(|e| ser::Error::custom(format!("issue serializing error: {e}")))?;
+        value.serialize(serializer)
     }
 }
 
 impl From<anyhow::Error> for Error {
-    fn from(error: anyhow::Error) -> Self {
-        Self::InternalServerError(format!("anyhow: {error}"))
-    }
-}
-
-impl From<base64ct::Error> for Error {
-    fn from(error: Base64Error) -> Self {
-        Self::InternalServerError(format!("base64ct: {error}"))
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(error: serde_json::Error) -> Self {
-        Self::InternalServerError(format!("serde_json: {error}"))
-    }
-}
-
-impl From<ciborium::ser::Error<std::io::Error>> for Error {
-    fn from(error: ciborium::ser::Error<std::io::Error>) -> Self {
-        Self::InternalServerError(format!("ciborium: {error}"))
-    }
-}
-
-impl From<http::uri::InvalidUri> for Error {
-    fn from(error: http::uri::InvalidUri) -> Self {
-        Self::InternalServerError(format!("http: {error}"))
-    }
-}
-
-impl From<jsonschema::error::ValidationError<'_>> for Error {
-    fn from(error: jsonschema::error::ValidationError<'_>) -> Self {
-        Self::InternalServerError(format!("jsonschema: {error}"))
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Self::InternalServerError(format!("std::io: {error}"))
+    fn from(err: anyhow::Error) -> Self {
+        match err.downcast_ref::<Self>() {
+            Some(Self::BadRequest(e)) => Self::BadRequest(format!("{err}: {e}")),
+            Some(Self::Unauthorized(e)) => Self::Unauthorized(format!("{err}: {e}")),
+            Some(Self::Forbidden(e)) => Self::Forbidden(format!("{err}: {e}")),
+            Some(Self::NotFound(e)) => Self::NotFound(format!("{err}: {e}")),
+            Some(Self::Conflict(e)) => Self::Conflict(format!("{err}: {e}")),
+            Some(Self::InternalServerError(e)) => Self::InternalServerError(format!("{err}: {e}")),
+            Some(Self::Unimplemented(e)) => Self::Unimplemented(format!("{err}: {e}")),
+            None => {
+                let source = err.source().map_or_else(String::new, ToString::to_string);
+                Self::InternalServerError(format!("{err}: {source}"))
+            }
+        }
     }
 }
 
 /// Construct an `Error::BadRequest` error from a string or existing error
 /// value.
-#[macro_export]
 macro_rules! bad_request {
     ($fmt:expr, $($arg:tt)*) => {
         $crate::error::Error::BadRequest(format!($fmt, $($arg)*))
@@ -132,76 +84,76 @@ macro_rules! bad_request {
         $crate::error::Error::BadRequest(format!($err))
     };
 }
+pub(crate) use bad_request;
 
 /// Construct an `Error::Forbidden` error from a string or existing error
 /// value.
-#[macro_export]
 macro_rules! forbidden {
     ($fmt:expr, $($arg:tt)*) => {
         $crate::error::Error::Forbidden(format!($fmt, $($arg)*))
     };
-    // ($msg:literal $(,)?) => {
-    //     $crate::Error::Forbidden($msg.into())
-    // };
      ($err:expr $(,)?) => {
         $crate::error::Error::Forbidden(format!($err))
     };
 }
+pub(crate) use forbidden;
 
 /// Construct an `Error::Unauthorized` error from a string or existing error
 /// value.
-#[macro_export]
 macro_rules! unauthorized {
     ($fmt:expr, $($arg:tt)*) => {
         $crate::error::Error::Unauthorized(format!($fmt, $($arg)*))
     };
-    // ($msg:literal $(,)?) => {
-    //     $crate::Error::Unauthorized($msg.into())
-    // };
      ($err:expr $(,)?) => {
         $crate::error::Error::Unauthorized(format!($err))
     };
 }
-
-// Error response for serializing internal errors to JSON.
-#[derive(Deserialize, Serialize)]
-struct DwnError {
-    /// Error code.
-    code: u16,
-
-    /// Error description.
-    detail: String,
-}
-
-impl Error {
-    /// Transfrom error to `OpenID` compatible json format.
-    #[must_use]
-    pub fn to_json(self) -> serde_json::Value {
-        serde_json::from_str(&self.to_string()).unwrap_or_default()
-    }
-}
+pub(crate) use unauthorized;
 
 #[cfg(test)]
 mod test {
-    use anyhow::anyhow;
+
+    use anyhow::{Context, Result, anyhow};
     use serde_json::{Value, json};
 
     use super::*;
 
     // Test that error details are retuned as json.
     #[test]
-    fn err_json() {
-        let err = Error::BadRequest("bad_request request".into());
+    fn dwn_context() {
+        let err = dwn_error().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            r#"{"code": 400, "detail": "request context: some invalid request"}"#
+        );
+    }
+    fn dwn_error() -> Result<(), Error> {
+        Err(Error::BadRequest("some invalid request".to_string())).context("request context")?
+    }
+
+    #[test]
+    fn anyhow_context() {
+        let err = anyhow_error().unwrap_err();
+        assert_eq!(err.to_string(), r#"{"code": 500, "detail": "error context: one-off error"}"#);
+    }
+    fn anyhow_error() -> Result<(), Error> {
+        Err(anyhow!("one-off error")).context("error context")?
+    }
+
+    // Test that error details are retuned as json.
+    #[test]
+    fn json() {
+        let err = Error::BadRequest("bad request request".into());
         let ser: Value = serde_json::from_str(&err.to_string()).unwrap();
-        assert_eq!(ser, json!({"code": 400, "detail": "bad_request request"}));
+        assert_eq!(ser, json!({"code": 400, "detail": "bad request request"}));
     }
 
     // Test that the error details are returned as an http query string.
     #[test]
     fn macro_literal() {
-        let err = bad_request!("bad_request request");
-        let ser = serde_json::to_value(&err).unwrap();
-        assert_eq!(ser, json!({"code": 400, "detail": "bad_request request"}));
+        let err = bad_request!("bad request");
+        let value = serde_json::to_value(&err).unwrap();
+        assert_eq!(value, json!({"code": 400, "detail": "bad request"}));
     }
 
     #[test]
