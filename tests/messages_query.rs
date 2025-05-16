@@ -26,20 +26,11 @@ static ALICE: OnceCell<Keyring> = OnceCell::const_new();
 static BOB: OnceCell<Keyring> = OnceCell::const_new();
 
 async fn alice() -> &'static Keyring {
-    ALICE
-        .get_or_init(|| async {
-            let keyring = Keyring::new("messages_query_alice").await.expect("create keyring");
-            keyring
-        })
-        .await
+    ALICE.get_or_init(|| async { Keyring::new("messages_query_alice").await.unwrap() }).await
 }
 
 async fn bob() -> &'static Keyring {
-    BOB.get_or_init(|| async {
-        let keyring = Keyring::new("messages_query_bob").await.expect("create keyring");
-        keyring
-    })
-    .await
+    BOB.get_or_init(|| async { Keyring::new("messages_query_bob").await.unwrap() }).await
 }
 
 // Should fetch all messages for owner owner beyond a provided cursor.

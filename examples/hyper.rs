@@ -1,5 +1,7 @@
 //! A simple Hyper HTTP server that handles DWN messages.
 
+#[path = "../examples/kms/mod.rs"]
+mod kms;
 mod provider;
 
 use std::convert::Infallible;
@@ -12,9 +14,16 @@ use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
+use kms::Keyring;
 use tokio::net::TcpListener;
+use tokio::sync::OnceCell;
 
 use crate::provider::ProviderImpl;
+
+static ALICE: OnceCell<Keyring> = OnceCell::const_new();
+async fn alice() -> &'static Keyring {
+    ALICE.get_or_init(|| async { Keyring::new("messages_query_alice").await.unwrap() }).await
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -51,13 +60,13 @@ impl Svc {
     ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
         let path = req.uri().path().to_string();
         let body = req.into_body().collect().await.unwrap();
-        let did = path.trim_start_matches('/').to_string();
+        let did = alice().await.did().await.unwrap();
 
         let request = match path.as_str() {
-            "/:did/read/records/:id" => {
+            "/read/records/:id" => {
                 serde_json::from_slice::<records::Read>(&body.to_bytes()).unwrap()
             }
-            _ => todo!(), //into_response("oh no! not found".into()),
+            _ => todo!(),
         };
 
         Ok(credibil_dwn::handle(&did, request, &self.provider).await.into_http())

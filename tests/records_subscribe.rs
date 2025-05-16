@@ -23,12 +23,7 @@ use tokio::time;
 static ALICE: OnceCell<Keyring> = OnceCell::const_new();
 
 async fn alice() -> &'static Keyring {
-    ALICE
-        .get_or_init(|| async {
-            let keyring = Keyring::new("records_subscribe_alice").await.expect("create keyring");
-            keyring
-        })
-        .await
+ALICE.get_or_init(|| async { Keyring::new("records_subscribe_alice").await.unwrap() }).await
 }
 
 // The owner should be able to subscribe their own event stream.

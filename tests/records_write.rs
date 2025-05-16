@@ -39,12 +39,7 @@ static ISSUER: OnceCell<Keyring> = OnceCell::const_new();
 static PFI: OnceCell<Keyring> = OnceCell::const_new();
 
 async fn alice() -> &'static Keyring {
-    ALICE
-        .get_or_init(|| async {
-            let keyring = Keyring::new("records_write_alice").await.expect("create keyring");
-            keyring
-        })
-        .await
+ALICE.get_or_init(|| async { Keyring::new("records_write_alice").await.unwrap() }).await
 }
 
 async fn bob() -> &'static Keyring {
@@ -56,21 +51,11 @@ async fn bob() -> &'static Keyring {
 }
 
 async fn carol() -> &'static Keyring {
-    CAROL
-        .get_or_init(|| async {
-            let keyring = Keyring::new("records_write_carol").await.expect("create keyring");
-            keyring
-        })
-        .await
+CAROL.get_or_init(|| async { Keyring::new("records_write_carol").await.unwrap() }).await
 }
 
 async fn issuer() -> &'static Keyring {
-    ISSUER
-        .get_or_init(|| async {
-            let keyring = Keyring::new("records_write_issuer").await.expect("create keyring");
-            keyring
-        })
-        .await
+ISSUER.get_or_init(|| async { Keyring::new("records_write_issuer").await.unwrap() }).await
 }
 
 async fn pfi() -> &'static Keyring {

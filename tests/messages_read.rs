@@ -30,29 +30,15 @@ static BOB: OnceCell<Keyring> = OnceCell::const_new();
 static CAROL: OnceCell<Keyring> = OnceCell::const_new();
 
 async fn alice() -> &'static Keyring {
-    ALICE
-        .get_or_init(|| async {
-            let keyring = Keyring::new("messages_read_alice").await.expect("create keyring");
-            keyring
-        })
-        .await
+    ALICE.get_or_init(|| async { Keyring::new("messages_read_alice").await.unwrap() }).await
 }
 
 async fn bob() -> &'static Keyring {
-    BOB.get_or_init(|| async {
-        let keyring = Keyring::new("messages_read_bob").await.expect("create keyring");
-        keyring
-    })
-    .await
+    BOB.get_or_init(|| async { Keyring::new("messages_read_bob").await.unwrap() }).await
 }
 
 async fn carol() -> &'static Keyring {
-    CAROL
-        .get_or_init(|| async {
-            let keyring = Keyring::new("messages_read_carol").await.expect("create keyring");
-            keyring
-        })
-        .await
+    CAROL.get_or_init(|| async { Keyring::new("messages_read_carol").await.unwrap() }).await
 }
 
 // Bob should be able to read any message in Alice's web node.

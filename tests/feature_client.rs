@@ -24,12 +24,7 @@ static ALICE: OnceCell<Keyring> = OnceCell::const_new();
 static BOB: OnceCell<Keyring> = OnceCell::const_new();
 
 async fn alice() -> &'static Keyring {
-    ALICE
-        .get_or_init(|| async {
-            let keyring = Keyring::new("feature_client_alice").await.expect("create keyring");
-            keyring
-        })
-        .await
+ALICE.get_or_init(|| async { Keyring::new("feature_client_alice").await.unwrap() }).await
 }
 
 async fn bob() -> &'static Keyring {
