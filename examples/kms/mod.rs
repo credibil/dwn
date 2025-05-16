@@ -19,7 +19,7 @@ pub struct Keyring {
     keys: BaseKeyring,
 
     // Set to true to sign with a private key that does not match the
-    // verifying key to test verification is catching bad signatures.
+    // verifying key to test verification is catching bad_request signatures.
     pub bad_signing: bool,
 }
 
@@ -52,7 +52,7 @@ impl Keyring {
     }
 
     // Sign with a private key that does not match the verifying key to test
-    // verification is catching bad signatures.
+    // verification is catching bad_request signatures.
     async fn bad_sign(&self, msg: &[u8]) -> anyhow::Result<Vec<u8>> {
         let mut bad_keyring = BaseKeyring::new(&self.owner).await?;
         bad_keyring.add_or_replace(&Curve::Ed25519, "bad_signing").await?;

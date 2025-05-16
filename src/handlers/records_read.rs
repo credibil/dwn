@@ -16,7 +16,7 @@ use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Method, bad, forbidden};
+use crate::{Method, bad_request, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -36,19 +36,19 @@ pub async fn handle(
         return Err(Error::NotFound("no matching record".to_string()));
     }
     if entries.len() > 1 {
-        return Err(bad!("multiple messages exist"));
+        return Err(bad_request!("multiple messages exist"));
     }
 
     // if record is deleted, return as NotFound
     if entries[0].descriptor().method == Method::Delete {
         let Some(delete) = entries[0].as_delete() else {
-            return Err(bad!("expected `RecordsDelete` message"));
+            return Err(bad_request!("expected `RecordsDelete` message"));
         };
 
         let Ok(Some(write)) =
             records_write::initial_write(owner, &delete.descriptor.record_id, provider).await
         else {
-            return Err(bad!("initial write for deleted record not found"));
+            return Err(bad_request!("initial write for deleted record not found"));
         };
 
         read.authorize(owner, &write, provider).await?;
@@ -105,11 +105,11 @@ pub async fn handle(
             .build();
         let (entries, _) = MessageStore::query(provider, owner, &query).await?;
         if entries.is_empty() {
-            return Err(bad!("initial write not found"));
+            return Err(bad_request!("initial write not found"));
         }
 
         let Some(mut initial_write) = entries[0].as_write().cloned() else {
-            return Err(bad!("expected `RecordsWrite` message"));
+            return Err(bad_request!("expected `RecordsWrite` message"));
         };
 
         initial_write.encoded_data = None;

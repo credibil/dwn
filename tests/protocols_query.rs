@@ -238,7 +238,7 @@ async fn tampered_signature() {
     };
 }
 
-// Should fail with a status of Unauthorized (401) if a bad signature is provided.
+// Should fail with a status of Unauthorized (401) if a bad_request signature is provided.
 #[tokio::test]
 async fn bad_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");

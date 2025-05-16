@@ -20,15 +20,15 @@ use credibil_se::{AlgAlgorithm, Curve, EncAlgorithm, PublicKey};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::api::Result;
 use crate::authorization::{Authorization, JwsPayload};
 use crate::event::Subscriber;
-use crate::handlers::Result;
 use crate::hd_key::DerivationScheme;
 use crate::interfaces::Descriptor;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Cursor, DateRange, Pagination, Range};
 use crate::utils::cid;
-use crate::{OneOrMany, bad, utils};
+use crate::{OneOrMany, bad_request, utils};
 
 /// The [`Delete`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -995,7 +995,7 @@ impl Encrypted {
             } else {
                 let mut decoded = Base64UrlUnpadded::decode_vec(&jwk.x)?;
                 let Some(y) = &jwk.y else {
-                    return Err(bad!("missing y"));
+                    return Err(bad_request!("missing y"));
                 };
                 decoded.extend(&Base64UrlUnpadded::decode_vec(y)?);
                 decoded
@@ -1006,14 +1006,15 @@ impl Encrypted {
                 key_id: recipient.key_id.clone(),
                 public_key: PublicKey::try_from(decoded)?,
             };
-            let cek: [u8; 32] = self.cek.clone().try_into().map_err(|_| bad!("invalid CEK key"))?;
+            let cek: [u8; 32] =
+                self.cek.clone().try_into().map_err(|_| bad_request!("invalid CEK key"))?;
 
             // encrypt cek
             let ke = match self.key_algorithm {
                 AlgAlgorithm::EcdhEsA256Kw => jwe::ecdh_a256kw(&cek, &recip)?,
                 AlgAlgorithm::EciesEs256K => jwe::ecies_es256k(&cek, &recip)?,
                 AlgAlgorithm::EcdhEs => {
-                    return Err(bad!("ECDH-ES requires a single recipient"));
+                    return Err(bad_request!("ECDH-ES requires a single recipient"));
                 }
             };
 

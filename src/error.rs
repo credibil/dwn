@@ -121,7 +121,7 @@ impl From<std::io::Error> for Error {
 /// Construct an `Error::BadRequest` error from a string or existing error
 /// value.
 #[macro_export]
-macro_rules! bad {
+macro_rules! bad_request {
     ($fmt:expr, $($arg:tt)*) => {
         $crate::error::Error::BadRequest(format!($fmt, $($arg)*))
     };
@@ -191,31 +191,31 @@ mod test {
     // Test that error details are retuned as json.
     #[test]
     fn err_json() {
-        let err = Error::BadRequest("bad request".into());
+        let err = Error::BadRequest("bad_request request".into());
         let ser: Value = serde_json::from_str(&err.to_string()).unwrap();
-        assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
+        assert_eq!(ser, json!({"code": 400, "detail": "bad_request request"}));
     }
 
     // Test that the error details are returned as an http query string.
     #[test]
     fn macro_literal() {
-        let err = bad!("bad request");
+        let err = bad_request!("bad_request request");
         let ser = serde_json::to_value(&err).unwrap();
-        assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
+        assert_eq!(ser, json!({"code": 400, "detail": "bad_request request"}));
     }
 
     #[test]
     fn macro_expr() {
-        let expr = anyhow!("bad request");
-        let err = bad!("{expr}");
+        let expr = anyhow!("bad_request request");
+        let err = bad_request!("{expr}");
         let ser = serde_json::to_value(&err).unwrap();
-        assert_eq!(ser, json!({"code": 400, "detail": "bad request"}));
+        assert_eq!(ser, json!({"code": 400, "detail": "bad_request request"}));
     }
 
     #[test]
     fn macro_tt() {
-        let err = bad!("bad request: {}", "a token");
+        let err = bad_request!("bad_request request: {}", "a token");
         let ser = serde_json::to_value(&err).unwrap();
-        assert_eq!(ser, json!({"code": 400, "detail": "bad request: a token"}));
+        assert_eq!(ser, json!({"code": 400, "detail": "bad_request request: a token"}));
     }
 }

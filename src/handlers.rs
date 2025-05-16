@@ -20,12 +20,8 @@ use std::fmt::Debug;
 
 use tracing::instrument;
 
-pub use crate::endpoint::{Body, Handler, Headers, IntoHttp, NoHeaders, Request, Response};
-pub use crate::error::Error;
+use crate::api::{Body, Error, Handler, Headers, Request, Response, Result};
 use crate::provider::Provider;
-
-/// DWN handler `Result` type.
-pub type Result<T, E = Error> = anyhow::Result<T, E>;
 
 /// Handle incoming DWN messages.
 ///

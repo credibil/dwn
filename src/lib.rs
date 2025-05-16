@@ -18,7 +18,7 @@ pub mod event;
 pub mod hd_key;
 pub mod interfaces;
 
-mod endpoint;
+mod api;
 mod error;
 mod grants;
 mod utils;
@@ -48,6 +48,7 @@ use ::serde::{Deserialize, Serialize};
 pub use credibil_se::{Receiver, Signer};
 use derive_more::Display;
 
+pub use self::api::*;
 pub use self::handlers::*;
 
 /// Web node interfaces.

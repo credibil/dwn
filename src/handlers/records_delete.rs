@@ -21,7 +21,7 @@ use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{RecordsQueryBuilder, Storable};
 use crate::tasks::{self, Task, TaskType};
-use crate::{Interface, Method, bad, forbidden};
+use crate::{Interface, Method, bad_request, forbidden};
 
 /// Handle — or process — a [`Delete`] message.
 ///
@@ -122,7 +122,7 @@ impl TryFrom<Document> for Delete {
     fn try_from(document: Document) -> Result<Self> {
         match document {
             Document::Delete(delete) => Ok(delete),
-            _ => Err(bad!("expected `RecordsDelete` message")),
+            _ => Err(bad_request!("expected `RecordsDelete` message")),
         }
     }
 }
@@ -133,7 +133,7 @@ impl TryFrom<&Document> for Delete {
     fn try_from(document: &Document) -> Result<Self> {
         match document {
             Document::Delete(delete) => Ok(delete.clone()),
-            _ => Err(bad!("expected `RecordsDelete` message")),
+            _ => Err(bad_request!("expected `RecordsDelete` message")),
         }
     }
 }
@@ -200,7 +200,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(Error::NotFound("no matching documents found".to_string()));
     }
     if entries.len() > 2 {
-        return Err(bad!("multiple messages exist"));
+        return Err(bad_request!("multiple messages exist"));
     }
 
     // delete message should be the most recent message
@@ -212,7 +212,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     // this should be the initial write
     let write = Write::try_from(&entries[0])?;
     if !write.is_initial()? {
-        return Err(bad!("initial write is not earliest message"));
+        return Err(bad_request!("initial write is not earliest message"));
     }
 
     // ensure the `RecordsDelete` message is searchable
@@ -254,7 +254,7 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
             &write.record_id
         } else {
             let Some(delete) = document.as_delete() else {
-                return Err(bad!("unexpected message type"));
+                return Err(bad_request!("unexpected message type"));
             };
             &delete.descriptor.record_id
         };
@@ -291,7 +291,7 @@ async fn purge(owner: &str, documents: &[Document], provider: &impl Provider) ->
         return Ok(());
     };
     let Some(write) = latest.as_write() else {
-        return Err(bad!("latest record is not a `RecordsWrite`"));
+        return Err(bad_request!("latest record is not a `RecordsWrite`"));
     };
     DataStore::delete(provider, owner, &write.record_id, &write.descriptor.data_cid).await?;
 
@@ -339,7 +339,7 @@ async fn delete_data(
     owner: &str, existing: &Document, latest: &Document, store: &impl DataStore,
 ) -> Result<()> {
     let Some(existing_write) = existing.as_write() else {
-        return Err(bad!("unexpected message type"));
+        return Err(bad_request!("unexpected message type"));
     };
 
     // keep data if referenced by latest message
@@ -356,5 +356,5 @@ async fn delete_data(
 
     DataStore::delete(store, owner, &existing_write.record_id, &existing_write.descriptor.data_cid)
         .await
-        .map_err(|e| bad!("failed to delete data: {e}"))
+        .map_err(|e| bad_request!("failed to delete data: {e}"))
 }

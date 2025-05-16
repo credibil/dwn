@@ -11,6 +11,15 @@ use bytes::Bytes;
 use http::StatusCode;
 use serde::Serialize;
 
+
+pub use crate::error::Error;
+use crate::provider::Provider;
+use crate::{schema, unauthorized};
+
+
+/// DWN handler `Result` type.
+pub type Result<T, E = Error> = anyhow::Result<T, E>;
+
 /// Methods common to all messages.
 ///
 /// The primary role of this trait is to provide a common interface for
@@ -27,14 +36,6 @@ pub trait Handler<P>: Debug + Send + Sync {
     fn handle(
         self, owner: &str, provider: &Self::Provider,
     ) -> impl Future<Output = Result<impl Into<Response<Self::Response>>, Self::Error>> + Send;
-
-    // /// Perform initial validation of the request.
-    // ///
-    // /// Validation undertaken here is common to all messages, with message-
-    // /// specific validation performed by the message's handler.
-    // fn validate(
-    //     &self, _owner: &str, _provider: &Self::Provider,
-    // ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
 /// A request to process.
@@ -51,9 +52,6 @@ where
     pub headers: H,
 }
 
-use crate::provider::Provider;
-use crate::{schema, unauthorized};
-
 impl<B: Body, H: Headers> Request<B, H> {
     /// Perform initial validation of the request.
     ///
@@ -65,7 +63,7 @@ impl<B: Body, H: Headers> Request<B, H> {
     /// Will fail if the request is invalid or if authentication fails.
     pub async fn validate(
         &self, _owner: &str, provider: &impl Provider,
-    ) -> crate::handlers::Result<()> {
+    ) -> Result<()> {
         // if !tenant.active(owner)? {
         //     return Err(Error::Unauthorized("tenant not active"));
         // }
@@ -136,7 +134,7 @@ pub trait IntoHttp {
     fn into_http(self) -> http::Response<Self::Body>;
 }
 
-impl<U: Serialize> IntoHttp for crate::handlers::Result<Response<U>> {
+impl<U: Serialize> IntoHttp for Result<Response<U>> {
     type Body = http_body_util::Full<Bytes>;
 
     /// Create a new reply with the given status code and body.

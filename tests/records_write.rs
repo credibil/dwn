@@ -1896,7 +1896,7 @@ async fn block_non_author() {
     // Carol attempts (but fails) to add a caption to Alice's image.
     // --------------------------------------------------
     let carol_caption = WriteBuilder::new()
-        .data(Data::from(b"bad vibes! >:(".to_vec()))
+        .data(Data::from(b"bad_request vibes! >:(".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://social-media.xyz",
             protocol_path: "image/caption",

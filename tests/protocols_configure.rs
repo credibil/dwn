@@ -96,8 +96,8 @@ async fn forbidden() {
         .await
         .expect("should build");
 
-    // set a bad signature
-    configure.authorization.signature.signatures[0].signature = "bad".to_string();
+    // set a bad_request signature
+    configure.authorization.signature.signatures[0].signature = "bad_request".to_string();
 
     let Err(Error::Unauthorized(_)) =
         credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider).await
@@ -298,7 +298,7 @@ async fn invalid_protocol() {
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
-        .definition(Definition::new("bad-protocol.xyz/"))
+        .definition(Definition::new("bad_request-protocol.xyz/"))
         .sign(alice)
         .build()
         .await
@@ -325,7 +325,7 @@ async fn invalid_schema() {
         .definition(Definition::new("http://minimal.xyz").add_type(
             "foo",
             ProtocolType {
-                schema: Some("bad-schema.xyz/".to_string()),
+                schema: Some("bad_request-schema.xyz/".to_string()),
                 data_formats: None,
             },
         ))
@@ -338,7 +338,7 @@ async fn invalid_schema() {
     configure.descriptor.definition.types.insert(
         "foo".to_string(),
         ProtocolType {
-            schema: Some("bad-schema.xyz/".to_string()),
+            schema: Some("bad_request-schema.xyz/".to_string()),
             data_formats: None,
         },
     );
@@ -348,7 +348,7 @@ async fn invalid_schema() {
     else {
         panic!("should not configure protocol");
     };
-    assert_eq!(e, "invalid URL: bad-schema.xyz/");
+    assert_eq!(e, "invalid URL: bad_request-schema.xyz/");
 }
 
 // Should reject non-owner requests with no grant with status of Forbidden (403).

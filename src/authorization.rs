@@ -12,8 +12,8 @@ use credibil_identity::{SignerExt, did};
 use credibil_jose::{Jws, JwsBuilder, Jwt, PublicKeyJwk};
 use serde::{Deserialize, Serialize};
 
-use crate::bad;
-use crate::handlers::Result;
+use crate::api::Result;
+use crate::bad_request;
 use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
 
@@ -80,12 +80,12 @@ impl Authorization {
             .signature
             .verify(resolver)
             .await
-            .map_err(|e| bad!("issue verifying signature: {e}"))?;
+            .map_err(|e| bad_request!("issue verifying signature: {e}"))?;
         if let Some(signature) = &self.owner_signature {
             let _: Jwt<JwsPayload> = signature
                 .verify(resolver)
                 .await
-                .map_err(|e| bad!("issue verifying owner signature: {e}"))?;
+                .map_err(|e| bad_request!("issue verifying owner signature: {e}"))?;
         }
         if let Some(grant) = &self.author_delegated_grant {
             let _: Jwt<JwsPayload> = grant
@@ -93,7 +93,7 @@ impl Authorization {
                 .signature
                 .verify(resolver)
                 .await
-                .map_err(|e| bad!("issue verifying author delegate signature: {e}"))?;
+                .map_err(|e| bad_request!("issue verifying author delegate signature: {e}"))?;
         }
         if let Some(grant) = &self.owner_delegated_grant {
             let _: Jwt<DelegatedGrant> = grant
@@ -101,7 +101,7 @@ impl Authorization {
                 .signature
                 .verify(resolver)
                 .await
-                .map_err(|e| bad!("issue verifying owner delegate signature: {e}"))?;
+                .map_err(|e| bad_request!("issue verifying owner delegate signature: {e}"))?;
         }
 
         Ok(())
@@ -121,7 +121,7 @@ impl Authorization {
                 || kid_did(&self.signature),
                 |grant| kid_did(&grant.authorization.signature),
             )
-            .map_err(|e| bad!("issue getting author's DID: {e}"))
+            .map_err(|e| bad_request!("issue getting author's DID: {e}"))
     }
 
     /// Get message owner's DID.
@@ -140,16 +140,17 @@ impl Authorization {
 
     /// Get message signer's DID from the message authorization.
     pub(crate) fn signer(&self) -> Result<String> {
-        kid_did(&self.signature).map_err(|e| bad!("issue getting signer's DID: {e}"))
+        kid_did(&self.signature).map_err(|e| bad_request!("issue getting signer's DID: {e}"))
     }
 
     /// Get the owner's signing DID from the owner signature.
     #[cfg(feature = "server")]
     pub(crate) fn owner_signer(&self) -> Result<String> {
         let Some(grant) = self.owner_delegated_grant.as_ref() else {
-            return Err(bad!("owner delegated grant not found"));
+            return Err(bad_request!("owner delegated grant not found"));
         };
-        kid_did(&grant.authorization.signature).map_err(|e| bad!("issue getting owner's DID: {e}"))
+        kid_did(&grant.authorization.signature)
+            .map_err(|e| bad_request!("issue getting owner's DID: {e}"))
     }
 
     /// Extract the JWS payload from the authorization's signature.
@@ -159,9 +160,9 @@ impl Authorization {
     /// Will return an error if the payload cannot be decoded or deserialized.
     pub fn payload(&self) -> Result<JwsPayload> {
         let decoded = Base64UrlUnpadded::decode_vec(&self.signature.payload)
-            .map_err(|e| bad!("issue decoding signature payload: {e}"))?;
+            .map_err(|e| bad_request!("issue decoding signature payload: {e}"))?;
         serde_json::from_slice(&decoded)
-            .map_err(|e| bad!("issue deserializing signature payload: {e}"))
+            .map_err(|e| bad_request!("issue deserializing signature payload: {e}"))
     }
 }
 
@@ -173,10 +174,10 @@ impl Authorization {
 /// the `kid` is not a valid DID.
 pub fn kid_did(jws: &Jws) -> Result<String> {
     let Some(kid) = jws.signatures[0].protected.kid() else {
-        return Err(bad!("Invalid `kid`"));
+        return Err(bad_request!("Invalid `kid`"));
     };
     let Some(did) = kid.split('#').next() else {
-        return Err(bad!("Invalid DID"));
+        return Err(bad_request!("Invalid DID"));
     };
     Ok(did.to_owned())
 }
@@ -251,7 +252,8 @@ impl AuthorizationBuilder {
     /// Will return an error when an incorrect value has been provided or when
     /// there was an issue signing the Authorization
     pub async fn build(self, signer: &impl SignerExt) -> Result<Authorization> {
-        let descriptor_cid = self.descriptor_cid.ok_or_else(|| bad!("descriptor not found"))?;
+        let descriptor_cid =
+            self.descriptor_cid.ok_or_else(|| bad_request!("descriptor not found"))?;
         let delegated_grant_id = if let Some(grant) = &self.delegated_grant {
             Some(cid::from_value(grant)?)
         } else {
