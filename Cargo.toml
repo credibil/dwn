@@ -95,7 +95,7 @@ exclude = [".*", "/docs", "snapshots/"]
 homepage = "https://credibil.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/credibil/dwn"
-rust-version = "1.86"
+rust-version = "1.87"
 version = "0.1.2"
 
 [workspace.lints.rust]
