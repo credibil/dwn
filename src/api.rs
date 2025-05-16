@@ -1,8 +1,8 @@
-//! # Endpoint
+//! # API
 //!
-//! `Endpoint` provides the entry point to the public API. Requests are routed
-//! to the appropriate handler for processing, returning a response that can
-//! be serialized to a JSON object or directly to HTTP.
+//! The api module provides the entry point to the public API. Requests are
+//! routed to the appropriate handler for processing, returning a response that
+//! can be serialized to a JSON object or directly to HTTP.
 
 use std::fmt::Debug;
 use std::ops::Deref;
@@ -27,14 +27,14 @@ pub trait Handler<P>: Debug + Send + Sync {
     /// The provider type used to access the implementer's capability provider.
     type Provider;
     /// The inner reply type specific to the implementing message.
-    type Response;
+    type Reply;
     /// The error type returned by the handler.
     type Error;
 
     /// Routes the message to the concrete handler used to process the message.
     fn handle(
         self, owner: &str, provider: &Self::Provider,
-    ) -> impl Future<Output = Result<impl Into<Response<Self::Response>>, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<impl Into<Reply<Self::Reply>>, Self::Error>> + Send;
 }
 
 /// A request to process.
@@ -90,7 +90,7 @@ impl<B: Body> From<B> for Request<B> {
 
 /// Top-level response data structure common to all handler.
 #[derive(Clone, Debug)]
-pub struct Response<T, H = NoHeaders>
+pub struct Reply<T, H = NoHeaders>
 where
     H: Headers,
 {
@@ -104,7 +104,7 @@ where
     pub body: T,
 }
 
-impl<T> From<T> for Response<T> {
+impl<T> From<T> for Reply<T> {
     fn from(body: T) -> Self {
         Self {
             status: StatusCode::OK,
@@ -114,7 +114,7 @@ impl<T> From<T> for Response<T> {
     }
 }
 
-impl<T> Deref for Response<T> {
+impl<T> Deref for Reply<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -131,7 +131,7 @@ pub trait IntoHttp {
     fn into_http(self) -> http::Response<Self::Body>;
 }
 
-impl<U: Serialize> IntoHttp for Result<Response<U>> {
+impl<U: Serialize> IntoHttp for Result<Reply<U>> {
     type Body = http_body_util::Full<Bytes>;
 
     /// Create a new reply with the given status code and body.

@@ -13,7 +13,7 @@ use crate::Method;
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
 use crate::handlers::{
-    Body, Error, Handler, Request, Response, Result, records_write, verify_grant, verify_protocol,
+    Body, Error, Handler, Reply, Request, Result, records_write, verify_grant, verify_protocol,
 };
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
@@ -27,9 +27,7 @@ use crate::store::{self, RecordsQueryBuilder};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(
-    owner: &str, provider: &impl Provider, read: Read,
-) -> Result<Response<ReadReply>> {
+pub async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = store::Query::from(read.clone());
 
@@ -58,7 +56,7 @@ pub async fn handle(
         // TODO: return optional body for NotFound error
         // return Err(Error::NotFound("record is deleted".to_string()));
 
-        return Ok(Response {
+        return Ok(Reply {
             status: StatusCode::NOT_FOUND,
             headers: None,
             body: ReadReply {
@@ -118,7 +116,7 @@ pub async fn handle(
         Some(initial_write)
     };
 
-    Ok(Response {
+    Ok(Reply {
         status: StatusCode::OK,
         headers: None,
         body: ReadReply {
@@ -135,11 +133,11 @@ pub async fn handle(
 impl<P: Provider> Handler<P> for Request<Read> {
     type Error = Error;
     type Provider = P;
-    type Response = ReadReply;
+    type Reply = ReadReply;
 
     async fn handle(
         self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

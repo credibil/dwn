@@ -16,7 +16,7 @@ use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
 use crate::handlers::{
-    Body, Error, Handler, Request, Response, Result, protocols_configure, verify_grant,
+    Body, Error, Handler, Reply, Request, Result, protocols_configure, verify_grant,
     verify_protocol,
 };
 use crate::interfaces::protocols::{
@@ -37,7 +37,7 @@ use crate::{Method, authorization, schema};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to save the [`Write`] message or attendant data.
-pub async fn handle(owner: &str, provider: &impl Provider, write: Write) -> Result<Response<()>> {
+pub async fn handle(owner: &str, provider: &impl Provider, write: Write) -> Result<Reply<()>> {
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 
@@ -143,7 +143,7 @@ pub async fn handle(owner: &str, provider: &impl Provider, write: Write) -> Resu
         write.revoke_grants(owner, provider).await?;
     }
 
-    Ok(Response {
+    Ok(Reply {
         status: code,
         headers: None,
         body: (),
@@ -153,11 +153,11 @@ pub async fn handle(owner: &str, provider: &impl Provider, write: Write) -> Resu
 impl<P: Provider> Handler<P> for Request<Write> {
     type Error = Error;
     type Provider = P;
-    type Response = ();
+    type Reply = ();
 
     async fn handle(
         self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

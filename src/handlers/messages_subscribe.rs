@@ -8,7 +8,7 @@ use futures::{StreamExt, future};
 use crate::authorization::Authorization;
 use crate::error::forbidden;
 use crate::event::SubscribeFilter;
-use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_grant};
 use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, MessageStore, Provider};
@@ -44,11 +44,11 @@ async fn handle(
 impl<P: Provider> Handler<P> for Request<Subscribe> {
     type Error = Error;
     type Provider = P;
-    type Response = SubscribeReply;
+    type Reply = SubscribeReply;
 
     async fn handle(
         self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

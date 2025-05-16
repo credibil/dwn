@@ -20,7 +20,7 @@ use std::fmt::Debug;
 
 use tracing::instrument;
 
-use crate::api::{Body, Error, Handler, Headers, Request, Response, Result};
+use crate::api::{Body, Error, Handler, Headers, Reply, Request, Result};
 use crate::provider::Provider;
 
 /// Handle incoming DWN messages.
@@ -36,12 +36,12 @@ use crate::provider::Provider;
 #[instrument(level = "debug", skip(provider))]
 pub async fn handle<B, H, P, U>(
     verifier: &str, request: impl Into<Request<B, H>> + Debug, provider: &P,
-) -> Result<Response<U>>
+) -> Result<Reply<U>>
 where
     B: Body,
     H: Headers,
     P: Provider,
-    Request<B, H>: Handler<P, Response = U, Provider = P, Error = Error>,
+    Request<B, H>: Handler<P, Reply = U, Provider = P, Error = Error>,
 {
     let request: Request<B, H> = request.into();
     request.validate(verifier, provider).await?;

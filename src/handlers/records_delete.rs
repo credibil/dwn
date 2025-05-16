@@ -16,7 +16,7 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
-use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_protocol};
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_protocol};
 use crate::interfaces::records::{Delete, RecordsFilter, Write};
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
@@ -31,7 +31,7 @@ use crate::{Interface, Method};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to delete the specified record from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Result<Response<()>> {
+pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Result<Reply<()>> {
     // a `RecordsWrite` record is required for delete processing
     let query = RecordsQueryBuilder::new()
         .method(None)
@@ -72,7 +72,7 @@ pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Re
     // run the delete task as a resumable task
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
-    Ok(Response {
+    Ok(Reply {
         status: StatusCode::ACCEPTED,
         headers: None,
         body: (),
@@ -82,11 +82,11 @@ pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Re
 impl<P: Provider> Handler<P> for Request<Delete> {
     type Error = Error;
     type Provider = P;
-    type Response = ();
+    type Reply = ();
 
     async fn handle(
         self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

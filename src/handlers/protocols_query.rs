@@ -4,7 +4,7 @@
 //! to query the [`MessageStore`] for protocols configured for the DWN.
 
 use crate::authorization::Authorization;
-use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_grant};
 use crate::interfaces::Descriptor;
 use crate::interfaces::protocols::{Access, Configure, Query, QueryReply};
 use crate::provider::{MessageStore, Provider};
@@ -51,11 +51,11 @@ pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Resu
 impl<P: Provider> Handler<P> for Request<Query> {
     type Error = Error;
     type Provider = P;
-    type Response = QueryReply;
+    type Reply = QueryReply;
 
     async fn handle(
         self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

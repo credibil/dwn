@@ -11,7 +11,7 @@ use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
-use crate::handlers::{Body, Error, Handler, Request, Response, Result, verify_grant};
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_grant};
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
     ProtocolType, RuleSet, Size,
@@ -97,7 +97,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 /// an issue occurs attempting to save the [`Configure`] message.
 async fn handle(
     owner: &str, provider: &impl Provider, configure: Configure,
-) -> Result<Response<ConfigureReply>> {
+) -> Result<Reply<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
 
     // validate the message
@@ -141,7 +141,7 @@ async fn handle(
     EventLog::append(provider, owner, &configure).await?;
     EventStream::emit(provider, owner, &Document::Configure(configure.clone())).await?;
 
-    Ok(Response {
+    Ok(Reply {
         status: StatusCode::ACCEPTED,
         headers: None,
         body: ConfigureReply { message: configure },
@@ -151,11 +151,11 @@ async fn handle(
 impl<P: Provider> Handler<P> for Request<Configure> {
     type Error = Error;
     type Provider = P;
-    type Response = ConfigureReply;
+    type Reply = ConfigureReply;
 
     async fn handle(
         self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

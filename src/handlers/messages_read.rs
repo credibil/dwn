@@ -17,9 +17,7 @@ use crate::Interface;
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
 use crate::grants::Scope;
-use crate::handlers::{
-    Body, Error, Handler, Request, Response, Result, records_write, verify_grant,
-};
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, records_write, verify_grant};
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
 use crate::interfaces::{Descriptor, Document};
@@ -79,11 +77,11 @@ async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<Rea
 impl<P: Provider> Handler<P> for Request<Read> {
     type Error = Error;
     type Provider = P;
-    type Response = ReadReply;
+    type Reply = ReadReply;
 
     async fn handle(
         self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Response<Self::Response>>, Self::Error> {
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

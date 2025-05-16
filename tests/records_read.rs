@@ -37,7 +37,7 @@ static BOB: OnceCell<Keyring> = OnceCell::const_new();
 static CAROL: OnceCell<Keyring> = OnceCell::const_new();
 
 async fn alice() -> &'static Keyring {
-ALICE.get_or_init(|| async { Keyring::new("records_read_alice").await.unwrap() }).await
+    ALICE.get_or_init(|| async { Keyring::new("records_read_alice").await.unwrap() }).await
 }
 
 async fn bob() -> &'static Keyring {
@@ -49,7 +49,7 @@ async fn bob() -> &'static Keyring {
 }
 
 async fn carol() -> &'static Keyring {
-CAROL.get_or_init(|| async { Keyring::new("records_read_carol").await.unwrap() }).await
+    CAROL.get_or_init(|| async { Keyring::new("records_read_carol").await.unwrap() }).await
 }
 
 // Should allow an owner to read their own records.
