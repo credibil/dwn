@@ -1,5 +1,6 @@
 //! # `DWN` Errors
 
+use http::StatusCode;
 use serde::{Deserialize, Serialize, Serializer, ser};
 use serde_json::Value;
 use thiserror::Error;
@@ -40,6 +41,22 @@ pub enum Error {
     /// The request method is not supported by the server and cannot be handled.
     #[error(r#"{{"code": 501, "detail": "{0}"}}"#)]
     Unimplemented(String),
+}
+
+impl Error {
+    /// Returns the error status code.
+    #[must_use]
+    pub const fn status(&self) -> u16 {
+        match self {
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST.as_u16(),
+            Self::Unauthorized(_) => StatusCode::UNAUTHORIZED.as_u16(),
+            Self::Forbidden(_) => StatusCode::FORBIDDEN.as_u16(),
+            Self::NotFound(_) => StatusCode::NOT_FOUND.as_u16(),
+            Self::Conflict(_) => StatusCode::CONFLICT.as_u16(),
+            Self::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            Self::Unimplemented(_) => StatusCode::NOT_IMPLEMENTED.as_u16(),
+        }
+    }
 }
 
 impl Serialize for Error {

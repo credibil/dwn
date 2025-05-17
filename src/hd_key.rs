@@ -189,7 +189,8 @@ pub fn derive_key(
         let mut okm = [0u8; PUBLIC_KEY_LENGTH];
         // let salt = hex!(owner); // TODO: use owner as salt
 
-        Hkdf::<Sha256>::new(None, &derived_key).expand(segment.as_bytes(), &mut okm)
+        Hkdf::<Sha256>::new(None, &derived_key)
+            .expand(segment.as_bytes(), &mut okm)
             .context("expanding hkdf key")?;
         derived_key = okm;
     }

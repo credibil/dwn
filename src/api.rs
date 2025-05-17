@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::ops::Deref;
 
 use bytes::Bytes;
-use http::StatusCode;
+use http::{Response, StatusCode, header};
 use serde::Serialize;
 
 pub use crate::error::Error;
@@ -135,20 +135,20 @@ impl<U: Serialize> IntoHttp for Result<Reply<U>> {
     type Body = http_body_util::Full<Bytes>;
 
     /// Create a new reply with the given status code and body.
-    fn into_http(self) -> http::Response<Self::Body> {
+    fn into_http(self) -> Response<Self::Body> {
         let result = match self {
             Ok(r) => {
                 let body = serde_json::to_vec(&r.body).unwrap_or_default();
-                http::Response::builder()
+                Response::builder()
                     .status(r.status)
-                    .header(http::header::CONTENT_TYPE, "application/json")
+                    .header(header::CONTENT_TYPE, "application/json")
                     .body(Self::Body::from(body))
             }
             Err(e) => {
                 let body = serde_json::to_vec(&e).unwrap_or_default();
-                http::Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .header(http::header::CONTENT_TYPE, "application/json")
+                Response::builder()
+                    .status(e.status())
+                    .header(header::CONTENT_TYPE, "application/json")
                     .body(Self::Body::from(body))
             }
         };

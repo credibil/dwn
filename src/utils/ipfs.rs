@@ -96,13 +96,13 @@ impl Block {
 
     /// Returns the cid.
     #[must_use]
-    pub fn cid(&self) -> &str {
+    pub const fn cid(&self) -> &str {
         self.cid.as_str()
     }
 
     /// Returns the payload.
     #[must_use]
-    pub fn data(&self) -> &[u8] {
+    pub const fn data(&self) -> &[u8] {
         self.data.as_slice()
     }
 }

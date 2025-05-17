@@ -781,7 +781,7 @@ pub enum Tag {
 impl Tag {
     /// Attempt to convert the tag value to a string.
     #[must_use]
-    pub fn as_str(&self) -> Option<&str> {
+    pub const fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(s) => Some(s.as_str()),
             _ => None,

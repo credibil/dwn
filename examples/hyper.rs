@@ -19,17 +19,16 @@ use tokio::net::TcpListener;
 
 use crate::provider::ProviderImpl;
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
     println!("Listening on http://0.0.0.0:8080");
 
-    let keyring=Keyring::new("alice").await.expect("should create keyring");
-    let owner=keyring.did().await.expect("should get did");
+    let keyring = Keyring::new("alice").await.expect("should create keyring");
+    let owner = keyring.did().await.expect("should get did");
 
     let svc = Svc {
-        owner:owner,
+        owner,
         provider: ProviderImpl::new().await?,
     };
 
@@ -60,7 +59,6 @@ impl Svc {
     ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
         let path = req.uri().path().to_string();
         let body = req.into_body().collect().await.unwrap();
-       
 
         let request = match path.as_str() {
             "/read/records/:id" => {
@@ -69,7 +67,6 @@ impl Svc {
             _ => todo!(),
         };
 
-        
         Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
     }
 }
@@ -80,5 +77,5 @@ impl Svc {
 //     // });
 
 //     let read= serde_json::from_slice::<records::Read>(&body.to_bytes()).unwrap();
-    
+
 //   }
