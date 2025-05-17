@@ -1,0 +1,26 @@
+[package]
+name = "test-utils"
+edition.workspace = true
+publish = false
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+async-nats = "0.41.0"
+blockstore = "0.7.1"
+ciborium.workspace = true
+cid.workspace = true
+credibil-dwn = { path = "../../" }
+credibil-identity.workspace = true
+credibil-jose.workspace = true
+credibil-se.workspace = true
+futures.workspace = true
+multihash-codetable.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+test-kms = { git = "https://github.com/credibil/se.git" }
+uuid.workspace = true
+

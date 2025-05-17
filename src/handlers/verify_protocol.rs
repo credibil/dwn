@@ -6,12 +6,12 @@
 //! This module provides the logic to enforce these permissions.
 
 use crate::authorization::Authorization;
-use crate::handlers::{protocols_configure, records_write};
+use crate::error::forbidden;
+use crate::handlers::{Result, protocols_configure, records_write};
 use crate::interfaces::protocols::{Action, ActionRule, Actor, RuleSet};
 use crate::interfaces::records::{Delete, Query, Read, RecordsFilter, Subscribe, Write};
 use crate::provider::MessageStore;
 use crate::store::RecordsQueryBuilder;
-use crate::{Result, forbidden};
 
 /// [`Authorizer`] holds protocol-related information required during the process
 /// of verifying an incoming message's protocol-based authorization.

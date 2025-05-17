@@ -14,14 +14,15 @@ use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
-use crate::endpoint::{Reply, Status};
-use crate::handlers::verify_protocol;
-use crate::interfaces::Document;
+use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_protocol};
 use crate::interfaces::records::{Delete, RecordsFilter, Write};
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{RecordsQueryBuilder, Storable};
 use crate::tasks::{self, Task, TaskType};
-use crate::{Error, Interface, Method, Result, bad, forbidden};
+use crate::{Interface, Method};
 
 /// Handle — or process — a [`Delete`] message.
 ///
@@ -30,7 +31,7 @@ use crate::{Error, Interface, Method, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to delete the specified record from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, delete: Delete, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Result<Reply<()>> {
     // a `RecordsWrite` record is required for delete processing
     let query = RecordsQueryBuilder::new()
         .method(None)
@@ -72,12 +73,32 @@ pub async fn handle(owner: &str, delete: Delete, provider: &impl Provider) -> Re
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
     Ok(Reply {
-        status: Status {
-            code: StatusCode::ACCEPTED,
-            detail: None,
-        },
-        body: None,
+        status: StatusCode::ACCEPTED,
+        headers: None,
+        body: (),
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Delete> {
+    type Error = Error;
+    type Provider = P;
+    type Reply = ();
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Delete {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
+    }
 }
 
 impl Storable for Delete {
@@ -97,30 +118,30 @@ impl Storable for Delete {
 }
 
 impl TryFrom<Document> for Delete {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: Document) -> Result<Self> {
         match document {
             Document::Delete(delete) => Ok(delete),
-            _ => Err(bad!("expected `RecordsDelete` message")),
+            _ => Err(bad_request!("expected `RecordsDelete` message")),
         }
     }
 }
 
 impl TryFrom<&Document> for Delete {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: &Document) -> Result<Self> {
         match document {
             Document::Delete(delete) => Ok(delete.clone()),
-            _ => Err(bad!("expected `RecordsDelete` message")),
+            _ => Err(bad_request!("expected `RecordsDelete` message")),
         }
     }
 }
 
 impl Task for Delete {
-    async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
-        delete(owner, self, provider).await
+    async fn run(&self, owner: &str, provider: &impl Provider) -> anyhow::Result<()> {
+        Ok(delete(owner, self, provider).await?)
     }
 }
 
@@ -180,7 +201,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
         return Err(Error::NotFound("no matching documents found".to_string()));
     }
     if entries.len() > 2 {
-        return Err(bad!("multiple messages exist"));
+        return Err(bad_request!("multiple messages exist"));
     }
 
     // delete message should be the most recent message
@@ -192,7 +213,7 @@ async fn delete(owner: &str, delete: &Delete, provider: &impl Provider) -> Resul
     // this should be the initial write
     let write = Write::try_from(&entries[0])?;
     if !write.is_initial()? {
-        return Err(bad!("initial write is not earliest message"));
+        return Err(bad_request!("initial write is not earliest message"));
     }
 
     // ensure the `RecordsDelete` message is searchable
@@ -234,7 +255,7 @@ async fn delete_children(owner: &str, record_id: &str, provider: &impl Provider)
             &write.record_id
         } else {
             let Some(delete) = document.as_delete() else {
-                return Err(bad!("unexpected message type"));
+                return Err(bad_request!("unexpected message type"));
             };
             &delete.descriptor.record_id
         };
@@ -271,7 +292,7 @@ async fn purge(owner: &str, documents: &[Document], provider: &impl Provider) ->
         return Ok(());
     };
     let Some(write) = latest.as_write() else {
-        return Err(bad!("latest record is not a `RecordsWrite`"));
+        return Err(bad_request!("latest record is not a `RecordsWrite`"));
     };
     DataStore::delete(provider, owner, &write.record_id, &write.descriptor.data_cid).await?;
 
@@ -319,7 +340,7 @@ async fn delete_data(
     owner: &str, existing: &Document, latest: &Document, store: &impl DataStore,
 ) -> Result<()> {
     let Some(existing_write) = existing.as_write() else {
-        return Err(bad!("unexpected message type"));
+        return Err(bad_request!("unexpected message type"));
     };
 
     // keep data if referenced by latest message
@@ -336,5 +357,5 @@ async fn delete_data(
 
     DataStore::delete(store, owner, &existing_write.record_id, &existing_write.descriptor.data_cid)
         .await
-        .map_err(|e| bad!("failed to delete data: {e}"))
+        .map_err(|e| bad_request!("failed to delete data: {e}"))
 }

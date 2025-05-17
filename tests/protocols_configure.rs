@@ -5,11 +5,6 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/kms/mod.rs"]
-mod kms;
-#[path = "../examples/provider/mod.rs"]
-mod provider;
-
 use std::collections::BTreeMap;
 
 use credibil_dwn::client::grants::{GrantBuilder, RevocationBuilder, Scope};
@@ -19,38 +14,23 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::ProtocolsQueryBuilder;
-use credibil_dwn::{Error, Method, StatusCode, endpoint};
-use kms::Keyring;
-use provider::ProviderImpl;
+use credibil_dwn::{Error, Method, StatusCode};
+use test_utils::{Identity, ProviderImpl};
 use tokio::sync::OnceCell;
 use tokio::time;
 
-static ALICE: OnceCell<Keyring> = OnceCell::const_new();
-static BOB: OnceCell<Keyring> = OnceCell::const_new();
-static CAROL: OnceCell<Keyring> = OnceCell::const_new();
+static ALICE: OnceCell<Identity> = OnceCell::const_new();
+static BOB: OnceCell<Identity> = OnceCell::const_new();
+static CAROL: OnceCell<Identity> = OnceCell::const_new();
 
-async fn alice() -> &'static Keyring {
-    ALICE.get_or_init(|| async {
-        let keyring = Keyring::new("protocols_configure_alice").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn alice() -> &'static Identity {
+    ALICE.get_or_init(|| async { Identity::new("protocols_configure_alice").await }).await
 }
-
-async fn bob() -> &'static Keyring {
-    BOB.get_or_init(|| async {
-        let keyring = Keyring::new("protocols_configure_bob").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn bob() -> &'static Identity {
+    BOB.get_or_init(|| async { Identity::new("protocols_configure_bob").await }).await
 }
-
-async fn carol() -> &'static Keyring {
-    CAROL.get_or_init(|| async {
-        let keyring = Keyring::new("protocols_configure_carol").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn carol() -> &'static Identity {
+    CAROL.get_or_init(|| async { Identity::new("protocols_configure_carol").await }).await
 }
 
 // Should allow a protocol definition with no schema or `data_format`.
@@ -69,10 +49,10 @@ async fn minimal() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // LATER: add support for multiple signatures to infosec
@@ -94,10 +74,10 @@ async fn forbidden() {
         .await
         .expect("should build");
 
-    // set a bad signature
-    configure.authorization.signature.signatures[0].signature = "bad".to_string();
+    // set a bad_request signature
+    configure.authorization.signature.signatures[0].signature = "bad_request".to_string();
 
-    let Err(Error::Unauthorized(_)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await
+    let Err(Error::Unauthorized(_)) = credibil_dwn::handle(alice.did(), configure, &provider).await
     else {
         panic!("should be Unauthorized");
     };
@@ -133,14 +113,15 @@ async fn overwrite_older() {
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), newer, &provider).await.expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), newer, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts to configure the older protocol and fails.
     // --------------------------------------------------
-    let Err(Error::Conflict(e)) = endpoint::handle(&alice.did().await.expect("did"), older, &provider).await else {
+    let Err(Error::Conflict(e)) = credibil_dwn::handle(alice.did(), older, &provider).await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message is not the latest");
@@ -155,9 +136,10 @@ async fn overwrite_older() {
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update, &provider).await.expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), update, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Control: only the most recent protocol should exist.
@@ -168,11 +150,10 @@ async fn overwrite_older() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should query");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should query");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 }
@@ -242,24 +223,24 @@ async fn overwrite_smaller() {
     // CID is smaller than the existing entry.
     // --------------------------------------------------
     // configure protocol
-    let reply = endpoint::handle(&alice.did().await.expect("did"), messages[1].clone(), &provider)
+    let reply = credibil_dwn::handle(alice.did(), messages[1].clone(), &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check the protocol with the smallest CID cannot be written
     let Err(Error::Conflict(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), messages[0].clone(), &provider).await
+        credibil_dwn::handle(alice.did(), messages[0].clone(), &provider).await
     else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message CID is smaller than existing entry");
 
     // check the protocol with the largest CID can be written
-    let reply = endpoint::handle(&alice.did().await.expect("did"), messages[2].clone(), &provider)
+    let reply = credibil_dwn::handle(alice.did(), messages[2].clone(), &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Control: only the most recent protocol should exist.
@@ -270,11 +251,10 @@ async fn overwrite_smaller() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should query");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should query");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 }
@@ -286,7 +266,7 @@ async fn invalid_protocol() {
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
-        .definition(Definition::new("bad-protocol.xyz/"))
+        .definition(Definition::new("bad_request-protocol.xyz/"))
         .sign(alice)
         .build()
         .await
@@ -295,7 +275,8 @@ async fn invalid_protocol() {
     // override builder's normalizing of  protocol
     configure.descriptor.definition.protocol = "minimal.xyz/".to_string();
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), configure, &provider).await
+    else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "invalid URL: minimal.xyz/");
@@ -311,7 +292,7 @@ async fn invalid_schema() {
         .definition(Definition::new("http://minimal.xyz").add_type(
             "foo",
             ProtocolType {
-                schema: Some("bad-schema.xyz/".to_string()),
+                schema: Some("bad_request-schema.xyz/".to_string()),
                 data_formats: None,
             },
         ))
@@ -324,15 +305,16 @@ async fn invalid_schema() {
     configure.descriptor.definition.types.insert(
         "foo".to_string(),
         ProtocolType {
-            schema: Some("bad-schema.xyz/".to_string()),
+            schema: Some("bad_request-schema.xyz/".to_string()),
             data_formats: None,
         },
     );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), configure, &provider).await
+    else {
         panic!("should not configure protocol");
     };
-    assert_eq!(e, "invalid URL: bad-schema.xyz/");
+    assert_eq!(e, "invalid URL: bad_request-schema.xyz/");
 }
 
 // Should reject non-owner requests with no grant with status of Forbidden (403).
@@ -349,7 +331,8 @@ async fn no_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), configure, &provider).await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "author has no grant");
@@ -393,7 +376,8 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), configure, &provider).await
+    else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -440,7 +424,8 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), configure, &provider).await
+    else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -495,7 +480,8 @@ async fn duplicate_role() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), configure, &provider).await
+    else {
         panic!("should not configure protocol");
     };
     assert!(e.contains("validation failed:"));
@@ -541,7 +527,7 @@ async fn invalid_read_action() {
         );
 
     let Err(Error::BadRequest(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), configure.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -573,7 +559,7 @@ async fn invalid_read_action() {
         );
 
     let Err(Error::BadRequest(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), configure.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -605,7 +591,7 @@ async fn invalid_read_action() {
         );
 
     let Err(Error::BadRequest(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), configure.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -636,10 +622,10 @@ async fn invalid_read_action() {
             },
         );
 
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow an external party to configure a protocol when they have a valid grant.
@@ -654,7 +640,7 @@ async fn valid_grant() {
     // Alice grants Bob permission to configure protocols.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Protocols {
             method: Method::Configure,
             protocol: None,
@@ -666,9 +652,10 @@ async fn valid_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob configures a protocol on Alice's web node.
@@ -681,10 +668,10 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Carol should not be able to use Bob's grant to configure a protocol.
@@ -697,7 +684,8 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), configure.clone(), &provider).await
+    let Err(Error::Forbidden(e)) =
+        credibil_dwn::handle(alice.did(), configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -714,8 +702,8 @@ async fn valid_grant() {
         .expect("should create revocation");
 
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_revocation, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_revocation, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify Bob can no longer use the grant.
@@ -728,7 +716,8 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), configure, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), configure, &provider).await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -745,7 +734,7 @@ async fn configure_scope() {
     // Alice grants Bob permission to configure protoocols for a specific protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Protocols {
             method: Method::Configure,
             protocol: Some("https://example.com/protocol/allowed".to_string()),
@@ -757,9 +746,10 @@ async fn configure_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob configures a protocol for the permitted protocol.
@@ -772,10 +762,10 @@ async fn configure_scope() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     //  Bob fails to configure a protocol for a different protocol.
@@ -788,7 +778,8 @@ async fn configure_scope() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), configure.clone(), &provider).await
+    let Err(Error::Forbidden(e)) =
+        credibil_dwn::handle(alice.did(), configure.clone(), &provider).await
     else {
         panic!("should not configure protocol");
     };
@@ -808,15 +799,15 @@ async fn configure_event() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check log
     let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
     let (entries, _) =
-        MessageStore::query(&provider, &alice.did().await.expect("did"), &query).await.expect("should query");
+        MessageStore::query(&provider, alice.did(), &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
@@ -833,9 +824,10 @@ async fn delete_older_events() {
         .await
         .expect("should build");
 
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), oldest, &provider).await.expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), oldest, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     time::sleep(time::Duration::from_secs(1)).await;
 
@@ -848,15 +840,16 @@ async fn delete_older_events() {
 
     let newest_cid = newest.cid().expect("should have CID");
 
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), newest, &provider).await.expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), newest, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check log
 
     let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
     let (entries, _) =
-        MessageStore::query(&provider, &alice.did().await.expect("did"), &query).await.expect("should query");
+        MessageStore::query(&provider, alice.did(), &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cid().unwrap(), newest_cid);
 }

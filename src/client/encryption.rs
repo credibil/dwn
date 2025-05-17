@@ -3,13 +3,13 @@
 //! This module provides data structures and functions used in the encrypting
 //! and decrypting of [`Write`] data.
 
+use anyhow::{Context, Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_se::{derive_x25519_secret, Receiver};
 use credibil_jose::jwe::{self, Header, Jwe, KeyEncryption, Protected, Recipients};
+use credibil_se::{Receiver, derive_x25519_secret};
 
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
 use crate::interfaces::records::{EncryptedKey, Write};
-use crate::{Result, bad};
 
 /// Decrypt the provided data using the encryption properties specified in the
 /// `Write` message.
@@ -22,13 +22,13 @@ pub async fn decrypt(
     data: &[u8], write: &Write, ancestor_jwk: &DerivedPrivateJwk, _: &impl Receiver,
 ) -> Result<Vec<u8>> {
     let Some(encryption) = &write.encryption else {
-        return Err(bad!("encryption parameter not set"));
+        return Err(anyhow!("encryption parameter not set"));
     };
     let Some(recipient) = encryption.key_encryption.iter().find(|k| {
         k.root_key_id == ancestor_jwk.root_key_id
             && k.derivation_scheme == ancestor_jwk.derivation_scheme
     }) else {
-        return Err(bad!("encryption key not found"));
+        return Err(anyhow!("encryption key not found"));
     };
 
     // ------------------------------------------------------------------------
@@ -86,10 +86,10 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
         }
         DerivationScheme::ProtocolPath => {
             let Some(protocol) = &descriptor.protocol else {
-                return Err(bad!("`protocol` not set"));
+                return Err(anyhow!("`protocol` not set"));
             };
             let Some(protocol_path) = &descriptor.protocol_path else {
-                return Err(bad!("`protocol_path` not set"));
+                return Err(anyhow!("`protocol_path` not set"));
             };
 
             let segments =
@@ -100,14 +100,14 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
         }
         DerivationScheme::ProtocolContext => {
             let Some(context_id) = &write.context_id else {
-                return Err(bad!("`context_id` not set"));
+                return Err(anyhow!("`context_id` not set"));
             };
             let segments = context_id.split('/').map(ToString::to_string).collect::<Vec<String>>();
             vec![DerivationScheme::ProtocolContext.to_string(), segments[0].clone()]
         }
         DerivationScheme::Schemas => {
             let Some(schema) = &descriptor.schema else {
-                return Err(bad!("`schema` not set"));
+                return Err(anyhow!("`schema` not set"));
             };
             vec![DerivationScheme::Schemas.to_string(), schema.clone()]
         }
@@ -116,8 +116,7 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
     Ok(derivation_path)
 }
 
-use anyhow::anyhow;
-use credibil_se::{PublicKey, PUBLIC_KEY_LENGTH, SharedSecret};
+use credibil_se::{PUBLIC_KEY_LENGTH, PublicKey, SharedSecret};
 
 struct ReceiverImpl(String);
 
@@ -126,9 +125,7 @@ impl Receiver for ReceiverImpl {
         Ok(String::new())
     }
 
-    async fn shared_secret(
-        &self, sender_public: PublicKey,
-    ) -> anyhow::Result<SharedSecret> {
+    async fn shared_secret(&self, sender_public: PublicKey) -> anyhow::Result<SharedSecret> {
         // EdDSA signing key
         let decoded = Base64UrlUnpadded::decode_vec(&self.0)?;
         let bytes: [u8; PUBLIC_KEY_LENGTH] =

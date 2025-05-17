@@ -15,15 +15,13 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use anyhow::anyhow;
+use anyhow::{Context, Error, Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_jose::PublicKeyJwk;
-use credibil_se::{derive_x25519_public_from_secret, Curve, KeyType, PUBLIC_KEY_LENGTH};
+use credibil_se::{Curve, KeyType, PUBLIC_KEY_LENGTH, derive_x25519_public_from_secret};
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-
-use crate::{Error, Result, bad};
 
 /// Key derivation schemes.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -66,7 +64,7 @@ impl FromStr for DerivationScheme {
             "protocolContext" => Ok(Self::ProtocolContext),
             "protocolPath" => Ok(Self::ProtocolPath),
             "schemas" => Ok(Self::Schemas),
-            _ => Err(bad!("invalid derivation scheme")),
+            _ => Err(anyhow!("invalid derivation scheme")),
         }
     }
 }
@@ -126,7 +124,7 @@ pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<
             // validate initial part of descendant path matches ancestor
             for (i, segment) in ancestor_path.iter().enumerate() {
                 if segment != &descendant_path[i] {
-                    return Err(bad!(
+                    return Err(anyhow!(
                         "ancestor and descendant key derivation segments do not match"
                     ));
                 }
@@ -141,7 +139,7 @@ pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<
 
     let ancestor_secret = Base64UrlUnpadded::decode_vec(&ancestor.derived_private_key.d)?;
     let secret_bytes: [u8; PUBLIC_KEY_LENGTH] =
-        ancestor_secret.try_into().map_err(|_| bad!("invalid secret key"))?;
+        ancestor_secret.try_into().map_err(|_| anyhow!("invalid secret key"))?;
 
     // derive descendant private/public keypair
     let derived_secret = derive_key(secret_bytes, sub_path)?;
@@ -186,14 +184,14 @@ pub fn derive_key(
 
     for segment in path {
         if segment.is_empty() {
-            return Err(bad!("invalid key derivation path"));
+            return Err(anyhow!("invalid key derivation path"));
         }
         let mut okm = [0u8; PUBLIC_KEY_LENGTH];
         // let salt = hex!(owner); // TODO: use owner as salt
 
         Hkdf::<Sha256>::new(None, &derived_key)
             .expand(segment.as_bytes(), &mut okm)
-            .map_err(|e| anyhow!("issue expanding hkdf key: {e}"))?;
+            .context("expanding hkdf key")?;
         derived_key = okm;
     }
 

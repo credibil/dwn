@@ -6,7 +6,7 @@
 use std::str::FromStr;
 
 use ::cid::Cid;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use credibil_identity::SignerExt;
 use credibil_se::Signer;
@@ -201,7 +201,7 @@ impl<S: SignerExt> ReadBuilder<MessageCid, Signed<'_, S>> {
     pub async fn build(self) -> Result<Read> {
         // verify CID
         let message_cid = self.message_cid.0;
-        let _ = Cid::from_str(&message_cid).map_err(|e| anyhow!("invalid CID: {e}"))?;
+        let _ = Cid::from_str(&message_cid).context("parsing CID")?;
 
         let descriptor = ReadDescriptor {
             base: Descriptor {

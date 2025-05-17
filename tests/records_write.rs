@@ -2,11 +2,6 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/kms/mod.rs"]
-mod kms;
-#[path = "../examples/provider/mod.rs"]
-mod provider;
-
 use std::io::Cursor;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
@@ -23,62 +18,34 @@ use credibil_dwn::hd_key::{DerivationScheme, PrivateKeyJwk};
 use credibil_dwn::interfaces::records::{QueryReply, ReadReply};
 use credibil_dwn::provider::EventLog;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
-use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, endpoint, store};
+use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, store};
 use credibil_identity::{Key, SignerExt};
 use credibil_jose::{JwsBuilder, PublicKeyJwk};
 use credibil_se::{Curve, KeyType};
-use kms::Keyring;
-use provider::ProviderImpl;
 use rand::RngCore;
+use test_utils::{Identity, ProviderImpl};
 use tokio::sync::OnceCell;
 
-static ALICE: OnceCell<Keyring> = OnceCell::const_new();
-static BOB: OnceCell<Keyring> = OnceCell::const_new();
-static CAROL: OnceCell<Keyring> = OnceCell::const_new();
-static ISSUER: OnceCell<Keyring> = OnceCell::const_new();
-static PFI: OnceCell<Keyring> = OnceCell::const_new();
+static ALICE: OnceCell<Identity> = OnceCell::const_new();
+static BOB: OnceCell<Identity> = OnceCell::const_new();
+static CAROL: OnceCell<Identity> = OnceCell::const_new();
+static ISSUER: OnceCell<Identity> = OnceCell::const_new();
+static PFI: OnceCell<Identity> = OnceCell::const_new();
 
-async fn alice() -> &'static Keyring {
-    ALICE
-        .get_or_init(|| async {
-            let keyring = Keyring::new("records_write_alice").await.expect("create keyring");
-            keyring
-        })
-        .await
+async fn alice() -> &'static Identity {
+    ALICE.get_or_init(|| async { Identity::new("records_write_alice").await }).await
 }
-
-async fn bob() -> &'static Keyring {
-    BOB.get_or_init(|| async {
-        let keyring = Keyring::new("records_write_bob").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn bob() -> &'static Identity {
+    BOB.get_or_init(|| async { Identity::new("records_write_bob").await }).await
 }
-
-async fn carol() -> &'static Keyring {
-    CAROL
-        .get_or_init(|| async {
-            let keyring = Keyring::new("records_write_carol").await.expect("create keyring");
-            keyring
-        })
-        .await
+async fn carol() -> &'static Identity {
+    CAROL.get_or_init(|| async { Identity::new("records_write_carol").await }).await
 }
-
-async fn issuer() -> &'static Keyring {
-    ISSUER
-        .get_or_init(|| async {
-            let keyring = Keyring::new("records_write_issuer").await.expect("create keyring");
-            keyring
-        })
-        .await
+async fn issuer() -> &'static Identity {
+    ISSUER.get_or_init(|| async { Identity::new("records_write_issuer").await }).await
 }
-
-async fn pfi() -> &'static Keyring {
-    PFI.get_or_init(|| async {
-        let keyring = Keyring::new("records_write_pfi").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn pfi() -> &'static Identity {
+    PFI.get_or_init(|| async { Identity::new("records_write_pfi").await }).await
 }
 
 // // Should handle pre-processing errors
@@ -103,8 +70,8 @@ async fn update_older() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the record was created.
@@ -115,11 +82,10 @@ async fn update_older() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(data)));
@@ -136,8 +102,8 @@ async fn update_older() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the updated record overwrote the original.
@@ -148,11 +114,10 @@ async fn update_older() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(data)));
@@ -160,7 +125,8 @@ async fn update_older() {
     // --------------------------------------------------
     // Attempt to overwrite the latest record with an older version.
     // --------------------------------------------------
-    let Err(Error::Conflict(e)) = endpoint::handle(&alice.did().await.expect("did"), initial, &provider).await else {
+    let Err(Error::Conflict(e)) = credibil_dwn::handle(alice.did(), initial, &provider).await
+    else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "a more recent update exists");
@@ -174,11 +140,10 @@ async fn update_older() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(data)));
@@ -201,8 +166,8 @@ async fn update_smaller_cid() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Create 2 records with the same `message_timestamp`.
@@ -233,9 +198,10 @@ async fn update_smaller_cid() {
     // --------------------------------------------------
     // Update the initial record with the first update (ordered by CID size).
     // --------------------------------------------------
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), sorted[0].clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), sorted[0].clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // verify update
     let query = QueryBuilder::new()
@@ -244,11 +210,10 @@ async fn update_smaller_cid() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_cid, sorted[0].descriptor.data_cid);
@@ -256,9 +221,10 @@ async fn update_smaller_cid() {
     // --------------------------------------------------
     // Apply the second update (ordered by CID size).
     // --------------------------------------------------
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), sorted[1].clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), sorted[1].clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // verify update
     let query = QueryBuilder::new()
@@ -267,11 +233,10 @@ async fn update_smaller_cid() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_cid, sorted[1].descriptor.data_cid);
@@ -280,7 +245,7 @@ async fn update_smaller_cid() {
     // Attempt to update using the first update (smaller CID) update and fail.
     // --------------------------------------------------
     let Err(Error::Conflict(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), sorted[0].clone(), &provider).await
+        credibil_dwn::handle(alice.did(), sorted[0].clone(), &provider).await
     else {
         panic!("should be Conflict");
     };
@@ -303,8 +268,8 @@ async fn update_flat_space() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Update the record with a new data format.
@@ -317,8 +282,8 @@ async fn update_flat_space() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the data format has been updated.
@@ -329,11 +294,10 @@ async fn update_flat_space() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_format, update.descriptor.data_format);
@@ -355,8 +319,8 @@ async fn immutable_unchanged() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify `date_created` cannot be updated.
@@ -370,7 +334,8 @@ async fn immutable_unchanged() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await
+    let Err(Error::BadRequest(e)) =
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -386,7 +351,8 @@ async fn immutable_unchanged() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await
+    let Err(Error::BadRequest(e)) =
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -410,8 +376,8 @@ async fn inherit_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Update the record, providing data to calculate CID and size, but without
@@ -420,8 +386,8 @@ async fn inherit_data() {
     let update =
         WriteBuilder::from(initial.clone()).sign(alice).build().await.expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the initial write and it's data are still available.
@@ -432,11 +398,10 @@ async fn inherit_data() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
@@ -453,8 +418,8 @@ async fn initial_no_data() {
     // --------------------------------------------------
     let initial = WriteBuilder::new().sign(alice).build().await.expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Verify the record cannot be queried for.
@@ -465,9 +430,9 @@ async fn initial_no_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.is_none());
+    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.entries.is_none());
 
     // --------------------------------------------------
     // Update the record, adding data.
@@ -479,8 +444,8 @@ async fn initial_no_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the data format has been updated.
@@ -491,11 +456,10 @@ async fn initial_no_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -520,8 +484,8 @@ async fn update_no_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Update the record, providing data to calculate CID and size, but without
@@ -533,7 +497,8 @@ async fn update_no_data() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await
+    let Err(Error::BadRequest(e)) =
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -548,11 +513,10 @@ async fn update_no_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
@@ -569,7 +533,7 @@ async fn retain_large_data() {
     // Alice writes a record with a lot of data.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let initial = WriteBuilder::new()
@@ -579,8 +543,8 @@ async fn retain_large_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Update the record but not data.
@@ -592,8 +556,8 @@ async fn retain_large_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the initial write's data is still available.
@@ -606,11 +570,10 @@ async fn retain_large_data() {
         .expect("should create read");
 
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), read.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let read_reply: ReadReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let read_reply: ReadReply = reply.body;
     assert!(read_reply.entry.records_write.is_some());
     let read_stream = read_reply.entry.data.expect("should have data");
     assert_eq!(read_stream.into_inner(), data.to_vec());
@@ -627,7 +590,7 @@ async fn retain_small_data() {
     // Alice writes a record with a lot of data.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let initial = WriteBuilder::new()
@@ -637,8 +600,8 @@ async fn retain_small_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Update the record but not data.
@@ -650,8 +613,8 @@ async fn retain_small_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the initial write's data is still available.
@@ -664,11 +627,10 @@ async fn retain_small_data() {
         .expect("should create read");
 
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), read.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let read_reply: ReadReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let read_reply: ReadReply = reply.body;
     assert!(read_reply.entry.records_write.is_some());
     let read_stream = read_reply.entry.data.expect("should have data");
     assert_eq!(read_stream.into_inner(), data.to_vec());
@@ -685,7 +647,7 @@ async fn large_data_size_larger() {
     // Writes a record with a lot of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -697,10 +659,11 @@ async fn large_data_size_larger() {
 
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
-    write.record_id = write.entry_id(&alice.did().await.expect("did")).expect("should create record ID");
+    write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -717,7 +680,7 @@ async fn small_data_size_larger() {
     // Writes a record with a small amount of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -729,10 +692,11 @@ async fn small_data_size_larger() {
 
     // alter the data size
     write.descriptor.data_size = MAX_ENCODED_SIZE + 100;
-    write.record_id = write.entry_id(&alice.did().await.expect("did")).expect("should create record ID");
+    write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -749,7 +713,7 @@ async fn large_data_size_smaller() {
     // Writes a record with a lot of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -761,10 +725,11 @@ async fn large_data_size_smaller() {
 
     // alter the data size
     write.descriptor.data_size = 1;
-    write.record_id = write.entry_id(&alice.did().await.expect("did")).expect("should create record ID");
+    write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -781,7 +746,7 @@ async fn small_data_size_smaller() {
     // Writes a record with a small amount of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -793,10 +758,11 @@ async fn small_data_size_smaller() {
 
     // alter the data size and recalculate the `record_id` and signature
     write.descriptor.data_size = 1;
-    write.record_id = write.entry_id(&alice.did().await.expect("did")).expect("should create record ID");
+    write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -813,7 +779,7 @@ async fn large_data_cid_larger() {
     // Writes a record with a lot of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -824,11 +790,12 @@ async fn large_data_cid_larger() {
         .expect("should create write");
 
     // alter the data CID
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -845,7 +812,7 @@ async fn small_data_cid_larger() {
     // Writes a record with a small amount of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -857,11 +824,12 @@ async fn small_data_cid_larger() {
 
     // alter the data CID
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -878,7 +846,7 @@ async fn large_data_cid_smaller() {
     // Writes a record with a lot of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -890,11 +858,12 @@ async fn large_data_cid_smaller() {
 
     // alter the data CID
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -911,7 +880,7 @@ async fn small_data_cid_smaller() {
     // Writes a record with a small amount of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -923,11 +892,12 @@ async fn small_data_cid_smaller() {
 
     // alter the data CID
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -945,7 +915,7 @@ async fn alter_data_cid_larger() {
     // --------------------------------------------------
     // record 1
     let mut data_1 = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data_1);
+    rand::rng().fill_bytes(&mut data_1);
 
     let write_1 = WriteBuilder::new()
         .data(Data::from(data_1.to_vec()))
@@ -954,12 +924,12 @@ async fn alter_data_cid_larger() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), write_1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // record 2
     let mut data_2 = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data_2);
+    rand::rng().fill_bytes(&mut data_2);
 
     let write_2 = WriteBuilder::new()
         .data(Data::from(data_2.to_vec()))
@@ -968,8 +938,8 @@ async fn alter_data_cid_larger() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), write_2.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Attempt to update record 2 to reference record 1's data.
@@ -981,7 +951,8 @@ async fn alter_data_cid_larger() {
     update.descriptor.data_cid = write_1.descriptor.data_cid;
     update.descriptor.data_size = write_1.descriptor.data_size;
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), update, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "data CID does not match descriptor `data_cid`");
@@ -995,11 +966,10 @@ async fn alter_data_cid_larger() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let read_reply: ReadReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let read_reply: ReadReply = reply.body;
     let data = read_reply.entry.data.expect("should have data");
     assert_eq!(data.into_inner(), data_2.to_vec());
 }
@@ -1015,7 +985,7 @@ async fn alter_data_cid_smaller() {
     // --------------------------------------------------
     // record 1
     let mut data_1 = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data_1);
+    rand::rng().fill_bytes(&mut data_1);
 
     let write_1 = WriteBuilder::new()
         .data(Data::from(data_1.to_vec()))
@@ -1024,12 +994,12 @@ async fn alter_data_cid_smaller() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), write_1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), write_1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // record 2
     let mut data_2 = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data_2);
+    rand::rng().fill_bytes(&mut data_2);
 
     let write_2 = WriteBuilder::new()
         .data(Data::from(data_2.to_vec()))
@@ -1038,8 +1008,8 @@ async fn alter_data_cid_smaller() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), write_2.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), write_2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Attempt to update record 2 to reference record 1's data.
@@ -1051,7 +1021,8 @@ async fn alter_data_cid_smaller() {
     update.descriptor.data_cid = write_1.descriptor.data_cid;
     update.descriptor.data_size = write_1.descriptor.data_size;
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), update, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "data CID does not match descriptor `data_cid`");
@@ -1065,11 +1036,10 @@ async fn alter_data_cid_smaller() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let read_reply: ReadReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let read_reply: ReadReply = reply.body;
     let data = read_reply.entry.data.expect("should have data");
     assert_eq!(data.into_inner(), data_2.to_vec());
 }
@@ -1090,8 +1060,8 @@ async fn update_published_no_date() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify `date_created` cannot be updated.
@@ -1103,8 +1073,8 @@ async fn update_published_no_date() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the record's `published` state has been updated.
@@ -1113,11 +1083,10 @@ async fn update_published_no_date() {
         .filter(RecordsFilter::new().record_id(&initial.record_id))
         .build()
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -1143,8 +1112,8 @@ async fn update_published() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify `date_created` cannot be updated.
@@ -1156,8 +1125,8 @@ async fn update_published() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the record's `published` state has been updated.
@@ -1168,11 +1137,10 @@ async fn update_published() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.published, Some(true));
@@ -1195,7 +1163,8 @@ async fn no_initial_write() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), initial, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), initial, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "initial write not found");
@@ -1218,7 +1187,8 @@ async fn create_date_mismatch() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), initial, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), initial, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "`message_timestamp` and `date_created` do not match");
@@ -1245,7 +1215,8 @@ async fn invalid_context_id() {
     initial.context_id =
         Some("bafkreihs5gnovjoqueffglvevvohpgts3aj5ykgmlqm7quuotujxtxtp7f".to_string());
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), initial, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), initial, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "invalid context ID");
@@ -1267,8 +1238,8 @@ async fn log_initial_write() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify an event was logged.
@@ -1281,7 +1252,7 @@ async fn log_initial_write() {
         .expect("should create query");
 
     let query = store::Query::from(query);
-    let (events, _) = EventLog::query(&provider, &alice.did().await.expect("did"), &query).await.expect("should fetch");
+    let (events, _) = EventLog::query(&provider, alice.did(), &query).await.expect("should fetch");
     assert_eq!(events.len(), 1);
 }
 
@@ -1302,8 +1273,8 @@ async fn retain_two_writes() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let update1 = WriteBuilder::from(initial.clone())
         .published(true)
@@ -1312,8 +1283,8 @@ async fn retain_two_writes() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let update2 = WriteBuilder::from(initial.clone())
         .date_published(Utc::now())
@@ -1322,8 +1293,8 @@ async fn retain_two_writes() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update2.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify only the initial write and latest update remain.
@@ -1336,11 +1307,11 @@ async fn retain_two_writes() {
         .expect("should create query");
 
     let query = store::Query::from(query);
-    let (events, _) = EventLog::query(&provider, &alice.did().await.expect("did"), &query).await.expect("should fetch");
+    let (events, _) = EventLog::query(&provider, alice.did(), &query).await.expect("should fetch");
     assert_eq!(events.len(), 2);
 
-    assert_eq!(events[0].cid(), initial.cid());
-    assert_eq!(events[1].cid(), update2.cid());
+    assert_eq!(events[0].cid().unwrap(), initial.cid().unwrap());
+    assert_eq!(events[1].cid().unwrap(), update2.cid().unwrap());
 }
 
 // Should allow anyone to create a record using the "anyone create" rule.
@@ -1361,10 +1332,10 @@ async fn anyone_create() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob writes an email.
@@ -1383,8 +1354,8 @@ async fn anyone_create() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), email.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), email.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice queries for the email from BOB.
@@ -1395,11 +1366,10 @@ async fn anyone_create() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -1426,10 +1396,10 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates a document.
@@ -1445,9 +1415,10 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_doc.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_doc.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob updates Alice's document.
@@ -1458,8 +1429,9 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), alice_doc, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), alice_doc, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to create a new document.
@@ -1475,7 +1447,8 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), bob_doc, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), bob_doc, &provider).await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -1499,10 +1472,10 @@ async fn ancestor_create() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a credential application to her web node to simulate a
@@ -1510,7 +1483,7 @@ async fn ancestor_create() {
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(&issuer.did().await.expect("did"))
+        .recipient(issuer.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication",
@@ -1522,16 +1495,17 @@ async fn ancestor_create() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), application.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), application.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // The VC Issuer responds to Alice's request.
     // --------------------------------------------------
     let response = WriteBuilder::new()
         .data(Data::from(b"credential response data".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication/credentialResponse",
@@ -1544,8 +1518,8 @@ async fn ancestor_create() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), response.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), response.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify VC Issuer's response was created.
@@ -1556,11 +1530,10 @@ async fn ancestor_create() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -1587,17 +1560,17 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates a post with Bob as the recipient.
     // --------------------------------------------------
     let alice_post = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://recipient-can-protocol.xyz",
             protocol_path: "post",
@@ -1607,16 +1580,17 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_post.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_post.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates a post tag.
     // --------------------------------------------------
     let alice_tag = WriteBuilder::new()
         .data(Data::from(b"tag my post".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://recipient-can-protocol.xyz",
             protocol_path: "post/tag",
@@ -1626,9 +1600,10 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_tag.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_tag.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob updates Alice's post.
@@ -1640,15 +1615,15 @@ async fn ancestor_update() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_tag.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_tag.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to create a new post.
     // --------------------------------------------------
     let bob_tag = WriteBuilder::new()
         .data(Data::from(b"Bob's post".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://recipient-can-protocol.xyz",
             protocol_path: "post/tag",
@@ -1658,7 +1633,8 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), bob_tag.clone(), &provider).await
+    let Err(Error::Forbidden(e)) =
+        credibil_dwn::handle(alice.did(), bob_tag.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -1684,17 +1660,17 @@ async fn direct_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates a post with Bob as the recipient.
     // --------------------------------------------------
     let alice_post = WriteBuilder::new()
         .data(Data::from(b"Hello Bob".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://recipient-can-protocol.xyz",
             protocol_path: "post",
@@ -1704,9 +1680,10 @@ async fn direct_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_post.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_post.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Carol attempts (but fails) to update Alice's post.
@@ -1718,7 +1695,7 @@ async fn direct_update() {
         .await
         .expect("should create write");
     let Err(Error::Forbidden(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), carol_update.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), carol_update.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -1733,9 +1710,10 @@ async fn direct_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_update.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow author to block non-authors using an ancestor author rule.
@@ -1757,10 +1735,10 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&bob.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(bob.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes an image to Bob's web node.
@@ -1778,15 +1756,16 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&bob.did().await.expect("did"), alice_image.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(bob.did(), alice_image.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Carol attempts (but fails) to add a caption to Alice's image.
     // --------------------------------------------------
     let carol_caption = WriteBuilder::new()
-        .data(Data::from(b"bad vibes! >:(".to_vec()))
+        .data(Data::from(b"bad_request vibes! >:(".to_vec()))
         .protocol(ProtocolBuilder {
             protocol: "http://social-media.xyz",
             protocol_path: "image/caption",
@@ -1799,7 +1778,7 @@ async fn block_non_author() {
         .await
         .expect("should create write");
     let Err(Error::Forbidden(e)) =
-        endpoint::handle(&bob.did().await.expect("did"), carol_caption.clone(), &provider).await
+        credibil_dwn::handle(bob.did(), carol_caption.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -1821,9 +1800,10 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&bob.did().await.expect("did"), alice_caption.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(bob.did(), alice_caption.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify Alice was able to add her caption.
@@ -1834,11 +1814,10 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&bob.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(bob.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -1865,17 +1844,17 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob creates a post.
     // --------------------------------------------------
     let bob_post = WriteBuilder::new()
         .data(Data::from(b"Bob's post".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://author-can-protocol.xyz",
             protocol_path: "post",
@@ -1886,15 +1865,15 @@ async fn ancestor_author_update() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_post.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_post.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice comments on Bob's post
     // --------------------------------------------------
     let alice_comment = WriteBuilder::new()
         .data(Data::from(b"Alice's comment".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://author-can-protocol.xyz",
             protocol_path: "post/comment",
@@ -1904,10 +1883,10 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), alice_comment.clone(), &provider)
+    let reply = credibil_dwn::handle(alice.did(), alice_comment.clone(), &provider)
         .await
         .expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob updates Alice's comment
@@ -1918,16 +1897,17 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_update.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to create a new comment on his post.
     // --------------------------------------------------
     let bob_post = WriteBuilder::new()
         .data(Data::from(b"Bob's comment".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://author-can-protocol.xyz",
             protocol_path: "post/comment",
@@ -1938,7 +1918,7 @@ async fn ancestor_author_update() {
         .await
         .expect("should create write");
     let Err(Error::Forbidden(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), bob_post.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), bob_post.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -1963,17 +1943,17 @@ async fn update_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob as a friend.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is my friend".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "friend",
@@ -1983,9 +1963,10 @@ async fn update_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_friend.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_friend.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice updates Bob's friend role record.
@@ -1997,8 +1978,8 @@ async fn update_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should reject a role record when no recipient is defined.
@@ -2018,10 +1999,10 @@ async fn no_role_recipient() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to add a role record with no recipient.
@@ -2038,7 +2019,7 @@ async fn no_role_recipient() {
         .await
         .expect("should create write");
     let Err(Error::BadRequest(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), bob_friend.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), bob_friend.clone(), &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -2064,17 +2045,17 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob as a friend.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is my friend".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "friend",
@@ -2084,9 +2065,10 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_friend.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_friend.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice removes Bob as a friend.
@@ -2097,15 +2079,15 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should create delete");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), delete, &provider).await.expect("should delete");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should delete");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob as a friend again.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is my friend again".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "friend",
@@ -2115,9 +2097,10 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_friend.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_friend.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow records to be created and updated using a context role.
@@ -2138,17 +2121,17 @@ async fn context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts a new thread.
     // --------------------------------------------------
     let thread = WriteBuilder::new()
         .data(Data::from(b"My new thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2159,15 +2142,15 @@ async fn context_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2177,9 +2160,10 @@ async fn context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice updates Bob's role.
@@ -2190,9 +2174,10 @@ async fn context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update_bob.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), update_bob.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow the same role to be created under different contexts.
@@ -2213,17 +2198,17 @@ async fn context_roles() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts a new thread.
     // --------------------------------------------------
     let thread1 = WriteBuilder::new()
         .data(Data::from(b"My new thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2234,15 +2219,15 @@ async fn context_roles() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread1 = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2252,16 +2237,17 @@ async fn context_roles() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread1.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts another thread.
     // --------------------------------------------------
     let thread2 = WriteBuilder::new()
         .data(Data::from(b"My new thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2272,15 +2258,15 @@ async fn context_roles() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread2.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the second thread.
     // --------------------------------------------------
     let bob_thread2 = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2290,9 +2276,10 @@ async fn context_roles() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread2.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread2.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should reject attempts to create a duplicate role under same context.
@@ -2313,17 +2300,17 @@ async fn duplicate_context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts a new thread.
     // --------------------------------------------------
     let thread = WriteBuilder::new()
         .data(Data::from(b"My new thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2334,15 +2321,15 @@ async fn duplicate_context_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2352,16 +2339,17 @@ async fn duplicate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to add Bob to the thread again.
     // --------------------------------------------------
     let bob_thread2 = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2372,7 +2360,7 @@ async fn duplicate_context_role() {
         .await
         .expect("should create write");
     let Err(Error::BadRequest(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread2.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), bob_thread2.clone(), &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -2398,17 +2386,17 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts a new thread.
     // --------------------------------------------------
     let thread = WriteBuilder::new()
         .data(Data::from(b"My new thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2419,15 +2407,15 @@ async fn recreate_context_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2437,9 +2425,10 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice removes Bob from the thread.
@@ -2450,15 +2439,15 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should create delete");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), delete, &provider).await.expect("should delete");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should delete");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice re-adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread2 = WriteBuilder::new()
         .data(Data::from(b"Bob can rejoin my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2468,9 +2457,10 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread2.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread2.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow a creating records using role-based permissions.
@@ -2491,17 +2481,17 @@ async fn role_can_create() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob as a friend.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is my friend".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "friend",
@@ -2511,16 +2501,17 @@ async fn role_can_create() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_friend.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_friend.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob write a chat record.
     // --------------------------------------------------
     let bob_chat = WriteBuilder::new()
         .data(Data::from(b"Bob is Alice's friend".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "chat",
@@ -2532,8 +2523,8 @@ async fn role_can_create() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_chat.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow a updating records using role-based permissions.
@@ -2554,17 +2545,17 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob as a friend.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is my friend".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "admin",
@@ -2574,16 +2565,17 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_friend.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_friend.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates a chat record.
     // --------------------------------------------------
     let alice_chat = WriteBuilder::new()
         .data(Data::from(b"Bob is Alice's friend".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "chat",
@@ -2593,9 +2585,10 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_chat.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_chat.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob uses his 'admin' role to update the chat thread.
@@ -2607,9 +2600,10 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_update.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should reject record creation if the recipient has not been assigned the
@@ -2631,17 +2625,17 @@ async fn invalid_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob as a friend.
     // --------------------------------------------------
     let bob_friend = WriteBuilder::new()
         .data(Data::from(b"Bob is my friend".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "admin",
@@ -2651,16 +2645,17 @@ async fn invalid_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_friend.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_friend.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates a chat record.
     // --------------------------------------------------
     let alice_chat = WriteBuilder::new()
         .data(Data::from(b"Bob is Alice's friend".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "chat",
@@ -2670,16 +2665,17 @@ async fn invalid_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_chat.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_chat.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to use the 'chat' role because it does not exist.
     // --------------------------------------------------
     let bob_chat = WriteBuilder::new()
         .data(Data::from(b"I'm more than a friend".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "chat",
@@ -2691,7 +2687,7 @@ async fn invalid_protocol_role() {
         .await
         .expect("should create write");
     let Err(Error::Forbidden(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), bob_chat.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), bob_chat.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -2717,10 +2713,10 @@ async fn unassigned_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to use the 'friend' role because it has not
@@ -2728,7 +2724,7 @@ async fn unassigned_protocol_role() {
     // --------------------------------------------------
     let bob_chat = WriteBuilder::new()
         .data(Data::from(b"I'm more than a friend".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://friend-role.xyz",
             protocol_path: "chat",
@@ -2740,7 +2736,7 @@ async fn unassigned_protocol_role() {
         .await
         .expect("should create write");
     let Err(Error::Forbidden(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), bob_chat.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), bob_chat.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -2765,17 +2761,17 @@ async fn create_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts a new thread.
     // --------------------------------------------------
     let thread = WriteBuilder::new()
         .data(Data::from(b"My new thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2786,15 +2782,15 @@ async fn create_protocol_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2804,16 +2800,17 @@ async fn create_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob write a chat record.
     // --------------------------------------------------
     let bob_chat = WriteBuilder::new()
         .data(Data::from(b"Bob is Alice's friend".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/chat",
@@ -2825,8 +2822,8 @@ async fn create_protocol_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_chat.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow record updates for authorized context role.
@@ -2847,17 +2844,17 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts a new thread.
     // --------------------------------------------------
     let thread = WriteBuilder::new()
         .data(Data::from(b"My new thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2868,15 +2865,15 @@ async fn update_protocol_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/admin",
@@ -2886,9 +2883,10 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice write a chat record.
@@ -2904,9 +2902,10 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_chat.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_chat.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob write a chat record.
@@ -2919,8 +2918,8 @@ async fn update_protocol_role() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_chat.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_chat.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should reject creation of records when no access has been granted to the
@@ -2942,17 +2941,17 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice starts a new thread.
     // --------------------------------------------------
     let thread1 = WriteBuilder::new()
         .data(Data::from(b"Thread one".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -2963,15 +2962,15 @@ async fn forbidden_role_path() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice adds Bob to the thread.
     // --------------------------------------------------
     let bob_thread = WriteBuilder::new()
         .data(Data::from(b"Bob can join my thread".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread/participant",
@@ -2981,16 +2980,17 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_thread.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_thread.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates a second thread.
     // --------------------------------------------------
     let thread2 = WriteBuilder::new()
         .data(Data::from(b"Thread two".to_vec()))
-        .recipient(&bob.did().await.expect("did"))
+        .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -3001,8 +3001,8 @@ async fn forbidden_role_path() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), thread2.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), thread2.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to write a chat record to the second thread.
@@ -3019,7 +3019,7 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), chat.clone(), &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), chat.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3044,17 +3044,17 @@ async fn invalid_role_path() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to use a fake protocol role.
     // --------------------------------------------------
     let chat = WriteBuilder::new()
         .data(Data::from(b"Hello Alice".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://thread-role.xyz",
             protocol_path: "thread",
@@ -3065,7 +3065,7 @@ async fn invalid_role_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), chat.clone(), &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), chat.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3090,10 +3090,10 @@ async fn initial_author_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob writes a message.
@@ -3112,8 +3112,8 @@ async fn initial_author_update() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_msg.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_msg.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the record was created.
@@ -3125,11 +3125,10 @@ async fn initial_author_update() {
         .await
         .expect("should create read");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), query.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -3147,17 +3146,16 @@ async fn initial_author_update() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the update.
     // --------------------------------------------------
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -3185,10 +3183,10 @@ async fn no_author_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob writes a message.
@@ -3207,8 +3205,8 @@ async fn no_author_update() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_msg.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_msg.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the record was created.
@@ -3220,11 +3218,10 @@ async fn no_author_update() {
         .await
         .expect("should create read");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), query.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -3249,7 +3246,8 @@ async fn no_author_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await
+    let Err(Error::Forbidden(e)) =
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3275,10 +3273,10 @@ async fn no_recipient_update() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob writes a message.
@@ -3297,8 +3295,8 @@ async fn no_recipient_update() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_msg.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), bob_msg.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the record was created.
@@ -3310,11 +3308,10 @@ async fn no_recipient_update() {
         .await
         .expect("should create read");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), query.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(
@@ -3335,12 +3332,13 @@ async fn no_recipient_update() {
         })
         .schema("http://message.me")
         .data_format("text/plain")
-        .recipient(&carol.did().await.expect("did"))
+        .recipient(carol.did())
         .sign(bob)
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await
+    let Err(Error::BadRequest(e)) =
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3353,8 +3351,7 @@ async fn unauthorized_create() {
     let provider = ProviderImpl::new().await.expect("should create provider");
     let alice = alice().await;
     let issuer = issuer().await;
-    let fake =
-        Keyring::new("records_write_unauthorized_create_fake").await.expect("create keyring");
+    let fake = Identity::new("records_write_unauthorized_create_fake").await;
 
     // --------------------------------------------------
     // Alice configures a credential issuance protocol.
@@ -3367,10 +3364,10 @@ async fn unauthorized_create() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a credential application to her web node to simulate a
@@ -3378,7 +3375,7 @@ async fn unauthorized_create() {
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(&issuer.did().await.expect("did"))
+        .recipient(issuer.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication",
@@ -3390,16 +3387,17 @@ async fn unauthorized_create() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), application.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), application.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // A fake VC Issuer responds to Alice's request.
     // --------------------------------------------------
     let response = WriteBuilder::new()
         .data(Data::from(b"credential response data".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication/credentialResponse",
@@ -3411,7 +3409,8 @@ async fn unauthorized_create() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), response, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), response, &provider).await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -3430,7 +3429,7 @@ async fn no_protocol_definition() {
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(&issuer.did().await.expect("did"))
+        .recipient(issuer.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication",
@@ -3442,7 +3441,7 @@ async fn no_protocol_definition() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), application, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), application, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3467,17 +3466,17 @@ async fn invalid_schema() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a credential application using an invalid schema.
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(&issuer.did().await.expect("did"))
+        .recipient(issuer.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication",
@@ -3489,7 +3488,7 @@ async fn invalid_schema() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), application, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), application, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3514,17 +3513,17 @@ async fn invalid_protocol_path() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a credential application using an invalid protocol path.
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(&issuer.did().await.expect("did"))
+        .recipient(issuer.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "invalidType",
@@ -3534,7 +3533,7 @@ async fn invalid_protocol_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), application, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), application, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3560,17 +3559,17 @@ async fn incorrect_protocol_path() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a credential application using an invalid protocol path.
     // --------------------------------------------------
     let application = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(&issuer.did().await.expect("did"))
+        .recipient(issuer.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication/credentialResponse",
@@ -3582,7 +3581,7 @@ async fn incorrect_protocol_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), application, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), application, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3606,10 +3605,10 @@ async fn invalid_data_format() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes an image to her web node.
@@ -3628,8 +3627,8 @@ async fn invalid_data_format() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), image.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), image.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to update the image to an invalid format.
@@ -3640,7 +3639,8 @@ async fn invalid_data_format() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), update, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), update, &provider).await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid data format");
@@ -3655,8 +3655,8 @@ async fn invalid_data_format() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the data format was updated.
@@ -3669,11 +3669,10 @@ async fn invalid_data_format() {
         .expect("should create read");
 
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), read.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let read_reply: ReadReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let read_reply: ReadReply = reply.body;
     assert!(read_reply.entry.records_write.is_some());
     let write = read_reply.entry.records_write.expect("should exist");
     assert_eq!(write.descriptor.data_format, "image/gif");
@@ -3697,10 +3696,10 @@ async fn any_data_format() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes an image to her web node.
@@ -3719,8 +3718,8 @@ async fn any_data_format() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), image.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), image.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice updates the image to another format.
@@ -3732,8 +3731,8 @@ async fn any_data_format() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the data format was updated.
@@ -3746,11 +3745,10 @@ async fn any_data_format() {
         .expect("should create read");
 
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), read.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let read_reply: ReadReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let read_reply: ReadReply = reply.body;
     assert!(read_reply.entry.records_write.is_some());
     let write = read_reply.entry.records_write.expect("should exist");
     assert_eq!(write.descriptor.data_format, "any-new-data-format");
@@ -3774,10 +3772,10 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to write a credential response with the
@@ -3795,7 +3793,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), response1, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), response1, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3806,7 +3804,7 @@ async fn schema_hierarchy() {
     // --------------------------------------------------
     let application1 = WriteBuilder::new()
         .data(Data::from(b"credential application data".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication",
@@ -3817,10 +3815,10 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), application1.clone(), &provider)
+    let reply = credibil_dwn::handle(alice.did(), application1.clone(), &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to write a credential application below her
@@ -3838,7 +3836,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), application2, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), application2, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3849,7 +3847,7 @@ async fn schema_hierarchy() {
     // --------------------------------------------------
     let response2 = WriteBuilder::new()
         .data(Data::from(b"credential response data".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://credential-issuance-protocol.xyz",
             protocol_path: "credentialApplication/credentialResponse",
@@ -3860,10 +3858,10 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), response2.clone(), &provider)
+    let reply = credibil_dwn::handle(alice.did(), response2.clone(), &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to write a credential application below the
@@ -3881,7 +3879,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), application3, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), application3, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3907,10 +3905,10 @@ async fn owner_no_rule() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice can write to her web node.
@@ -3928,16 +3926,17 @@ async fn owner_no_rule() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to write to ALice's web node.
     // --------------------------------------------------
     let bob_write = WriteBuilder::new()
         .data(Data::from(b"some data".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://private-protocol.xyz",
             protocol_path: "privateNote",
@@ -3950,7 +3949,7 @@ async fn owner_no_rule() {
         .await
         .expect("should create write");
     let Err(Error::Forbidden(e)) =
-        endpoint::handle(&alice.did().await.expect("did"), bob_write.clone(), &provider).await
+        credibil_dwn::handle(alice.did(), bob_write.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -3975,10 +3974,10 @@ async fn deep_nesting() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&pfi.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(pfi.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Setup:
@@ -3988,7 +3987,7 @@ async fn deep_nesting() {
     // --------------------------------------------------
     let alice_ask = WriteBuilder::new()
         .data(Data::from(b"some request".to_vec()))
-        .recipient(&pfi.did().await.expect("did"))
+        .recipient(pfi.did())
         .protocol(ProtocolBuilder {
             protocol: "http://dex.xyz",
             protocol_path: "ask",
@@ -4000,13 +3999,13 @@ async fn deep_nesting() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&pfi.did().await.expect("did"), alice_ask.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(pfi.did(), alice_ask.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // offer response
     let pfi_offer = WriteBuilder::new()
         .data(Data::from(b"some offer".to_vec()))
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://dex.xyz",
             protocol_path: "ask/offer",
@@ -4018,8 +4017,8 @@ async fn deep_nesting() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&pfi.did().await.expect("did"), pfi_offer.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(pfi.did(), pfi_offer.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // The test:
@@ -4027,7 +4026,7 @@ async fn deep_nesting() {
     // --------------------------------------------------
     let fulfillment = WriteBuilder::new()
         .data(Data::from(b"some offer".to_vec()))
-        .recipient(&pfi.did().await.expect("did"))
+        .recipient(pfi.did())
         .protocol(ProtocolBuilder {
             protocol: "http://dex.xyz",
             protocol_path: "ask/offer/fulfillment",
@@ -4038,9 +4037,10 @@ async fn deep_nesting() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&pfi.did().await.expect("did"), fulfillment.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(pfi.did(), fulfillment.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the record was created.
@@ -4051,11 +4051,10 @@ async fn deep_nesting() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&pfi.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(pfi.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.descriptor.data_cid, fulfillment.descriptor.data_cid);
@@ -4079,10 +4078,10 @@ async fn invalid_parent_id() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&pfi.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(pfi.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice uses the tbDEX protocol to make a request to a Participating
@@ -4090,7 +4089,7 @@ async fn invalid_parent_id() {
     // --------------------------------------------------
     let alice_ask = WriteBuilder::new()
         .data(Data::from(b"some request".to_vec()))
-        .recipient(&pfi.did().await.expect("did"))
+        .recipient(pfi.did())
         .protocol(ProtocolBuilder {
             protocol: "http://dex.xyz",
             protocol_path: "ask",
@@ -4102,8 +4101,8 @@ async fn invalid_parent_id() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&pfi.did().await.expect("did"), alice_ask.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(pfi.did(), alice_ask.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempt (and fails) to respond to the PFI to acknowledge
@@ -4111,7 +4110,7 @@ async fn invalid_parent_id() {
     // --------------------------------------------------
     let fulfillment = WriteBuilder::new()
         .data(Data::from(b"some offer".to_vec()))
-        .recipient(&pfi.did().await.expect("did"))
+        .recipient(pfi.did())
         .protocol(ProtocolBuilder {
             protocol: "http://dex.xyz",
             protocol_path: "ask/offer/fulfillment",
@@ -4123,7 +4122,7 @@ async fn invalid_parent_id() {
         .await
         .expect("should create write");
     let Err(Error::Forbidden(e)) =
-        endpoint::handle(&pfi.did().await.expect("did"), fulfillment.clone(), &provider).await
+        credibil_dwn::handle(pfi.did(), fulfillment.clone(), &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -4149,9 +4148,7 @@ async fn invalid_encryption_cid() {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(
-                &alice.public_key().await.expect("get public key").to_bytes(),
-            ),
+            x: Base64UrlUnpadded::encode_string(&alice.public_key().await.expect("get public key")),
             ..PublicKeyJwk::default()
         },
         d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),
@@ -4172,9 +4169,10 @@ async fn invalid_encryption_cid() {
         .build()
         .await
         .expect("should build");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), email, &provider).await.expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), email, &provider)
+        .await
+        .expect("should configure protocol");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     //  Bob writes an encrypted email to ALICE.
@@ -4219,7 +4217,8 @@ async fn invalid_encryption_cid() {
     encryption.initialization_vector = "invalid-iv".to_string();
     write.encryption = Some(encryption);
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization `encryptionCid`s do not match");
@@ -4243,10 +4242,10 @@ async fn protocol_not_normalized() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes an email.
@@ -4265,11 +4264,11 @@ async fn protocol_not_normalized() {
         .expect("should create write");
 
     email.descriptor.protocol = Some("example.com/".to_string());
-    email.record_id = email.entry_id(&alice.did().await.expect("did")).expect("should create record ID");
+    email.record_id = email.entry_id(alice.did()).expect("should create record ID");
     email.context_id = Some(email.record_id.clone());
     email.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), email, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), email, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find protocol definition");
@@ -4292,9 +4291,10 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice configures a social media protocol that allows anyone to read and
@@ -4308,10 +4308,10 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob learns the `data_cid` of Alice's record and attempts to gain access
@@ -4323,7 +4323,7 @@ async fn small_data_cid_protocol() {
             data_cid: alice_write.descriptor.data_cid.clone(),
             data_size: alice_write.descriptor.data_size.clone(),
         })
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://social-media.xyz",
             protocol_path: "image",
@@ -4335,9 +4335,10 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+    let reply = credibil_dwn::handle(alice.did(), bob_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Verify Bob's record cannot be read.
@@ -4348,7 +4349,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create read");
-    let Err(Error::NotFound(e)) = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await else {
+    let Err(Error::NotFound(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "no matching record");
@@ -4362,9 +4363,9 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.is_none());
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.entries.is_none());
 
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(&bob_write.record_id))
@@ -4372,9 +4373,9 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.is_none());
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.entries.is_none());
 
     // --------------------------------------------------
     //  Bob attempts (and fails) to publish his record without data.
@@ -4385,7 +4386,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), bob_update, &provider).await
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), bob_update, &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -4404,7 +4405,7 @@ async fn large_data_cid_protocol() {
     // Alice writes a private record with a large amount of data.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let alice_write = WriteBuilder::new()
@@ -4413,9 +4414,10 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice configures a social media protocol that allows anyone to read and
@@ -4429,10 +4431,10 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob learns the metadata (including data_cid) of Alice's private record.
@@ -4444,7 +4446,7 @@ async fn large_data_cid_protocol() {
             data_cid: alice_write.descriptor.data_cid.clone(),
             data_size: alice_write.descriptor.data_size.clone(),
         })
-        .recipient(&alice.did().await.expect("did"))
+        .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://social-media.xyz",
             protocol_path: "image",
@@ -4456,9 +4458,10 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+    let reply = credibil_dwn::handle(alice.did(), bob_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Verify Bob's record cannot be read.
@@ -4469,7 +4472,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create read");
-    let Err(Error::NotFound(e)) = endpoint::handle(&alice.did().await.expect("did"), read, &provider).await else {
+    let Err(Error::NotFound(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "no matching record");
@@ -4483,9 +4486,9 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.is_none());
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.entries.is_none());
 
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().record_id(&bob_write.record_id))
@@ -4493,9 +4496,9 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.is_none());
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.entries.is_none());
 
     // --------------------------------------------------
     //  Bob attempts (and fails) to publish his record without data.
@@ -4506,7 +4509,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), bob_update, &provider).await
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), bob_update, &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -4533,10 +4536,10 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a record without a schema.
@@ -4553,9 +4556,10 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), no_schema.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), no_schema.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a record with a schema.
@@ -4573,9 +4577,10 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), with_schema.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), with_schema.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify Bob's record cannot be queried.
@@ -4586,9 +4591,9 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.is_none());
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.entries.is_none());
 
     let query = QueryBuilder::new()
         .filter(RecordsFilter::new().protocol_path("doc"))
@@ -4596,11 +4601,10 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create query");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 2);
 }
@@ -4634,16 +4638,16 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a record at the minimum size.
     // --------------------------------------------------
     let mut data = [0u8; 1];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let min_size = WriteBuilder::new()
@@ -4657,14 +4661,14 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), min_size, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), min_size, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a record at the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1000];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
@@ -4678,14 +4682,14 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), max_size, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), max_size, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a record greater than the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1001];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let too_big = WriteBuilder::new()
@@ -4699,7 +4703,8 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), too_big, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), too_big, &provider).await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "data size is greater than allowed");
@@ -4735,16 +4740,16 @@ async fn protocol_min_size() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a record below the minimum size.
     // --------------------------------------------------
     let mut data = [0u8; 999];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let too_small = WriteBuilder::new()
@@ -4758,7 +4763,7 @@ async fn protocol_min_size() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), too_small, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), too_small, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -4768,7 +4773,7 @@ async fn protocol_min_size() {
     // Alice writes a record at the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1000];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
@@ -4782,8 +4787,8 @@ async fn protocol_min_size() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), max_size, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), max_size, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should fail authorization if protocol message size is greater than specified
@@ -4816,16 +4821,16 @@ async fn protocol_max_size() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes a record above the minimum size.
     // --------------------------------------------------
     let mut data = [0u8; 1001];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let too_big = WriteBuilder::new()
@@ -4839,7 +4844,8 @@ async fn protocol_max_size() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), too_big, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), too_big, &provider).await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "data size is greater than allowed");
@@ -4848,7 +4854,7 @@ async fn protocol_max_size() {
     // Alice writes a record at the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1000];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
@@ -4862,8 +4868,8 @@ async fn protocol_max_size() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), max_size, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), max_size, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should fail when write references a parent that has been deleted.
@@ -4883,10 +4889,10 @@ async fn deleted_parent() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes foo1.
@@ -4905,8 +4911,8 @@ async fn deleted_parent() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), foo1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), foo1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice deletes foo1.
@@ -4917,8 +4923,8 @@ async fn deleted_parent() {
         .build()
         .await
         .expect("should create delete");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), delete, &provider).await.expect("should delete");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should delete");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to write bar1 under foo1.
@@ -4936,7 +4942,7 @@ async fn deleted_parent() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), bar1, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), bar1, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find parent record");
@@ -4960,10 +4966,10 @@ async fn incorrect_parent_context() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice writes foo1.
@@ -4982,8 +4988,8 @@ async fn incorrect_parent_context() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), foo1.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), foo1.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts (and fails) to write bar1 using an invalid context_id.
@@ -5003,10 +5009,10 @@ async fn incorrect_parent_context() {
         .expect("should create write");
 
     bar1.context_id = Some(format!("differentParent/{}", bar1.record_id));
-    bar1.record_id = bar1.entry_id(&alice.did().await.expect("did")).expect("should create record ID");
+    bar1.record_id = bar1.entry_id(alice.did()).expect("should create record ID");
     bar1.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), bar1, &provider).await else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), bar1, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "incorrect parent `context_id`");
@@ -5030,16 +5036,16 @@ async fn protocol_grant_match() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
@@ -5049,9 +5055,10 @@ async fn protocol_grant_match() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob reads the record using the grant.
@@ -5068,8 +5075,9 @@ async fn protocol_grant_match() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), bob_write, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_write, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevents writes when protocol and grant scope do not match.
@@ -5090,10 +5098,10 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let email = include_bytes!("../examples/protocols/email.json");
     let definition: Definition = serde_json::from_slice(email).expect("should deserialize");
@@ -5103,16 +5111,16 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records using the email protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://email-protocol.xyz".to_string(),
@@ -5122,9 +5130,10 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob reads the record using the grant and theminimal protocol.
@@ -5141,7 +5150,7 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), bob_write, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), bob_write, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -5166,10 +5175,10 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates the context that she will give Bob access to.
@@ -5187,15 +5196,16 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records using the email protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://email-protocol.xyz".to_string(),
@@ -5205,9 +5215,10 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob uses the grant to write a record to the protocol.
@@ -5226,8 +5237,9 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), bob_write, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_write, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevent writes when protocol and context grant scope do not match.
@@ -5248,10 +5260,10 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice creates the context that she will give Bob access to.
@@ -5269,15 +5281,16 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records using the email protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://email-protocol.xyz".to_string(),
@@ -5287,9 +5300,10 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob uses the grant to write a record to the protocol.
@@ -5308,7 +5322,7 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), bob_write, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), bob_write, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -5333,16 +5347,16 @@ async fn protocol_path_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
@@ -5352,9 +5366,10 @@ async fn protocol_path_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob uses the grant to write a record to the protocol.
@@ -5371,8 +5386,9 @@ async fn protocol_path_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), bob_write, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_write, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevent writes when protocol and protocol path grant scope do not match.
@@ -5393,16 +5409,16 @@ async fn protocol_path_no_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
@@ -5412,9 +5428,10 @@ async fn protocol_path_no_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob uses the grant to write a record to the protocol.
@@ -5431,7 +5448,7 @@ async fn protocol_path_no_grant() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), bob_write, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), bob_write, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -5457,16 +5474,16 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
@@ -5479,9 +5496,10 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob is able to create a published record .
@@ -5499,8 +5517,9 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), published, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), published, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to create an unpublished record .
@@ -5517,7 +5536,7 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), unpublished, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), unpublished, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -5543,16 +5562,16 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
@@ -5565,9 +5584,10 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob is able to create an unpublished record .
@@ -5584,8 +5604,9 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), unpublished, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), unpublished, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to create a published record .
@@ -5603,7 +5624,7 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = endpoint::handle(&alice.did().await.expect("did"), published, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), published, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -5629,16 +5650,16 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should build");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice grants Bob permission to read records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://minimal.xyz".to_string(),
@@ -5649,9 +5670,10 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob is able to create an unpublished record .
@@ -5669,8 +5691,9 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), published, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), published, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to create a published record .
@@ -5687,8 +5710,9 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should create write");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), unpublished, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply =
+        credibil_dwn::handle(alice.did(), unpublished, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevent writes where neither data stream nor data CID are provided.
@@ -5701,7 +5725,7 @@ async fn missing_data_cid() {
     // Alice writes a record without a data stream.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let initial = WriteBuilder::new()
         .data(Data::Bytes(data.to_vec()))
@@ -5710,8 +5734,8 @@ async fn missing_data_cid() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Update the record, still without a data stream.
@@ -5723,7 +5747,8 @@ async fn missing_data_cid() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), update, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "referenced data does not exist");
@@ -5739,7 +5764,7 @@ async fn missing_encoded_data() {
     // Alice writes a record without a data stream.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let initial = WriteBuilder::new()
         .data(Data::Bytes(data.to_vec()))
@@ -5748,8 +5773,8 @@ async fn missing_encoded_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Update the record, still without a data stream.
@@ -5761,7 +5786,8 @@ async fn missing_encoded_data() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), update, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "referenced data does not exist");
@@ -5783,8 +5809,8 @@ async fn write_after_delete() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice deletes the record.
@@ -5795,8 +5821,8 @@ async fn write_after_delete() {
         .build()
         .await
         .expect("should create delete");
-    let reply = endpoint::handle(&alice.did().await.expect("did"), delete, &provider).await.expect("should delete");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should delete");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Update the record, still without a data stream.
@@ -5808,7 +5834,8 @@ async fn write_after_delete() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), update, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), update, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "record has been deleted");
@@ -5830,9 +5857,10 @@ async fn cross_tenant_data() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        endpoint::handle(&alice.did().await.expect("did"), alice_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+    let reply = credibil_dwn::handle(alice.did(), alice_write.clone(), &provider)
+        .await
+        .expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice verifies her record has encoded data.
@@ -5844,11 +5872,10 @@ async fn cross_tenant_data() {
         .await
         .expect("should create read");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), query.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+        credibil_dwn::handle(alice.did(), query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
-    let query_reply: QueryReply =
-        reply.body.expect("should exist").try_into().expect("should convert");
+    let query_reply: QueryReply = reply.body;
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].write.encoded_data, Some(Base64UrlUnpadded::encode_string(b"some data")));
@@ -5867,8 +5894,8 @@ async fn cross_tenant_data() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&bob.did().await.expect("did"), bob_write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+        credibil_dwn::handle(bob.did(), bob_write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Bob attempts (and fails) to read his record.
@@ -5879,9 +5906,10 @@ async fn cross_tenant_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = endpoint::handle(&bob.did().await.expect("did"), query.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
-    assert!(reply.body.is_none());
+    let reply =
+        credibil_dwn::handle(bob.did(), query.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
+    assert!(reply.body.entries.is_none());
 }
 
 // Should fail when `record_id` does not match signature `record_id`.
@@ -5903,7 +5931,8 @@ async fn record_id_mismatch() {
     // alter the record ID
     write.record_id = "somerandomrecordid".to_string();
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization record IDs do not match");
@@ -5949,7 +5978,8 @@ async fn context_id_mismatch() {
         .await
         .expect("should sign");
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization context IDs do not match");
@@ -5997,7 +6027,8 @@ async fn invalid_attestation() {
         .await
         .expect("should sign");
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization attestation CIDs do not match");
@@ -6070,7 +6101,8 @@ async fn attestation_descriptor_cid() {
         .await
         .expect("should sign");
 
-    let Err(Error::BadRequest(e)) = endpoint::handle(&alice.did().await.expect("did"), write, &provider).await else {
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), write, &provider).await
+    else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization attestation CIDs do not match");
@@ -6088,8 +6120,8 @@ async fn unknown_error() {
     // --------------------------------------------------
     let initial = WriteBuilder::new().sign(alice).build().await.expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), initial.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::NO_CONTENT);
+        credibil_dwn::handle(alice.did(), initial.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
     // Update the record, providing data.
@@ -6101,8 +6133,8 @@ async fn unknown_error() {
         .await
         .expect("should create write");
     let reply =
-        endpoint::handle(&alice.did().await.expect("did"), update.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        credibil_dwn::handle(alice.did(), update.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // simulate throwing unexpected error
 }

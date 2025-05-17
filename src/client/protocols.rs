@@ -19,6 +19,7 @@
 
 #![cfg(feature = "client")]
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use credibil_identity::SignerExt;
 use credibil_se::Signer;
@@ -31,7 +32,7 @@ pub use crate::interfaces::protocols::{
 };
 use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
-use crate::{Interface, Method, Result, utils};
+use crate::{Interface, Method, utils};
 
 /// Options to use when creating a permission grant.
 pub struct ConfigureBuilder<D, S> {

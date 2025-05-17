@@ -9,17 +9,18 @@ use std::sync::LazyLock;
 use chrono::SecondsFormat::Micros;
 use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
-use crate::handlers::verify_grant;
-use crate::interfaces::Document;
+use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_grant};
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
     ProtocolType, RuleSet, Size,
 };
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{EventLog, EventStream, MessageStore, Provider};
 use crate::store::Storable;
 use crate::utils::cid;
-use crate::{Error, Result, bad, forbidden, store, utils};
+use crate::{store, utils};
 
 /// Define a default protocol definition.
 pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
@@ -94,7 +95,9 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to save the [`Configure`] message.
-pub async fn handle(owner: &str, configure: Configure, provider: &impl Provider) -> Result<Reply> {
+async fn handle(
+    owner: &str, provider: &impl Provider, configure: Configure,
+) -> Result<Reply<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
 
     // validate the message
@@ -110,7 +113,7 @@ pub async fn handle(owner: &str, configure: Configure, provider: &impl Provider)
         let Some(latest) = existing.iter().max_by(|a, b| {
             a.descriptor.base.message_timestamp.cmp(&b.descriptor.base.message_timestamp)
         }) else {
-            return Err(bad!("no matching protocol entries found"));
+            return Err(bad_request!("no matching protocol entries found"));
         };
 
         let configure_ts = configure.descriptor.base.message_timestamp.timestamp_micros();
@@ -139,12 +142,32 @@ pub async fn handle(owner: &str, configure: Configure, provider: &impl Provider)
     EventStream::emit(provider, owner, &Document::Configure(configure.clone())).await?;
 
     Ok(Reply {
-        status: Status {
-            code: StatusCode::ACCEPTED,
-            detail: None,
-        },
-        body: Some(ReplyBody::ProtocolsConfigure(ConfigureReply { message: configure })),
+        status: StatusCode::ACCEPTED,
+        headers: None,
+        body: ConfigureReply { message: configure },
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Configure> {
+    type Error = Error;
+    type Provider = P;
+    type Reply = ConfigureReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Configure {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
+    }
 }
 
 impl Storable for Configure {
@@ -164,12 +187,12 @@ impl Storable for Configure {
 }
 
 impl TryFrom<Document> for Configure {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(document: Document) -> Result<Self> {
         match document {
             Document::Configure(configure) => Ok(configure),
-            _ => Err(bad!("expected `ProtocolsConfigure` message")),
+            _ => Err(bad_request!("expected `ProtocolsConfigure` message")),
         }
     }
 }

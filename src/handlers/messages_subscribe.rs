@@ -4,14 +4,14 @@
 //! requests to subscribe to message events matching the provided filter(s).
 
 use futures::{StreamExt, future};
-use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
+use crate::authorization::Authorization;
+use crate::error::forbidden;
 use crate::event::SubscribeFilter;
-use crate::handlers::verify_grant;
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_grant};
+use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, MessageStore, Provider};
-use crate::{Result, forbidden};
 
 /// Handle — or process — a [`Subscribe`] message.
 ///
@@ -19,7 +19,9 @@ use crate::{Result, forbidden};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs creating the subscription [`Subscriber`].
-pub async fn handle(owner: &str, subscribe: Subscribe, provider: &impl Provider) -> Result<Reply> {
+async fn handle(
+    owner: &str, provider: &impl Provider, subscribe: Subscribe,
+) -> Result<SubscribeReply> {
     // authorize the subscriber
     subscribe.authorize(owner, provider).await?;
 
@@ -34,15 +36,31 @@ pub async fn handle(owner: &str, subscribe: Subscribe, provider: &impl Provider)
         subscriber.inner = Box::pin(filtered);
     }
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::MessagesSubscribe(SubscribeReply {
-            subscription: subscriber,
-        })),
+    Ok(SubscribeReply {
+        subscription: subscriber,
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Subscribe> {
+    type Error = Error;
+    type Provider = P;
+    type Reply = SubscribeReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Subscribe {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
+    }
 }
 
 impl Subscribe {

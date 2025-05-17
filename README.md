@@ -33,8 +33,8 @@ async fn main() {
     // this would normally run on a web server (for example, axum)
     // ... deserialize request and pass to the endpoint
     let reply =
-        endpoint::handle(&alice.did, write.clone(), &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::ACCEPTED);
+        endpoint::handle(alice.did(),, write.clone(), &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // find and read the previously written record
     let query = QueryBuilder::new()
@@ -44,8 +44,8 @@ async fn main() {
         .await
         .expect("should create read");
 
-    let reply = endpoint::handle(&alice.did, query, &provider).await.expect("should write");
-    assert_eq!(reply.status.code, StatusCode::OK);
+    let reply = endpoint::handle(alice.did(),, query, &provider).await.expect("should write");
+    assert_eq!(reply.status, StatusCode::OK);
 
     let body = reply.body.expect("should have body");
     let entries = body.entries.expect("should have entries");

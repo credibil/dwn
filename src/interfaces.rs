@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::interfaces::protocols::Configure;
 use crate::interfaces::records::{Delete, Write};
 use crate::serde::rfc3339_micros;
-use crate::{Interface, Method, Result};
+use crate::{Interface, Method};
 
 /// The message descriptor.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -66,7 +66,7 @@ impl Document {
     ///
     /// The underlying CID computation is not infallible and may fail if the
     /// message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
+    pub fn cid(&self) -> anyhow::Result<String> {
         match self {
             Self::Write(write) => write.cid(),
             Self::Delete(delete) => delete.cid(),
@@ -114,6 +114,6 @@ impl Document {
 
 impl datastore::Document for Document {
     fn cid(&self) -> anyhow::Result<String> {
-        self.cid().map_err(Into::into)
+        self.cid()
     }
 }

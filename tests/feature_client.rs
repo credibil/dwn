@@ -5,11 +5,6 @@
 
 #![cfg(feature = "client")]
 
-#[path = "../examples/kms/mod.rs"]
-mod kms;
-#[path = "../examples/provider/mod.rs"]
-mod provider;
-
 use std::io::Cursor;
 
 use credibil_dwn::Method;
@@ -17,26 +12,17 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::messages::{QueryBuilder, ReadBuilder};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
-use kms::Keyring;
+use test_utils::Identity;
 use tokio::sync::OnceCell;
 
-static ALICE: OnceCell<Keyring> = OnceCell::const_new();
-static BOB: OnceCell<Keyring> = OnceCell::const_new();
+static ALICE: OnceCell<Identity> = OnceCell::const_new();
+static BOB: OnceCell<Identity> = OnceCell::const_new();
 
-async fn alice() -> &'static Keyring {
-    ALICE.get_or_init(|| async {
-        let keyring = Keyring::new("feature_client_alice").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn alice() -> &'static Identity {
+    ALICE.get_or_init(|| async { Identity::new("feature_client_alice").await }).await
 }
-
-async fn bob() -> &'static Keyring {
-    BOB.get_or_init(|| async {
-        let keyring = Keyring::new("feature_client_bob").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn bob() -> &'static Identity {
+    BOB.get_or_init(|| async { Identity::new("feature_client_bob").await }).await
 }
 
 // Should fetch all messages for owner owner beyond a provided cursor.
@@ -112,7 +98,7 @@ async fn grant_builder() {
     let bob = bob().await;
 
     let grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Messages {
             method: Method::Query,
             protocol: None,

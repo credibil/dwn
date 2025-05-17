@@ -10,17 +10,18 @@ use std::io::Cursor;
 use std::str::FromStr;
 
 use ::cid::Cid;
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
+use crate::Interface;
+use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
 use crate::grants::Scope;
-use crate::handlers::{records_write, verify_grant};
-use crate::interfaces::Document;
+use crate::handlers::{Body, Error, Handler, Reply, Request, Result, records_write, verify_grant};
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
+use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, MessageStore, Provider};
-use crate::{Error, Interface, Result, bad, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -29,9 +30,10 @@ use crate::{Error, Interface, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
+async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<ReadReply> {
     // validate message CID
-    let cid = Cid::from_str(&read.descriptor.message_cid).map_err(|e| bad!("invalid CID: {e}"))?;
+    let cid = Cid::from_str(&read.descriptor.message_cid)
+        .map_err(|e| bad_request!("invalid CID: {e}"))?;
 
     let Some(mut document) = MessageStore::get(provider, owner, &cid.to_string()).await? else {
         return Err(Error::NotFound("message not found".to_string()));
@@ -44,7 +46,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     let data = if let Document::Write(ref mut write) = document {
         if let Some(encoded) = write.encoded_data.clone() {
             write.encoded_data = None;
-            let bytes = Base64UrlUnpadded::decode_vec(&encoded)?;
+            let bytes = Base64UrlUnpadded::decode_vec(&encoded).context("decoding data")?;
             Some(Cursor::new(bytes))
         } else {
             use std::io::Read;
@@ -53,7 +55,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
                     .await?
             {
                 let mut buf = Vec::new();
-                read.read_to_end(&mut buf)?;
+                read.read_to_end(&mut buf).context("reading `write` data")?;
                 Some(Cursor::new(buf))
             } else {
                 None
@@ -63,19 +65,35 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         None
     };
 
-    Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::MessagesRead(ReadReply {
-            entry: Some(ReadReplyEntry {
-                message_cid: read.descriptor.message_cid,
-                message: document,
-                data,
-            }),
-        })),
+    Ok(ReadReply {
+        entry: Some(ReadReplyEntry {
+            message_cid: read.descriptor.message_cid,
+            message: document,
+            data,
+        }),
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Read> {
+    type Error = Error;
+    type Provider = P;
+    type Reply = ReadReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Read {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        Some(&self.authorization)
+    }
 }
 
 impl Read {

@@ -5,7 +5,7 @@
 
 use std::fmt::Display;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -104,14 +104,12 @@ impl Matcher {
             MatchOn::StartsWith(filter_val) => value.starts_with(filter_val),
             MatchOn::OneOf(values) => values.contains(&value.to_string()),
             MatchOn::Range(range) => {
-                let int_val = value
-                    .parse()
-                    .map_err(|e| anyhow!("issue converting match value to usize: {e}"))?;
+                let int_val = value.parse().context("converting match value to usize")?;
                 range.contains(&int_val)
             }
             MatchOn::DateRange(range) => {
                 let date_val = DateTime::parse_from_rfc3339(value)
-                    .map_err(|e| anyhow!("issue converting match value to date: {e}"))?;
+                    .context("converting match value to date")?;
                 range.contains(&date_val.into())
             }
         };

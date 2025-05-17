@@ -5,15 +5,20 @@
 
 use std::io::Cursor;
 
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use http::StatusCode;
 
-use crate::endpoint::{Reply, ReplyBody, Status};
-use crate::handlers::{records_write, verify_grant, verify_protocol};
+use crate::Method;
+use crate::authorization::Authorization;
+use crate::error::{bad_request, forbidden};
+use crate::handlers::{
+    Body, Error, Handler, Reply, Request, Result, records_write, verify_grant, verify_protocol,
+};
+use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
 use crate::store::{self, RecordsQueryBuilder};
-use crate::{Error, Method, Result, bad, forbidden};
 
 /// Handle — or process — a [`Read`] message.
 ///
@@ -22,7 +27,7 @@ use crate::{Error, Method, Result, bad, forbidden};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result<Reply> {
+pub async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<Reply<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = store::Query::from(read.clone());
 
@@ -31,19 +36,19 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         return Err(Error::NotFound("no matching record".to_string()));
     }
     if entries.len() > 1 {
-        return Err(bad!("multiple messages exist"));
+        return Err(bad_request!("multiple messages exist"));
     }
 
     // if record is deleted, return as NotFound
     if entries[0].descriptor().method == Method::Delete {
         let Some(delete) = entries[0].as_delete() else {
-            return Err(bad!("expected `RecordsDelete` message"));
+            return Err(bad_request!("expected `RecordsDelete` message"));
         };
 
         let Ok(Some(write)) =
             records_write::initial_write(owner, &delete.descriptor.record_id, provider).await
         else {
-            return Err(bad!("initial write for deleted record not found"));
+            return Err(bad_request!("initial write for deleted record not found"));
         };
 
         read.authorize(owner, &write, provider).await?;
@@ -52,18 +57,16 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         // return Err(Error::NotFound("record is deleted".to_string()));
 
         return Ok(Reply {
-            status: Status {
-                code: StatusCode::NOT_FOUND,
-                detail: None,
-            },
-            body: Some(ReplyBody::RecordsRead(ReadReply {
+            status: StatusCode::NOT_FOUND,
+            headers: None,
+            body: ReadReply {
                 entry: ReadReplyEntry {
                     records_delete: Some(delete.clone()),
                     initial_write: Some(write),
                     records_write: None,
                     data: None,
                 },
-            })),
+            },
         });
     }
 
@@ -74,7 +77,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
 
     let data = if let Some(encoded) = write.encoded_data {
         write.encoded_data = None;
-        let buffer = Base64UrlUnpadded::decode_vec(&encoded)?;
+        let buffer = Base64UrlUnpadded::decode_vec(&encoded).context("decoding data")?;
         Some(Cursor::new(buffer))
     } else {
         use std::io::Read;
@@ -86,7 +89,7 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
         };
 
         let mut buf = Vec::new();
-        read.read_to_end(&mut buf)?;
+        read.read_to_end(&mut buf).context("reading data")?;
         Some(Cursor::new(buf))
     };
 
@@ -102,11 +105,11 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
             .build();
         let (entries, _) = MessageStore::query(provider, owner, &query).await?;
         if entries.is_empty() {
-            return Err(bad!("initial write not found"));
+            return Err(bad_request!("initial write not found"));
         }
 
         let Some(mut initial_write) = entries[0].as_write().cloned() else {
-            return Err(bad!("expected `RecordsWrite` message"));
+            return Err(bad_request!("expected `RecordsWrite` message"));
         };
 
         initial_write.encoded_data = None;
@@ -114,19 +117,39 @@ pub async fn handle(owner: &str, read: Read, provider: &impl Provider) -> Result
     };
 
     Ok(Reply {
-        status: Status {
-            code: StatusCode::OK,
-            detail: None,
-        },
-        body: Some(ReplyBody::RecordsRead(ReadReply {
+        status: StatusCode::OK,
+        headers: None,
+        body: ReadReply {
             entry: ReadReplyEntry {
                 records_write: Some(write.clone()),
                 records_delete: None,
                 initial_write,
                 data,
             },
-        })),
+        },
     })
+}
+
+impl<P: Provider> Handler<P> for Request<Read> {
+    type Error = Error;
+    type Provider = P;
+    type Reply = ReadReply;
+
+    async fn handle(
+        self, verifier: &str, provider: &Self::Provider,
+    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
+        handle(verifier, provider, self.body).await
+    }
+}
+
+impl Body for Read {
+    fn descriptor(&self) -> &Descriptor {
+        &self.descriptor.base
+    }
+
+    fn authorization(&self) -> Option<&Authorization> {
+        self.authorization.as_ref()
+    }
 }
 
 impl Read {

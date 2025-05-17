@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::io;
 
+use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use credibil_jose::jwe::{self, Protected};
@@ -20,14 +21,16 @@ use credibil_se::{AlgAlgorithm, Curve, EncAlgorithm, PublicKey};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::api::Result;
 use crate::authorization::{Authorization, JwsPayload};
+use crate::error::bad_request;
 use crate::event::Subscriber;
 use crate::hd_key::DerivationScheme;
 use crate::interfaces::Descriptor;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
 use crate::store::{Cursor, DateRange, Pagination, Range};
 use crate::utils::cid;
-use crate::{OneOrMany, Result, bad, utils};
+use crate::{OneOrMany, utils};
 
 /// The [`Delete`] message expected by the handler.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -51,7 +54,7 @@ impl Delete {
     /// # Errors
     ///
     /// This method will fail if the message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
+    pub fn cid(&self) -> anyhow::Result<String> {
         cid::from_value(self)
     }
 }
@@ -620,7 +623,7 @@ impl Write {
     /// # Errors
     ///
     /// This method will fail if the message cannot be serialized to CBOR.
-    pub fn cid(&self) -> Result<String> {
+    pub fn cid(&self) -> anyhow::Result<String> {
         let mut write = self.clone();
         write.encoded_data = None;
         cid::from_value(&write)
@@ -638,10 +641,10 @@ impl Write {
             descriptor: &'a WriteDescriptor,
             author: &'a str,
         }
-        utils::cid::from_value(&EntryId {
+        Ok(utils::cid::from_value(&EntryId {
             descriptor: &self.descriptor,
             author,
-        })
+        })?)
     }
 }
 
@@ -946,8 +949,7 @@ impl<'a> EncryptOptions<'a> {
             enc: self.content_algorithm.clone(),
             alg: None,
         };
-        let aad = serde_json::to_vec(&protected)?;
-
+        let aad = serde_json::to_vec(&protected).context("deserializing protected header")?;
         let encrypted = self.content_algorithm.encrypt(self.data, &cek, &aad)?;
 
         Ok(Encrypted {
@@ -989,13 +991,13 @@ impl Encrypted {
             // recipient's public key
             let jwk = &recipient.public_key;
             let decoded = if jwk.crv == Curve::Ed25519 {
-                Base64UrlUnpadded::decode_vec(&jwk.x)?
+                Base64UrlUnpadded::decode_vec(&jwk.x).context("decoding `x`")?
             } else {
-                let mut decoded = Base64UrlUnpadded::decode_vec(&jwk.x)?;
+                let mut decoded = Base64UrlUnpadded::decode_vec(&jwk.x).context("decoding `x`")?;
                 let Some(y) = &jwk.y else {
-                    return Err(bad!("missing y"));
+                    return Err(bad_request!("missing y"));
                 };
-                decoded.extend(&Base64UrlUnpadded::decode_vec(y)?);
+                decoded.extend(&Base64UrlUnpadded::decode_vec(y).context("decoding `y`")?);
                 decoded
             };
 
@@ -1004,14 +1006,15 @@ impl Encrypted {
                 key_id: recipient.key_id.clone(),
                 public_key: PublicKey::try_from(decoded)?,
             };
-            let cek: [u8; 32] = self.cek.clone().try_into().map_err(|_| bad!("invalid CEK key"))?;
+            let cek: [u8; 32] =
+                self.cek.clone().try_into().map_err(|_| bad_request!("invalid CEK key"))?;
 
             // encrypt cek
             let ke = match self.key_algorithm {
                 AlgAlgorithm::EcdhEsA256Kw => jwe::ecdh_a256kw(&cek, &recip)?,
                 AlgAlgorithm::EciesEs256K => jwe::ecies_es256k(&cek, &recip)?,
                 AlgAlgorithm::EcdhEs => {
-                    return Err(bad!("ECDH-ES requires a single recipient"));
+                    return Err(bad_request!("ECDH-ES requires a single recipient"));
                 }
             };
 
