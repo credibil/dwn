@@ -220,7 +220,7 @@ async fn no_encoded_data() {
     // Alice creates a record.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
@@ -1042,7 +1042,7 @@ async fn data_size_part_range() {
     // Alice creates 3 records with varying data sizes.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write10 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
@@ -1056,7 +1056,7 @@ async fn data_size_part_range() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 50];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write50 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
@@ -1070,7 +1070,7 @@ async fn data_size_part_range() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 100];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write100 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
@@ -1166,7 +1166,7 @@ async fn data_size_full_range() {
     // Alice creates 3 records with varying data sizes.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write10 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
@@ -1180,7 +1180,7 @@ async fn data_size_full_range() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 50];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write50 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
@@ -1194,7 +1194,7 @@ async fn data_size_full_range() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 100];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write100 = WriteBuilder::new()
         .data(Data::from(data.to_vec()))

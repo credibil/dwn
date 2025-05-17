@@ -276,7 +276,7 @@ async fn data_gt_threshold() {
     // Alice writes a record.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
@@ -323,7 +323,7 @@ async fn no_data_after_update() {
     // Alice writes a record.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
@@ -343,7 +343,7 @@ async fn no_data_after_update() {
     // Alice updates the record.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let reader = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::from(write)

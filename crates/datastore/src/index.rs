@@ -394,7 +394,7 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
 //         let alice = Keyring::new();
 
 //         let mut data = [0u8; 10];
-//         rand::thread_rng().fill_bytes(&mut data);
+//         rand::rng().fill_bytes(&mut data);
 //         let stream = Cursor::new(data.to_vec());
 
 //         let write = WriteBuilder::new()

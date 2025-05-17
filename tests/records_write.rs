@@ -533,7 +533,7 @@ async fn retain_large_data() {
     // Alice writes a record with a lot of data.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let initial = WriteBuilder::new()
@@ -590,7 +590,7 @@ async fn retain_small_data() {
     // Alice writes a record with a lot of data.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let initial = WriteBuilder::new()
@@ -647,7 +647,7 @@ async fn large_data_size_larger() {
     // Writes a record with a lot of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -680,7 +680,7 @@ async fn small_data_size_larger() {
     // Writes a record with a small amount of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -713,7 +713,7 @@ async fn large_data_size_smaller() {
     // Writes a record with a lot of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -746,7 +746,7 @@ async fn small_data_size_smaller() {
     // Writes a record with a small amount of data and then change the `data_size`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -779,7 +779,7 @@ async fn large_data_cid_larger() {
     // Writes a record with a lot of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -790,7 +790,7 @@ async fn large_data_cid_larger() {
         .expect("should create write");
 
     // alter the data CID
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
@@ -812,7 +812,7 @@ async fn small_data_cid_larger() {
     // Writes a record with a small amount of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -824,7 +824,7 @@ async fn small_data_cid_larger() {
 
     // alter the data CID
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
@@ -846,7 +846,7 @@ async fn large_data_cid_smaller() {
     // Writes a record with a lot of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -858,7 +858,7 @@ async fn large_data_cid_smaller() {
 
     // alter the data CID
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
@@ -880,7 +880,7 @@ async fn small_data_cid_smaller() {
     // Writes a record with a small amount of data and then change the `data_cid`.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let mut write = WriteBuilder::new()
@@ -892,7 +892,7 @@ async fn small_data_cid_smaller() {
 
     // alter the data CID
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
@@ -915,7 +915,7 @@ async fn alter_data_cid_larger() {
     // --------------------------------------------------
     // record 1
     let mut data_1 = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data_1);
+    rand::rng().fill_bytes(&mut data_1);
 
     let write_1 = WriteBuilder::new()
         .data(Data::from(data_1.to_vec()))
@@ -929,7 +929,7 @@ async fn alter_data_cid_larger() {
 
     // record 2
     let mut data_2 = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data_2);
+    rand::rng().fill_bytes(&mut data_2);
 
     let write_2 = WriteBuilder::new()
         .data(Data::from(data_2.to_vec()))
@@ -985,7 +985,7 @@ async fn alter_data_cid_smaller() {
     // --------------------------------------------------
     // record 1
     let mut data_1 = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data_1);
+    rand::rng().fill_bytes(&mut data_1);
 
     let write_1 = WriteBuilder::new()
         .data(Data::from(data_1.to_vec()))
@@ -999,7 +999,7 @@ async fn alter_data_cid_smaller() {
 
     // record 2
     let mut data_2 = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data_2);
+    rand::rng().fill_bytes(&mut data_2);
 
     let write_2 = WriteBuilder::new()
         .data(Data::from(data_2.to_vec()))
@@ -4405,7 +4405,7 @@ async fn large_data_cid_protocol() {
     // Alice writes a private record with a large amount of data.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let alice_write = WriteBuilder::new()
@@ -4647,7 +4647,7 @@ async fn protocol_size_range() {
     // Alice writes a record at the minimum size.
     // --------------------------------------------------
     let mut data = [0u8; 1];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let min_size = WriteBuilder::new()
@@ -4668,7 +4668,7 @@ async fn protocol_size_range() {
     // Alice writes a record at the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1000];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
@@ -4689,7 +4689,7 @@ async fn protocol_size_range() {
     // Alice writes a record greater than the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1001];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let too_big = WriteBuilder::new()
@@ -4749,7 +4749,7 @@ async fn protocol_min_size() {
     // Alice writes a record below the minimum size.
     // --------------------------------------------------
     let mut data = [0u8; 999];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let too_small = WriteBuilder::new()
@@ -4773,7 +4773,7 @@ async fn protocol_min_size() {
     // Alice writes a record at the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1000];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
@@ -4830,7 +4830,7 @@ async fn protocol_max_size() {
     // Alice writes a record above the minimum size.
     // --------------------------------------------------
     let mut data = [0u8; 1001];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let too_big = WriteBuilder::new()
@@ -4854,7 +4854,7 @@ async fn protocol_max_size() {
     // Alice writes a record at the maximum size.
     // --------------------------------------------------
     let mut data = [0u8; 1000];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let stream = Cursor::new(data.to_vec());
 
     let max_size = WriteBuilder::new()
@@ -5725,7 +5725,7 @@ async fn missing_data_cid() {
     // Alice writes a record without a data stream.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let initial = WriteBuilder::new()
         .data(Data::Bytes(data.to_vec()))
@@ -5764,7 +5764,7 @@ async fn missing_encoded_data() {
     // Alice writes a record without a data stream.
     // --------------------------------------------------
     let mut data = [0u8; 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let initial = WriteBuilder::new()
         .data(Data::Bytes(data.to_vec()))

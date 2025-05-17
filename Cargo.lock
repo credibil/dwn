@@ -586,7 +586,7 @@ dependencies = [
  "ipld-core",
  "jsonschema",
  "multihash-codetable",
- "rand 0.8.5",
+ "rand 0.9.1",
  "serde",
  "serde_ipld_dagcbor",
  "serde_json",

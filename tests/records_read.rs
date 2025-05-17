@@ -1989,7 +1989,7 @@ async fn data_blocks_deleted() {
     // Alice writes a record and then deletes its data from BlockStore.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
 
     let write = WriteBuilder::new()
         .data(Data::from(data.to_vec()))
@@ -2073,7 +2073,7 @@ async fn block_data() {
     // Alice writes a record and then deletes its data from BlockStore.
     // --------------------------------------------------
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_stream = Cursor::new(data.to_vec());
 
     let write = WriteBuilder::new()
@@ -2652,9 +2652,7 @@ async fn decrypt_protocol() {
         public_key: PublicKeyJwk {
             kty: KeyType::Okp,
             crv: Curve::Ed25519,
-            x: Base64UrlUnpadded::encode_string(
-                &alice.public_key().await.expect("get public key"),
-            ),
+            x: Base64UrlUnpadded::encode_string(&alice.public_key().await.expect("get public key")),
             ..PublicKeyJwk::default()
         },
         d: "8rmFFiUcTjjrL5mgBzWykaH39D64VD0mbDHwILvsu30".to_string(),

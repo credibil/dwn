@@ -37,7 +37,7 @@ async fn configure() {
     // Bob creates a RecordsWrite message
     // --------------------------------------------------
     let mut data = [0u8; 8];
-    rand::thread_rng().fill_bytes(&mut data);
+    rand::rng().fill_bytes(&mut data);
     let write_data = Data::from(data.to_vec());
 
     let mut write = WriteBuilder::new()
