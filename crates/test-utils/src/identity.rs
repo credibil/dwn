@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 use anyhow::{Result, bail};
 use credibil_identity::did::{self, Document, DocumentBuilder};
-use credibil_identity::{Identity as Id, Key, SignerExt};
+use credibil_identity::{Key, SignerExt};
 use credibil_jose::PublicKeyJwk;
 use credibil_se::{Algorithm, Curve, PublicKey, Receiver, SharedSecret, Signer};
 
@@ -44,10 +44,9 @@ impl Identity {
         }
     }
 
-    pub async fn invalid() -> Self {
-        let mut id = Self::new("invalid").await;
+    pub async fn invalid(owner: &str) -> Self {
+        let mut id = Self::new(owner).await;
         id.invalid = true;
-        id.keyring.add(&Curve::Ed25519, "bad_signer").await.expect("bad signing key");
         id
     }
 
@@ -58,21 +57,14 @@ impl Identity {
     pub async fn public_key(&self) -> Result<Vec<u8>> {
         self.keyring.verifying_key("signer").await
     }
-
-    pub async fn resolve(&self, url: &str) -> Result<Id> {
-        let key = url.trim_end_matches("/did.json");
-        let store = DID_STORE.lock().expect("should lock");
-        let Some(doc) = store.get(key).cloned() else {
-            bail!("document not found");
-        };
-        Ok(Id::DidDocument(doc))
-    }
 }
 
 impl Signer for Identity {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         if self.invalid {
-            self.keyring.sign("bad_signer", msg).await
+            let mut keyring = test_kms::Keyring::new("random").await?;
+            keyring.add(&Curve::Ed25519, "signer").await?;
+            keyring.sign("signer", msg).await
         } else {
             self.keyring.sign("signer", msg).await
         }
@@ -89,7 +81,10 @@ impl Signer for Identity {
 
 impl SignerExt for Identity {
     async fn verification_method(&self) -> Result<Key> {
-        let Id::DidDocument(doc) = self.resolve(&self.url).await?;
+        let store = DID_STORE.lock().expect("should lock");
+        let Some(doc) = store.get(&self.url).cloned() else {
+            bail!("document not found");
+        };
         let vm = &doc.verification_method.as_ref().unwrap()[0];
         Ok(Key::KeyId(vm.id.clone()))
     }

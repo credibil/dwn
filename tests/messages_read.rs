@@ -101,7 +101,7 @@ async fn read_message() {
 #[tokio::test]
 async fn invalid_signature() {
     let provider = ProviderImpl::new().await.expect("should create provider");
-    let invalid = Identity::invalid().await;
+    let invalid = Identity::invalid("invalid_signature").await;
 
     let read = ReadBuilder::new()
         .message_cid("bafkreihxrkspxsocoaoetqjm3iop26svz2k622cgart56v2ng7g6q6ofwa".to_string())
