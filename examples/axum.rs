@@ -2,10 +2,6 @@
 //!
 //! This example demonstrates how to use the Verifiable Credential Issuer (VCI)
 
-#[path = "../examples/kms/mod.rs"]
-mod kms;
-mod provider;
-
 use anyhow::Result;
 use axum::extract::State;
 use axum::http::{HeaderValue, header};
@@ -14,16 +10,13 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use credibil_dwn::interfaces::{messages, protocols, records};
 use credibil_dwn::{self, IntoHttp};
-use kms::Keyring;
-// use credibil_vc::blockstore::BlockStore;
+use test_utils::{Identity, ProviderImpl};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
-
-use crate::provider::ProviderImpl;
 
 #[derive(Clone)]
 struct Dwn {
@@ -34,7 +27,7 @@ struct Dwn {
 #[tokio::main]
 async fn main() -> Result<()> {
     let dwn = Dwn {
-        owner: Keyring::new("alice").await?.did().await?,
+        owner: Identity::new("alice").await.did().to_string(),
         provider: ProviderImpl::new().await?,
     };
 

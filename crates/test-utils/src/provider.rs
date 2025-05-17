@@ -1,20 +1,18 @@
-//! # Example Provider
-//!
-//! This example implements a simple in-memory provider for the Credibil DWN.
-//! It uses an in-memory blockstore and a NATS client for message transport.
-
-#![allow(dead_code)]
+//! # Mock Provider
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use blockstore::{Blockstore as _, InMemoryBlockstore};
 use cid::Cid;
 use credibil_dwn::event::{Event, Subscriber};
 use credibil_dwn::provider::{BlockStore, EventStream, Identity, IdentityResolver};
+use credibil_identity::Identity as Id;
 use futures::stream::StreamExt;
 use multihash_codetable::MultihashDigest;
 use serde::{Deserialize, Serialize};
+
+use crate::identity::DID_STORE;
 
 const RAW: u64 = 0x55;
 
@@ -83,8 +81,13 @@ impl BlockStore for ProviderImpl {
 }
 
 impl IdentityResolver for ProviderImpl {
-    async fn resolve(&self, _url: &str) -> Result<Identity> {
-        unimplemented!("DidResolver::resolve")
+    async fn resolve(&self, url: &str) -> Result<Identity> {
+        let key = url.trim_end_matches("/did.json");
+        let store = DID_STORE.lock().expect("should lock");
+        let Some(doc) = store.get(key).cloned() else {
+            bail!("document not found");
+        };
+        Ok(Id::DidDocument(doc))
     }
 }
 

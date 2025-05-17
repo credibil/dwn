@@ -2,11 +2,6 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/kms/mod.rs"]
-mod kms;
-#[path = "../examples/provider/mod.rs"]
-mod provider;
-
 use core::panic;
 use std::io::Cursor;
 use std::time::Duration;
@@ -19,24 +14,18 @@ use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode};
 use futures::StreamExt;
-use kms::Keyring;
-use provider::ProviderImpl;
+use test_utils::{Identity, ProviderImpl};
 use tokio::sync::OnceCell;
 use tokio::time;
 
-static ALICE: OnceCell<Keyring> = OnceCell::const_new();
-static BOB: OnceCell<Keyring> = OnceCell::const_new();
+static ALICE: OnceCell<Identity> = OnceCell::const_new();
+static BOB: OnceCell<Identity> = OnceCell::const_new();
 
-async fn alice() -> &'static Keyring {
-    ALICE.get_or_init(|| async { Keyring::new("messages_subscribe_alice").await.unwrap() }).await
+async fn alice() -> &'static Identity {
+    ALICE.get_or_init(|| async { Identity::new("messages_subscribe_alice").await }).await
 }
-
-async fn bob() -> &'static Keyring {
-    BOB.get_or_init(|| async {
-        let keyring = Keyring::new("messages_subscribe_bob").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn bob() -> &'static Identity {
+    BOB.get_or_init(|| async { Identity::new("messages_subscribe_bob").await }).await
 }
 
 // TODO: implement fake provider with no subscription support for this test.
@@ -54,8 +43,7 @@ async fn invalid_message() {
     let mut subscribe = SubscribeBuilder::new().sign(alice).build().await.expect("should build");
     subscribe.descriptor.filters.push(MessagesFilter::default());
 
-    let Err(Error::BadRequest(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider).await
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), subscribe, &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -74,9 +62,8 @@ async fn owner_events() {
     let filter = MessagesFilter::new().interface(Interface::Records);
     let subscribe =
         SubscribeBuilder::new().add_filter(filter).sign(alice).build().await.expect("should build");
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider)
-        .await
-        .expect("should subscribe");
+    let reply =
+        credibil_dwn::handle(alice.did(), subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: SubscribeReply = reply.body;
@@ -95,18 +82,14 @@ async fn owner_events() {
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), write, &provider)
-        .await
-        .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Ensure the RecordsWrite event exists.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should query");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -144,8 +127,7 @@ async fn unauthorized() {
     let mut subscribe = SubscribeBuilder::new().sign(alice).build().await.expect("should build");
     subscribe.authorization = Authorization::default();
 
-    let Err(Error::BadRequest(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider).await
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), subscribe, &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -155,8 +137,7 @@ async fn unauthorized() {
     // Bob attempts to subscribe to Alice's event stream.
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new().sign(bob).build().await.expect("should build");
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), subscribe, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -174,7 +155,7 @@ async fn interface_scope() {
     // Alice grants Bob permission to subscribe to all her messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Messages {
             method: Method::Subscribe,
             protocol: None,
@@ -186,9 +167,8 @@ async fn interface_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant, &provider)
-        .await
-        .expect("should write");
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -201,9 +181,8 @@ async fn interface_scope() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider)
-        .await
-        .expect("should subscribe");
+    let reply =
+        credibil_dwn::handle(alice.did(), subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: SubscribeReply = reply.body;
@@ -226,7 +205,7 @@ async fn interface_scope() {
 
     message_cids.push(configure.cid().expect("should have cid"));
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -241,7 +220,7 @@ async fn interface_scope() {
 
     message_cids.push(configure.cid().expect("should have cid"));
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -263,9 +242,7 @@ async fn interface_scope() {
 
     message_cids.push(write.cid().expect("should have cid"));
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), write, &provider)
-        .await
-        .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // 4. write a random record
@@ -279,9 +256,7 @@ async fn interface_scope() {
 
     message_cids.push(write.cid().expect("should have cid"));
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), write, &provider)
-        .await
-        .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -314,7 +289,7 @@ async fn unauthorized_interface() {
     // Alice grants Bob permission to write records scoped to the 'allow-any' protocol.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Write,
             protocol: "http://allow-any".to_string(),
@@ -327,9 +302,8 @@ async fn unauthorized_interface() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant, &provider)
-        .await
-        .expect("should write");
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -342,8 +316,7 @@ async fn unauthorized_interface() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), subscribe, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -361,7 +334,7 @@ async fn unauthorized_method() {
     // Alice grants Bob permission to query messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Messages {
             method: Method::Query,
             protocol: None,
@@ -373,9 +346,8 @@ async fn unauthorized_method() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant, &provider)
-        .await
-        .expect("should write");
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -388,8 +360,7 @@ async fn unauthorized_method() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), subscribe, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -419,7 +390,7 @@ async fn protocol_filter() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -433,7 +404,7 @@ async fn protocol_filter() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -442,7 +413,7 @@ async fn protocol_filter() {
     // Alice grants Bob permission to subscribe to `protocol1` messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Messages {
             method: Method::Subscribe,
             protocol: Some("http://protocol1.xyz".to_string()),
@@ -454,9 +425,8 @@ async fn protocol_filter() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant, &provider)
-        .await
-        .expect("should write");
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -471,9 +441,8 @@ async fn protocol_filter() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider)
-        .await
-        .expect("should subscribe");
+    let reply =
+        credibil_dwn::handle(alice.did(), subscribe, &provider).await.expect("should subscribe");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: SubscribeReply = reply.body;
@@ -499,9 +468,7 @@ async fn protocol_filter() {
 
     let protocol1_cid = write.cid().expect("should have cid");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), write, &provider)
-        .await
-        .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // protocol2
@@ -519,9 +486,7 @@ async fn protocol_filter() {
         .await
         .expect("should create write");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), write, &provider)
-        .await
-        .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -571,7 +536,7 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -585,7 +550,7 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -594,7 +559,7 @@ async fn invalid_protocol() {
     // Alice grants Bob permission to subscribe to `protocol1` messages.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Messages {
             method: Method::Subscribe,
             protocol: Some("http://protocol1.xyz".to_string()),
@@ -606,9 +571,8 @@ async fn invalid_protocol() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant, &provider)
-        .await
-        .expect("should write");
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -622,8 +586,7 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), subscribe, &provider).await
     else {
         panic!("should be Forbidden");
     };
@@ -641,8 +604,7 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), subscribe, &provider).await
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), subscribe, &provider).await
     else {
         panic!("should be Forbidden");
     };

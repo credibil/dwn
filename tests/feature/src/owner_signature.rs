@@ -38,7 +38,7 @@ async fn flat_space() {
         .await
         .expect("should create write");
 
-    let reply = endpoint::handle(&BOB.did, bob_msg.clone(), &provider).await.expect("should write");
+    let reply = endpoint::handle(BOB.did(),, bob_msg.clone(), &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -49,7 +49,7 @@ async fn flat_space() {
         ReadBuilder::new().filter(filter).sign(&*ALICE).build().await.expect("should create write");
 
     let reply =
-        endpoint::handle(&BOB.did, alice_read.clone(), &provider).await.expect("should read");
+        endpoint::handle(BOB.did(),, alice_read.clone(), &provider).await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply = reply.body.expect("should be records read");
@@ -63,13 +63,13 @@ async fn flat_space() {
     read_bob_msg.sign_as_owner(&*ALICE).await.expect("should sign as owner");
     read_bob_msg.with_stream(alice_data);
 
-    let reply = endpoint::handle(&ALICE.did, read_bob_msg, &provider).await.expect("should write");
+    let reply = endpoint::handle(ALICE.did(),, read_bob_msg, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Bob's message can be read from Alice's web node
     // --------------------------------------------------
-    let reply = endpoint::handle(&BOB.did, alice_read, &provider).await.expect("should read");
+    let reply = endpoint::handle(BOB.did(),, alice_read, &provider).await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply = reply.body.expect("should be records read");

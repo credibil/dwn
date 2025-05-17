@@ -1,9 +1,5 @@
 //! A simple Hyper HTTP server that handles DWN messages.
 
-#[path = "../examples/kms/mod.rs"]
-mod kms;
-mod provider;
-
 use anyhow::Result;
 use credibil_dwn::interfaces::{messages, protocols, records};
 use credibil_dwn::{self, IntoHttp};
@@ -12,10 +8,8 @@ use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-use kms::Keyring;
+use test_utils::{Identity, ProviderImpl};
 use tokio::net::TcpListener;
-
-use crate::provider::ProviderImpl;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,7 +17,7 @@ async fn main() -> Result<()> {
     println!("Alice's DWN listening on http://0.0.0.0:8080");
 
     let svc = Svc {
-        owner: Keyring::new("alice").await?.did().await?,
+        owner: Identity::new("alice").await.did().to_string(),
         provider: ProviderImpl::new().await?,
     };
 

@@ -22,7 +22,7 @@ async fn configure() {
     // Alice grants App X to write as her for the `chat` protocol
     // --------------------------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(&APP.did)
+        .granted_to(APP.did(),)
         .request_id("grant_id_1")
         .description("allow App X to write as me in chat protocol")
         .delegated(true)

@@ -5,11 +5,6 @@
 
 #![cfg(all(feature = "client", feature = "server"))]
 
-#[path = "../examples/kms/mod.rs"]
-mod kms;
-#[path = "../examples/provider/mod.rs"]
-mod provider;
-
 use std::time::Duration;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
@@ -21,29 +16,22 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::{Error, Method, StatusCode, cid};
 use credibil_jose::{Jws, Protected, Signature};
-use kms::Keyring;
-use provider::ProviderImpl;
+use test_utils::{Identity, ProviderImpl};
 use tokio::sync::OnceCell;
 use tokio::time;
 
-static ALICE: OnceCell<Keyring> = OnceCell::const_new();
-static BOB: OnceCell<Keyring> = OnceCell::const_new();
-static CAROL: OnceCell<Keyring> = OnceCell::const_new();
+static ALICE: OnceCell<Identity> = OnceCell::const_new();
+static BOB: OnceCell<Identity> = OnceCell::const_new();
+static CAROL: OnceCell<Identity> = OnceCell::const_new();
 
-async fn alice() -> &'static Keyring {
-    ALICE.get_or_init(|| async { Keyring::new("protocols_query_alice").await.unwrap() }).await
+async fn alice() -> &'static Identity {
+    ALICE.get_or_init(|| async { Identity::new("protocols_query_alice").await }).await
 }
-
-async fn bob() -> &'static Keyring {
-    BOB.get_or_init(|| async {
-        let keyring = Keyring::new("protocols_query_bob").await.expect("create keyring");
-        keyring
-    })
-    .await
+async fn bob() -> &'static Identity {
+    BOB.get_or_init(|| async { Identity::new("protocols_query_bob").await }).await
 }
-
-async fn carol() -> &'static Keyring {
-    CAROL.get_or_init(|| async { Keyring::new("protocols_query_carol").await.unwrap() }).await
+async fn carol() -> &'static Identity {
+    CAROL.get_or_init(|| async { Identity::new("protocols_query_carol").await }).await
 }
 
 // Should return protocols matching the query.
@@ -62,7 +50,7 @@ async fn authorized() {
             .build()
             .await
             .expect("should build");
-        let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+        let reply = credibil_dwn::handle(alice.did(), configure, &provider)
             .await
             .expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -77,9 +65,7 @@ async fn authorized() {
         .build()
         .await
         .expect("should build");
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -89,9 +75,7 @@ async fn authorized() {
     // Execute a 'fetch-all' query without filter.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(alice).build().await.expect("should build");
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -119,7 +103,7 @@ async fn unauthorized() {
             .build()
             .await
             .expect("should build");
-        let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+        let reply = credibil_dwn::handle(alice.did(), configure, &provider)
             .await
             .expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -129,9 +113,7 @@ async fn unauthorized() {
     // Query for a protocol as an anonymous (unauthenticated) user.
     // --------------------------------------------------
     let query = QueryBuilder::new().filter("http://protocol-2.xyz").build();
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -146,9 +128,7 @@ async fn unauthorized() {
         .build()
         .await
         .expect("should build");
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -158,9 +138,7 @@ async fn unauthorized() {
     // Query all published protocols as an anonymous (unauthenticated) user.
     // --------------------------------------------------
     let query = QueryBuilder::new().build();
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -170,9 +148,7 @@ async fn unauthorized() {
     // Query all published protocols as an unauthorized user.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(bob).build().await.expect("should build");
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -196,8 +172,7 @@ async fn bad_protocol() {
         protocol: "protocol-3.xyz/".to_string(),
     });
 
-    let Err(Error::BadRequest(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
+    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), query, &provider).await
     else {
         panic!("should be BadRequest");
     };
@@ -221,8 +196,7 @@ async fn tampered_signature() {
     let base64 = Base64UrlUnpadded::encode_string(&bytes);
     authorization.signature.payload = base64;
 
-    let Err(Error::Unauthorized(_)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
+    let Err(Error::Unauthorized(_)) = credibil_dwn::handle(alice.did(), query, &provider).await
     else {
         panic!("should be Unauthorized");
     };
@@ -245,8 +219,7 @@ async fn bad_signature() {
         }],
     };
 
-    let Err(Error::Unauthorized(_)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
+    let Err(Error::Unauthorized(_)) = credibil_dwn::handle(alice.did(), query, &provider).await
     else {
         panic!("should be Unauthorized");
     };
@@ -270,7 +243,7 @@ async fn valid_grant() {
             .build()
             .await
             .expect("should build");
-        let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+        let reply = credibil_dwn::handle(alice.did(), configure, &provider)
             .await
             .expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -280,7 +253,7 @@ async fn valid_grant() {
     // Alice grants Bob permission to query protocols.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Protocols {
             method: Method::Query,
             protocol: None,
@@ -292,10 +265,9 @@ async fn valid_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider)
-            .await
-            .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -307,9 +279,7 @@ async fn valid_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -325,9 +295,7 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -342,9 +310,8 @@ async fn valid_grant() {
         .await
         .expect("should create revocation");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), bob_revocation, &provider)
-        .await
-        .expect("should write");
+    let reply =
+        credibil_dwn::handle(alice.did(), bob_revocation, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -361,8 +328,7 @@ async fn valid_grant() {
         }],
     };
 
-    let Err(Error::Unauthorized(_)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
+    let Err(Error::Unauthorized(_)) = credibil_dwn::handle(alice.did(), query, &provider).await
     else {
         panic!("should be Unauthorized");
     };
@@ -385,7 +351,7 @@ async fn valid_scope() {
             .build()
             .await
             .expect("should build");
-        let reply = credibil_dwn::handle(&alice.did().await.expect("did"), configure, &provider)
+        let reply = credibil_dwn::handle(alice.did(), configure, &provider)
             .await
             .expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -395,7 +361,7 @@ async fn valid_scope() {
     // Alice grants Bob permission to query protocols.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Protocols {
             method: Method::Query,
             protocol: Some("http://protocol-1.xyz".to_string()),
@@ -407,10 +373,9 @@ async fn valid_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider)
-            .await
-            .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -424,9 +389,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -445,9 +408,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -465,9 +426,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -485,9 +444,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider)
-        .await
-        .expect("should match");
+    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -507,7 +464,7 @@ async fn expired_grant() {
     // Alice grants Bob permission to query protocols.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Protocols {
             method: Method::Query,
             protocol: None,
@@ -520,10 +477,9 @@ async fn expired_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider)
-            .await
-            .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -538,9 +494,7 @@ async fn expired_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant has expired");
@@ -557,7 +511,7 @@ async fn inactive_grant() {
     // Alice grants Bob permission to query protocols.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Protocols {
             method: Method::Query,
             protocol: None,
@@ -569,10 +523,9 @@ async fn inactive_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider)
-            .await
-            .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -594,9 +547,7 @@ async fn inactive_grant() {
         .expect("should subtract");
     query.descriptor.base.message_timestamp = older_timestamp;
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant is not yet active");
@@ -613,7 +564,7 @@ async fn invalid_scope() {
     // Alice grants Bob permission to read records.
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
-        .granted_to(&bob.did().await.expect("did"))
+        .granted_to(bob.did())
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "https://example.com/protocol/test".to_string(),
@@ -626,10 +577,9 @@ async fn invalid_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(&alice.did().await.expect("did"), bob_grant.clone(), &provider)
-            .await
-            .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -642,9 +592,7 @@ async fn invalid_scope() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "interface is not within grant scope");
@@ -667,9 +615,7 @@ async fn missing_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&alice.did().await.expect("did"), query, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "no grant found");
@@ -687,7 +633,7 @@ async fn incorrect_grantor() {
     // Alice gives Carol a permission grant with scope ProtocolsQuery.
     // --------------------------------------------------
     let carol_grant = GrantBuilder::new()
-        .granted_to(&carol.did().await.expect("did"))
+        .granted_to(carol.did())
         .scope(Scope::Records {
             method: Method::Read,
             protocol: "https://example.com/protocol/test".to_string(),
@@ -697,10 +643,9 @@ async fn incorrect_grantor() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        credibil_dwn::handle(&alice.did().await.expect("did"), carol_grant.clone(), &provider)
-            .await
-            .expect("should write");
+    let reply = credibil_dwn::handle(alice.did(), carol_grant.clone(), &provider)
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -709,9 +654,7 @@ async fn incorrect_grantor() {
     let mut grant = carol_grant.clone();
     grant.sign_as_owner(bob).await.expect("should sign");
 
-    let reply = credibil_dwn::handle(&bob.did().await.expect("did"), grant, &provider)
-        .await
-        .expect("should write");
+    let reply = credibil_dwn::handle(bob.did(), grant, &provider).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -724,9 +667,7 @@ async fn incorrect_grantor() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) =
-        credibil_dwn::handle(&bob.did().await.expect("did"), query, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = credibil_dwn::handle(bob.did(), query, &provider).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted by grantor");

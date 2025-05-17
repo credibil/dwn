@@ -33,7 +33,7 @@ base64ct.workspace = true
 bytes = "1.10.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.41", features = ["serde"] }
-ciborium = "0.2.2"
+ciborium.workspace = true
 cid.workspace = true
 credibil-identity.workspace = true
 credibil-jose.workspace = true
@@ -47,7 +47,7 @@ http-body = "1.0.1"
 http-body-util = "0.1"
 ipld-core = "0.4.2"
 jsonschema = { version = "0.30.0", default-features = false, features = ["resolve-file"] }
-multihash-codetable = { version = "0.1.4", features = ["sha2"] }
+multihash-codetable.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_ipld_dagcbor = "0.6.3"
@@ -58,11 +58,10 @@ thiserror = "2.0.12"
 tokio = { workspace = true, optional = true }
 tracing = "0.1.41"
 ulid = "1.2.1"
-uuid = { version = "1.16.0", features = ["fast-rng", "v4"] }
+uuid.workspace = true
 zeroize = "1.8.1"
 
 [dev-dependencies]
-async-nats = "0.41.0"
 axum = { version = "0.8.4", features = ["macros"] }
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
 blockstore = "0.7.1"
@@ -71,6 +70,7 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["full"] }
 multibase.workspace = true
 reqwest = { version = "0.12.15", features = ["json"] }
+test-utils = { path = "crates/test-utils" }
 tower-http = { version = "0.6.2", features = ["cors", "set-header", "trace"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
@@ -115,6 +115,7 @@ nursery = "warn"
 [workspace.dependencies]
 anyhow = "1.0.98"
 base64ct = { version = "1.7.3", features = ["std"] }
+ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-dwn = { path = "." }
 credibil-identity = { git = "https://github.com/credibil/identity.git" }
@@ -124,12 +125,14 @@ datastore = { path = "./crates/datastore" }
 futures = "0.3.31"
 http = "1.3.1"
 multibase = "0.9.1"
+multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 rand = "0.8.5"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["alloc"] }
 sha2 = "0.10.9"
 test-kms = { git = "https://github.com/credibil/se.git" }
 tokio = { version = "1.45.0", features = ["macros", "rt-multi-thread", "sync", "time"] }
+uuid = { version = "1.16.0", features = ["fast-rng", "v4"] }
 
 [patch.crates-io]
 # credibil-identity = { path = "../identity" }

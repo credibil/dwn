@@ -25,7 +25,7 @@ async fn configure_any() {
     // Alice grants Bob the ability to configure any protocol
     // --------------------------------------------------
     let builder = GrantBuilder::new()
-        .granted_to(&BOB.did)
+        .granted_to(BOB.did(),)
         .request_id("grant_id_1")
         .description("Allow Bob to configure any protocol")
         .delegated(true)
@@ -50,7 +50,7 @@ async fn configure_any() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&ALICE.did, configure, &provider)
+    let reply = endpoint::handle(ALICE.did(),, configure, &provider)
         .await
         .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -65,7 +65,7 @@ async fn configure_any() {
         .await
         .expect("should build");
 
-    let reply = endpoint::handle(&ALICE.did, query, &provider).await.expect("should find protocol");
+    let reply = endpoint::handle(ALICE.did(),, query, &provider).await.expect("should find protocol");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body = reply.body.expect("should have body");

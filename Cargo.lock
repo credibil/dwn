@@ -592,7 +592,6 @@ name = "credibil-dwn"
 version = "0.1.2"
 dependencies = [
  "anyhow",
- "async-nats",
  "async-recursion",
  "axum",
  "axum-extra",
@@ -627,6 +626,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "test-kms",
+ "test-utils",
  "thiserror 2.0.12",
  "tokio",
  "tower-http",
@@ -3014,6 +3014,28 @@ dependencies = [
  "serde",
  "sha2",
  "x25519-dalek",
+]
+
+[[package]]
+name = "test-utils"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "async-nats",
+ "base64ct",
+ "blockstore",
+ "ciborium",
+ "cid",
+ "credibil-dwn",
+ "credibil-identity",
+ "credibil-jose",
+ "credibil-se",
+ "futures",
+ "multihash-codetable",
+ "serde",
+ "serde_json",
+ "test-kms",
+ "uuid",
 ]
 
 [[package]]

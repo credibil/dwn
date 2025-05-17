@@ -408,22 +408,22 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
 //         // add message
 //         let message_cid = write.cid().unwrap();
 //         let block = ipfs::encode_block(&write).unwrap();
-//         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
+//         block_store.put(alice.did(),, PARTITION, &message_cid, &block).await.unwrap();
 
 //         // update indexes
-//         super::insert(&alice.did, PARTITION, &write, &block_store).await.unwrap();
+//         super::insert(alice.did(),, PARTITION, &write, &block_store).await.unwrap();
 
 //         // execute query
 //         let query = RecordsQueryBuilder::new()
 //             .add_filter(
 //                 RecordsFilter::new()
-//                     // .add_author(&alice.did)
+//                     // .add_author(alice.did(),)
 //                     // .data_size(Range::new().gt(8)),
 //                     .record_id(write.record_id),
 //             )
 //             .build();
 
-//         let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
+//         let items = super::query(alice.did(),, PARTITION, &query, &block_store).await.unwrap();
 //     }
 
 //     #[tokio::test]
@@ -441,14 +441,14 @@ impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
 //         // add message
 //         let message_cid = configure.cid().unwrap();
 //         let block = ipfs::encode_block(&configure).unwrap();
-//         block_store.put(&alice.did, PARTITION, &message_cid, &block).await.unwrap();
+//         block_store.put(alice.did(),, PARTITION, &message_cid, &block).await.unwrap();
 
 //         // update indexes
-//         super::insert(&alice.did, PARTITION, &configure, &block_store).await.unwrap();
+//         super::insert(alice.did(),, PARTITION, &configure, &block_store).await.unwrap();
 
 //         // execute query
 //         let query = ProtocolsQueryBuilder::new().protocol("http://minimal.xyz").build();
-//         let items = super::query(&alice.did, PARTITION, &query, &block_store).await.unwrap();
+//         let items = super::query(alice.did(),, PARTITION, &query, &block_store).await.unwrap();
 //     }
 
 //     struct BlockStoreImpl {
