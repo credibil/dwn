@@ -4,9 +4,8 @@ use std::sync::{Arc, LazyLock, Mutex};
 use anyhow::{Result, bail};
 use credibil_identity::did::{self, Document, DocumentBuilder};
 use credibil_identity::{Identity as Id, Key, SignerExt};
+use credibil_jose::PublicKeyJwk;
 use credibil_se::{Algorithm, Curve, PublicKey, Receiver, SharedSecret, Signer};
-
-use crate::keystore::{KeyUse, Keyring};
 
 pub static DID_STORE: LazyLock<Arc<Mutex<HashMap<String, Document>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
@@ -15,18 +14,17 @@ pub static DID_STORE: LazyLock<Arc<Mutex<HashMap<String, Document>>>> =
 pub struct Identity {
     pub url: String,
     did: String,
-    keyring: Keyring,
+    keyring: test_kms::Keyring,
     invalid: bool,
 }
 
 impl Identity {
-    // Generate a DID-based Identity.
     pub async fn new(owner: &str) -> Self {
         // create a new keyring and add a signing key.
-        let mut keyring = Keyring::new(owner).await.expect("keyring created");
-        keyring.add("signer", KeyUse::Signing).await.expect("signing key added");
-        let verifying_key =
-            keyring.verifying_key_jwk("signer").await.expect("JWK verifying key derived");
+        let mut keyring = test_kms::Keyring::new(owner).await.expect("keyring created");
+        keyring.add(&Curve::Ed25519, "signer").await.expect("keyring created");
+        let key_bytes = keyring.verifying_key("signer").await.expect("key bytes");
+        let verifying_key = PublicKeyJwk::from_bytes(&key_bytes).expect("verifying key");
 
         // generate a did:web document
         let url = format!("https://credibil.io/{}", uuid::Uuid::new_v4());
@@ -49,7 +47,7 @@ impl Identity {
     pub async fn invalid() -> Self {
         let mut id = Self::new("invalid").await;
         id.invalid = true;
-        id.keyring.keys.add(&Curve::Ed25519, "bad_signer").await.expect("bad signing key");
+        id.keyring.add(&Curve::Ed25519, "bad_signer").await.expect("bad signing key");
         id
     }
 
@@ -103,7 +101,7 @@ impl Receiver for Identity {
     }
 
     async fn shared_secret(&self, sender_public: PublicKey) -> Result<SharedSecret> {
-        let secret = self.keyring.keys.private_key("signing").await?;
+        let secret = self.keyring.private_key("signing").await?;
         credibil_se::derive_x25519_secret(secret.as_bytes(), &sender_public)
     }
 }
