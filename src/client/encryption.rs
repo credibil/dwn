@@ -66,7 +66,8 @@ pub async fn decrypt(
         ciphertext: Base64UrlUnpadded::encode_string(data),
     };
 
-    let plaintext: Vec<u8> = jwe::decrypt(&jwe, &receiver).await.context("failed to decrypt")?;
+    let plaintext: Vec<u8> =
+        jwe::decrypt_bytes(&jwe, &receiver).await.map_err(|e| bad!("failed to decrypt: {e}"))?;
 
     Ok(plaintext)
 }

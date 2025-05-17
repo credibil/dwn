@@ -950,9 +950,7 @@ impl<'a> EncryptOptions<'a> {
             alg: None,
         };
         let aad = serde_json::to_vec(&protected).context("deserializing protected header")?;
-
-        let plaintext = serde_json::to_vec(self.data).context("deserializing plaintext")?;
-        let encrypted = self.content_algorithm.encrypt(&plaintext, &cek, &aad)?;
+        let encrypted = self.content_algorithm.encrypt(self.data, &cek, &aad)?;
 
         Ok(Encrypted {
             content_algorithm: self.content_algorithm.clone(),
