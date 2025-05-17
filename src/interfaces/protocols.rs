@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 #[cfg(feature = "server")]
 use std::collections::HashMap;
+use std::slice;
 
 use anyhow::Context;
 use credibil_jose::PublicKeyJwk;
@@ -151,8 +152,10 @@ fn add_encryption(
     structure: &mut BTreeMap<String, RuleSet>, parent_key: &DerivedPrivateJwk,
 ) -> Result<()> {
     for (key, rule_set) in structure {
-        let derived_jwk =
-            hd_key::derive_jwk(parent_key.clone(), &DerivationPath::Relative(&[key.clone()]))?;
+        let derived_jwk = hd_key::derive_jwk(
+            parent_key.clone(),
+            &DerivationPath::Relative(slice::from_ref(key)),
+        )?;
         let public_key_jwk = derived_jwk.derived_private_key.public_key.clone();
         rule_set.encryption = Some(PathEncryption {
             root_key_id: parent_key.root_key_id.clone(),

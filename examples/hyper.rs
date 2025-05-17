@@ -4,10 +4,8 @@
 mod kms;
 mod provider;
 
-use std::convert::Infallible;
-
 use anyhow::Result;
-use credibil_dwn::interfaces::records;
+use credibil_dwn::interfaces::{messages, protocols, records};
 use credibil_dwn::{self, IntoHttp};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
@@ -22,13 +20,10 @@ use crate::provider::ProviderImpl;
 #[tokio::main]
 async fn main() -> Result<()> {
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
-    println!("Listening on http://0.0.0.0:8080");
-
-    let keyring = Keyring::new("alice").await.expect("should create keyring");
-    let owner = keyring.did().await.expect("should get did");
+    println!("Alice's DWN listening on http://0.0.0.0:8080");
 
     let svc = Svc {
-        owner,
+        owner: Keyring::new("alice").await?.did().await?,
         provider: ProviderImpl::new().await?,
     };
 
@@ -54,28 +49,52 @@ struct Svc {
 
 impl Svc {
     // Handle DWN messages.
-    async fn handle(
-        &self, req: hyper::Request<Incoming>,
-    ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
+    async fn handle(&self, req: hyper::Request<Incoming>) -> Result<hyper::Response<Full<Bytes>>> {
         let path = req.uri().path().to_string();
-        let body = req.into_body().collect().await.unwrap();
+        let body = req.into_body().collect().await.expect("should have body");
 
-        let request = match path.as_str() {
-            "/read/records/:id" => {
-                serde_json::from_slice::<records::Read>(&body.to_bytes()).unwrap()
+        match path.as_str() {
+            "/messages/query" => {
+                let request = serde_json::from_slice::<messages::Query>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
             }
-            _ => todo!(),
-        };
-
-        Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            "/messages/read" => {
+                let request = serde_json::from_slice::<messages::Read>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/messages/subscribe" => {
+                let request = serde_json::from_slice::<messages::Subscribe>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/protocols/configure" => {
+                let request = serde_json::from_slice::<protocols::Configure>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/protocols/query" => {
+                let request = serde_json::from_slice::<protocols::Query>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/records/delete" => {
+                let request = serde_json::from_slice::<records::Delete>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/records/query" => {
+                let request = serde_json::from_slice::<records::Query>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/records/read" => {
+                let request = serde_json::from_slice::<records::Read>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/records/subscribe" => {
+                let request = serde_json::from_slice::<records::Subscribe>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            "/records/write" => {
+                let request = serde_json::from_slice::<records::Write>(&body.to_bytes())?;
+                Ok(credibil_dwn::handle(&self.owner, request, &self.provider).await.into_http())
+            }
+            _ => Err(anyhow::anyhow!("path {path} is not supported")),
+        }
     }
 }
-
-// async fn into_records_read (req: hyper::Request<Incoming>) -> Result<records::Read, Infallible> {
-//     // const record = await RecordsRead.create({
-//     //   filter: { recordId: req.params.id },
-//     // });
-
-//     let read= serde_json::from_slice::<records::Read>(&body.to_bytes()).unwrap();
-
-//   }

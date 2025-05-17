@@ -64,12 +64,15 @@ zeroize = "1.8.1"
 [dev-dependencies]
 async-nats = "0.41.0"
 axum = { version = "0.8.4", features = ["macros"] }
+axum-extra = { version = "0.10.1", features = ["typed-header"] }
 blockstore = "0.7.1"
 credibil-dwn.workspace = true
 hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["full"] }
 multibase.workspace = true
 reqwest = { version = "0.12.15", features = ["json"] }
+tower-http = { version = "0.6.2", features = ["cors", "set-header", "trace"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
 [[example]]
 name = "axum"
