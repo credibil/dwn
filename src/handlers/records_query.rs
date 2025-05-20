@@ -84,14 +84,12 @@ pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Resu
     })
 }
 
-impl<P: Provider> Handler<P> for Request<Query> {
+impl<P: Provider> Handler<QueryReply, P> for Request<Query> {
     type Error = Error;
-    type Provider = P;
-    type Reply = QueryReply;
 
     async fn handle(
-        self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
+        self, verifier: &str, provider: &P,
+    ) -> Result<impl Into<Reply<QueryReply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

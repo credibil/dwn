@@ -148,14 +148,12 @@ async fn handle(
     })
 }
 
-impl<P: Provider> Handler<P> for Request<Configure> {
+impl<P: Provider> Handler<ConfigureReply,P> for Request<Configure> {
     type Error = Error;
-    type Provider = P;
-    type Reply = ConfigureReply;
 
     async fn handle(
-        self, verifier: &str, provider: &Self::Provider,
-    ) -> Result<impl Into<Reply<Self::Reply>>, Self::Error> {
+        self, verifier: &str, provider: &P,
+    ) -> Result<impl Into<Reply<ConfigureReply>>, Self::Error> {
         handle(verifier, provider, self.body).await
     }
 }

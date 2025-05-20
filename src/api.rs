@@ -19,24 +19,6 @@ use crate::schema;
 /// DWN handler `Result` type.
 pub type Result<T, E = Error> = anyhow::Result<T, E>;
 
-/// Methods common to all messages.
-///
-/// The primary role of this trait is to provide a common interface for
-/// messages so they can be handled by [`handle`] method.
-pub trait Handler<P>: Debug + Send + Sync {
-    /// The provider type used to access the implementer's capability provider.
-    type Provider;
-    /// The inner reply type specific to the implementing message.
-    type Reply;
-    /// The error type returned by the handler.
-    type Error;
-
-    /// Routes the message to the concrete handler used to process the message.
-    fn handle(
-        self, owner: &str, provider: &Self::Provider,
-    ) -> impl Future<Output = Result<impl Into<Reply<Self::Reply>>, Self::Error>> + Send;
-}
-
 /// A request to process.
 #[derive(Clone, Debug)]
 pub struct Request<B, H = NoHeaders>
@@ -120,6 +102,20 @@ impl<T> Deref for Reply<T> {
     fn deref(&self) -> &Self::Target {
         &self.body
     }
+}
+
+/// Request handler.
+///
+/// The primary role of this trait is to provide a common interface for
+/// requests so they can be handled by [`handle`] method.
+pub trait Handler<U, P> {
+    /// The error type returned by the handler.
+    type Error;
+
+    /// Routes the message to the concrete handler used to process the message.
+    fn handle(
+        self, tenant: &str, provider: &P,
+    ) -> impl Future<Output = Result<impl Into<Reply<U>>, Self::Error>> + Send;
 }
 
 /// Trait for converting a `Result` into an HTTP response.

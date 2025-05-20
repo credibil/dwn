@@ -35,15 +35,15 @@ use crate::provider::Provider;
 /// information on the reason for failure.
 #[instrument(level = "debug", skip(provider))]
 pub async fn handle<B, H, P, U>(
-    verifier: &str, request: impl Into<Request<B, H>> + Debug, provider: &P,
+    owner: &str, request: impl Into<Request<B, H>> + Debug, provider: &P,
 ) -> Result<Reply<U>>
 where
     B: Body,
     H: Headers,
     P: Provider,
-    Request<B, H>: Handler<P, Reply = U, Provider = P, Error = Error>,
+    Request<B, H>: Handler<U, P, Error = Error>,
 {
     let request: Request<B, H> = request.into();
-    request.validate(verifier, provider).await?;
-    Ok(request.handle(verifier, provider).await?.into())
+    request.validate(owner, provider).await?;
+    Ok(request.handle(owner, provider).await?.into())
 }
