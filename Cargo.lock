@@ -577,7 +577,7 @@ dependencies = [
 [[package]]
 name = "credibil-did"
 version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#ba82466693ee89cc7a6e13a52dce70ec11046f2a"
+source = "git+https://github.com/credibil/proof.git#ffdf6f8e23c7f9450f4650b8720a3c5dd1bd3695"
 dependencies = [
  "anyhow",
  "chrono",
@@ -641,6 +641,7 @@ dependencies = [
 [[package]]
 name = "credibil-ecc"
 version = "0.1.2"
+source = "git+https://github.com/credibil/key.git#a014404c3e3b4f1296b7f5aa7a8b9419390131fa"
 dependencies = [
  "aes-gcm",
  "aes-kw",
@@ -663,7 +664,7 @@ dependencies = [
 [[package]]
 name = "credibil-jose"
 version = "0.1.2"
-source = "git+https://github.com/credibil/key.git#ae196e903127c22724e470e0734b8600696e43d8"
+source = "git+https://github.com/credibil/key.git#a014404c3e3b4f1296b7f5aa7a8b9419390131fa"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -678,7 +679,7 @@ dependencies = [
 [[package]]
 name = "credibil-proof"
 version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#ba82466693ee89cc7a6e13a52dce70ec11046f2a"
+source = "git+https://github.com/credibil/proof.git#ffdf6f8e23c7f9450f4650b8720a3c5dd1bd3695"
 dependencies = [
  "anyhow",
  "credibil-core",

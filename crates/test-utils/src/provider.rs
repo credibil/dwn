@@ -2,17 +2,17 @@
 
 use std::sync::Arc;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use blockstore::{Blockstore as _, InMemoryBlockstore};
 use cid::Cid;
 use credibil_dwn::event::{Event, Subscriber};
-use credibil_dwn::provider::{BlockStore, EventStream, Identity, IdentityResolver};
-use credibil_identity::Identity as Id;
+use credibil_dwn::provider::{BlockStore, EventStream, Resolver};
+use credibil_proof::DocumentRequest;
 use futures::stream::StreamExt;
 use multihash_codetable::MultihashDigest;
 use serde::{Deserialize, Serialize};
 
-use crate::identity::DID_STORE;
+use crate::datastore::Store;
 
 const RAW: u64 = 0x55;
 
@@ -80,14 +80,12 @@ impl BlockStore for ProviderImpl {
     }
 }
 
-impl IdentityResolver for ProviderImpl {
-    async fn resolve(&self, url: &str) -> Result<Identity> {
-        let key = url.trim_end_matches("/did.json");
-        let store = DID_STORE.lock().expect("should lock");
-        let Some(doc) = store.get(key).cloned() else {
-            bail!("document not found");
-        };
-        Ok(Id::DidDocument(doc))
+impl Resolver for ProviderImpl {
+    async fn resolve(&self, url: &str) -> Result<Vec<u8>> {
+        let request = DocumentRequest { url: url.to_string() };
+        let document =
+            credibil_proof::handle("owner", request, &Store).await.map(|r| r.0.clone())?;
+        serde_json::to_vec(&document).map_err(|e| e.into())
     }
 }
 

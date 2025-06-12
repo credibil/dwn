@@ -277,7 +277,7 @@ impl Index {
         self.items.remove(&key)
     }
 
-    fn lower_bound(&self, lower: Bound<String>) -> Range<String, IndexItem> {
+    fn lower_bound(&self, lower: Bound<String>) -> Range<'_, String, IndexItem> {
         self.items.range((lower, Unbounded))
     }
 
@@ -328,7 +328,7 @@ impl IndexesBuilder<NoOwner, NoPartition, NoStore> {
 }
 
 impl<P, S> IndexesBuilder<NoOwner, P, S> {
-    fn owner(self, owner: &str) -> IndexesBuilder<Owner, P, S> {
+    fn owner(self, owner: &str) -> IndexesBuilder<Owner<'_>, P, S> {
         IndexesBuilder {
             owner: Owner(owner),
             partition: self.partition,
@@ -339,7 +339,7 @@ impl<P, S> IndexesBuilder<NoOwner, P, S> {
 }
 
 impl<O, S> IndexesBuilder<O, NoPartition, S> {
-    fn partition(self, partition: &str) -> IndexesBuilder<O, Partition, S> {
+    fn partition(self, partition: &str) -> IndexesBuilder<O, Partition<'_>, S> {
         IndexesBuilder {
             owner: self.owner,
             partition: Partition(partition),

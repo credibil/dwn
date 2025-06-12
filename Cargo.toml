@@ -69,13 +69,13 @@ tower-http = { version = "0.6.6", features = ["cors", "set-header", "trace"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
 [[example]]
-name = "axum"
-path = "examples/axum.rs"
+name = "json_rpc"
+path = "examples/json_rpc.rs"
 # required-features = ["client", "server"]
 
 [[example]]
-name = "hyper"
-path = "examples/hyper.rs"
+name = "http"
+path = "examples/http.rs"
 # required-features = ["client", "server"]
 
 # -----------------------------------------------
@@ -111,10 +111,10 @@ anyhow = "1.0.98"
 ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-core = { git = "https://github.com/credibil/core.git" }
+credibil-dwn = { path = "." }
 credibil-ecc = { git = "https://github.com/credibil/key.git" }
 credibil-jose = { git = "https://github.com/credibil/key.git" }
 credibil-proof = { git = "https://github.com/credibil/proof.git" }
-credibil-dwn = { path = "." }
 futures = "0.3.31"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 serde = { version = "1.0.219", features = ["derive"] }
@@ -125,8 +125,8 @@ uuid = { version = "1.17.0", features = ["fast-rng", "v4"] }
 # [patch."https://github.com/credibil/proof"]
 # credibil-proof = { path = "../proof" }
 
-[patch."https://github.com/credibil/key"]
-credibil-ecc = { path = "../key/ecc" }
+# [patch."https://github.com/credibil/key"]
+# credibil-ecc = { path = "../key/ecc" }
 # credibil-jose = { path = "../key/jose" }
 
 [profile.release]

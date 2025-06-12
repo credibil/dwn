@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::io::Read;
 
 use anyhow::Result;
-pub use credibil_identity::{Identity, IdentityResolver};
+pub use credibil_proof::{ Resolver};
 pub use datastore::BlockStore;
 use datastore::{data, store};
 use ipld_core::ipld::Ipld;
@@ -30,14 +30,14 @@ use crate::utils::ipfs::Block;
 
 /// Provider trait.
 pub trait Provider:
-    MessageStore + DataStore + TaskStore + EventLog + EventStream + IdentityResolver
+    MessageStore + DataStore + TaskStore + EventLog + EventStream + Resolver
 {
 }
 
 /// A blanket implementation for `Provider` trait  to allow any type
 /// implementing the required super traits to be considered a `Provider`.
 impl<T> Provider for T where
-    T: MessageStore + DataStore + TaskStore + EventLog + EventStream + IdentityResolver
+    T: MessageStore + DataStore + TaskStore + EventLog + EventStream + Resolver
 {
 }
 

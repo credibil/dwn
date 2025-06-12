@@ -3,13 +3,11 @@
 //! The `Authorization` module groups types and functionality loosely related
 //! to message authorization and authentication.
 
-#[cfg(feature = "server")]
-use anyhow::{Context, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_jose::{Jws, JwsBuilder, Jwt};
+use credibil_proof::Signature;
 #[cfg(feature = "server")]
-use credibil_identity::{IdentityResolver, did::Resource};
-use credibil_identity::{SignerExt, did};
-use credibil_jose::{Jws, JwsBuilder, Jwt, PublicKeyJwk};
+use credibil_proof::{Resolver, resolve_jwk};
 use serde::{Deserialize, Serialize};
 
 use crate::api::Result;
@@ -73,8 +71,8 @@ pub struct Authorization {
 impl Authorization {
     /// Verify message signature.
     #[cfg(feature = "server")]
-    pub(crate) async fn verify(&self, resolver: &impl IdentityResolver) -> Result<()> {
-        let resolver = async |kid: String| did_jwk(&kid, resolver).await;
+    pub(crate) async fn verify(&self, resolver: &impl Resolver) -> Result<()> {
+        let resolver = async |kid: String| resolve_jwk(&kid, resolver).await;
 
         let _: Jwt<JwsPayload> = self
             .signature
@@ -182,22 +180,6 @@ pub fn kid_did(jws: &Jws) -> Result<String> {
     Ok(did.to_owned())
 }
 
-/// Retrieve the JWK specified by the provided DID URL.
-///
-/// # Errors
-///
-/// TODO: Document errors
-pub async fn did_jwk<R>(did_url: &str, resolver: &R) -> anyhow::Result<PublicKeyJwk>
-where
-    R: IdentityResolver + Send + Sync,
-{
-    let deref = did::dereference(did_url, resolver).await.context("dereferencing DID URL")?;
-    let Resource::VerificationMethod(vm) = deref else {
-        return Err(anyhow!("Verification method not found"));
-    };
-    vm.key.jwk().context("getting JWK from verification method")
-}
-
 /// Options to use when creating a permission grant.
 #[derive(Clone, Debug, Default)]
 pub struct AuthorizationBuilder {
@@ -249,7 +231,7 @@ impl AuthorizationBuilder {
     ///
     /// Will return an error when an incorrect value has been provided or when
     /// there was an issue signing the Authorization
-    pub async fn build(self, signer: &impl SignerExt) -> Result<Authorization> {
+    pub async fn build(self, signer: &impl Signature) -> Result<Authorization> {
         let descriptor_cid =
             self.descriptor_cid.ok_or_else(|| bad_request!("descriptor not found"))?;
         let delegated_grant_id = if let Some(grant) = &self.delegated_grant {

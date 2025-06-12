@@ -44,7 +44,7 @@ cfg_if::cfg_if! {
 }
 
 use ::serde::{Deserialize, Serialize};
-pub use credibil_se::{Receiver, Signer};
+pub use credibil_ecc::{Receiver, Signer};
 use derive_more::Display;
 
 pub use self::api::*;

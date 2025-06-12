@@ -17,7 +17,7 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use credibil_jose::jwe::{self, Protected};
 use credibil_jose::{Jws, PublicKeyJwk};
-use credibil_se::{AlgAlgorithm, Curve, EncAlgorithm, PublicKey};
+use credibil_ecc::{AlgAlgorithm, Curve, EncAlgorithm, PublicKey};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 

@@ -3,8 +3,8 @@
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use credibil_identity::SignerExt;
-use credibil_se::Signer;
+use credibil_proof::Signature;
+use credibil_ecc::Signer;
 
 use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
 pub use crate::grants::{Conditions, Publication, RecordsScope, Scope};
@@ -168,7 +168,7 @@ impl GrantBuilder<Grantee, Scoped, Unsigned> {
     }
 }
 
-impl<S: SignerExt> GrantBuilder<Grantee, Scoped, Signed<'_, S>> {
+impl<S: Signature> GrantBuilder<Grantee, Scoped, Signed<'_, S>> {
     /// Generate a permission grant.
     ///
     /// # Errors
@@ -297,7 +297,7 @@ impl RequestBuilder<Scoped, Unsigned> {
     }
 }
 
-impl<S: SignerExt> RequestBuilder<Scoped, Signed<'_, S>> {
+impl<S: Signature> RequestBuilder<Scoped, Signed<'_, S>> {
     /// Generate a grant request.
     ///
     /// # Errors
@@ -404,7 +404,7 @@ impl RevocationBuilder<Grant, Unsigned> {
     }
 }
 
-impl<S: SignerExt> RevocationBuilder<Grant, Signed<'_, S>> {
+impl<S: Signature> RevocationBuilder<Grant, Signed<'_, S>> {
     /// Generate a grant revocation.
     ///
     /// # Errors

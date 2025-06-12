@@ -21,8 +21,8 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use credibil_identity::SignerExt;
-use credibil_se::Signer;
+use credibil_proof::Signature;
+use credibil_ecc::Signer;
 
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;
@@ -123,7 +123,7 @@ impl<D> ConfigureBuilder<D, Unsigned> {
     }
 }
 
-impl<S: SignerExt> ConfigureBuilder<Defined, Signed<'_, S>> {
+impl<S: Signature> ConfigureBuilder<Defined, Signed<'_, S>> {
     /// Generate the Configure message.
     ///
     /// # Errors
@@ -252,7 +252,7 @@ impl QueryBuilder<Unsigned> {
     }
 }
 
-impl<S: SignerExt> QueryBuilder<Signed<'_, S>> {
+impl<S: Signature> QueryBuilder<Signed<'_, S>> {
     /// Build the query.
     ///
     /// # Errors

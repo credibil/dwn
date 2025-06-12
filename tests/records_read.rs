@@ -19,9 +19,9 @@ use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{DataStore, MessageStore};
 use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid};
-use credibil_identity::{Key, SignerExt};
+use credibil_ecc::{Curve, KeyType};
 use credibil_jose::PublicKeyJwk;
-use credibil_se::{Curve, KeyType};
+use credibil_proof::{Signature, VerifyBy};
 use rand::RngCore;
 use test_utils::{Identity, ProviderImpl};
 use tokio::sync::OnceCell;
@@ -2120,7 +2120,7 @@ async fn decrypt_schema() {
     let alice = alice().await;
 
     let alice_key_ref = alice.verification_method().await.expect("should get kid");
-    let Key::KeyId(alice_kid) = alice_key_ref else {
+    let VerifyBy::KeyId(alice_kid) = alice_key_ref else {
         panic!("should be KeyId");
     };
 
@@ -2267,7 +2267,7 @@ async fn decrypt_schemaless() {
     // Alice derives participants' keys.
     // --------------------------------------------------
     let alice_key_ref = alice.verification_method().await.expect("should get kid");
-    let Key::KeyId(alice_kid) = alice_key_ref else {
+    let VerifyBy::KeyId(alice_kid) = alice_key_ref else {
         panic!("should be KeyId");
     };
     let data_format = String::from("image/jpg");
@@ -2367,7 +2367,7 @@ async fn decrypt_context() {
     // Alice's keys.
     // --------------------------------------------------
     let alice_key_ref = alice.verification_method().await.expect("should get kid");
-    let Key::KeyId(alice_kid) = alice_key_ref else {
+    let VerifyBy::KeyId(alice_kid) = alice_key_ref else {
         panic!("should be KeyId");
     };
     let alice_private_jwk = PrivateKeyJwk {
@@ -2386,7 +2386,7 @@ async fn decrypt_context() {
     // Bob's keys.
     // --------------------------------------------------
     let bob_key_ref = bob.verification_method().await.expect("should get kid");
-    let Key::KeyId(bob_kid) = bob_key_ref else {
+    let VerifyBy::KeyId(bob_kid) = bob_key_ref else {
         panic!("should be KeyId");
     };
     let bob_private_jwk = PrivateKeyJwk {
@@ -2644,7 +2644,7 @@ async fn decrypt_protocol() {
     // Alice's keys.
     // --------------------------------------------------
     let alice_key_ref = alice.verification_method().await.expect("should get kid");
-    let Key::KeyId(alice_kid) = alice_key_ref else {
+    let VerifyBy::KeyId(alice_kid) = alice_key_ref else {
         panic!("should be KeyId");
     };
 

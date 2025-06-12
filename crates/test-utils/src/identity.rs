@@ -1,45 +1,39 @@
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex};
-
-use anyhow::{Result, bail};
-use credibil_identity::did::{self, Document, DocumentBuilder};
-use credibil_identity::{Key, SignerExt};
+use anyhow::Result;
+use credibil_ecc::Curve::Ed25519;
+use credibil_ecc::{Algorithm, Entry, Keyring, PublicKey, Receiver, SharedSecret, Signer};
 use credibil_jose::PublicKeyJwk;
-use credibil_se::{Algorithm, Curve, PublicKey, Receiver, SharedSecret, Signer};
+use credibil_proof::did::{Document, DocumentBuilder, KeyId, VerificationMethod};
+use credibil_proof::{Signature, VerifyBy};
 
-pub static DID_STORE: LazyLock<Arc<Mutex<HashMap<String, Document>>>> =
-    LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+use crate::datastore::Store;
+use crate::vault::KeyVault as Vault;
 
 #[derive(Clone)]
 pub struct Identity {
     pub url: String,
-    did: String,
-    keyring: test_kms::Keyring,
+    document: Document,
+    signer: Entry,
     invalid: bool,
 }
 
 impl Identity {
     pub async fn new(owner: &str) -> Self {
         // create a new keyring and add a signing key.
-        let mut keyring = test_kms::Keyring::new(owner).await.expect("keyring created");
-        keyring.add(&Curve::Ed25519, "signer").await.expect("keyring created");
-        let key_bytes = keyring.verifying_key("signer").await.expect("key bytes");
-        let verifying_key = PublicKeyJwk::from_bytes(&key_bytes).expect("verifying key");
+        let signer =
+            Keyring::generate(&Vault, owner, "signing", Ed25519).await.expect("should generate");
+        let key = signer.verifying_key().await.expect("key bytes");
+        let jwk = PublicKeyJwk::from_bytes(&key.to_bytes()).expect("verifying key");
 
         // generate a did:web document
         let url = format!("https://credibil.io/{}", uuid::Uuid::new_v4());
-        let did = did::web::default_did(&url).expect("should construct DID");
-
-        let document = DocumentBuilder::new(&did)
-            .add_verifying_key(&verifying_key, true)
-            .expect("should add verifying key")
-            .build();
-        DID_STORE.lock().expect("should lock").insert(url.clone(), document);
+        let vm = VerificationMethod::build().key(jwk).key_id(KeyId::Index("key-0".to_string()));
+        let builder = DocumentBuilder::new().verification_method(vm).derive_key_agreement(true);
+        let document = credibil_proof::create(&url, builder, &Store).await.expect("should create");
 
         Self {
             url,
-            did,
-            keyring,
+            document,
+            signer,
             invalid: false,
         }
     }
@@ -51,27 +45,26 @@ impl Identity {
     }
 
     pub fn did(&self) -> &str {
-        &self.did
+        &self.document.id
     }
 
     pub async fn public_key(&self) -> Result<Vec<u8>> {
-        self.keyring.verifying_key("signer").await
+        Ok(self.signer.verifying_key().await?.to_bytes().to_vec())
     }
 }
 
 impl Signer for Identity {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         if self.invalid {
-            let mut keyring = test_kms::Keyring::new("random").await?;
-            keyring.add(&Curve::Ed25519, "signer").await?;
-            keyring.sign("signer", msg).await
+            let signer = Keyring::generate(&Vault, "random", "signing", Ed25519).await?;
+            Ok(signer.sign(msg).await)
         } else {
-            self.keyring.sign("signer", msg).await
+            Ok(self.signer.sign(msg).await)
         }
     }
 
-    async fn verifying_key(&self) -> Result<Vec<u8>> {
-        self.keyring.verifying_key("signer").await
+    async fn verifying_key(&self) -> Result<PublicKey> {
+        self.signer.verifying_key().await
     }
 
     async fn algorithm(&self) -> Result<Algorithm> {
@@ -79,24 +72,23 @@ impl Signer for Identity {
     }
 }
 
-impl SignerExt for Identity {
-    async fn verification_method(&self) -> Result<Key> {
-        let store = DID_STORE.lock().expect("should lock");
-        let Some(doc) = store.get(&self.url).cloned() else {
-            bail!("document not found");
-        };
-        let vm = &doc.verification_method.as_ref().unwrap()[0];
-        Ok(Key::KeyId(vm.id.clone()))
+impl Signature for Identity {
+    async fn verification_method(&self) -> Result<VerifyBy> {
+        let vm = &self.document.verification_method.as_ref().unwrap()[0];
+        Ok(VerifyBy::KeyId(vm.id.clone()))
     }
 }
 
 impl Receiver for Identity {
     async fn key_id(&self) -> Result<String> {
-        Ok(self.did.clone())
+        Ok(self.document.id.clone())
+    }
+
+    async fn public_key(&self) -> Result<PublicKey> {
+        self.signer.verifying_key().await
     }
 
     async fn shared_secret(&self, sender_public: PublicKey) -> Result<SharedSecret> {
-        let secret = self.keyring.private_key("signing").await?;
-        credibil_se::derive_x25519_secret(secret.as_bytes(), &sender_public)
+        self.signer.shared_secret(sender_public).await
     }
 }

@@ -8,8 +8,8 @@ use std::str::FromStr;
 use ::cid::Cid;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use credibil_identity::SignerExt;
-use credibil_se::Signer;
+use credibil_proof::Signature;
+use credibil_ecc::Signer;
 
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;
@@ -83,7 +83,7 @@ impl QueryBuilder<Unsigned> {
     }
 }
 
-impl<S: SignerExt> QueryBuilder<Signed<'_, S>> {
+impl<S: Signature> QueryBuilder<Signed<'_, S>> {
     /// Generate the permission grant.
     ///
     /// # Errors
@@ -191,7 +191,7 @@ impl ReadBuilder<MessageCid, Unsigned> {
     }
 }
 
-impl<S: SignerExt> ReadBuilder<MessageCid, Signed<'_, S>> {
+impl<S: Signature> ReadBuilder<MessageCid, Signed<'_, S>> {
     /// Generate the Read message.
     ///
     /// # Errors
@@ -284,7 +284,7 @@ impl SubscribeBuilder<Unsigned> {
     }
 }
 
-impl<S: SignerExt> SubscribeBuilder<Signed<'_, S>> {
+impl<S: Signature> SubscribeBuilder<Signed<'_, S>> {
     /// Generate the permission grant.
     ///
     /// # Errors

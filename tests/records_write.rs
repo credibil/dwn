@@ -19,9 +19,9 @@ use credibil_dwn::interfaces::records::{QueryReply, ReadReply};
 use credibil_dwn::provider::EventLog;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, store};
-use credibil_identity::{Key, SignerExt};
+use credibil_ecc::{Curve, KeyType};
 use credibil_jose::{JwsBuilder, PublicKeyJwk};
-use credibil_se::{Curve, KeyType};
+use credibil_proof::{Signature, VerifyBy};
 use rand::RngCore;
 use test_utils::{Identity, ProviderImpl};
 use tokio::sync::OnceCell;
@@ -4140,7 +4140,7 @@ async fn invalid_encryption_cid() {
     // Setup: Alice's keys.
     // --------------------------------------------------
     let alice_key_ref = alice.verification_method().await.expect("should get kid");
-    let Key::KeyId(alice_kid) = alice_key_ref else {
+    let VerifyBy::KeyId(alice_kid) = alice_key_ref else {
         panic!("should be KeyId");
     };
 

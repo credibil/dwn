@@ -5,8 +5,8 @@
 
 use anyhow::{Context, Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_ecc::{Receiver, derive_x25519_secret};
 use credibil_jose::jwe::{self, Header, Jwe, KeyEncryption, Protected, Recipients};
-use credibil_se::{Receiver, derive_x25519_secret};
 
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk};
 use crate::interfaces::records::{EncryptedKey, Write};
@@ -66,8 +66,7 @@ pub async fn decrypt(
         ciphertext: Base64UrlUnpadded::encode_string(data),
     };
 
-    let plaintext: Vec<u8> =
-        jwe::decrypt_bytes(&jwe, &receiver).await.context("decrypting JWE")?;
+    let plaintext: Vec<u8> = jwe::decrypt_bytes(&jwe, &receiver).await.context("decrypting JWE")?;
 
     Ok(plaintext)
 }
@@ -116,13 +115,21 @@ fn derivation_path(encrypted_key: &EncryptedKey, write: &Write) -> Result<Vec<St
     Ok(derivation_path)
 }
 
-use credibil_se::{PUBLIC_KEY_LENGTH, PublicKey, SharedSecret};
+use credibil_ecc::{PUBLIC_KEY_LENGTH, PublicKey, SharedSecret};
 
 struct ReceiverImpl(String);
 
 impl Receiver for ReceiverImpl {
     async fn key_id(&self) -> anyhow::Result<String> {
         Ok(String::new())
+    }
+
+    async fn public_key(&self) -> anyhow::Result<PublicKey> {
+        // EdDSA signing key
+        let decoded = Base64UrlUnpadded::decode_vec(&self.0)?;
+        let bytes: [u8; PUBLIC_KEY_LENGTH] =
+            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
+        Ok(PublicKey::from(bytes))
     }
 
     async fn shared_secret(&self, sender_public: PublicKey) -> anyhow::Result<SharedSecret> {
