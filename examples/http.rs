@@ -10,7 +10,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use credibil_dwn::interfaces::{messages, protocols, records};
 use credibil_dwn::{self, IntoHttp};
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -21,14 +21,14 @@ use tracing_subscriber::FmtSubscriber;
 #[derive(Clone)]
 struct Dwn {
     owner: String,
-    provider: ProviderImpl,
+    provider: Provider,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let dwn = Dwn {
         owner: Identity::new("alice").await.did().to_string(),
-        provider: ProviderImpl::new().await?,
+        provider: Provider::new().await?,
     };
 
     let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG).finish();

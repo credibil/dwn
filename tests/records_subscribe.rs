@@ -10,7 +10,7 @@ use credibil_dwn::client::records::{
 };
 use credibil_dwn::interfaces::records::{QueryReply, SubscribeReply};
 use futures::StreamExt;
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 use tokio::time;
 
@@ -23,7 +23,7 @@ async fn alice() -> &'static Identity {
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]
 async fn owner_events() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------

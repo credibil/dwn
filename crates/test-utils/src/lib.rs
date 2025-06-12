@@ -7,4 +7,4 @@ mod vault;
 
 pub use identity::Identity;
 
-pub use self::provider::ProviderImpl;
+pub use self::provider::Provider;

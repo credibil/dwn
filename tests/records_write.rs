@@ -23,7 +23,7 @@ use credibil_ecc::{Curve, KeyType};
 use credibil_jose::{JwsBuilder, PublicKeyJwk};
 use credibil_proof::{Signature, VerifyBy};
 use rand::RngCore;
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
@@ -55,7 +55,7 @@ async fn pfi() -> &'static Identity {
 // Should be able to update existing record when update has a later `message_timestamp`.
 #[tokio::test]
 async fn update_older() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -153,7 +153,7 @@ async fn update_older() {
 // only when message CID is larger than the existing one.
 #[tokio::test]
 async fn update_smaller_cid() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -255,7 +255,7 @@ async fn update_smaller_cid() {
 // Should allow data format of a flat-space record to be updated to any value.
 #[tokio::test]
 async fn update_flat_space() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -306,7 +306,7 @@ async fn update_flat_space() {
 // Should not allow immutable properties to be updated.
 #[tokio::test]
 async fn immutable_unchanged() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -363,7 +363,7 @@ async fn immutable_unchanged() {
 // match and no data stream is provided.
 #[tokio::test]
 async fn inherit_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -410,7 +410,7 @@ async fn inherit_data() {
 // ln 367: Should allow an initial write without data.
 #[tokio::test]
 async fn initial_no_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -471,7 +471,7 @@ async fn initial_no_data() {
 // ln 409: Should not allow a record to be updated without data.
 #[tokio::test]
 async fn update_no_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -526,7 +526,7 @@ async fn update_no_data() {
 // `encoded_data` threshold.
 #[tokio::test]
 async fn retain_large_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -583,7 +583,7 @@ async fn retain_large_data() {
 // `encoded_data` threshold.
 #[tokio::test]
 async fn retain_small_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -640,7 +640,7 @@ async fn retain_small_data() {
 // descriptor `data_size` is larger than data size.
 #[tokio::test]
 async fn large_data_size_larger() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -673,7 +673,7 @@ async fn large_data_size_larger() {
 // `data_size` is larger than `encoded_data` threshold.
 #[tokio::test]
 async fn small_data_size_larger() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -706,7 +706,7 @@ async fn small_data_size_larger() {
 // descriptor `data_size` is smaller than threshold.
 #[tokio::test]
 async fn large_data_size_smaller() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -739,7 +739,7 @@ async fn large_data_size_smaller() {
 // `data_size` is smaller than actual data size.
 #[tokio::test]
 async fn small_data_size_smaller() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -772,7 +772,7 @@ async fn small_data_size_smaller() {
 // descriptor `data_cid` is incorrect.
 #[tokio::test]
 async fn large_data_cid_larger() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -805,7 +805,7 @@ async fn large_data_cid_larger() {
 // `data_cid` is incorrect.
 #[tokio::test]
 async fn small_data_cid_larger() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -839,7 +839,7 @@ async fn small_data_cid_larger() {
 // descriptor `data_cid` is incorrect.
 #[tokio::test]
 async fn large_data_cid_smaller() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -873,7 +873,7 @@ async fn large_data_cid_smaller() {
 // `data_cid` is incorrect.
 #[tokio::test]
 async fn small_data_cid_smaller() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -907,7 +907,7 @@ async fn small_data_cid_smaller() {
 // update.
 #[tokio::test]
 async fn alter_data_cid_larger() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -977,7 +977,7 @@ async fn alter_data_cid_larger() {
 // Should prevent accessing data by referencing a different`data_cid` in an update.
 #[tokio::test]
 async fn alter_data_cid_smaller() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1047,7 +1047,7 @@ async fn alter_data_cid_smaller() {
 // Should allow updates without specifying `data` or `date_published`.
 #[tokio::test]
 async fn update_published_no_date() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1098,7 +1098,7 @@ async fn update_published_no_date() {
 // Should conserve `published` state when updating using an existing Write record.
 #[tokio::test]
 async fn update_published() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1153,7 +1153,7 @@ async fn update_published() {
 // Should fail when updating a record but its initial write cannot be found.
 #[tokio::test]
 async fn no_initial_write() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let initial = WriteBuilder::new()
@@ -1174,7 +1174,7 @@ async fn no_initial_write() {
 // do not match.
 #[tokio::test]
 async fn create_date_mismatch() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let created = DateTime::parse_from_rfc3339("2025-01-01T00:00:00-00:00").unwrap();
@@ -1197,7 +1197,7 @@ async fn create_date_mismatch() {
 // Should fail when creating a record with an invalid `context_id`.
 #[tokio::test]
 async fn invalid_context_id() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut initial = WriteBuilder::new()
@@ -1225,7 +1225,7 @@ async fn invalid_context_id() {
 // Should log an event on initial write.
 #[tokio::test]
 async fn log_initial_write() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1259,7 +1259,7 @@ async fn log_initial_write() {
 // Should only ever retain (at most) the initial and most recent writes.
 #[tokio::test]
 async fn retain_two_writes() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1317,7 +1317,7 @@ async fn retain_two_writes() {
 // Should allow anyone to create a record using the "anyone create" rule.
 #[tokio::test]
 async fn anyone_create() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1381,7 +1381,7 @@ async fn anyone_create() {
 // Should allow anyone to create a record using the "anyone co-update" rule.
 #[tokio::test]
 async fn anyone_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1457,7 +1457,7 @@ async fn anyone_update() {
 // Should allow creating records using an ancestor recipient rule.
 #[tokio::test]
 async fn ancestor_create() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -1545,7 +1545,7 @@ async fn ancestor_create() {
 // Should allow creating records using an ancestor recipient rule.
 #[tokio::test]
 async fn ancestor_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1644,7 +1644,7 @@ async fn ancestor_update() {
 // Should allow updates using a direct recipient rule.
 #[tokio::test]
 async fn direct_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -1719,7 +1719,7 @@ async fn direct_update() {
 // Should allow author to block non-authors using an ancestor author rule.
 #[tokio::test]
 async fn block_non_author() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -1829,7 +1829,7 @@ async fn block_non_author() {
 // Should allow author to update using an ancestor author rule.
 #[tokio::test]
 async fn ancestor_author_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1928,7 +1928,7 @@ async fn ancestor_author_update() {
 // Should allow a role record with recipient to be created and updated.
 #[tokio::test]
 async fn update_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1985,7 +1985,7 @@ async fn update_role() {
 // Should reject a role record when no recipient is defined.
 #[tokio::test]
 async fn no_role_recipient() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -2030,7 +2030,7 @@ async fn no_role_recipient() {
 // previous record has been deleted.
 #[tokio::test]
 async fn recreate_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2106,7 +2106,7 @@ async fn recreate_role() {
 // Should allow records to be created and updated using a context role.
 #[tokio::test]
 async fn context_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2183,7 +2183,7 @@ async fn context_role() {
 // Should allow the same role to be created under different contexts.
 #[tokio::test]
 async fn context_roles() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2285,7 +2285,7 @@ async fn context_roles() {
 // Should reject attempts to create a duplicate role under same context.
 #[tokio::test]
 async fn duplicate_context_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2371,7 +2371,7 @@ async fn duplicate_context_role() {
 // after their previous record has been deleted.
 #[tokio::test]
 async fn recreate_context_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2466,7 +2466,7 @@ async fn recreate_context_role() {
 // Should allow a creating records using role-based permissions.
 #[tokio::test]
 async fn role_can_create() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2530,7 +2530,7 @@ async fn role_can_create() {
 // Should allow a updating records using role-based permissions.
 #[tokio::test]
 async fn role_can_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2610,7 +2610,7 @@ async fn role_can_update() {
 // protocol role.
 #[tokio::test]
 async fn invalid_protocol_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2698,7 +2698,7 @@ async fn invalid_protocol_role() {
 // protocol role being used.
 #[tokio::test]
 async fn unassigned_protocol_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2746,7 +2746,7 @@ async fn unassigned_protocol_role() {
 // Should allow record creation for authorized context role.
 #[tokio::test]
 async fn create_protocol_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2829,7 +2829,7 @@ async fn create_protocol_role() {
 // Should allow record updates for authorized context role.
 #[tokio::test]
 async fn update_protocol_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2926,7 +2926,7 @@ async fn update_protocol_role() {
 // protocol role path.
 #[tokio::test]
 async fn forbidden_role_path() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -3029,7 +3029,7 @@ async fn forbidden_role_path() {
 // Should reject creation of records using an invalid protocol path.
 #[tokio::test]
 async fn invalid_role_path() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -3075,7 +3075,7 @@ async fn invalid_role_path() {
 // Should allow record updates by the initial author.
 #[tokio::test]
 async fn initial_author_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -3167,7 +3167,7 @@ async fn initial_author_update() {
 // Should prevent record updates by another author who does not have permission.
 #[tokio::test]
 async fn no_author_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -3257,7 +3257,7 @@ async fn no_author_update() {
 // Should prevent updates to the immutable `recipient` property.
 #[tokio::test]
 async fn no_recipient_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -3348,7 +3348,7 @@ async fn no_recipient_update() {
 // Should prevent unauthorized record creation using a `recipient` rule.
 #[tokio::test]
 async fn unauthorized_create() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let issuer = issuer().await;
     let fake = Identity::new("records_write_unauthorized_create_fake").await;
@@ -3419,7 +3419,7 @@ async fn unauthorized_create() {
 // Should prevent record creation when protocol cannot be found.
 #[tokio::test]
 async fn no_protocol_definition() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3451,7 +3451,7 @@ async fn no_protocol_definition() {
 // Should prevent record creation when schema is invalid.
 #[tokio::test]
 async fn invalid_schema() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3498,7 +3498,7 @@ async fn invalid_schema() {
 // Should prevent record creation when protocol path is invalid.
 #[tokio::test]
 async fn invalid_protocol_path() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3544,7 +3544,7 @@ async fn invalid_protocol_path() {
 // That is, the path is valid but it is used incorrectly.
 #[tokio::test]
 async fn incorrect_protocol_path() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3591,7 +3591,7 @@ async fn incorrect_protocol_path() {
 // Should prevent use of invalid data formats for a given protocol.
 #[tokio::test]
 async fn invalid_data_format() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3682,7 +3682,7 @@ async fn invalid_data_format() {
 // permitted data format(s).
 #[tokio::test]
 async fn any_data_format() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3758,7 +3758,7 @@ async fn any_data_format() {
 // specified hierarchal level.
 #[tokio::test]
 async fn schema_hierarchy() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3890,7 +3890,7 @@ async fn schema_hierarchy() {
 // defined.
 #[tokio::test]
 async fn owner_no_rule() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -3959,7 +3959,7 @@ async fn owner_no_rule() {
 // Should find recipient-based rules for deeply nested contexts.
 #[tokio::test]
 async fn deep_nesting() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let pfi = pfi().await;
 
@@ -4063,7 +4063,7 @@ async fn deep_nesting() {
 // Should not permit write with invalid `parent_id`.
 #[tokio::test]
 async fn invalid_parent_id() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let pfi = pfi().await;
 
@@ -4132,7 +4132,7 @@ async fn invalid_parent_id() {
 // Should fail when CID for encrypted data does not match authorization `encryption_cid`.
 #[tokio::test]
 async fn invalid_encryption_cid() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4228,7 +4228,7 @@ async fn invalid_encryption_cid() {
 #[tokio::test]
 #[ignore = "the protocol is automatically normalized"]
 async fn protocol_not_normalized() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4278,7 +4278,7 @@ async fn protocol_not_normalized() {
 // protocol-authorized records.
 #[tokio::test]
 async fn small_data_cid_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4397,7 +4397,7 @@ async fn small_data_cid_protocol() {
 // protocol-authorized records with large amount of data.
 #[tokio::test]
 async fn large_data_cid_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4520,7 +4520,7 @@ async fn large_data_cid_protocol() {
 // require a schema.
 #[tokio::test]
 async fn protocol_schema() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4612,7 +4612,7 @@ async fn protocol_schema() {
 // Should allow writes within the message size bounds specified in the protocol.
 #[tokio::test]
 async fn protocol_size_range() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4714,7 +4714,7 @@ async fn protocol_size_range() {
 // minimum size.
 #[tokio::test]
 async fn protocol_min_size() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4795,7 +4795,7 @@ async fn protocol_min_size() {
 // maximum size.
 #[tokio::test]
 async fn protocol_max_size() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4875,7 +4875,7 @@ async fn protocol_max_size() {
 // Should fail when write references a parent that has been deleted.
 #[tokio::test]
 async fn deleted_parent() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4952,7 +4952,7 @@ async fn deleted_parent() {
 // in `context_id`.
 #[tokio::test]
 async fn incorrect_parent_context() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5021,7 +5021,7 @@ async fn incorrect_parent_context() {
 // Should allow writes when protocol and grant scope matches.
 #[tokio::test]
 async fn protocol_grant_match() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5083,7 +5083,7 @@ async fn protocol_grant_match() {
 // Should prevents writes when protocol and grant scope do not match.
 #[tokio::test]
 async fn protocol_grant_mismatch() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5160,7 +5160,7 @@ async fn protocol_grant_mismatch() {
 // Should allow writes when protocol and context grant scope match.
 #[tokio::test]
 async fn protocol_context_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5245,7 +5245,7 @@ async fn protocol_context_grant() {
 // Should prevent writes when protocol and context grant scope do not match.
 #[tokio::test]
 async fn protocol_context_no_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5332,7 +5332,7 @@ async fn protocol_context_no_grant() {
 // Should allow writes when protocol and protocol path grant scope match.
 #[tokio::test]
 async fn protocol_path_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5394,7 +5394,7 @@ async fn protocol_path_grant() {
 // Should prevent writes when protocol and protocol path grant scope do not match.
 #[tokio::test]
 async fn protocol_path_no_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5459,7 +5459,7 @@ async fn protocol_path_no_grant() {
 // published.
 #[tokio::test]
 async fn grant_publish_required() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5547,7 +5547,7 @@ async fn grant_publish_required() {
 // published.
 #[tokio::test]
 async fn grant_publish_prohibited() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5635,7 +5635,7 @@ async fn grant_publish_prohibited() {
 // does not specify.
 #[tokio::test]
 async fn grant_publish_undefined() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5718,7 +5718,7 @@ async fn grant_publish_undefined() {
 // Should prevent writes where neither data stream nor data CID are provided.
 #[tokio::test]
 async fn missing_data_cid() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5757,7 +5757,7 @@ async fn missing_data_cid() {
 // Should prevent writes where neither data stream nor encoded data are provided.
 #[tokio::test]
 async fn missing_encoded_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5796,7 +5796,7 @@ async fn missing_encoded_data() {
 // Should prevent updates to a record after it has been deleted.
 #[tokio::test]
 async fn write_after_delete() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5844,7 +5844,7 @@ async fn write_after_delete() {
 // Should prevent referencing data across web nodes.
 #[tokio::test]
 async fn cross_tenant_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5915,7 +5915,7 @@ async fn cross_tenant_data() {
 // Should fail when `record_id` does not match signature `record_id`.
 #[tokio::test]
 async fn record_id_mismatch() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5941,7 +5941,7 @@ async fn record_id_mismatch() {
 // Should fail when `context_id` does not match signature `context_id`.
 #[tokio::test]
 async fn context_id_mismatch() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5989,7 +5989,7 @@ async fn context_id_mismatch() {
 // `descriptor_cid`.
 #[tokio::test]
 async fn invalid_attestation() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -6045,7 +6045,7 @@ async fn multiple_attesters() {
 // `descriptor_cid`.
 #[tokio::test]
 async fn attestation_descriptor_cid() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -6112,7 +6112,7 @@ async fn attestation_descriptor_cid() {
 #[tokio::test]
 #[ignore]
 async fn unknown_error() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------

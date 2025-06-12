@@ -14,7 +14,7 @@ use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode};
 use futures::StreamExt;
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 use tokio::time;
 
@@ -37,7 +37,7 @@ async fn bob() -> &'static Identity {
 // Should respond with a status of BadRequest (400) when message is invalid.
 #[tokio::test]
 async fn invalid_message() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut subscribe = SubscribeBuilder::new().sign(alice).build().await.expect("should build");
@@ -53,7 +53,7 @@ async fn invalid_message() {
 // Should allow owner to subscribe their own event stream.
 #[tokio::test]
 async fn owner_events() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -117,7 +117,7 @@ async fn owner_events() {
 // Should not allow non-owners to subscribe to unauthorized event streams.
 #[tokio::test]
 async fn unauthorized() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -147,7 +147,7 @@ async fn unauthorized() {
 // Should allow users to subscribe to events matching grant scope.
 #[tokio::test]
 async fn interface_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -281,7 +281,7 @@ async fn interface_scope() {
 // Should reject subscriptions when interface is not authorized.
 #[tokio::test]
 async fn unauthorized_interface() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -326,7 +326,7 @@ async fn unauthorized_interface() {
 // Should reject subscriptions when method is not authorized.
 #[tokio::test]
 async fn unauthorized_method() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -370,7 +370,7 @@ async fn unauthorized_method() {
 // Should allow subscribing to protocol filtered messages with matching protocol grant scopes.
 #[tokio::test]
 async fn protocol_filter() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -516,7 +516,7 @@ async fn protocol_filter() {
 // Should reject subscribing to messages with incorrect protocol grant scope.
 #[tokio::test]
 async fn invalid_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 

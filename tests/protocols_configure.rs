@@ -15,7 +15,7 @@ use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::ProtocolsQueryBuilder;
 use credibil_dwn::{Error, Method, StatusCode};
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 use tokio::time;
 
@@ -36,7 +36,7 @@ async fn carol() -> &'static Identity {
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]
 async fn minimal() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -63,7 +63,7 @@ async fn minimal() {
 // Should return a status of Forbidden (403) when authorization fails.
 #[tokio::test]
 async fn forbidden() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // configure a protocol
@@ -86,7 +86,7 @@ async fn forbidden() {
 // Should overwrite existing protocol when timestamp is newer.
 #[tokio::test]
 async fn overwrite_older() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let definition = Definition::new("http://minimal.xyz");
@@ -162,7 +162,7 @@ async fn overwrite_older() {
 // protocol is lexicographically larger.
 #[tokio::test]
 async fn overwrite_smaller() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let definition_1 = Definition::new("http://minimal.xyz").add_type(
@@ -262,7 +262,7 @@ async fn overwrite_smaller() {
 // Should return a status of BadRequest (400) when protocol is not normalized.
 #[tokio::test]
 async fn invalid_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -285,7 +285,7 @@ async fn invalid_protocol() {
 // Should return a status of BadRequest (400) when schema is not normalized.
 #[tokio::test]
 async fn invalid_schema() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -320,7 +320,7 @@ async fn invalid_schema() {
 // Should reject non-owner requests with no grant with status of Forbidden (403).
 #[tokio::test]
 async fn no_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -342,7 +342,7 @@ async fn no_grant() {
 // or `who` + `of` combination).
 #[tokio::test]
 async fn duplicate_actor() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -434,7 +434,7 @@ async fn duplicate_actor() {
 // Should reject request when action rule contains duplicated roles.
 #[tokio::test]
 async fn duplicate_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -491,7 +491,7 @@ async fn duplicate_role() {
 // (Action::Read, Action::Query, Action::Subscribe).
 #[tokio::test]
 async fn invalid_read_action() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -631,7 +631,7 @@ async fn invalid_read_action() {
 // Should allow an external party to configure a protocol when they have a valid grant.
 #[tokio::test]
 async fn valid_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -726,7 +726,7 @@ async fn valid_grant() {
 // Should allow configuring a specific protocol.
 #[tokio::test]
 async fn configure_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -789,7 +789,7 @@ async fn configure_scope() {
 // Should add an event when a protocol is configured.
 #[tokio::test]
 async fn configure_event() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let configure = ConfigureBuilder::new()
@@ -814,7 +814,7 @@ async fn configure_event() {
 // Should delete older events when one is overwritten.
 #[tokio::test]
 async fn delete_older_events() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let oldest = ConfigureBuilder::new()

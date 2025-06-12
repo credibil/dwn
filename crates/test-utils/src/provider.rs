@@ -15,19 +15,44 @@ use serde::{Deserialize, Serialize};
 use crate::datastore::Store;
 
 const RAW: u64 = 0x55;
-
+const SUBJECT: &str = "events";
 #[derive(Clone)]
-pub struct ProviderImpl {
+pub struct Provider {
     blockstore: Arc<InMemoryBlockstore<64>>,
     pub nats_client: Arc<async_nats::Client>,
 }
 
-impl ProviderImpl {
+impl Provider {
     pub async fn new() -> Result<Self> {
         Ok(Self {
             blockstore: Arc::new(InMemoryBlockstore::<64>::new()),
             nats_client: Arc::new(async_nats::connect("demo.nats.io").await?),
         })
+    }
+}
+
+impl BlockStore for Provider {
+    async fn put(&self, owner: &str, partition: &str, key: &str, block: &[u8]) -> Result<()> {
+        let cid = Identitifier::new(owner, partition, key).to_cid()?;
+        self.blockstore.put_keyed(&cid, block).await.map_err(Into::into)
+    }
+
+    async fn get(&self, owner: &str, partition: &str, key: &str) -> Result<Option<Vec<u8>>> {
+        let cid = Identitifier::new(owner, partition, key).to_cid()?;
+        let Some(bytes) = self.blockstore.get(&cid).await? else {
+            return Ok(None);
+        };
+        Ok(Some(bytes))
+    }
+
+    async fn delete(&self, owner: &str, partition: &str, key: &str) -> Result<()> {
+        let cid = Identitifier::new(owner, partition, key).to_cid()?;
+        self.blockstore.remove(&cid).await?;
+        Ok(())
+    }
+
+    async fn purge(&self, _owner: &str, _partition: &str) -> Result<()> {
+        unimplemented!()
     }
 }
 
@@ -55,32 +80,7 @@ impl<'a> Identitifier<'a> {
     }
 }
 
-impl BlockStore for ProviderImpl {
-    async fn put(&self, owner: &str, partition: &str, key: &str, block: &[u8]) -> Result<()> {
-        let cid = Identitifier::new(owner, partition, key).to_cid()?;
-        self.blockstore.put_keyed(&cid, block).await.map_err(Into::into)
-    }
-
-    async fn get(&self, owner: &str, partition: &str, key: &str) -> Result<Option<Vec<u8>>> {
-        let cid = Identitifier::new(owner, partition, key).to_cid()?;
-        let Some(bytes) = self.blockstore.get(&cid).await? else {
-            return Ok(None);
-        };
-        Ok(Some(bytes))
-    }
-
-    async fn delete(&self, owner: &str, partition: &str, key: &str) -> Result<()> {
-        let cid = Identitifier::new(owner, partition, key).to_cid()?;
-        self.blockstore.remove(&cid).await?;
-        Ok(())
-    }
-
-    async fn purge(&self, _owner: &str, _partition: &str) -> Result<()> {
-        unimplemented!()
-    }
-}
-
-impl Resolver for ProviderImpl {
+impl Resolver for Provider {
     async fn resolve(&self, url: &str) -> Result<Vec<u8>> {
         let request = DocumentRequest { url: url.to_string() };
         let document =
@@ -89,9 +89,9 @@ impl Resolver for ProviderImpl {
     }
 }
 
-const SUBJECT: &str = "events";
 
-impl EventStream for ProviderImpl {
+
+impl EventStream for Provider {
     /// Subscribe to a owner's event stream.
     async fn subscribe(&self, owner: &str) -> Result<Subscriber> {
         let subscriber = self.nats_client.subscribe(format!("{SUBJECT}.{owner}")).await?;

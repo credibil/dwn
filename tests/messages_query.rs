@@ -13,7 +13,7 @@ use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
 use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::QueryReply;
 use credibil_dwn::{Error, Interface, Method, StatusCode};
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
@@ -29,7 +29,7 @@ async fn bob() -> &'static Identity {
 // Should fetch all messages for owner owner beyond a provided cursor.
 #[tokio::test]
 async fn owner_messages() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -149,7 +149,7 @@ async fn owner_messages() {
 // and has no permission grant.
 #[tokio::test]
 async fn no_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -163,7 +163,7 @@ async fn no_grant() {
 // Should return a status of BadRequest (400) if the request is invalid.
 #[tokio::test]
 async fn invalid_request() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
@@ -179,7 +179,7 @@ async fn invalid_request() {
 // Should return a status of BadRequest (400) if an empty filter is provided.
 #[tokio::test]
 async fn empty_filter() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
@@ -195,7 +195,7 @@ async fn empty_filter() {
 // Should allow querying of messages with matching interface and method grant scope.
 #[tokio::test]
 async fn match_grant_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -328,7 +328,7 @@ async fn match_grant_scope() {
 // Should reject message queries with mismatching method grant scopes.
 #[tokio::test]
 async fn mismatched_grant_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -365,7 +365,7 @@ async fn mismatched_grant_scope() {
 // Should allow querying of messages with matching protocol grant scope.
 #[tokio::test]
 async fn match_protocol_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -443,7 +443,7 @@ async fn match_protocol_scope() {
 // Should reject querying with protocol when diallowed by protocol grant scope.
 #[tokio::test]
 async fn mismatched_protocol_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 

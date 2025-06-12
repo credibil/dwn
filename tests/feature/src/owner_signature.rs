@@ -11,7 +11,7 @@ use credibil_dwn::client::records::{Data, ReadBuilder, RecordsFilter, WriteBuild
 use credibil_dwn::endpoint;
 use http::StatusCode;
 use serde_json::{Value, json};
-use test_node::ProviderImpl;
+use test_node::Provider;
 use test_node::kms::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
@@ -20,7 +20,7 @@ static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
 async fn flat_space() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
 
     // --------------------------------------------------
     // Bob writes a message to his web node

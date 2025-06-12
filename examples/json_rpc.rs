@@ -10,7 +10,7 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
 
     let svc = Svc {
         owner: Identity::new("alice").await.did().to_string(),
-        provider: ProviderImpl::new().await?,
+        provider: Provider::new().await?,
     };
 
     loop {
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
 #[derive(Clone)]
 struct Svc {
     owner: String,
-    provider: ProviderImpl,
+    provider: Provider,
 }
 
 impl Svc {

@@ -16,7 +16,7 @@ use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode};
 use rand::RngCore;
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
@@ -36,7 +36,7 @@ async fn carol() -> &'static Identity {
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]
 async fn read_message() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -100,7 +100,7 @@ async fn read_message() {
 // Should returns Unauthenticated (401) when authentication fails.
 #[tokio::test]
 async fn invalid_signature() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let invalid = Identity::invalid("invalid_signature").await;
 
     let read = ReadBuilder::new()
@@ -119,7 +119,7 @@ async fn invalid_signature() {
 // Should return a status of BadRequest (400) when the request is invalid.
 #[tokio::test]
 async fn invalid_request() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut read = ReadBuilder::new()
@@ -139,7 +139,7 @@ async fn invalid_request() {
 // Should return a status of BadRequest (400) when the message CID is invalid.
 #[tokio::test]
 async fn invalid_message_cid() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut read = ReadBuilder::new()
@@ -162,7 +162,7 @@ async fn invalid_message_cid() {
 // Should return a status of NotFound (404) when the message cannot be found.
 #[tokio::test]
 async fn not_found() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let read = ReadBuilder::new()
@@ -182,7 +182,7 @@ async fn not_found() {
 // (and has no grant from the owner).
 #[tokio::test]
 async fn forbidden() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -222,7 +222,7 @@ async fn forbidden() {
 // Should return data less than data::MAX_ENCODED_SIZE.
 #[tokio::test]
 async fn data_lt_threshold() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -269,7 +269,7 @@ async fn data_lt_threshold() {
 // Should return data greater than data::MAX_ENCODED_SIZE.
 #[tokio::test]
 async fn data_gt_threshold() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -316,7 +316,7 @@ async fn data_gt_threshold() {
 // Should not return data for an initial write after the record is updated.
 #[tokio::test]
 async fn no_data_after_update() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -377,7 +377,7 @@ async fn no_data_after_update() {
 // Should return a status of Forbidden (403) if the owner is not the author.
 #[tokio::test]
 async fn owner_not_author() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -478,7 +478,7 @@ async fn owner_not_author() {
 // Should return a status of Forbidden (403) when grant has different interface scope.
 #[tokio::test]
 async fn invalid_interface() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -560,7 +560,7 @@ async fn invalid_interface() {
 // Should allow external parties to read a message using a n unrestricted grant.
 #[tokio::test]
 async fn permissive_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -625,7 +625,7 @@ async fn permissive_grant() {
 // Should allow reading protocol messages with a protocol-based grant.
 #[tokio::test]
 async fn protocol_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -923,7 +923,7 @@ async fn protocol_grant() {
 // Should reject reading protocol messages with mismatching protocol grant scopes.
 #[tokio::test]
 async fn invalid_protocol_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1010,7 +1010,7 @@ async fn invalid_protocol_grant() {
 // Should fail if a `RecordsWrite` message is not found for a requested `RecordsDelete`.
 #[tokio::test]
 async fn delete_with_no_write() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 

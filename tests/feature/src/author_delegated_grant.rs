@@ -10,7 +10,7 @@ use credibil_dwn::client::grants::{GrantBuilder, Scope};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
 use credibil_dwn::{Method, endpoint};
 use http::StatusCode;
-use test_node::ProviderImpl;
+use test_node::Provider;
 use test_node::kms::{self, Keyring};
 
 static ALICE: LazyLock<Keyring> = LazyLock::new(Keyring::new);
@@ -19,7 +19,7 @@ static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]
 async fn configure_any() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
 
     // --------------------------------------------------
     // Alice grants Bob the ability to configure any protocol

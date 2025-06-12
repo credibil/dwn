@@ -16,7 +16,7 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::{Error, Method, StatusCode, cid};
 use credibil_jose::{Jws, Protected, Signature};
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 use tokio::time;
 
@@ -37,7 +37,7 @@ async fn carol() -> &'static Identity {
 // Should return protocols matching the query.
 #[tokio::test]
 async fn authorized() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -85,7 +85,7 @@ async fn authorized() {
 // Should return published protocols matching the query if query is unauthenticated or unauthorized.
 #[tokio::test]
 async fn unauthorized() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -158,7 +158,7 @@ async fn unauthorized() {
 // Should fail with a status of BadRequest (400) if protocol is not normalized.
 #[tokio::test]
 async fn bad_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut query = QueryBuilder::new()
@@ -183,7 +183,7 @@ async fn bad_protocol() {
 // been tampered with.
 #[tokio::test]
 async fn tampered_signature() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut query = QueryBuilder::new().sign(alice).build().await.expect("should build");
@@ -205,7 +205,7 @@ async fn tampered_signature() {
 // Should fail with a status of Unauthorized (401) if a bad_request signature is provided.
 #[tokio::test]
 async fn bad_signature() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut query = QueryBuilder::new().sign(alice).build().await.expect("should build");
@@ -228,7 +228,7 @@ async fn bad_signature() {
 // Should allow an external party to query when they have a valid grant.
 #[tokio::test]
 async fn valid_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -337,7 +337,7 @@ async fn valid_grant() {
 // Should allow scoping the query to a specific protocol.
 #[tokio::test]
 async fn valid_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -456,7 +456,7 @@ async fn valid_scope() {
 // Should reject an external party when they present an expired grant.
 #[tokio::test]
 async fn expired_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -503,7 +503,7 @@ async fn expired_grant() {
 // Should reject an external party when they present a grant that is not yet active.
 #[tokio::test]
 async fn inactive_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -556,7 +556,7 @@ async fn inactive_grant() {
 // Should reject an external party using a grant with a different scope.
 #[tokio::test]
 async fn invalid_scope() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -601,7 +601,7 @@ async fn invalid_scope() {
 // Should reject an external party using a grant if the grant cannot be found.
 #[tokio::test]
 async fn missing_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -624,7 +624,7 @@ async fn missing_grant() {
 // Should fail if the grant has not been granted for the owner.
 #[tokio::test]
 async fn incorrect_grantor() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;

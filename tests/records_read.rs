@@ -23,7 +23,7 @@ use credibil_ecc::{Curve, KeyType};
 use credibil_jose::PublicKeyJwk;
 use credibil_proof::{Signature, VerifyBy};
 use rand::RngCore;
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
@@ -43,7 +43,7 @@ async fn carol() -> &'static Identity {
 // Should allow an owner to read their own records.
 #[tokio::test]
 async fn owner() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -79,7 +79,7 @@ async fn owner() {
 // Should not allow non-owners to read private records.
 #[tokio::test]
 async fn disallow_non_owner() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -114,7 +114,7 @@ async fn disallow_non_owner() {
 // Should allow anonymous users to read published records.
 #[tokio::test]
 async fn published_anonymous() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -145,7 +145,7 @@ async fn published_anonymous() {
 // Should allow authenticated users to read published records.
 #[tokio::test]
 async fn published_authenticated() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -183,7 +183,7 @@ async fn published_authenticated() {
 // Should allow non-owners to read records they have received.
 #[tokio::test]
 async fn non_owner_recipient() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -222,7 +222,7 @@ async fn non_owner_recipient() {
 // using a valid `record_id`.
 #[tokio::test]
 async fn deleted_write() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -268,7 +268,7 @@ async fn deleted_write() {
 // write of a deleted record using a valid `record_id`.
 #[tokio::test]
 async fn non_author_deleted_write() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -352,7 +352,7 @@ async fn non_author_deleted_write() {
 // Should allow non-owners to read records they have authored.
 #[tokio::test]
 async fn non_owner_author() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -440,7 +440,7 @@ async fn non_owner_author() {
 // Should include intial write for updated records.
 #[tokio::test]
 async fn initial_write_included() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -486,7 +486,7 @@ async fn initial_write_included() {
 // Should allow anyone to read when using `allow-anyone` rule.
 #[tokio::test]
 async fn allow_anyone() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -546,7 +546,7 @@ async fn allow_anyone() {
 // Should not allow anonymous reads when there is no `allow-anyone` rule.
 #[tokio::test]
 async fn no_anonymous() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -598,7 +598,7 @@ async fn no_anonymous() {
 // Should allow read using recipient rule.
 #[tokio::test]
 async fn allow_recipient() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -674,7 +674,7 @@ async fn allow_recipient() {
 // Should allow read using ancestor author rule.
 #[tokio::test]
 async fn allow_author() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -750,7 +750,7 @@ async fn allow_author() {
 // Should support using a filter when there is only a single result.
 #[tokio::test]
 async fn filter_one() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -810,7 +810,7 @@ async fn filter_one() {
 // Should return a status of BadRequest (400) when using a filter returns multiple results.
 #[tokio::test]
 async fn filter_many() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -871,7 +871,7 @@ async fn filter_many() {
 // Should allow using a root-level role to authorize reads.
 #[tokio::test]
 async fn root_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -946,7 +946,7 @@ async fn root_role() {
 // Should not allow reads when protocol path does not point to an active role record.
 #[tokio::test]
 async fn invalid_protocol_path() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1004,7 +1004,7 @@ async fn invalid_protocol_path() {
 // Should not allow reads when recipient does not have an active role.
 #[tokio::test]
 async fn no_recipient_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1062,7 +1062,7 @@ async fn no_recipient_role() {
 // Should allow reads when using a valid context role.
 #[tokio::test]
 async fn context_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1192,7 +1192,7 @@ async fn context_role() {
 // Should not allow reads when context role is used in wrong context.
 #[tokio::test]
 async fn invalid_context_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1304,7 +1304,7 @@ async fn invalid_context_role() {
 // Should disallow external party reads when grant has incorrect method scope.
 #[tokio::test]
 async fn invalid_grant_method() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1359,7 +1359,7 @@ async fn invalid_grant_method() {
 // Should allow reads of protocol records using grants with unrestricted scope.
 #[tokio::test]
 async fn unrestricted_grant() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1449,7 +1449,7 @@ async fn unrestricted_grant() {
 // Should allow reads of protocol records with matching grant scope.
 #[tokio::test]
 async fn grant_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1539,7 +1539,7 @@ async fn grant_protocol() {
 // Should not allow reads when grant scope does not match record protocol scope.
 #[tokio::test]
 async fn invalid_grant_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1615,7 +1615,7 @@ async fn invalid_grant_protocol() {
 // Should allow reading records within the context specified by the grant.
 #[tokio::test]
 async fn grant_context() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1689,7 +1689,7 @@ async fn grant_context() {
 // Should not allow reading records within when grant context does not match.
 #[tokio::test]
 async fn invalid_grant_context() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1765,7 +1765,7 @@ async fn invalid_grant_context() {
 // Should allow reading records in the grant protocol path.
 #[tokio::test]
 async fn grant_protocol_path() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1840,7 +1840,7 @@ async fn grant_protocol_path() {
 // Should not allow reading records outside the grant protocol path.
 #[tokio::test]
 async fn invalid_grant_protocol_path() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1916,7 +1916,7 @@ async fn invalid_grant_protocol_path() {
 // Should return a status of NotFound (404) when record does not exist.
 #[tokio::test]
 async fn record_not_found() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let read = ReadBuilder::new()
@@ -1934,7 +1934,7 @@ async fn record_not_found() {
 // Should return NotFound (404) when record has been deleted.
 #[tokio::test]
 async fn record_deleted() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1982,7 +1982,7 @@ async fn record_deleted() {
 // Should return NotFound (404) when record data blocks have been deleted.
 #[tokio::test]
 async fn data_blocks_deleted() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -2026,7 +2026,7 @@ async fn data_blocks_deleted() {
 // Should not get data from block store when record has `encoded_data`.
 #[tokio::test]
 async fn encoded_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -2066,7 +2066,7 @@ async fn encoded_data() {
 // Should get data from block store when record does not have `encoded_data`.
 #[tokio::test]
 async fn block_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -2116,7 +2116,7 @@ async fn block_data() {
 // Should decrypt flat-space schema-contained records using a derived key.
 #[tokio::test]
 async fn decrypt_schema() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let alice_key_ref = alice.verification_method().await.expect("should get kid");
@@ -2260,7 +2260,7 @@ async fn decrypt_schema() {
 // Should decrypt flat-space schemaless records using a derived key.
 #[tokio::test]
 async fn decrypt_schemaless() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -2359,7 +2359,7 @@ async fn decrypt_schemaless() {
 // within a protocol-context derivation scheme.
 #[tokio::test]
 async fn decrypt_context() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2636,7 +2636,7 @@ async fn decrypt_context() {
 // within a protocol derivation scheme.
 #[tokio::test]
 async fn decrypt_protocol() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2775,7 +2775,7 @@ async fn decrypt_protocol() {
 // Should return Unauthorized (401) for invalid signatures.
 #[tokio::test]
 async fn invalid_signature() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut read = ReadBuilder::new()
@@ -2798,7 +2798,7 @@ async fn invalid_signature() {
 // Should return BadRequest (400) for unparsable messages.
 #[tokio::test]
 async fn invalid_message() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let mut read = ReadBuilder::new()

@@ -10,7 +10,6 @@ use crate::vault::KeyVault as Vault;
 
 #[derive(Clone)]
 pub struct Identity {
-    pub url: String,
     document: Document,
     signer: Entry,
     invalid: bool,
@@ -24,14 +23,13 @@ impl Identity {
         let key = signer.verifying_key().await.expect("key bytes");
         let jwk = PublicKeyJwk::from_bytes(&key.to_bytes()).expect("verifying key");
 
-        // generate a did:web document
+        // generate (and store) a did:web document
         let url = format!("https://credibil.io/{}", uuid::Uuid::new_v4());
         let vm = VerificationMethod::build().key(jwk).key_id(KeyId::Index("key-0".to_string()));
         let builder = DocumentBuilder::new().verification_method(vm).derive_key_agreement(true);
         let document = credibil_proof::create(&url, builder, &Store).await.expect("should create");
 
         Self {
-            url,
             document,
             signer,
             invalid: false,

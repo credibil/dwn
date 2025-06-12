@@ -15,7 +15,7 @@ use credibil_dwn::client::records::{
 use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{EventLog, MessageStore};
 use credibil_dwn::{Error, Interface, Method, StatusCode, store};
-use test_utils::{Identity, ProviderImpl};
+use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
@@ -35,7 +35,7 @@ async fn carol() -> &'static Identity {
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]
 async fn delete_record() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -102,7 +102,7 @@ async fn delete_record() {
 // Should not affect other records (or tenants) with the same data.
 #[tokio::test]
 async fn delete_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -242,7 +242,7 @@ async fn delete_data() {
 // Should return a status of NotFound (404) when deleting a non-existent record.
 #[tokio::test]
 async fn not_found() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let delete = DeleteBuilder::new()
@@ -261,7 +261,7 @@ async fn not_found() {
 // Should disallow delete when there is a newer record.
 #[tokio::test]
 async fn newer_version() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -318,7 +318,7 @@ async fn newer_version() {
 // Should be able to delete and then rewrite the same data.
 #[tokio::test]
 async fn rewrite_data() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     let data = br#"{"record": "test record write"}"#;
@@ -365,7 +365,7 @@ async fn rewrite_data() {
 // Should allow delete using the 'allow-anyone' rule.
 #[tokio::test]
 async fn anyone_delete() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -424,7 +424,7 @@ async fn anyone_delete() {
 // Should allow recipient to delete using an ancestor recipient rule.
 #[tokio::test]
 async fn ancestor_recipient() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -522,7 +522,7 @@ async fn ancestor_recipient() {
 // Should allow recipient to delete using a recipient rule.
 #[tokio::test]
 async fn direct_recipient() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -599,7 +599,7 @@ async fn direct_recipient() {
 // Should allow the author to delete with ancestor author rule.
 #[tokio::test]
 async fn ancestor_author() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -695,7 +695,7 @@ async fn ancestor_author() {
 // Should allow co-delete by invoking a context role.
 #[tokio::test]
 async fn context_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -818,7 +818,7 @@ async fn context_role() {
 // Should allow co-delete by invoking a root-level role.
 #[tokio::test]
 async fn root_role() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -919,7 +919,7 @@ async fn root_role() {
 // Should return a status of Forbidden (403) if message is not authorized.
 #[tokio::test]
 async fn forbidden() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
     let bob = bob().await;
 
@@ -959,7 +959,7 @@ async fn forbidden() {
 // Should return a status of Forbidden (403) if message is not authorized.
 #[tokio::test]
 async fn unauthorized() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -984,7 +984,7 @@ async fn unauthorized() {
 // Should return a status of BadRequest (400) when message is invalid.
 #[tokio::test]
 async fn invalid_message() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1008,7 +1008,7 @@ async fn invalid_message() {
 // Should index additional properties for the record being deleted.
 #[tokio::test]
 async fn index_additional() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1065,7 +1065,7 @@ async fn index_additional() {
 // Should log delete event while retaining initial write event.
 #[tokio::test]
 async fn log_delete() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1116,7 +1116,7 @@ async fn log_delete() {
 // Should delete all writes except the initial write.
 #[tokio::test]
 async fn delete_updates() {
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = alice().await;
 
     // --------------------------------------------------

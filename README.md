@@ -14,12 +14,12 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 use credibil_dwn::{StatusCode, endpoint};
 use test_node::keystore;
-use test_node::ProviderImpl;
+use test_node::Provider;
 
 #[tokio::main]
 async fn main() {
     // create a provider for the DWN library
-    let provider = ProviderImpl::new().await.expect("should create provider");
+    let provider = Provider::new().await.expect("should create provider");
     let alice = Keyring::new();
 
     // create a request to write a new record (and serialize to JSON)
