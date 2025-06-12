@@ -29,15 +29,15 @@ server = ["dep:async-recursion", "dep:tokio"]
 [dependencies]
 anyhow.workspace = true
 async-recursion = { version = "1.1.1", optional = true }
-base64ct = { version = "1.7.3", features = ["std"] }
+base64ct = { version = "1.8.0", features = ["std"] }
 bytes = "1.10.1"
-cfg-if = "1.0.0"
+cfg-if = "1.0.1"
 chrono = { version = "0.4.41", features = ["serde"] }
 ciborium.workspace = true
 cid.workspace = true
-credibil-identity.workspace = true
+credibil-ecc.workspace = true
 credibil-jose.workspace = true
-credibil-se.workspace = true
+credibil-proof.workspace = true
 datastore = { path = "./crates/datastore" }
 derive_more = { version = "2.0.1", features = ["display"] }
 futures.workspace = true
@@ -65,7 +65,7 @@ axum = { version = "0.8.4", features = ["macros"] }
 hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["full"] }
 test-utils = { path = "crates/test-utils" }
-tower-http = { version = "0.6.4", features = ["cors", "set-header", "trace"] }
+tower-http = { version = "0.6.6", features = ["cors", "set-header", "trace"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
 [[example]]
@@ -110,19 +110,24 @@ nursery = "warn"
 anyhow = "1.0.98"
 ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
-credibil-identity = { git = "https://github.com/credibil/identity.git" }
-credibil-jose = { git = "https://github.com/credibil/se.git" }
-credibil-se = { git = "https://github.com/credibil/se.git" }
+credibil-core = { git = "https://github.com/credibil/core.git" }
+credibil-ecc = { git = "https://github.com/credibil/key.git" }
+credibil-jose = { git = "https://github.com/credibil/key.git" }
+credibil-proof = { git = "https://github.com/credibil/proof.git" }
+credibil-dwn = { path = "." }
 futures = "0.3.31"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["alloc"] }
-tokio = { version = "1.45.0", features = ["macros", "rt-multi-thread", "sync", "time"] }
-uuid = { version = "1.16.0", features = ["fast-rng", "v4"] }
+tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+uuid = { version = "1.17.0", features = ["fast-rng", "v4"] }
 
-[patch.crates-io]
-# credibil-identity = { path = "../identity" }
-# credibil-jose = { path = "../se" }
+# [patch."https://github.com/credibil/proof"]
+# credibil-proof = { path = "../proof" }
+
+[patch."https://github.com/credibil/key"]
+credibil-ecc = { path = "../key/ecc" }
+# credibil-jose = { path = "../key/jose" }
 
 [profile.release]
 # optimize for small code size
