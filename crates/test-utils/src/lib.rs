@@ -1,9 +1,8 @@
 //! # Mock Provider
 
-mod datastore;
+mod store;
 mod identity;
 mod provider;
-mod vault;
 
 pub use identity::Identity;
 

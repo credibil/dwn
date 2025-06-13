@@ -12,7 +12,7 @@ use futures::stream::StreamExt;
 use multihash_codetable::MultihashDigest;
 use serde::{Deserialize, Serialize};
 
-use crate::datastore::Store;
+use crate::store::Store;
 
 const RAW: u64 = 0x55;
 const SUBJECT: &str = "events";

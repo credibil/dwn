@@ -5,8 +5,7 @@ use credibil_jose::PublicKeyJwk;
 use credibil_proof::did::{Document, DocumentBuilder, KeyId, VerificationMethod};
 use credibil_proof::{Signature, VerifyBy};
 
-use crate::datastore::Store;
-use crate::vault::KeyVault as Vault;
+use crate::store::Store;
 
 #[derive(Clone)]
 pub struct Identity {
@@ -19,7 +18,7 @@ impl Identity {
     pub async fn new(owner: &str) -> Self {
         // create a new keyring and add a signing key.
         let signer =
-            Keyring::generate(&Vault, owner, "signing", Ed25519).await.expect("should generate");
+            Keyring::generate(&Store, owner, "signing", Ed25519).await.expect("should generate");
         let key = signer.verifying_key().await.expect("key bytes");
         let jwk = PublicKeyJwk::from_bytes(&key.to_bytes()).expect("verifying key");
 
@@ -54,7 +53,7 @@ impl Identity {
 impl Signer for Identity {
     async fn try_sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         if self.invalid {
-            let signer = Keyring::generate(&Vault, "random", "signing", Ed25519).await?;
+            let signer = Keyring::generate(&Store, "random", "signing", Ed25519).await?;
             Ok(signer.sign(msg).await)
         } else {
             Ok(self.signer.sign(msg).await)
