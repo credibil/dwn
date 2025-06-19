@@ -26,7 +26,7 @@ async fn bob() -> &'static Identity {
     BOB.get_or_init(|| async { Identity::new("messages_query_bob").await }).await
 }
 
-// Should fetch all messages for owner owner beyond a provided cursor.
+// Should fetch all messages for owner beyond a provided cursor.
 #[tokio::test]
 async fn owner_messages() {
     let provider = Provider::new().await.expect("should create provider");
