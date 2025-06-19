@@ -60,6 +60,7 @@ pub trait MessageStore: Send + Sync {
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send;
+    
     /// Purge all records from the store.
     fn purge(&self) -> impl Future<Output = Result<()>> + Send;
 }
