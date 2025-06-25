@@ -3,6 +3,7 @@
 //! The records subscribe endpoint handles `RecordsSubscribe` messages —
 //! requests to subscribe to records events matching the provided filter(s).
 
+use credibil_core::api::{Body, Handler, Request, Response};
 use futures::{StreamExt, future};
 
 use crate::OneOrMany;
@@ -10,7 +11,7 @@ use crate::authorization::Authorization;
 use crate::error::forbidden;
 use crate::event::SubscribeFilter;
 use crate::grants::Grant;
-use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_protocol};
+use crate::handlers::{BodyExt, Error, Result, verify_protocol};
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Subscribe, SubscribeReply};
 use crate::provider::{EventStream, Provider};
@@ -52,17 +53,19 @@ pub async fn handle(
     })
 }
 
-impl<P: Provider> Handler<SubscribeReply,P> for Request<Subscribe> {
+impl<P: Provider> Handler<SubscribeReply, P> for Request<Subscribe> {
     type Error = Error;
 
     async fn handle(
         self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<SubscribeReply>>, Self::Error> {
+    ) -> Result<impl Into<Response<SubscribeReply>>> {
+        self.body.validate(provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Subscribe {
+impl Body for Subscribe {}
+impl BodyExt for Subscribe {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }

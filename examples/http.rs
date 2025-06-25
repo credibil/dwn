@@ -8,8 +8,9 @@ use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use credibil_dwn::api::Client;
+use credibil_dwn::http::IntoHttp;
 use credibil_dwn::interfaces::{messages, protocols, records};
-use credibil_dwn::{self, IntoHttp};
 use test_utils::{Identity, Provider};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
@@ -18,18 +19,10 @@ use tower_http::trace::TraceLayer;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
-#[derive(Clone)]
-struct Dwn {
-    owner: String,
-    provider: Provider,
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    let dwn = Dwn {
-        owner: Identity::new("alice").await.did().to_string(),
-        provider: Provider::new().await?,
-    };
+    let owner = Identity::new("alice").await.did().to_string();
+    let client = Client::new(owner, Provider::new().await);
 
     let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG).finish();
     tracing::subscriber::set_global_default(subscriber).expect("set subscriber");
@@ -52,7 +45,7 @@ async fn main() -> Result<()> {
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-cache, no-store"),
         ))
-        .with_state(dwn);
+        .with_state(client);
 
     let listener = TcpListener::bind("0.0.0.0:8080").await.expect("should bind");
     tracing::info!("listening on {}", listener.local_addr().expect("should have addr"));
@@ -61,70 +54,70 @@ async fn main() -> Result<()> {
 
 #[axum::debug_handler]
 async fn messages_query(
-    State(dwn): State<Dwn>, Json(request): Json<messages::Query>,
+    State(client): State<Client<Provider>>, Json(request): Json<messages::Query>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn messages_read(
-    State(dwn): State<Dwn>, Json(request): Json<messages::Read>,
+    State(client): State<Client<Provider>>, Json(request): Json<messages::Read>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn messages_subscribe(
-    State(dwn): State<Dwn>, Json(request): Json<messages::Subscribe>,
+    State(client): State<Client<Provider>>, Json(request): Json<messages::Subscribe>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn protocols_configure(
-    State(dwn): State<Dwn>, Json(request): Json<protocols::Configure>,
+    State(client): State<Client<Provider>>, Json(request): Json<protocols::Configure>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn protocols_query(
-    State(dwn): State<Dwn>, Json(request): Json<protocols::Query>,
+    State(client): State<Client<Provider>>, Json(request): Json<protocols::Query>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_delete(
-    State(dwn): State<Dwn>, Json(request): Json<records::Delete>,
+    State(client): State<Client<Provider>>, Json(request): Json<records::Delete>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_query(
-    State(dwn): State<Dwn>, Json(request): Json<records::Query>,
+    State(client): State<Client<Provider>>, Json(request): Json<records::Query>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_read(
-    State(dwn): State<Dwn>, Json(request): Json<records::Read>,
+    State(client): State<Client<Provider>>, Json(request): Json<records::Read>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_subscribe(
-    State(dwn): State<Dwn>, Json(request): Json<records::Subscribe>,
+    State(client): State<Client<Provider>>, Json(request): Json<records::Subscribe>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_write(
-    State(dwn): State<Dwn>, Json(request): Json<records::Write>,
+    State(client): State<Client<Provider>>, Json(request): Json<records::Write>,
 ) -> impl IntoResponse {
-    credibil_dwn::handle(&dwn.owner, request, &dwn.provider).await.into_http()
+    client.request(request).execute().await.into_http()
 }

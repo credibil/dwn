@@ -14,9 +14,9 @@ use credibil_jose::PublicKeyJwk;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::api::Result;
 use crate::authorization::Authorization;
 use crate::error::bad_request;
+use crate::handlers::Result;
 use crate::hd_key::{self, DerivationPath, DerivationScheme, DerivedPrivateJwk, PrivateKeyJwk};
 use crate::interfaces::Descriptor;
 use crate::store::Cursor;
@@ -363,7 +363,7 @@ pub struct Tags {
 }
 
 /// [`ConfigureReply`] is returned by the handler in the
-/// [`crate::endpoint::Reply`] `body` field.
+/// [`crate::endpoint::Response`] `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ConfigureReply {
     /// The [`Configure`] entry.
@@ -405,7 +405,7 @@ pub struct QueryDescriptor {
     pub filter: Option<ProtocolsFilter>,
 }
 
-/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Response`]
 /// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {

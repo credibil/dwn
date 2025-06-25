@@ -3,8 +3,8 @@
 use anyhow::{Result, anyhow};
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
-use credibil_proof::Signature;
 use credibil_ecc::Signer;
+use credibil_proof::Signature;
 
 use crate::client::records::{Data, ProtocolBuilder, WriteBuilder};
 pub use crate::grants::{Conditions, Publication, RecordsScope, Scope};

@@ -7,11 +7,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 
 use chrono::SecondsFormat::Micros;
+use credibil_core::api::{Body, Handler, Request, Response};
 use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
-use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_grant};
+use crate::handlers::{BodyExt, Error, Result, verify_grant};
 use crate::interfaces::protocols::{
     self, Action, ActionRule, Actor, Configure, ConfigureReply, Definition, PROTOCOL_URI,
     ProtocolType, RuleSet, Size,
@@ -97,7 +98,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
 /// an issue occurs attempting to save the [`Configure`] message.
 async fn handle(
     owner: &str, provider: &impl Provider, configure: Configure,
-) -> Result<Reply<ConfigureReply>> {
+) -> Result<Response<ConfigureReply>> {
     configure.authorize(owner, provider).await?;
 
     // validate the message
@@ -141,24 +142,26 @@ async fn handle(
     EventLog::append(provider, owner, &configure).await?;
     EventStream::emit(provider, owner, &Document::Configure(configure.clone())).await?;
 
-    Ok(Reply {
+    Ok(Response {
         status: StatusCode::ACCEPTED,
         headers: None,
         body: ConfigureReply { message: configure },
     })
 }
 
-impl<P: Provider> Handler<ConfigureReply,P> for Request<Configure> {
+impl<P: Provider> Handler<ConfigureReply, P> for Request<Configure> {
     type Error = Error;
 
     async fn handle(
         self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<ConfigureReply>>, Self::Error> {
+    ) -> Result<impl Into<Response<ConfigureReply>>> {
+        BodyExt::validate(&self.body, provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Configure {
+impl Body for Configure {}
+impl BodyExt for Configure {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }

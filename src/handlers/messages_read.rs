@@ -12,12 +12,13 @@ use std::str::FromStr;
 use ::cid::Cid;
 use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_core::api::{Body, Handler, Request, Response};
 
 use crate::Interface;
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
 use crate::grants::Scope;
-use crate::handlers::{Body, Error, Handler, Reply, Request, Result, records_write, verify_grant};
+use crate::handlers::{BodyExt, Error, Result, records_write, verify_grant};
 use crate::interfaces::messages::{Read, ReadReply, ReadReplyEntry};
 use crate::interfaces::protocols::PROTOCOL_URI;
 use crate::interfaces::{Descriptor, Document};
@@ -77,14 +78,14 @@ async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<Rea
 impl<P: Provider> Handler<ReadReply, P> for Request<Read> {
     type Error = Error;
 
-    async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<ReadReply>>, Self::Error> {
+    async fn handle(self, verifier: &str, provider: &P) -> Result<impl Into<Response<ReadReply>>> {
+        self.body.validate(provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Read {
+impl Body for Read {}
+impl BodyExt for Read {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }

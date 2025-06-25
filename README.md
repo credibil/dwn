@@ -19,7 +19,7 @@ use test_node::Provider;
 #[tokio::main]
 async fn main() {
     // create a provider for the DWN library
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = Keyring::new();
 
     // create a request to write a new record (and serialize to JSON)

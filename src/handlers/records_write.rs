@@ -9,20 +9,20 @@ use std::io::{Cursor, Read};
 use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat::Micros;
+use credibil_core::api::{Body, Handler, Request, Response};
 use http::StatusCode;
 use serde_json::json;
 
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
 use crate::grants::{Grant, GrantData, RequestData, RevocationData, Scope};
-use crate::handlers::{
-    Body, Error, Handler, Reply, Request, Result, protocols_configure, verify_grant,
-    verify_protocol,
-};
+use crate::handlers::{BodyExt, Error, Result, protocols_configure, verify_grant, verify_protocol};
 use crate::interfaces::protocols::{
     self, GRANT_PATH, PROTOCOL_URI, ProtocolType, REQUEST_PATH, REVOCATION_PATH, RuleSet,
 };
-use crate::interfaces::records::{DelegatedGrant, RecordsFilter, SignaturePayload, Write};
+use crate::interfaces::records::{
+    DelegatedGrant, RecordsFilter, SignaturePayload, Write, WriteReply,
+};
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{
@@ -37,7 +37,9 @@ use crate::{Method, authorization, schema};
 ///
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to save the [`Write`] message or attendant data.
-pub async fn handle(owner: &str, provider: &impl Provider, write: Write) -> Result<Reply<()>> {
+pub async fn handle(
+    owner: &str, provider: &impl Provider, write: Write,
+) -> Result<Response<WriteReply>> {
     write.authorize(owner, provider).await?;
     write.verify_integrity(owner, provider).await?;
 
@@ -143,24 +145,24 @@ pub async fn handle(owner: &str, provider: &impl Provider, write: Write) -> Resu
         write.revoke_grants(owner, provider).await?;
     }
 
-    Ok(Reply {
+    Ok(Response {
         status: code,
         headers: None,
-        body: (),
+        body: WriteReply,
     })
 }
 
-impl<P: Provider> Handler<(), P> for Request<Write> {
+impl<P: Provider> Handler<WriteReply, P> for Request<Write> {
     type Error = Error;
 
-    async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<()>>, Self::Error> {
+    async fn handle(self, verifier: &str, provider: &P) -> Result<impl Into<Response<WriteReply>>> {
+        self.body.validate(provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Write {
+impl Body for Write {}
+impl BodyExt for Write {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }

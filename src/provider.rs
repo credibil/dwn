@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::io::Read;
 
 use anyhow::Result;
-pub use credibil_proof::{ Resolver};
+pub use credibil_proof::Resolver;
 pub use datastore::BlockStore;
 use datastore::{data, store};
 use ipld_core::ipld::Ipld;
@@ -60,7 +60,7 @@ pub trait MessageStore: Send + Sync {
 
     /// Delete message associated with the specified id.
     fn delete(&self, owner: &str, message_cid: &str) -> impl Future<Output = Result<()>> + Send;
-    
+
     /// Purge all records from the store.
     fn purge(&self) -> impl Future<Output = Result<()>> + Send;
 }

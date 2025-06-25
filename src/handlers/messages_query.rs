@@ -3,9 +3,11 @@
 //! The messages query endpoint handles `MessagesQuery` messages — requests
 //! to query the [`EventLog`] for matching persisted messages (of any type).
 
+use credibil_core::api::{Body, Handler, Request, Response};
+
 use crate::authorization::Authorization;
 use crate::error::forbidden;
-use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_grant};
+use crate::handlers::{BodyExt, Error, Result, verify_grant};
 use crate::interfaces::Descriptor;
 use crate::interfaces::messages::{Query, QueryReply};
 use crate::provider::{EventLog, Provider};
@@ -32,14 +34,14 @@ async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Result<Q
 impl<P: Provider> Handler<QueryReply, P> for Request<Query> {
     type Error = Error;
 
-    async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<QueryReply>>, Self::Error> {
+    async fn handle(self, verifier: &str, provider: &P) -> Result<impl Into<Response<QueryReply>>> {
+        self.body.validate(provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Query {
+impl Body for Query {}
+impl BodyExt for Query {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }

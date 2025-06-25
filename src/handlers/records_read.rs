@@ -7,14 +7,13 @@ use std::io::Cursor;
 
 use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_core::api::{Body, Handler, Request, Response};
 use http::StatusCode;
 
 use crate::Method;
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
-use crate::handlers::{
-    Body, Error, Handler, Reply, Request, Result, records_write, verify_grant, verify_protocol,
-};
+use crate::handlers::{BodyExt, Error, Result, records_write, verify_grant, verify_protocol};
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Read, ReadReply, ReadReplyEntry, RecordsFilter, Write};
 use crate::provider::{DataStore, MessageStore, Provider};
@@ -27,7 +26,9 @@ use crate::store::{self, RecordsQueryBuilder};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to retrieve the specified message from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result<Reply<ReadReply>> {
+pub async fn handle(
+    owner: &str, provider: &impl Provider, read: Read,
+) -> Result<Response<ReadReply>> {
     // get the latest active `RecordsWrite` and `RecordsDelete` messages
     let query = store::Query::from(read.clone());
 
@@ -56,7 +57,7 @@ pub async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result
         // TODO: return optional body for NotFound error
         // return Err(Error::NotFound("record is deleted".to_string()));
 
-        return Ok(Reply {
+        return Ok(Response {
             status: StatusCode::NOT_FOUND,
             headers: None,
             body: ReadReply {
@@ -116,7 +117,7 @@ pub async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result
         Some(initial_write)
     };
 
-    Ok(Reply {
+    Ok(Response {
         status: StatusCode::OK,
         headers: None,
         body: ReadReply {
@@ -133,14 +134,14 @@ pub async fn handle(owner: &str, provider: &impl Provider, read: Read) -> Result
 impl<P: Provider> Handler<ReadReply, P> for Request<Read> {
     type Error = Error;
 
-    async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<ReadReply>>, Self::Error> {
+    async fn handle(self, verifier: &str, provider: &P) -> Result<impl Into<Response<ReadReply>>> {
+        self.body.validate(provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Read {
+impl Body for Read {}
+impl BodyExt for Read {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }

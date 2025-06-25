@@ -4,10 +4,12 @@
 //! to query the [`MessageStore`] for matching [`Write`] (and possibly
 //! [`Delete`]) messages.
 
+use credibil_core::api::{Body, Handler, Request, Response};
+
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
 use crate::grants::Grant;
-use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_protocol};
+use crate::handlers::{BodyExt, Error, Result, verify_protocol};
 use crate::interfaces::Descriptor;
 use crate::interfaces::records::{Query, QueryReply, QueryReplyEntry, RecordsFilter, Sort, Write};
 use crate::provider::{MessageStore, Provider};
@@ -87,14 +89,14 @@ pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Resu
 impl<P: Provider> Handler<QueryReply, P> for Request<Query> {
     type Error = Error;
 
-    async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<QueryReply>>, Self::Error> {
+    async fn handle(self, verifier: &str, provider: &P) -> Result<impl Into<Response<QueryReply>>> {
+        BodyExt::validate(&self.body, provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Query {
+impl Body for Query {}
+impl BodyExt for Query {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }

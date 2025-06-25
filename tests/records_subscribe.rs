@@ -5,6 +5,7 @@
 use std::time::Duration;
 
 use credibil_dwn::StatusCode;
+use credibil_dwn::api::Client;
 use credibil_dwn::client::records::{
     Data, QueryBuilder, RecordsFilter, SubscribeBuilder, WriteBuilder,
 };
@@ -20,10 +21,16 @@ async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("records_subscribe_alice").await }).await
 }
 
+static ALICE_CLIENT: OnceCell<Client<Provider>> = OnceCell::const_new();
+async fn alice_client() -> &'static Client<Provider> {
+    let alice = alice().await;
+    ALICE_CLIENT.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
+}
+
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]
 async fn owner_events() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -32,9 +39,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().add_author(alice.did());
     let subscribe =
         SubscribeBuilder::new().filter(filter).sign(alice).build().await.expect("should build");
-    let reply = credibil_dwn::handle(alice.did(), subscribe, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(subscribe).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::OK);
     let mut subscribe_reply: SubscribeReply = reply.body;
 
@@ -52,8 +57,7 @@ async fn owner_events() {
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -62,7 +66,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query =
         QueryBuilder::new().filter(filter).sign(alice).build().await.expect("should create query");
-    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should query");
+    let reply = alice_client.request(query).execute().await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;

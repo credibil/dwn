@@ -10,15 +10,12 @@ use jsonschema::{Retrieve, Uri};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::api::{Body, Result};
 use crate::error::bad_request;
+use crate::handlers::{BodyExt, Result};
 
 /// Validates the given payload using JSON schema keyed by the given schema name.
 /// Throws if the given payload fails validation.
-pub fn validate<T>(message: &T) -> Result<()>
-where
-    T: Body,
-{
+pub fn validate(message: &impl BodyExt) -> Result<()> {
     let descriptor = message.descriptor();
     let schema_name = format!("{}-{}", descriptor.interface, descriptor.method).to_lowercase();
     validate_value(&schema_name, message)
@@ -121,7 +118,7 @@ struct Retriever;
 impl Retrieve for Retriever {
     fn retrieve(
         &self, uri: &Uri<String>,
-    ) -> Result<Value, Box<(dyn Error + Send + Sync + 'static)>> {
+    ) -> anyhow::Result<Value, Box<(dyn Error + Send + Sync + 'static)>> {
         match uri.path().as_str() {
             "/dwn/json-schemas/defs.json" => {
                 let schema = include_bytes!("../schemas/definitions.json");

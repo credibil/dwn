@@ -10,8 +10,8 @@ use credibil_proof::Signature;
 use credibil_proof::{Resolver, resolve_jwk};
 use serde::{Deserialize, Serialize};
 
-use crate::api::Result;
 use crate::error::bad_request;
+use crate::handlers::Result;
 use crate::interfaces::records::DelegatedGrant;
 use crate::utils::cid;
 

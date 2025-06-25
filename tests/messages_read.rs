@@ -7,6 +7,7 @@
 
 use std::io::{Cursor, Read};
 
+use credibil_dwn::api::Client;
 use credibil_dwn::client::grants::{GrantBuilder, RequestBuilder, RevocationBuilder, Scope};
 use credibil_dwn::client::messages::ReadBuilder;
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, ProtocolType, RuleSet};
@@ -33,10 +34,22 @@ async fn carol() -> &'static Identity {
     CAROL.get_or_init(|| async { Identity::new("messages_read_carol").await }).await
 }
 
+static ALICE_CLIENT: OnceCell<Client<Provider>> = OnceCell::const_new();
+async fn alice_client() -> &'static Client<Provider> {
+    let alice = alice().await;
+    ALICE_CLIENT.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
+}
+
+static BOB_CLIENT: OnceCell<Client<Provider>> = OnceCell::const_new();
+async fn bob_client() -> &'static Client<Provider> {
+    let bob = bob().await;
+    BOB_CLIENT.get_or_init(|| async { Client::new(bob.did(), Provider::new().await) }).await
+}
+
 // Bob should be able to read any message in Alice's web node.
 #[tokio::test]
 async fn read_message() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -54,7 +67,7 @@ async fn read_message() {
         .await
         .expect("should create write");
 
-    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
+    let reply = alice_client.request(write).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -74,8 +87,7 @@ async fn read_message() {
     let bob_grant_id = bob_grant.record_id.clone();
     let message_cid = bob_grant.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
+    let reply = alice_client.request(bob_grant).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -89,7 +101,7 @@ async fn read_message() {
         .await
         .expect("should create read");
 
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: ReadReply = reply.body;
@@ -100,8 +112,8 @@ async fn read_message() {
 // Should returns Unauthenticated (401) when authentication fails.
 #[tokio::test]
 async fn invalid_signature() {
-    let provider = Provider::new().await.expect("should create provider");
     let invalid = Identity::invalid("invalid_signature").await;
+    let invalid_client = Client::new(invalid.did(), Provider::new().await);
 
     let read = ReadBuilder::new()
         .message_cid("bafkreihxrkspxsocoaoetqjm3iop26svz2k622cgart56v2ng7g6q6ofwa".to_string())
@@ -110,8 +122,7 @@ async fn invalid_signature() {
         .await
         .expect("should create read");
 
-    let Err(Error::Unauthorized(_)) = credibil_dwn::handle(invalid.did(), read, &provider).await
-    else {
+    let Err(Error::Unauthorized(_)) = invalid_client.request(read).execute().await else {
         panic!("should be Unauthorized");
     };
 }
@@ -119,7 +130,7 @@ async fn invalid_signature() {
 // Should return a status of BadRequest (400) when the request is invalid.
 #[tokio::test]
 async fn invalid_request() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     let mut read = ReadBuilder::new()
@@ -130,7 +141,7 @@ async fn invalid_request() {
         .expect("should create read");
     read.descriptor.base.interface = Interface::Protocols;
 
-    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::BadRequest(e)) = alice_client.request(read).execute().await else {
         panic!("should be BadRequest");
     };
     assert!(e.starts_with("schema not found"));
@@ -139,7 +150,7 @@ async fn invalid_request() {
 // Should return a status of BadRequest (400) when the message CID is invalid.
 #[tokio::test]
 async fn invalid_message_cid() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     let mut read = ReadBuilder::new()
@@ -153,7 +164,7 @@ async fn invalid_message_cid() {
     // set an invalid message CID
     read.descriptor.message_cid = "invalidcid".to_string();
 
-    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::BadRequest(e)) = alice_client.request(read).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "invalid CID: Failed to parse multihash");
@@ -162,7 +173,7 @@ async fn invalid_message_cid() {
 // Should return a status of NotFound (404) when the message cannot be found.
 #[tokio::test]
 async fn not_found() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     let read = ReadBuilder::new()
@@ -172,7 +183,7 @@ async fn not_found() {
         .await
         .expect("should create read");
 
-    let Err(Error::NotFound(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::NotFound(e)) = alice_client.request(read).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "message not found");
@@ -182,7 +193,7 @@ async fn not_found() {
 // (and has no grant from the owner).
 #[tokio::test]
 async fn forbidden() {
-    let provider = Provider::new().await.expect("should create provider");
+    let bob_client = bob_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -199,8 +210,7 @@ async fn forbidden() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(bob.did(), write.clone(), &provider).await.expect("should write");
+    let reply = bob_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -213,7 +223,7 @@ async fn forbidden() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(bob.did(), read, &provider).await else {
+    let Err(Error::Forbidden(e)) = bob_client.request(read).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "missing grant ID");
@@ -222,7 +232,7 @@ async fn forbidden() {
 // Should return data less than data::MAX_ENCODED_SIZE.
 #[tokio::test]
 async fn data_lt_threshold() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -240,7 +250,7 @@ async fn data_lt_threshold() {
 
     let write_cid = write.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
+    let reply = alice_client.request(write).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -253,7 +263,7 @@ async fn data_lt_threshold() {
         .await
         .expect("should create read");
 
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: ReadReply = reply.body;
@@ -269,7 +279,7 @@ async fn data_lt_threshold() {
 // Should return data greater than data::MAX_ENCODED_SIZE.
 #[tokio::test]
 async fn data_gt_threshold() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -288,7 +298,7 @@ async fn data_gt_threshold() {
 
     let write_cid = write.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
+    let reply = alice_client.request(write).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -300,7 +310,7 @@ async fn data_gt_threshold() {
         .build()
         .await
         .expect("should create read");
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: ReadReply = reply.body;
@@ -316,7 +326,7 @@ async fn data_gt_threshold() {
 // Should not return data for an initial write after the record is updated.
 #[tokio::test]
 async fn no_data_after_update() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -335,8 +345,7 @@ async fn no_data_after_update() {
 
     let initial_write_cid = write.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -352,7 +361,7 @@ async fn no_data_after_update() {
         .build()
         .await
         .expect("should update write");
-    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
+    let reply = alice_client.request(write).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -364,7 +373,7 @@ async fn no_data_after_update() {
         .build()
         .await
         .expect("should create read");
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: ReadReply = reply.body;
@@ -377,7 +386,7 @@ async fn no_data_after_update() {
 // Should return a status of Forbidden (403) if the owner is not the author.
 #[tokio::test]
 async fn owner_not_author() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -394,9 +403,7 @@ async fn owner_not_author() {
 
     let unpublished_cid = configure.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // published
@@ -409,9 +416,7 @@ async fn owner_not_author() {
 
     let published_cid = configure.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -425,7 +430,7 @@ async fn owner_not_author() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::Forbidden(e)) = alice_client.request(read).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "missing grant ID");
@@ -438,7 +443,7 @@ async fn owner_not_author() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::Forbidden(e)) = alice_client.request(read).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "missing grant ID");
@@ -454,7 +459,7 @@ async fn owner_not_author() {
         .await
         .expect("should create read");
 
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -468,7 +473,7 @@ async fn owner_not_author() {
         .await
         .expect("should create read");
 
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -478,7 +483,7 @@ async fn owner_not_author() {
 // Should return a status of Forbidden (403) when grant has different interface scope.
 #[tokio::test]
 async fn invalid_interface() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -493,9 +498,7 @@ async fn invalid_interface() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -514,7 +517,7 @@ async fn invalid_interface() {
 
     let write_cid = write.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
+    let reply = alice_client.request(write).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -535,8 +538,7 @@ async fn invalid_interface() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
+    let reply = alice_client.request(bob_grant).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -551,7 +553,7 @@ async fn invalid_interface() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::Forbidden(e)) = alice_client.request(read).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "interface is not within grant scope");
@@ -560,7 +562,7 @@ async fn invalid_interface() {
 // Should allow external parties to read a message using a n unrestricted grant.
 #[tokio::test]
 async fn permissive_grant() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -580,7 +582,7 @@ async fn permissive_grant() {
 
     let write_cid = write.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), write, &provider).await.expect("should write");
+    let reply = alice_client.request(write).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -599,8 +601,7 @@ async fn permissive_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
+    let reply = alice_client.request(bob_grant).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -614,7 +615,7 @@ async fn permissive_grant() {
         .await
         .expect("should create read");
 
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: ReadReply = reply.body;
@@ -625,7 +626,7 @@ async fn permissive_grant() {
 // Should allow reading protocol messages with a protocol-based grant.
 #[tokio::test]
 async fn protocol_grant() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -646,9 +647,7 @@ async fn protocol_grant() {
 
     let alice_configure_cid = configure.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -667,8 +666,7 @@ async fn protocol_grant() {
 
     let carol_request_cid = carol_request.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), carol_request, &provider).await.expect("should write");
+    let reply = alice_client.request(carol_request).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -688,9 +686,7 @@ async fn protocol_grant() {
 
     let carol_grant_cid = carol_grant.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), carol_grant.clone(), &provider)
-        .await
-        .expect("should write");
+    let reply = alice_client.request(carol_grant.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -713,8 +709,7 @@ async fn protocol_grant() {
 
     let alice_write_cid = write.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -729,7 +724,7 @@ async fn protocol_grant() {
 
     let alice_delete_cid = delete.cid().expect("should get CID");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -753,8 +748,7 @@ async fn protocol_grant() {
 
     let carol_write_cid = write.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -769,8 +763,7 @@ async fn protocol_grant() {
 
     let carol_revocation_cid = carol_revocation.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), carol_revocation, &provider).await.expect("should write");
+    let reply = alice_client.request(carol_revocation).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -788,9 +781,7 @@ async fn protocol_grant() {
         .await
         .expect("should create grant");
 
-    let reply = credibil_dwn::handle(alice.did(), bob_grant.clone(), &provider)
-        .await
-        .expect("should write");
+    let reply = alice_client.request(bob_grant.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -803,7 +794,7 @@ async fn protocol_grant() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::Forbidden(e)) = alice_client.request(read).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "missing grant ID");
@@ -820,8 +811,7 @@ async fn protocol_grant() {
         .await
         .expect("should create read");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(read.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -830,8 +820,7 @@ async fn protocol_grant() {
     // Carol's permission request
     read.descriptor.message_cid = carol_request_cid.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(read.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -840,8 +829,7 @@ async fn protocol_grant() {
     // Alice's Permission Grant to Carol
     read.descriptor.message_cid = carol_grant_cid.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(read.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -850,8 +838,7 @@ async fn protocol_grant() {
     // Alice's write
     read.descriptor.message_cid = alice_write_cid.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(read.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -860,8 +847,7 @@ async fn protocol_grant() {
     // Alice's delete
     read.descriptor.message_cid = alice_delete_cid.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(read.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -870,8 +856,7 @@ async fn protocol_grant() {
     // Carol's write
     read.descriptor.message_cid = carol_write_cid.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(read.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -880,8 +865,7 @@ async fn protocol_grant() {
     // Alice's Revocation of Carol's Grant
     read.descriptor.message_cid = carol_revocation_cid.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), read.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(read.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     let body: ReadReply = reply.body;
     let entry = body.entry.expect("should have entry");
@@ -902,8 +886,7 @@ async fn protocol_grant() {
 
     let write_cid = write.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // Bob is unable to read the control message
@@ -914,7 +897,7 @@ async fn protocol_grant() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::Forbidden(e)) = alice_client.request(read).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "missing grant ID");
@@ -923,7 +906,7 @@ async fn protocol_grant() {
 // Should reject reading protocol messages with mismatching protocol grant scopes.
 #[tokio::test]
 async fn invalid_protocol_grant() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -941,9 +924,7 @@ async fn invalid_protocol_grant() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -966,8 +947,7 @@ async fn invalid_protocol_grant() {
 
     let write_cid = write.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -986,8 +966,7 @@ async fn invalid_protocol_grant() {
 
     let grant_cid = bob_grant.cid().expect("should get CID");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
+    let reply = alice_client.request(bob_grant).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1001,7 +980,7 @@ async fn invalid_protocol_grant() {
         .await
         .expect("should create read");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::Forbidden(e)) = alice_client.request(read).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "no grant found");
@@ -1010,7 +989,7 @@ async fn invalid_protocol_grant() {
 // Should fail if a `RecordsWrite` message is not found for a requested `RecordsDelete`.
 #[tokio::test]
 async fn delete_with_no_write() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1024,9 +1003,7 @@ async fn delete_with_no_write() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1045,8 +1022,7 @@ async fn delete_with_no_write() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        credibil_dwn::handle(alice.did(), bob_grant, &provider).await.expect("should write");
+    let reply = alice_client.request(bob_grant).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1073,7 +1049,9 @@ async fn delete_with_no_write() {
         .build()
         .await
         .expect("should create write");
-    MessageStore::put(&provider, alice.did(), &delete).await.expect("should put message");
+    MessageStore::put(&alice_client.provider, alice.did(), &delete)
+        .await
+        .expect("should put message");
 
     // --------------------------------------------------
     // Bob attempts to use the grant to read the protocol message, but fails.
@@ -1086,7 +1064,7 @@ async fn delete_with_no_write() {
         .await
         .expect("should create read");
 
-    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), read, &provider).await else {
+    let Err(Error::BadRequest(e)) = alice_client.request(read).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "expected `RecordsWrite` message");

@@ -15,16 +15,16 @@ use std::io;
 use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
+use credibil_ecc::{AlgAlgorithm, Curve, EncAlgorithm, PublicKey};
 use credibil_jose::jwe::{self, Protected};
 use credibil_jose::{Jws, PublicKeyJwk};
-use credibil_ecc::{AlgAlgorithm, Curve, EncAlgorithm, PublicKey};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::api::Result;
 use crate::authorization::{Authorization, JwsPayload};
 use crate::error::bad_request;
 use crate::event::Subscriber;
+use crate::handlers::Result;
 use crate::hd_key::DerivationScheme;
 use crate::interfaces::Descriptor;
 use crate::serde::{rfc3339_micros, rfc3339_micros_opt};
@@ -75,7 +75,7 @@ pub struct DeleteDescriptor {
 }
 
 /// [`DeleteReply`] is returned by the handler in the
-/// [`crate::endpoint::Reply`] `body` field.
+/// [`crate::endpoint::Response`] `body` field.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DeleteReply;
 
@@ -111,7 +111,7 @@ pub struct QueryDescriptor {
     pub pagination: Option<Pagination>,
 }
 
-/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Response`]
 /// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -508,7 +508,7 @@ pub struct ReadDescriptor {
     pub filter: RecordsFilter,
 }
 
-/// [`ReadReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// [`ReadReply`] is returned by the handler in the [`crate::endpoint::Response`]
 /// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -566,7 +566,7 @@ pub struct SubscribeDescriptor {
 }
 
 /// [`SubscribeReply`] is returned by the handler in the
-/// [`crate::endpoint::Reply`] `body` field.
+/// [`crate::endpoint::Response`] `body` field.
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscribeReply {
@@ -829,7 +829,7 @@ impl From<bool> for Tag {
 }
 
 /// For consistency, [`WriteReply`] is returned by the handler in the
-/// [`crate::endpoint::Reply`] `body` field, but contains no data.
+/// [`crate::endpoint::Response`] `body` field, but contains no data.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WriteReply;
 

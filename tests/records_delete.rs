@@ -5,6 +5,7 @@
 use std::io::Read;
 
 use chrono::Days;
+use credibil_dwn::api::Client;
 use credibil_dwn::client::messages;
 use credibil_dwn::client::messages::MessagesFilter;
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition};
@@ -32,10 +33,22 @@ async fn carol() -> &'static Identity {
     CAROL.get_or_init(|| async { Identity::new("records_delete_carol").await }).await
 }
 
+static ALICE_CLIENT: OnceCell<Client<Provider>> = OnceCell::const_new();
+async fn alice_client() -> &'static Client<Provider> {
+    let alice = alice().await;
+    ALICE_CLIENT.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
+}
+
+static BOB_CLIENT: OnceCell<Client<Provider>> = OnceCell::const_new();
+async fn bob_client() -> &'static Client<Provider> {
+    let bob = bob().await;
+    BOB_CLIENT.get_or_init(|| async { Client::new(bob.did(), Provider::new().await) }).await
+}
+
 // Should successfully delete a record and then fail when attempting to delete it again.
 #[tokio::test]
 async fn delete_record() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -49,8 +62,7 @@ async fn delete_record() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -59,8 +71,7 @@ async fn delete_record() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query =
         QueryBuilder::new().filter(filter).sign(alice).build().await.expect("should find write");
-    let reply =
-        credibil_dwn::handle(alice.did(), query.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(query.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     // --------------------------------------------------
@@ -73,13 +84,13 @@ async fn delete_record() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Ensure record doesn't appear in query results.
     // --------------------------------------------------
-    let reply = credibil_dwn::handle(alice.did(), query, &provider).await.expect("should read");
+    let reply = alice_client.request(query).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -93,7 +104,7 @@ async fn delete_record() {
         .await
         .expect("should create delete");
 
-    let Err(Error::NotFound(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await else {
+    let Err(Error::NotFound(e)) = alice_client.request(delete).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "cannot delete a `RecordsDelete` record");
@@ -102,7 +113,8 @@ async fn delete_record() {
 // Should not affect other records (or tenants) with the same data.
 #[tokio::test]
 async fn delete_data() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
+    let bob_client = bob_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -117,9 +129,7 @@ async fn delete_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = credibil_dwn::handle(alice.did(), alice_write1.clone(), &provider)
-        .await
-        .expect("should write");
+    let reply = alice_client.request(alice_write1.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -131,9 +141,7 @@ async fn delete_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = credibil_dwn::handle(alice.did(), alice_write2.clone(), &provider)
-        .await
-        .expect("should write");
+    let reply = alice_client.request(alice_write2.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -145,8 +153,7 @@ async fn delete_data() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(bob.did(), bob_write1.clone(), &provider).await.expect("should write");
+    let reply = bob_client.request(bob_write1.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -158,8 +165,7 @@ async fn delete_data() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(bob.did(), bob_write2.clone(), &provider).await.expect("should write");
+    let reply = bob_client.request(bob_write2.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -172,14 +178,14 @@ async fn delete_data() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // ensure the second record's data is unaffected
     let filter = RecordsFilter::new().record_id(&alice_write2.record_id);
     let read =
         ReadBuilder::new().filter(filter).sign(alice).build().await.expect("should find write");
-    let reply = credibil_dwn::handle(alice.did(), read, &provider).await.expect("should read");
+    let reply = alice_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -200,7 +206,7 @@ async fn delete_data() {
         .build()
         .await
         .expect("should create delete");
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // ensure the second record has been deleted
@@ -210,8 +216,7 @@ async fn delete_data() {
         .build()
         .await
         .expect("should find write");
-    let reply =
-        credibil_dwn::handle(alice.did(), read, &provider).await.expect("should be not found");
+    let reply = alice_client.request(read).execute().await.expect("should be not found");
     assert_eq!(reply.status, StatusCode::NOT_FOUND);
 
     // TODO: uncomment when NotFound error supports body with initial_write and delete records
@@ -226,7 +231,7 @@ async fn delete_data() {
     let filter = RecordsFilter::new().record_id(&bob_write1.record_id);
     let read =
         ReadBuilder::new().filter(filter).sign(bob).build().await.expect("should find write");
-    let reply = credibil_dwn::handle(bob.did(), read, &provider).await.expect("should read");
+    let reply = bob_client.request(read).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -242,7 +247,7 @@ async fn delete_data() {
 // Should return a status of NotFound (404) when deleting a non-existent record.
 #[tokio::test]
 async fn not_found() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     let delete = DeleteBuilder::new()
@@ -252,7 +257,7 @@ async fn not_found() {
         .await
         .expect("should create delete");
 
-    let Err(Error::NotFound(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await else {
+    let Err(Error::NotFound(e)) = alice_client.request(delete).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "no matching record found");
@@ -261,7 +266,7 @@ async fn not_found() {
 // Should disallow delete when there is a newer record.
 #[tokio::test]
 async fn newer_version() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -275,8 +280,7 @@ async fn newer_version() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -290,8 +294,7 @@ async fn newer_version() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -309,7 +312,7 @@ async fn newer_version() {
     delete.descriptor.base.message_timestamp =
         timestamp.checked_sub_days(Days::new(1)).expect("should subtract days");
 
-    let Err(Error::Conflict(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await else {
+    let Err(Error::Conflict(e)) = alice_client.request(delete).execute().await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "newer record version exists");
@@ -318,7 +321,7 @@ async fn newer_version() {
 // Should be able to delete and then rewrite the same data.
 #[tokio::test]
 async fn rewrite_data() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     let data = br#"{"record": "test record write"}"#;
@@ -332,8 +335,7 @@ async fn rewrite_data() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -345,7 +347,7 @@ async fn rewrite_data() {
         .build()
         .await
         .expect("should create delete");
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -357,15 +359,14 @@ async fn rewrite_data() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow delete using the 'allow-anyone' rule.
 #[tokio::test]
 async fn anyone_delete() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -382,9 +383,7 @@ async fn anyone_delete() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -403,8 +402,7 @@ async fn anyone_delete() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -417,14 +415,14 @@ async fn anyone_delete() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow recipient to delete using an ancestor recipient rule.
 #[tokio::test]
 async fn ancestor_recipient() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -442,9 +440,7 @@ async fn ancestor_recipient() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -464,8 +460,7 @@ async fn ancestor_recipient() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), chat.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(chat.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -485,8 +480,7 @@ async fn ancestor_recipient() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), tag.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(tag.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -499,8 +493,7 @@ async fn ancestor_recipient() {
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = alice_client.request(delete).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "action not permitted");
@@ -515,14 +508,14 @@ async fn ancestor_recipient() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow recipient to delete using a recipient rule.
 #[tokio::test]
 async fn direct_recipient() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -540,9 +533,7 @@ async fn direct_recipient() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -562,8 +553,7 @@ async fn direct_recipient() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), chat.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(chat.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -576,8 +566,7 @@ async fn direct_recipient() {
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = alice_client.request(delete).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "action not permitted");
@@ -592,14 +581,14 @@ async fn direct_recipient() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow the author to delete with ancestor author rule.
 #[tokio::test]
 async fn ancestor_author() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -617,9 +606,7 @@ async fn ancestor_author() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -638,8 +625,7 @@ async fn ancestor_author() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), post.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(post.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -658,8 +644,7 @@ async fn ancestor_author() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        credibil_dwn::handle(alice.did(), comment.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(comment.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -672,8 +657,7 @@ async fn ancestor_author() {
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = alice_client.request(delete).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "action not permitted");
@@ -688,14 +672,14 @@ async fn ancestor_author() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow co-delete by invoking a context role.
 #[tokio::test]
 async fn context_role() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -713,9 +697,7 @@ async fn context_role() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -736,8 +718,7 @@ async fn context_role() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), thread.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(thread.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -758,8 +739,7 @@ async fn context_role() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), admin.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(admin.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -780,8 +760,7 @@ async fn context_role() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), chat.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(chat.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -794,8 +773,7 @@ async fn context_role() {
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = alice_client.request(delete).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -811,14 +789,14 @@ async fn context_role() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow co-delete by invoking a root-level role.
 #[tokio::test]
 async fn root_role() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -836,9 +814,7 @@ async fn root_role() {
         .await
         .expect("should build");
 
-    let reply = credibil_dwn::handle(alice.did(), configure, &provider)
-        .await
-        .expect("should configure protocol");
+    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -859,8 +835,7 @@ async fn root_role() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), admin.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(admin.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -881,8 +856,7 @@ async fn root_role() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), chat.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(chat.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -895,8 +869,7 @@ async fn root_role() {
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = alice_client.request(delete).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -912,14 +885,14 @@ async fn root_role() {
         .await
         .expect("should create delete");
 
-    let reply = credibil_dwn::handle(alice.did(), delete, &provider).await.expect("should read");
+    let reply = alice_client.request(delete).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should return a status of Forbidden (403) if message is not authorized.
 #[tokio::test]
 async fn forbidden() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -935,8 +908,7 @@ async fn forbidden() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -949,8 +921,7 @@ async fn forbidden() {
         .await
         .expect("should create delete");
 
-    let Err(Error::Forbidden(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::Forbidden(e)) = alice_client.request(delete).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "delete request failed authorization");
@@ -959,7 +930,7 @@ async fn forbidden() {
 // Should return a status of Forbidden (403) if message is not authorized.
 #[tokio::test]
 async fn unauthorized() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -974,8 +945,7 @@ async fn unauthorized() {
 
     delete.authorization.signature.signatures[0].signature = "bad_signature".to_string();
 
-    let Err(Error::Unauthorized(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::Unauthorized(e)) = alice_client.request(delete).execute().await else {
         panic!("should be Unauthorized");
     };
     assert!(e.starts_with("failed to authenticate"));
@@ -984,7 +954,7 @@ async fn unauthorized() {
 // Should return a status of BadRequest (400) when message is invalid.
 #[tokio::test]
 async fn invalid_message() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -998,8 +968,7 @@ async fn invalid_message() {
         .expect("should create delete");
     delete.descriptor = DeleteDescriptor::default();
 
-    let Err(Error::BadRequest(e)) = credibil_dwn::handle(alice.did(), delete, &provider).await
-    else {
+    let Err(Error::BadRequest(e)) = alice_client.request(delete).execute().await else {
         panic!("should be BadRequest");
     };
     assert!(e.contains("validation failed:"));
@@ -1008,7 +977,7 @@ async fn invalid_message() {
 // Should index additional properties for the record being deleted.
 #[tokio::test]
 async fn index_additional() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1024,8 +993,7 @@ async fn index_additional() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1038,8 +1006,7 @@ async fn index_additional() {
         .await
         .expect("should create delete");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), delete.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(delete.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1051,21 +1018,23 @@ async fn index_additional() {
         .include_archived(true)
         .build();
 
-    let (entries, _) = MessageStore::query(&provider, alice.did(), &query.clone().into())
-        .await
-        .expect("should query");
+    let (entries, _) =
+        MessageStore::query(&alice_client.provider, alice.did(), &query.clone().into())
+            .await
+            .expect("should query");
     assert_eq!(entries.len(), 1);
 
     // check log
-    let (entries, _) =
-        MessageStore::query(&provider, alice.did(), &query).await.expect("should query");
+    let (entries, _) = MessageStore::query(&alice_client.provider, alice.did(), &query)
+        .await
+        .expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
 // Should log delete event while retaining initial write event.
 #[tokio::test]
 async fn log_delete() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1080,8 +1049,7 @@ async fn log_delete() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1094,8 +1062,7 @@ async fn log_delete() {
         .await
         .expect("should create delete");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), delete.clone(), &provider).await.expect("should read");
+    let reply = alice_client.request(delete.clone()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1109,14 +1076,15 @@ async fn log_delete() {
         .expect("should create query");
     let query = store::Query::from(query);
 
-    let (entries, _) = EventLog::query(&provider, alice.did(), &query).await.expect("should query");
+    let (entries, _) =
+        EventLog::query(&alice_client.provider, alice.did(), &query).await.expect("should query");
     assert_eq!(entries.len(), 2);
 }
 
 // Should delete all writes except the initial write.
 #[tokio::test]
 async fn delete_updates() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1131,8 +1099,7 @@ async fn delete_updates() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write1.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write1.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write2 = WriteBuilder::from(write1.clone())
@@ -1142,8 +1109,7 @@ async fn delete_updates() {
         .await
         .expect("should create write");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), write2.clone(), &provider).await.expect("should write");
+    let reply = alice_client.request(write2.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1156,8 +1122,7 @@ async fn delete_updates() {
         .await
         .expect("should create delete");
 
-    let reply =
-        credibil_dwn::handle(alice.did(), delete.clone(), &provider).await.expect("should delete");
+    let reply = alice_client.request(delete.clone()).execute().await.expect("should delete");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1171,6 +1136,7 @@ async fn delete_updates() {
         .expect("should create query");
     let query = store::Query::from(query);
 
-    let (entries, _) = EventLog::query(&provider, alice.did(), &query).await.expect("should query");
+    let (entries, _) =
+        EventLog::query(&alice_client.provider, alice.did(), &query).await.expect("should query");
     assert_eq!(entries.len(), 2);
 }

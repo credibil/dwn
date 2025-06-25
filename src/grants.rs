@@ -12,8 +12,8 @@ use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::api::{Error, Result};
 use crate::error::bad_request;
+use crate::handlers::{Error, Result};
 use crate::interfaces::records::{DelegatedGrant, Write};
 use crate::serde::rfc3339_micros;
 use crate::{Interface, Method};

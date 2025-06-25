@@ -19,7 +19,7 @@ static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 // Allow author-delegated grant to configure any protocols.
 #[tokio::test]
 async fn configure_any() {
-    let provider = Provider::new().await.expect("should create provider");
+    let alice_client = alice_client().await;
 
     // --------------------------------------------------
     // Alice grants Bob the ability to configure any protocol

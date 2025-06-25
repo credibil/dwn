@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use blockstore::{Blockstore as _, InMemoryBlockstore};
 use cid::Cid;
+use credibil_core::api::Client;
 use credibil_dwn::event::{Event, Subscriber};
 use credibil_dwn::provider::{BlockStore, EventStream, Resolver};
 use credibil_proof::DocumentRequest;
@@ -23,11 +24,13 @@ pub struct Provider {
 }
 
 impl Provider {
-    pub async fn new() -> Result<Self> {
-        Ok(Self {
+    pub async fn new() -> Self {
+        Self {
             blockstore: Arc::new(InMemoryBlockstore::<64>::new()),
-            nats_client: Arc::new(async_nats::connect("demo.nats.io").await?),
-        })
+            nats_client: Arc::new(
+                async_nats::connect("demo.nats.io").await.expect("should connect"),
+            ),
+        }
     }
 }
 
@@ -84,12 +87,10 @@ impl Resolver for Provider {
     async fn resolve(&self, url: &str) -> Result<Vec<u8>> {
         let request = DocumentRequest { url: url.to_string() };
         let document =
-            credibil_proof::handle("owner", request, &Store).await.map(|r| r.0.clone())?;
+            Client::new("owner", Store).request(request).execute().await.map(|r| r.0.clone())?;
         serde_json::to_vec(&document).map_err(|e| e.into())
     }
 }
-
-
 
 impl EventStream for Provider {
     /// Subscribe to a owner's event stream.

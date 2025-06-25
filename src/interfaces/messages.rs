@@ -40,7 +40,7 @@ pub struct QueryDescriptor {
     pub cursor: Option<Cursor>,
 }
 
-/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// [`QueryReply`] is returned by the handler in the [`crate::endpoint::Response`]
 /// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct QueryReply {
@@ -75,7 +75,7 @@ pub struct ReadDescriptor {
     pub message_cid: String,
 }
 
-/// [`ReadReply`] is returned by the handler in the [`crate::endpoint::Reply`]
+/// [`ReadReply`] is returned by the handler in the [`crate::endpoint::Response`]
 /// `body` field.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ReadReply {
@@ -121,7 +121,7 @@ pub struct SubscribeDescriptor {
 }
 
 /// [`SubscribeReply`] is returned by the handler in the
-/// [`crate::endpoint::Reply`] `body` field.
+/// [`crate::endpoint::Response`] `body` field.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct SubscribeReply {
     /// The subscription to the requested events.

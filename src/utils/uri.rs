@@ -3,8 +3,8 @@
 use anyhow::Context;
 use http::uri::Uri;
 
-use crate::api::Result;
 use crate::error::bad_request;
+use crate::handlers::Result;
 
 pub fn clean(uri: &str) -> Result<String> {
     let stripped = uri.strip_suffix('/').unwrap_or(uri);

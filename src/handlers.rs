@@ -16,34 +16,55 @@ mod records_write;
 mod verify_grant;
 mod verify_protocol;
 
-use std::fmt::Debug;
+use std::future::Future;
 
-use tracing::instrument;
+use credibil_core::api::Body;
+use credibil_proof::Resolver;
+use serde::Serialize;
 
-use crate::api::{Body, Error, Handler, Headers, Reply, Request, Result};
-use crate::provider::Provider;
+use crate::authorization::Authorization;
+pub use crate::error::Error;
+use crate::error::unauthorized;
+use crate::interfaces::Descriptor;
+use crate::schema;
 
-/// Handle incoming DWN messages.
-///
-/// # Errors
-///
-/// This method can fail for a number of reasons related to the incoming
-/// message's viability. Expected failues include invalid authorization,
-/// insufficient permissions, and invalid message content.
-///
-/// Implementers should look to the Error type and description for more
-/// information on the reason for failure.
-#[instrument(level = "debug", skip(provider))]
-pub async fn handle<B, H, P, U>(
-    owner: &str, request: impl Into<Request<B, H>> + Debug, provider: &P,
-) -> Result<Reply<U>>
-where
-    B: Body,
-    H: Headers,
-    P: Provider,
-    Request<B, H>: Handler<U, P, Error = Error>,
-{
-    let request: Request<B, H> = request.into();
-    request.validate(owner, provider).await?;
-    Ok(request.handle(owner, provider).await?.into())
+/// A type alias for the result type used throughout the handlers module.
+pub type Result<T> = anyhow::Result<T, Error>;
+
+/// The `BodyExt` trait is used to restrict the types able to implement
+/// request body. It is implemented by all `xxxRequest` types.
+pub trait BodyExt: Body + Serialize {
+    /// The request's 'core' descriptor.
+    fn descriptor(&self) -> &Descriptor;
+
+    /// the Request's authorization, if any.
+    fn authorization(&self) -> Option<&Authorization>;
+
+    /// Perform initial validation of the request.
+    ///
+    /// Validation undertaken here is common to all messages, with message-
+    /// specific validation performed by the message's handler.
+    ///
+    /// # Errors
+    ///
+    /// Will fail if the request is invalid or if authentication fails.
+    fn validate(&self, resolver: &impl Resolver) -> impl Future<Output = Result<()>> + Send {
+        async {
+            // if !tenant.active(owner)? {
+            //     return Err(Error::Unauthorized("tenant not active"));
+            // }
+
+            #[cfg(debug_assertions)]
+            schema::validate(self)?;
+
+            // authenticate the requestor
+            if let Some(authzn) = self.authorization() {
+                if let Err(e) = authzn.verify(resolver).await {
+                    return Err(unauthorized!("failed to authenticate: {e}"));
+                }
+            }
+
+            Ok(())
+        }
+    }
 }

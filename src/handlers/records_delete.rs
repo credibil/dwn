@@ -12,12 +12,13 @@ use std::collections::HashMap;
 
 use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
+use credibil_core::api::{Body, Handler, Request, Response};
 use http::StatusCode;
 
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};
-use crate::handlers::{Body, Error, Handler, Reply, Request, Result, verify_protocol};
-use crate::interfaces::records::{Delete, RecordsFilter, Write};
+use crate::handlers::{BodyExt, Error, Result, verify_protocol};
+use crate::interfaces::records::{Delete, DeleteReply, RecordsFilter, Write};
 use crate::interfaces::{Descriptor, Document};
 use crate::provider::{DataStore, EventLog, EventStream, MessageStore, Provider};
 use crate::store::{RecordsQueryBuilder, Storable};
@@ -31,7 +32,9 @@ use crate::{Interface, Method};
 /// The endpoint will return an error when message authorization fails or when
 /// an issue occurs attempting to delete the specified record from the
 /// [`MessageStore`].
-pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Result<Reply<()>> {
+pub async fn handle(
+    owner: &str, provider: &impl Provider, delete: Delete,
+) -> Result<Response<DeleteReply>> {
     // a `RecordsWrite` record is required for delete processing
     let query = RecordsQueryBuilder::new()
         .method(None)
@@ -72,24 +75,26 @@ pub async fn handle(owner: &str, provider: &impl Provider, delete: Delete) -> Re
     // run the delete task as a resumable task
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
-    Ok(Reply {
+    Ok(Response {
         status: StatusCode::ACCEPTED,
         headers: None,
-        body: (),
+        body: DeleteReply,
     })
 }
 
-impl<P: Provider> Handler<(), P> for Request<Delete> {
+impl<P: Provider> Handler<DeleteReply, P> for Request<Delete> {
     type Error = Error;
 
     async fn handle(
         self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Reply<()>>, Self::Error> {
+    ) -> Result<impl Into<Response<DeleteReply>>> {
+        self.body.validate(provider).await?;
         handle(verifier, provider, self.body).await
     }
 }
 
-impl Body for Delete {
+impl Body for Delete {}
+impl BodyExt for Delete {
     fn descriptor(&self) -> &Descriptor {
         &self.descriptor.base
     }
