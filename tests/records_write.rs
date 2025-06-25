@@ -27,34 +27,35 @@ use rand::RngCore;
 use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;
 
+static ALICE: OnceCell<Identity> = OnceCell::const_new();
+static BOB: OnceCell<Identity> = OnceCell::const_new();
+static CAROL: OnceCell<Identity> = OnceCell::const_new();
+static ISSUER: OnceCell<Identity> = OnceCell::const_new();
+static PFI: OnceCell<Identity> = OnceCell::const_new();
+static ALICE_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static BOB_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+
 async fn alice() -> &'static Identity {
-    static ALICE: OnceCell<Identity> = OnceCell::const_new();
     ALICE.get_or_init(|| async { Identity::new("records_write_alice").await }).await
 }
 async fn bob() -> &'static Identity {
-    static BOB: OnceCell<Identity> = OnceCell::const_new();
     BOB.get_or_init(|| async { Identity::new("records_write_bob").await }).await
 }
 async fn carol() -> &'static Identity {
-    static CAROL: OnceCell<Identity> = OnceCell::const_new();
     CAROL.get_or_init(|| async { Identity::new("records_write_carol").await }).await
 }
 async fn issuer() -> &'static Identity {
-    static ISSUER: OnceCell<Identity> = OnceCell::const_new();
     ISSUER.get_or_init(|| async { Identity::new("records_write_issuer").await }).await
 }
 async fn pfi() -> &'static Identity {
-    static PFI: OnceCell<Identity> = OnceCell::const_new();
     PFI.get_or_init(|| async { Identity::new("records_write_pfi").await }).await
 }
 async fn alice_node() -> &'static Client<Provider> {
     let alice = alice().await;
-    static ALICE_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
     ALICE_NODE.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
 }
 async fn bob_node() -> &'static Client<Provider> {
     let bob = bob().await;
-    static BOB_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
     BOB_NODE.get_or_init(|| async { Client::new(bob.did(), Provider::new().await) }).await
 }
 
