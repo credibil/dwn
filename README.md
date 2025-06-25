@@ -13,13 +13,13 @@ A Rust-based implementation of the Decentralized Web Node [specification], as po
 use base64ct::{Base64UrlUnpadded, Encoding};
 use credibil_dwn::client::records::{Data, QueryBuilder, RecordsFilter, WriteBuilder};
 use credibil_dwn::{StatusCode, endpoint};
-use test_node::keystore;
-use test_node::Provider;
+use node::keystore;
+use node::Provider;
 
 #[tokio::main]
 async fn main() {
     // create a provider for the DWN library
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = Keyring::new();
 
     // create a request to write a new record (and serialize to JSON)

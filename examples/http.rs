@@ -3,7 +3,7 @@
 //! This example demonstrates how to use the Verifiable Credential Issuer (VCI)
 
 use anyhow::Result;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -22,23 +22,23 @@ use tracing_subscriber::FmtSubscriber;
 #[tokio::main]
 async fn main() -> Result<()> {
     let owner = Identity::new("alice").await.did().to_string();
-    let client = Client::new(owner, Provider::new().await);
+    let client = Client::new(Provider::new().await);
 
     let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG).finish();
     tracing::subscriber::set_global_default(subscriber).expect("set subscriber");
     let cors = CorsLayer::new().allow_methods(Any).allow_origin(Any).allow_headers(Any);
 
     let router = Router::new()
-        .route("/messages/query", post(messages_query))
-        .route("/messages/read", post(messages_read))
-        .route("/messages/subscribe", post(messages_subscribe))
-        .route("/protocols/configure", post(protocols_configure))
-        .route("/protocols/query", get(protocols_query))
-        .route("/records/delete", get(records_delete))
-        .route("/records/query", post(records_query))
-        .route("/records/read", post(records_read))
-        .route("/records/subscribe", post(records_subscribe))
-        .route("/records/write", post(records_write))
+        .route("/{did}/messages/query", post(messages_query))
+        .route("/{did}/messages/read", post(messages_read))
+        .route("/{did}/messages/subscribe", post(messages_subscribe))
+        .route("/{did}/protocols/configure", post(protocols_configure))
+        .route("/{did}/protocols/query", get(protocols_query))
+        .route("/{did}/records/delete", get(records_delete))
+        .route("/{did}/records/query", post(records_query))
+        .route("/{did}/records/read", post(records_read))
+        .route("/{did}/records/subscribe", post(records_subscribe))
+        .route("/{did}/records/write", post(records_write))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -54,70 +54,80 @@ async fn main() -> Result<()> {
 
 #[axum::debug_handler]
 async fn messages_query(
-    State(client): State<Client<Provider>>, Json(request): Json<messages::Query>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<messages::Query>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn messages_read(
-    State(client): State<Client<Provider>>, Json(request): Json<messages::Read>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<messages::Read>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn messages_subscribe(
-    State(client): State<Client<Provider>>, Json(request): Json<messages::Subscribe>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<messages::Subscribe>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn protocols_configure(
-    State(client): State<Client<Provider>>, Json(request): Json<protocols::Configure>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<protocols::Configure>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn protocols_query(
-    State(client): State<Client<Provider>>, Json(request): Json<protocols::Query>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<protocols::Query>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_delete(
-    State(client): State<Client<Provider>>, Json(request): Json<records::Delete>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<records::Delete>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_query(
-    State(client): State<Client<Provider>>, Json(request): Json<records::Query>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<records::Query>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_read(
-    State(client): State<Client<Provider>>, Json(request): Json<records::Read>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<records::Read>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_subscribe(
-    State(client): State<Client<Provider>>, Json(request): Json<records::Subscribe>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<records::Subscribe>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
 
 #[axum::debug_handler]
 async fn records_write(
-    State(client): State<Client<Provider>>, Json(request): Json<records::Write>,
+    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    Json(request): Json<records::Write>,
 ) -> impl IntoResponse {
-    client.request(request).execute().await.into_http()
+    client.request(request).owner(&did).execute().await.into_http()
 }
