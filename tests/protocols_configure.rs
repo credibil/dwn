@@ -23,6 +23,7 @@ use tokio::time;
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
 static BOB: OnceCell<Identity> = OnceCell::const_new();
 static CAROL: OnceCell<Identity> = OnceCell::const_new();
+static ALICE_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("protocols_configure_alice").await }).await
@@ -33,17 +34,15 @@ async fn bob() -> &'static Identity {
 async fn carol() -> &'static Identity {
     CAROL.get_or_init(|| async { Identity::new("protocols_configure_carol").await }).await
 }
-
-static ALICE_CLIENT: OnceCell<Client<Provider>> = OnceCell::const_new();
-async fn alice_client() -> &'static Client<Provider> {
+async fn alice_node() -> &'static Client<Provider> {
     let alice = alice().await;
-    ALICE_CLIENT.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
+    ALICE_NODE.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
 }
 
 // Should allow a protocol definition with no schema or `data_format`.
 #[tokio::test]
 async fn minimal() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -56,7 +55,7 @@ async fn minimal() {
         .await
         .expect("should build");
 
-    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
@@ -68,7 +67,7 @@ async fn minimal() {
 // Should return a status of Forbidden (403) when authorization fails.
 #[tokio::test]
 async fn forbidden() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     // configure a protocol
@@ -82,7 +81,7 @@ async fn forbidden() {
     // set a bad_request signature
     configure.authorization.signature.signatures[0].signature = "bad_request".to_string();
 
-    let Err(Error::Unauthorized(_)) = alice_client.request(configure).execute().await else {
+    let Err(Error::Unauthorized(_)) = alice_node.request(configure).execute().await else {
         panic!("should be Unauthorized");
     };
 }
@@ -90,7 +89,7 @@ async fn forbidden() {
 // Should overwrite existing protocol when timestamp is newer.
 #[tokio::test]
 async fn overwrite_older() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let definition = Definition::new("http://minimal.xyz");
@@ -117,13 +116,13 @@ async fn overwrite_older() {
         .await
         .expect("should build");
 
-    let reply = alice_client.request(newer).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(newer).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts to configure the older protocol and fails.
     // --------------------------------------------------
-    let Err(Error::Conflict(e)) = alice_client.request(older).execute().await else {
+    let Err(Error::Conflict(e)) = alice_node.request(older).execute().await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message is not the latest");
@@ -138,7 +137,7 @@ async fn overwrite_older() {
         .await
         .expect("should build");
 
-    let reply = alice_client.request(update).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(update).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -150,7 +149,7 @@ async fn overwrite_older() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_client.request(query).execute().await.expect("should query");
+    let reply = alice_node.request(query).execute().await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -162,7 +161,7 @@ async fn overwrite_older() {
 // protocol is lexicographically larger.
 #[tokio::test]
 async fn overwrite_smaller() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let definition_1 = Definition::new("http://minimal.xyz").add_type(
@@ -223,25 +222,19 @@ async fn overwrite_smaller() {
     // CID is smaller than the existing entry.
     // --------------------------------------------------
     // configure protocol
-    let reply = alice_client
-        .request(messages[1].clone())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        alice_node.request(messages[1].clone()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check the protocol with the smallest CID cannot be written
-    let Err(Error::Conflict(e)) = alice_client.request(messages[0].clone()).execute().await else {
+    let Err(Error::Conflict(e)) = alice_node.request(messages[0].clone()).execute().await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message CID is smaller than existing entry");
 
     // check the protocol with the largest CID can be written
-    let reply = alice_client
-        .request(messages[2].clone())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        alice_node.request(messages[2].clone()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -253,7 +246,7 @@ async fn overwrite_smaller() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_client.request(query).execute().await.expect("should query");
+    let reply = alice_node.request(query).execute().await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -264,7 +257,7 @@ async fn overwrite_smaller() {
 // Should return a status of BadRequest (400) when protocol is not normalized.
 #[tokio::test]
 async fn invalid_protocol() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -277,7 +270,7 @@ async fn invalid_protocol() {
     // override builder's normalizing of  protocol
     configure.descriptor.definition.protocol = "minimal.xyz/".to_string();
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "invalid URL: minimal.xyz/");
@@ -286,7 +279,7 @@ async fn invalid_protocol() {
 // Should return a status of BadRequest (400) when schema is not normalized.
 #[tokio::test]
 async fn invalid_schema() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -311,7 +304,7 @@ async fn invalid_schema() {
         },
     );
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "invalid URL: bad_request-schema.xyz/");
@@ -320,7 +313,7 @@ async fn invalid_schema() {
 // Should reject non-owner requests with no grant with status of Forbidden (403).
 #[tokio::test]
 async fn no_grant() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let bob = bob().await;
 
     let configure = ConfigureBuilder::new()
@@ -330,7 +323,7 @@ async fn no_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = alice_client.request(configure).execute().await else {
+    let Err(Error::Forbidden(e)) = alice_node.request(configure).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "author has no grant");
@@ -340,7 +333,7 @@ async fn no_grant() {
 // or `who` + `of` combination).
 #[tokio::test]
 async fn duplicate_actor() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -374,7 +367,7 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -421,7 +414,7 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -430,7 +423,7 @@ async fn duplicate_actor() {
 // Should reject request when action rule contains duplicated roles.
 #[tokio::test]
 async fn duplicate_role() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -476,7 +469,7 @@ async fn duplicate_role() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure).execute().await else {
         panic!("should not configure protocol");
     };
     assert!(e.contains("validation failed:"));
@@ -486,7 +479,7 @@ async fn duplicate_role() {
 // (Action::Read, Action::Query, Action::Subscribe).
 #[tokio::test]
 async fn invalid_read_action() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let mut configure = ConfigureBuilder::new()
@@ -521,7 +514,7 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure.clone()).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure.clone()).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "role friend is missing read-like actions");
@@ -551,7 +544,7 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure.clone()).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure.clone()).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "role friend is missing read-like actions");
@@ -581,7 +574,7 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = alice_client.request(configure.clone()).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(configure.clone()).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "role friend is missing read-like actions");
@@ -611,14 +604,14 @@ async fn invalid_read_action() {
             },
         );
 
-    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow an external party to configure a protocol when they have a valid grant.
 #[tokio::test]
 async fn valid_grant() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -639,7 +632,7 @@ async fn valid_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = alice_client.request(bob_grant.clone()).execute().await.expect("should write");
+    let reply = alice_node.request(bob_grant.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -653,7 +646,7 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -667,7 +660,7 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = alice_client.request(configure.clone()).execute().await else {
+    let Err(Error::Forbidden(e)) = alice_node.request(configure.clone()).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -682,7 +675,7 @@ async fn valid_grant() {
         .await
         .expect("should create revocation");
 
-    let reply = alice_client.request(bob_revocation).execute().await.expect("should write");
+    let reply = alice_node.request(bob_revocation).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -696,7 +689,7 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = alice_client.request(configure).execute().await else {
+    let Err(Error::Forbidden(e)) = alice_node.request(configure).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -705,7 +698,7 @@ async fn valid_grant() {
 // Should allow configuring a specific protocol.
 #[tokio::test]
 async fn configure_scope() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -725,7 +718,7 @@ async fn configure_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = alice_client.request(bob_grant.clone()).execute().await.expect("should write");
+    let reply = alice_node.request(bob_grant.clone()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -739,7 +732,7 @@ async fn configure_scope() {
         .await
         .expect("should build");
 
-    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -753,7 +746,7 @@ async fn configure_scope() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = alice_client.request(configure.clone()).execute().await else {
+    let Err(Error::Forbidden(e)) = alice_node.request(configure.clone()).execute().await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "message and grant protocols do not match");
@@ -762,7 +755,7 @@ async fn configure_scope() {
 // Should add an event when a protocol is configured.
 #[tokio::test]
 async fn configure_event() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let configure = ConfigureBuilder::new()
@@ -772,21 +765,20 @@ async fn configure_event() {
         .await
         .expect("should build");
 
-    let reply = alice_client.request(configure).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(configure).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check log
     let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
-    let (entries, _) = MessageStore::query(&alice_client.provider, alice.did(), &query)
-        .await
-        .expect("should query");
+    let (entries, _) =
+        MessageStore::query(&alice_node.provider, alice.did(), &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
 }
 
 // Should delete older events when one is overwritten.
 #[tokio::test]
 async fn delete_older_events() {
-    let alice_client = alice_client().await;
+    let alice_node = alice_node().await;
     let alice = alice().await;
 
     let oldest = ConfigureBuilder::new()
@@ -796,7 +788,7 @@ async fn delete_older_events() {
         .await
         .expect("should build");
 
-    let reply = alice_client.request(oldest).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(oldest).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     time::sleep(time::Duration::from_secs(1)).await;
@@ -810,15 +802,14 @@ async fn delete_older_events() {
 
     let newest_cid = newest.cid().expect("should have CID");
 
-    let reply = alice_client.request(newest).execute().await.expect("should configure protocol");
+    let reply = alice_node.request(newest).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check log
 
     let query = ProtocolsQueryBuilder::new().protocol("https://minimal.xyz").build();
-    let (entries, _) = MessageStore::query(&alice_client.provider, alice.did(), &query)
-        .await
-        .expect("should query");
+    let (entries, _) =
+        MessageStore::query(&alice_node.provider, alice.did(), &query).await.expect("should query");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cid().unwrap(), newest_cid);
 }
