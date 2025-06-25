@@ -561,6 +561,7 @@ dependencies = [
 [[package]]
 name = "credibil-core"
 version = "0.1.0"
+source = "git+https://github.com/credibil/core.git#4399500b9bf0393106e9773fe29cd10bad968034"
 dependencies = [
  "anyhow",
  "bytes",
@@ -602,7 +603,6 @@ dependencies = [
  "async-recursion",
  "axum",
  "base64ct",
- "bytes",
  "cfg-if",
  "chrono",
  "ciborium",
@@ -616,7 +616,6 @@ dependencies = [
  "futures",
  "hkdf",
  "http",
- "http-body",
  "http-body-util",
  "hyper",
  "hyper-util",
