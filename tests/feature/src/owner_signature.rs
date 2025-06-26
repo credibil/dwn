@@ -20,7 +20,7 @@ static BOB: LazyLock<Keyring> = LazyLock::new(Keyring::new);
 // Use owner signature for authorization when it is provided.
 #[tokio::test]
 async fn flat_space() {
-    let alice_node = alice_node().await;
+    let node = node().await;
 
     // --------------------------------------------------
     // Bob writes a message to his web node

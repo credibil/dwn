@@ -16,19 +16,19 @@ use tokio::sync::OnceCell;
 use tokio::time;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
-static ALICE_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("records_subscribe_alice").await }).await
 }
-async fn alice_node() -> &'static Client<Provider> {
-    ALICE_NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<Provider> {
+    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
 }
 
 // The owner should be able to subscribe their own event stream.
 #[tokio::test]
 async fn owner_events() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -37,7 +37,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().add_author(alice.did());
     let subscribe =
         SubscribeBuilder::new().filter(filter).sign(alice).build().await.expect("should build");
-    let reply = alice_node
+    let reply = node
         .request(subscribe)
         .owner(alice.did())
         .execute()
@@ -61,7 +61,7 @@ async fn owner_events() {
     let message_cid = write.cid().expect("should have cid");
 
     let reply =
-        alice_node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -70,7 +70,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query =
         QueryBuilder::new().filter(filter).sign(alice).build().await.expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;

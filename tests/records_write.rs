@@ -32,8 +32,7 @@ static BOB: OnceCell<Identity> = OnceCell::const_new();
 static CAROL: OnceCell<Identity> = OnceCell::const_new();
 static ISSUER: OnceCell<Identity> = OnceCell::const_new();
 static PFI: OnceCell<Identity> = OnceCell::const_new();
-static ALICE_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
-static BOB_NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("records_write_alice").await }).await
@@ -50,12 +49,10 @@ async fn issuer() -> &'static Identity {
 async fn pfi() -> &'static Identity {
     PFI.get_or_init(|| async { Identity::new("records_write_pfi").await }).await
 }
-async fn alice_node() -> &'static Client<Provider> {
-    ALICE_NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<Provider> {
+    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
 }
-async fn bob_node() -> &'static Client<Provider> {
-    BOB_NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
-}
+
 
 // // Should handle pre-processing errors
 // #[tokio::test]
@@ -64,7 +61,7 @@ async fn bob_node() -> &'static Client<Provider> {
 // Should be able to update existing record when update has a later `message_timestamp`.
 #[tokio::test]
 async fn update_older() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -78,7 +75,7 @@ async fn update_older() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -90,7 +87,7 @@ async fn update_older() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -109,7 +106,7 @@ async fn update_older() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -121,7 +118,7 @@ async fn update_older() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -132,7 +129,7 @@ async fn update_older() {
     // --------------------------------------------------
     // Attempt to overwrite the latest record with an older version.
     // --------------------------------------------------
-    let Err(Error::Conflict(e)) = alice_node.request(initial).owner(alice.did()).execute().await else {
+    let Err(Error::Conflict(e)) = node.request(initial).owner(alice.did()).execute().await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "a more recent update exists");
@@ -146,7 +143,7 @@ async fn update_older() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -159,7 +156,7 @@ async fn update_older() {
 // only when message CID is larger than the existing one.
 #[tokio::test]
 async fn update_smaller_cid() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -171,7 +168,7 @@ async fn update_smaller_cid() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -203,7 +200,7 @@ async fn update_smaller_cid() {
     // --------------------------------------------------
     // Update the initial record with the first update (ordered by CID size).
     // --------------------------------------------------
-    let reply = alice_node.request(sorted[0].clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(sorted[0].clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // verify update
@@ -213,7 +210,7 @@ async fn update_smaller_cid() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -224,7 +221,7 @@ async fn update_smaller_cid() {
     // --------------------------------------------------
     // Apply the second update (ordered by CID size).
     // --------------------------------------------------
-    let reply = alice_node.request(sorted[1].clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(sorted[1].clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // verify update
@@ -234,7 +231,7 @@ async fn update_smaller_cid() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -245,7 +242,7 @@ async fn update_smaller_cid() {
     // --------------------------------------------------
     // Attempt to update using the first update (smaller CID) update and fail.
     // --------------------------------------------------
-    let Err(Error::Conflict(e)) = alice_node.request(sorted[0].clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Conflict(e)) = node.request(sorted[0].clone()).owner(alice.did()).execute().await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "an update with a larger CID already exists");
@@ -254,7 +251,7 @@ async fn update_smaller_cid() {
 // Should allow data format of a flat-space record to be updated to any value.
 #[tokio::test]
 async fn update_flat_space() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -266,7 +263,7 @@ async fn update_flat_space() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -279,7 +276,7 @@ async fn update_flat_space() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -291,7 +288,7 @@ async fn update_flat_space() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -303,7 +300,7 @@ async fn update_flat_space() {
 // Should not allow immutable properties to be updated.
 #[tokio::test]
 async fn immutable_unchanged() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -315,7 +312,7 @@ async fn immutable_unchanged() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -330,7 +327,7 @@ async fn immutable_unchanged() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(update.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update.clone()).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "immutable properties do not match");
@@ -345,7 +342,7 @@ async fn immutable_unchanged() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(update.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update.clone()).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "immutable properties do not match");
@@ -355,7 +352,7 @@ async fn immutable_unchanged() {
 // match and no data stream is provided.
 #[tokio::test]
 async fn inherit_data() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -367,7 +364,7 @@ async fn inherit_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -376,7 +373,7 @@ async fn inherit_data() {
     // --------------------------------------------------
     let update =
         WriteBuilder::from(initial.clone()).sign(alice).build().await.expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -388,7 +385,7 @@ async fn inherit_data() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(read).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -400,14 +397,14 @@ async fn inherit_data() {
 // ln 367: Should allow an initial write without data.
 #[tokio::test]
 async fn initial_no_data() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
     // Write a record with no data.
     // --------------------------------------------------
     let initial = WriteBuilder::new().sign(alice).build().await.expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
@@ -419,7 +416,7 @@ async fn initial_no_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(read).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -432,7 +429,7 @@ async fn initial_no_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -444,7 +441,7 @@ async fn initial_no_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(read).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -459,7 +456,7 @@ async fn initial_no_data() {
 // ln 409: Should not allow a record to be updated without data.
 #[tokio::test]
 async fn update_no_data() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -471,7 +468,7 @@ async fn update_no_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -484,7 +481,7 @@ async fn update_no_data() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(update.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update.clone()).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "data CID does not match descriptor `data_cid`");
@@ -498,7 +495,7 @@ async fn update_no_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(read).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -511,7 +508,7 @@ async fn update_no_data() {
 // `encoded_data` threshold.
 #[tokio::test]
 async fn retain_large_data() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -527,7 +524,7 @@ async fn retain_large_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -539,7 +536,7 @@ async fn retain_large_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -552,7 +549,7 @@ async fn retain_large_data() {
         .await
         .expect("should create read");
 
-    let reply = alice_node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -565,7 +562,7 @@ async fn retain_large_data() {
 // `encoded_data` threshold.
 #[tokio::test]
 async fn retain_small_data() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -581,7 +578,7 @@ async fn retain_small_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -593,7 +590,7 @@ async fn retain_small_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -606,7 +603,7 @@ async fn retain_small_data() {
         .await
         .expect("should create read");
 
-    let reply = alice_node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -619,7 +616,7 @@ async fn retain_small_data() {
 // descriptor `data_size` is larger than data size.
 #[tokio::test]
 async fn large_data_size_larger() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -641,7 +638,7 @@ async fn large_data_size_larger() {
     write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -651,7 +648,7 @@ async fn large_data_size_larger() {
 // `data_size` is larger than `encoded_data` threshold.
 #[tokio::test]
 async fn small_data_size_larger() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -673,7 +670,7 @@ async fn small_data_size_larger() {
     write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -683,7 +680,7 @@ async fn small_data_size_larger() {
 // descriptor `data_size` is smaller than threshold.
 #[tokio::test]
 async fn large_data_size_smaller() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -705,7 +702,7 @@ async fn large_data_size_smaller() {
     write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -715,7 +712,7 @@ async fn large_data_size_smaller() {
 // `data_size` is smaller than actual data size.
 #[tokio::test]
 async fn small_data_size_smaller() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -737,7 +734,7 @@ async fn small_data_size_smaller() {
     write.record_id = write.entry_id(alice.did()).expect("should create record ID");
     write.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data size does not match message `data_size`");
@@ -747,7 +744,7 @@ async fn small_data_size_smaller() {
 // descriptor `data_cid` is incorrect.
 #[tokio::test]
 async fn large_data_cid_larger() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -769,7 +766,7 @@ async fn large_data_cid_larger() {
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -779,7 +776,7 @@ async fn large_data_cid_larger() {
 // `data_cid` is incorrect.
 #[tokio::test]
 async fn small_data_cid_larger() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -802,7 +799,7 @@ async fn small_data_cid_larger() {
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -812,7 +809,7 @@ async fn small_data_cid_larger() {
 // descriptor `data_cid` is incorrect.
 #[tokio::test]
 async fn large_data_cid_smaller() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -835,7 +832,7 @@ async fn large_data_cid_smaller() {
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -845,7 +842,7 @@ async fn large_data_cid_smaller() {
 // `data_cid` is incorrect.
 #[tokio::test]
 async fn small_data_cid_smaller() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -868,7 +865,7 @@ async fn small_data_cid_smaller() {
     let write_stream = Cursor::new(data.to_vec());
     write.data_stream = Some(write_stream);
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "actual data CID does not match message `data_cid`");
@@ -878,7 +875,7 @@ async fn small_data_cid_smaller() {
 // update.
 #[tokio::test]
 async fn alter_data_cid_larger() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -894,7 +891,7 @@ async fn alter_data_cid_larger() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // record 2
@@ -907,7 +904,7 @@ async fn alter_data_cid_larger() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -920,7 +917,7 @@ async fn alter_data_cid_larger() {
     update.descriptor.data_cid = write_1.descriptor.data_cid;
     update.descriptor.data_size = write_1.descriptor.data_size;
 
-    let Err(Error::BadRequest(e)) = alice_node.request(update).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "data CID does not match descriptor `data_cid`");
@@ -934,7 +931,7 @@ async fn alter_data_cid_larger() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(read).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -945,7 +942,7 @@ async fn alter_data_cid_larger() {
 // Should prevent accessing data by referencing a different`data_cid` in an update.
 #[tokio::test]
 async fn alter_data_cid_smaller() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -961,7 +958,7 @@ async fn alter_data_cid_smaller() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // record 2
@@ -974,7 +971,7 @@ async fn alter_data_cid_smaller() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -987,7 +984,7 @@ async fn alter_data_cid_smaller() {
     update.descriptor.data_cid = write_1.descriptor.data_cid;
     update.descriptor.data_size = write_1.descriptor.data_size;
 
-    let Err(Error::BadRequest(e)) = alice_node.request(update).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "data CID does not match descriptor `data_cid`");
@@ -1001,7 +998,7 @@ async fn alter_data_cid_smaller() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(read).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -1012,7 +1009,7 @@ async fn alter_data_cid_smaller() {
 // Should allow updates without specifying `data` or `date_published`.
 #[tokio::test]
 async fn update_published_no_date() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1024,7 +1021,7 @@ async fn update_published_no_date() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1036,7 +1033,7 @@ async fn update_published_no_date() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1046,7 +1043,7 @@ async fn update_published_no_date() {
         .filter(RecordsFilter::new().record_id(&initial.record_id))
         .build()
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1061,7 +1058,7 @@ async fn update_published_no_date() {
 // Should conserve `published` state when updating using an existing Write record.
 #[tokio::test]
 async fn update_published() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1074,7 +1071,7 @@ async fn update_published() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1086,7 +1083,7 @@ async fn update_published() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1098,7 +1095,7 @@ async fn update_published() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1114,7 +1111,7 @@ async fn update_published() {
 // Should fail when updating a record but its initial write cannot be found.
 #[tokio::test]
 async fn no_initial_write() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     let initial = WriteBuilder::new()
@@ -1124,7 +1121,7 @@ async fn no_initial_write() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(initial).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(initial).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "initial write not found");
@@ -1134,7 +1131,7 @@ async fn no_initial_write() {
 // do not match.
 #[tokio::test]
 async fn create_date_mismatch() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     let created = DateTime::parse_from_rfc3339("2025-01-01T00:00:00-00:00").unwrap();
@@ -1147,7 +1144,7 @@ async fn create_date_mismatch() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(initial).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(initial).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "`message_timestamp` and `date_created` do not match");
@@ -1156,7 +1153,7 @@ async fn create_date_mismatch() {
 // Should fail when creating a record with an invalid `context_id`.
 #[tokio::test]
 async fn invalid_context_id() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     let mut initial = WriteBuilder::new()
@@ -1174,7 +1171,7 @@ async fn invalid_context_id() {
     initial.context_id =
         Some("bafkreihs5gnovjoqueffglvevvohpgts3aj5ykgmlqm7quuotujxtxtp7f".to_string());
 
-    let Err(Error::BadRequest(e)) = alice_node.request(initial).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(initial).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "invalid context ID");
@@ -1183,7 +1180,7 @@ async fn invalid_context_id() {
 // Should log an event on initial write.
 #[tokio::test]
 async fn log_initial_write() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1195,7 +1192,7 @@ async fn log_initial_write() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1210,14 +1207,14 @@ async fn log_initial_write() {
 
     let query = store::Query::from(query);
     let (events, _) =
-        EventLog::query(&alice_node.provider, alice.did(), &query).await.expect("should fetch");
+        EventLog::query(&node.provider, alice.did(), &query).await.expect("should fetch");
     assert_eq!(events.len(), 1);
 }
 
 // Should only ever retain (at most) the initial and most recent writes.
 #[tokio::test]
 async fn retain_two_writes() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1230,7 +1227,7 @@ async fn retain_two_writes() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let update1 = WriteBuilder::from(initial.clone())
@@ -1239,7 +1236,7 @@ async fn retain_two_writes() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let update2 = WriteBuilder::from(initial.clone())
@@ -1248,7 +1245,7 @@ async fn retain_two_writes() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update2.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1263,7 +1260,7 @@ async fn retain_two_writes() {
 
     let query = store::Query::from(query);
     let (events, _) =
-        EventLog::query(&alice_node.provider, alice.did(), &query).await.expect("should fetch");
+        EventLog::query(&node.provider, alice.did(), &query).await.expect("should fetch");
     assert_eq!(events.len(), 2);
 
     assert_eq!(events[0].cid().unwrap(), initial.cid().unwrap());
@@ -1273,7 +1270,7 @@ async fn retain_two_writes() {
 // Should allow anyone to create a record using the "anyone create" rule.
 #[tokio::test]
 async fn anyone_create() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1288,7 +1285,7 @@ async fn anyone_create() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1307,7 +1304,7 @@ async fn anyone_create() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(email.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(email.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1319,7 +1316,7 @@ async fn anyone_create() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1334,7 +1331,7 @@ async fn anyone_create() {
 // Should allow anyone to create a record using the "anyone co-update" rule.
 #[tokio::test]
 async fn anyone_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1349,7 +1346,7 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1366,7 +1363,7 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_doc.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_doc.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1378,7 +1375,7 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_doc).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_doc).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1395,7 +1392,7 @@ async fn anyone_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_doc).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_doc).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -1404,7 +1401,7 @@ async fn anyone_update() {
 // Should allow creating records using an ancestor recipient rule.
 #[tokio::test]
 async fn ancestor_create() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -1419,7 +1416,7 @@ async fn ancestor_create() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1440,7 +1437,7 @@ async fn ancestor_create() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(application.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(application.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1460,7 +1457,7 @@ async fn ancestor_create() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(response.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(response.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1472,7 +1469,7 @@ async fn ancestor_create() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1487,7 +1484,7 @@ async fn ancestor_create() {
 // Should allow creating records using an ancestor recipient rule.
 #[tokio::test]
 async fn ancestor_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1502,7 +1499,7 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1520,7 +1517,7 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_post.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_post.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1538,7 +1535,7 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_tag.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_tag.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1550,7 +1547,7 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_tag.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_tag.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1568,7 +1565,7 @@ async fn ancestor_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_tag.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_tag.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -1577,7 +1574,7 @@ async fn ancestor_update() {
 // Should allow updates using a direct recipient rule.
 #[tokio::test]
 async fn direct_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -1593,7 +1590,7 @@ async fn direct_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1611,7 +1608,7 @@ async fn direct_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_post.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_post.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1623,7 +1620,7 @@ async fn direct_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(carol_update.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(carol_update.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -1637,14 +1634,14 @@ async fn direct_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow author to block non-authors using an ancestor author rule.
 #[tokio::test]
 async fn block_non_author() {
-    let bob_node = bob_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -1660,7 +1657,7 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should build");
-    let reply = bob_node.request(configure).owner(bob.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(bob.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1679,7 +1676,7 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should create write");
-    let reply = bob_node.request(alice_image.clone()).owner(bob.did()).execute().await.expect("should write");
+    let reply = node.request(alice_image.clone()).owner(bob.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1698,7 +1695,7 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = bob_node.request(carol_caption.clone()).owner(bob.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(carol_caption.clone()).owner(bob.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -1719,7 +1716,7 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should create write");
-    let reply = bob_node.request(alice_caption.clone()).owner(bob.did()).execute().await.expect("should write");
+    let reply = node.request(alice_caption.clone()).owner(bob.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1731,7 +1728,7 @@ async fn block_non_author() {
         .build()
         .await
         .expect("should create query");
-    let reply = bob_node.request(query).owner(bob.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(bob.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1746,7 +1743,7 @@ async fn block_non_author() {
 // Should allow author to update using an ancestor author rule.
 #[tokio::test]
 async fn ancestor_author_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1761,7 +1758,7 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1779,7 +1776,7 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_post.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_post.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1797,7 +1794,7 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_comment.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_comment.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1809,7 +1806,7 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1827,7 +1824,7 @@ async fn ancestor_author_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_post.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_post.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -1836,7 +1833,7 @@ async fn ancestor_author_update() {
 // Should allow a role record with recipient to be created and updated.
 #[tokio::test]
 async fn update_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1851,7 +1848,7 @@ async fn update_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1869,7 +1866,7 @@ async fn update_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1881,14 +1878,14 @@ async fn update_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should reject a role record when no recipient is defined.
 #[tokio::test]
 async fn no_role_recipient() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -1902,7 +1899,7 @@ async fn no_role_recipient() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1919,7 +1916,7 @@ async fn no_role_recipient() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(bob_friend.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(bob_friend.clone()).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "role record is missing recipient");
@@ -1929,7 +1926,7 @@ async fn no_role_recipient() {
 // previous record has been deleted.
 #[tokio::test]
 async fn recreate_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -1944,7 +1941,7 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1962,7 +1959,7 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1974,7 +1971,7 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should create delete");
-    let reply = alice_node.request(delete).owner(alice.did()).execute().await.expect("should delete");
+    let reply = node.request(delete).owner(alice.did()).execute().await.expect("should delete");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1992,14 +1989,14 @@ async fn recreate_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow records to be created and updated using a context role.
 #[tokio::test]
 async fn context_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2014,7 +2011,7 @@ async fn context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2032,7 +2029,7 @@ async fn context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2050,7 +2047,7 @@ async fn context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2062,14 +2059,14 @@ async fn context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update_bob.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update_bob.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow the same role to be created under different contexts.
 #[tokio::test]
 async fn context_roles() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2084,7 +2081,7 @@ async fn context_roles() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2102,7 +2099,7 @@ async fn context_roles() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2120,7 +2117,7 @@ async fn context_roles() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2138,7 +2135,7 @@ async fn context_roles() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread2.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2156,14 +2153,14 @@ async fn context_roles() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread2.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should reject attempts to create a duplicate role under same context.
 #[tokio::test]
 async fn duplicate_context_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2178,7 +2175,7 @@ async fn duplicate_context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2196,7 +2193,7 @@ async fn duplicate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2214,7 +2211,7 @@ async fn duplicate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2232,7 +2229,7 @@ async fn duplicate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(bob_thread2.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(bob_thread2.clone()).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "recipient already has this role record");
@@ -2242,7 +2239,7 @@ async fn duplicate_context_role() {
 // after their previous record has been deleted.
 #[tokio::test]
 async fn recreate_context_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2257,7 +2254,7 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2275,7 +2272,7 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2293,7 +2290,7 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2305,7 +2302,7 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should create delete");
-    let reply = alice_node.request(delete).owner(alice.did()).execute().await.expect("should delete");
+    let reply = node.request(delete).owner(alice.did()).execute().await.expect("should delete");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2323,14 +2320,14 @@ async fn recreate_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread2.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow a creating records using role-based permissions.
 #[tokio::test]
 async fn role_can_create() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2345,7 +2342,7 @@ async fn role_can_create() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2363,7 +2360,7 @@ async fn role_can_create() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2382,14 +2379,14 @@ async fn role_can_create() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_chat.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_chat.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow a updating records using role-based permissions.
 #[tokio::test]
 async fn role_can_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2404,7 +2401,7 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2422,7 +2419,7 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2440,7 +2437,7 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_chat.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_chat.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2453,7 +2450,7 @@ async fn role_can_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
@@ -2461,7 +2458,7 @@ async fn role_can_update() {
 // protocol role.
 #[tokio::test]
 async fn invalid_protocol_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2476,7 +2473,7 @@ async fn invalid_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2494,7 +2491,7 @@ async fn invalid_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2512,7 +2509,7 @@ async fn invalid_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_chat.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_chat.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2531,7 +2528,7 @@ async fn invalid_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_chat.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_chat.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "protocol path does not match role record type");
@@ -2541,7 +2538,7 @@ async fn invalid_protocol_role() {
 // protocol role being used.
 #[tokio::test]
 async fn unassigned_protocol_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2556,7 +2553,7 @@ async fn unassigned_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2576,7 +2573,7 @@ async fn unassigned_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_chat.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_chat.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find record for role");
@@ -2585,7 +2582,7 @@ async fn unassigned_protocol_role() {
 // Should allow record creation for authorized context role.
 #[tokio::test]
 async fn create_protocol_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2600,7 +2597,7 @@ async fn create_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2618,7 +2615,7 @@ async fn create_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2636,7 +2633,7 @@ async fn create_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2655,14 +2652,14 @@ async fn create_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_chat.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_chat.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should allow record updates for authorized context role.
 #[tokio::test]
 async fn update_protocol_role() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2677,7 +2674,7 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2695,7 +2692,7 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2713,7 +2710,7 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2730,7 +2727,7 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_chat.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_chat.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2743,7 +2740,7 @@ async fn update_protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_chat.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_chat.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
@@ -2751,7 +2748,7 @@ async fn update_protocol_role() {
 // protocol role path.
 #[tokio::test]
 async fn forbidden_role_path() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2766,7 +2763,7 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2784,7 +2781,7 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2802,7 +2799,7 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_thread.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2820,7 +2817,7 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(thread2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread2.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2838,7 +2835,7 @@ async fn forbidden_role_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(chat.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(chat.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find record for role");
@@ -2847,7 +2844,7 @@ async fn forbidden_role_path() {
 // Should reject creation of records using an invalid protocol path.
 #[tokio::test]
 async fn invalid_role_path() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2862,7 +2859,7 @@ async fn invalid_role_path() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2881,7 +2878,7 @@ async fn invalid_role_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(chat.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(chat.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "no rule set defined for invoked role");
@@ -2890,7 +2887,7 @@ async fn invalid_role_path() {
 // Should allow record updates by the initial author.
 #[tokio::test]
 async fn initial_author_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -2905,7 +2902,7 @@ async fn initial_author_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2924,7 +2921,7 @@ async fn initial_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_msg.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_msg.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2936,7 +2933,7 @@ async fn initial_author_update() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2956,13 +2953,13 @@ async fn initial_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Verify the update.
     // --------------------------------------------------
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2977,7 +2974,7 @@ async fn initial_author_update() {
 // Should prevent record updates by another author who does not have permission.
 #[tokio::test]
 async fn no_author_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -2993,7 +2990,7 @@ async fn no_author_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3012,7 +3009,7 @@ async fn no_author_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_msg.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_msg.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3024,7 +3021,7 @@ async fn no_author_update() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3052,7 +3049,7 @@ async fn no_author_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(update.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(update.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -3061,7 +3058,7 @@ async fn no_author_update() {
 // Should prevent updates to the immutable `recipient` property.
 #[tokio::test]
 async fn no_recipient_update() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
     let carol = carol().await;
@@ -3077,7 +3074,7 @@ async fn no_recipient_update() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3096,7 +3093,7 @@ async fn no_recipient_update() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_msg.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_msg.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3108,7 +3105,7 @@ async fn no_recipient_update() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3137,7 +3134,7 @@ async fn no_recipient_update() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(update.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "immutable properties do not match");
@@ -3146,7 +3143,7 @@ async fn no_recipient_update() {
 // Should prevent unauthorized record creation using a `recipient` rule.
 #[tokio::test]
 async fn unauthorized_create() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let issuer = issuer().await;
     let fake = Identity::new("records_write_unauthorized_create_fake").await;
@@ -3162,7 +3159,7 @@ async fn unauthorized_create() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3183,7 +3180,7 @@ async fn unauthorized_create() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(application.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(application.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3203,7 +3200,7 @@ async fn unauthorized_create() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(response).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(response).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "action not permitted");
@@ -3212,7 +3209,7 @@ async fn unauthorized_create() {
 // Should prevent record creation when protocol cannot be found.
 #[tokio::test]
 async fn no_protocol_definition() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3234,7 +3231,7 @@ async fn no_protocol_definition() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(application).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(application).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find protocol definition");
@@ -3243,7 +3240,7 @@ async fn no_protocol_definition() {
 // Should prevent record creation when schema is invalid.
 #[tokio::test]
 async fn invalid_schema() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3258,7 +3255,7 @@ async fn invalid_schema() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3278,7 +3275,7 @@ async fn invalid_schema() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(application).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(application).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid schema");
@@ -3287,7 +3284,7 @@ async fn invalid_schema() {
 // Should prevent record creation when protocol path is invalid.
 #[tokio::test]
 async fn invalid_protocol_path() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3302,7 +3299,7 @@ async fn invalid_protocol_path() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3320,7 +3317,7 @@ async fn invalid_protocol_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(application).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(application).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid protocol path");
@@ -3330,7 +3327,7 @@ async fn invalid_protocol_path() {
 // That is, the path is valid but it is used incorrectly.
 #[tokio::test]
 async fn incorrect_protocol_path() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let issuer = issuer().await;
 
@@ -3345,7 +3342,7 @@ async fn incorrect_protocol_path() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3365,7 +3362,7 @@ async fn incorrect_protocol_path() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(application).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(application).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid protocol path for parentless record");
@@ -3374,7 +3371,7 @@ async fn incorrect_protocol_path() {
 // Should prevent use of invalid data formats for a given protocol.
 #[tokio::test]
 async fn invalid_data_format() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3388,7 +3385,7 @@ async fn invalid_data_format() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3407,7 +3404,7 @@ async fn invalid_data_format() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(image.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(image.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3419,7 +3416,7 @@ async fn invalid_data_format() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(update).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(update).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid data format");
@@ -3433,7 +3430,7 @@ async fn invalid_data_format() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3446,7 +3443,7 @@ async fn invalid_data_format() {
         .await
         .expect("should create read");
 
-    let reply = alice_node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -3459,7 +3456,7 @@ async fn invalid_data_format() {
 // permitted data format(s).
 #[tokio::test]
 async fn any_data_format() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3473,7 +3470,7 @@ async fn any_data_format() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3492,7 +3489,7 @@ async fn any_data_format() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(image.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(image.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3504,7 +3501,7 @@ async fn any_data_format() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3517,7 +3514,7 @@ async fn any_data_format() {
         .await
         .expect("should create read");
 
-    let reply = alice_node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(read.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let read_reply: ReadReply = reply.body;
@@ -3530,7 +3527,7 @@ async fn any_data_format() {
 // specified hierarchal level.
 #[tokio::test]
 async fn schema_hierarchy() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3544,7 +3541,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3563,7 +3560,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(response1).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(response1).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid protocol path");
@@ -3584,7 +3581,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node
+    let reply = node
         .request(application1.clone()).owner(alice.did())
         .execute()
         .await
@@ -3607,7 +3604,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(application2).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(application2).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid protocol path");
@@ -3629,7 +3626,7 @@ async fn schema_hierarchy() {
         .await
         .expect("should create write");
     let reply =
-        alice_node.request(response2.clone()).owner(alice.did()).execute().await.expect("should configure protocol");
+        node.request(response2.clone()).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3648,7 +3645,7 @@ async fn schema_hierarchy() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(application3).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(application3).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "invalid protocol path");
@@ -3658,7 +3655,7 @@ async fn schema_hierarchy() {
 // defined.
 #[tokio::test]
 async fn owner_no_rule() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -3673,7 +3670,7 @@ async fn owner_no_rule() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3692,7 +3689,7 @@ async fn owner_no_rule() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3712,7 +3709,7 @@ async fn owner_no_rule() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_write.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_write.clone()).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "no rule defined for action");
@@ -3883,7 +3880,7 @@ async fn invalid_parent_id() {
 // Should fail when CID for encrypted data does not match authorization `encryption_cid`.
 #[tokio::test]
 async fn invalid_encryption_cid() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -3920,7 +3917,7 @@ async fn invalid_encryption_cid() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(email).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(email).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3966,7 +3963,7 @@ async fn invalid_encryption_cid() {
     encryption.initialization_vector = "invalid-iv".to_string();
     write.encryption = Some(encryption);
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization `encryptionCid`s do not match");
@@ -3976,7 +3973,7 @@ async fn invalid_encryption_cid() {
 #[tokio::test]
 #[ignore = "the protocol is automatically normalized"]
 async fn protocol_not_normalized() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3990,7 +3987,7 @@ async fn protocol_not_normalized() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4014,7 +4011,7 @@ async fn protocol_not_normalized() {
     email.context_id = Some(email.record_id.clone());
     email.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::Forbidden(e)) = alice_node.request(email).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(email).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find protocol definition");
@@ -4024,7 +4021,7 @@ async fn protocol_not_normalized() {
 // protocol-authorized records.
 #[tokio::test]
 async fn small_data_cid_protocol() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4037,7 +4034,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4052,7 +4049,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4077,7 +4074,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
@@ -4089,7 +4086,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create read");
-    let Err(Error::NotFound(e)) = alice_node.request(read).owner(alice.did()).execute().await else {
+    let Err(Error::NotFound(e)) = node.request(read).owner(alice.did()).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "no matching record");
@@ -4103,7 +4100,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -4113,7 +4110,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -4126,7 +4123,7 @@ async fn small_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(bob_update).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(bob_update).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "referenced data does not exist");
@@ -4136,7 +4133,7 @@ async fn small_data_cid_protocol() {
 // protocol-authorized records with large amount of data.
 #[tokio::test]
 async fn large_data_cid_protocol() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4153,7 +4150,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4168,7 +4165,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4193,7 +4190,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
@@ -4205,7 +4202,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create read");
-    let Err(Error::NotFound(e)) = alice_node.request(read).owner(alice.did()).execute().await else {
+    let Err(Error::NotFound(e)) = node.request(read).owner(alice.did()).execute().await else {
         panic!("should be NotFound");
     };
     assert_eq!(e, "no matching record");
@@ -4219,7 +4216,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -4229,7 +4226,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -4242,7 +4239,7 @@ async fn large_data_cid_protocol() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(bob_update).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(bob_update).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "referenced data does not exist");
@@ -4252,7 +4249,7 @@ async fn large_data_cid_protocol() {
 // require a schema.
 #[tokio::test]
 async fn protocol_schema() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4268,7 +4265,7 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4286,7 +4283,7 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(no_schema.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(no_schema.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4305,7 +4302,7 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(with_schema.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(with_schema.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4317,7 +4314,7 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -4327,7 +4324,7 @@ async fn protocol_schema() {
         .build()
         .await
         .expect("should create query");
-    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4338,7 +4335,7 @@ async fn protocol_schema() {
 // Should allow writes within the message size bounds specified in the protocol.
 #[tokio::test]
 async fn protocol_size_range() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4364,7 +4361,7 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4385,7 +4382,7 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(min_size).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(min_size).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4406,7 +4403,7 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(max_size).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(max_size).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4427,7 +4424,7 @@ async fn protocol_size_range() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(too_big).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(too_big).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "data size is greater than allowed");
@@ -4437,7 +4434,7 @@ async fn protocol_size_range() {
 // minimum size.
 #[tokio::test]
 async fn protocol_min_size() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4463,7 +4460,7 @@ async fn protocol_min_size() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4484,7 +4481,7 @@ async fn protocol_min_size() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(too_small).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(too_small).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "data size is less than allowed");
@@ -4507,7 +4504,7 @@ async fn protocol_min_size() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(max_size).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(max_size).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
@@ -4515,7 +4512,7 @@ async fn protocol_min_size() {
 // maximum size.
 #[tokio::test]
 async fn protocol_max_size() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4541,7 +4538,7 @@ async fn protocol_max_size() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4562,7 +4559,7 @@ async fn protocol_max_size() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(too_big).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(too_big).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "data size is greater than allowed");
@@ -4585,14 +4582,14 @@ async fn protocol_max_size() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(max_size).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(max_size).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should fail when write references a parent that has been deleted.
 #[tokio::test]
 async fn deleted_parent() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4606,7 +4603,7 @@ async fn deleted_parent() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4625,7 +4622,7 @@ async fn deleted_parent() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(foo1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(foo1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4637,7 +4634,7 @@ async fn deleted_parent() {
         .build()
         .await
         .expect("should create delete");
-    let reply = alice_node.request(delete).owner(alice.did()).execute().await.expect("should delete");
+    let reply = node.request(delete).owner(alice.did()).execute().await.expect("should delete");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4656,7 +4653,7 @@ async fn deleted_parent() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bar1).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bar1).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find parent record");
@@ -4666,7 +4663,7 @@ async fn deleted_parent() {
 // in `context_id`.
 #[tokio::test]
 async fn incorrect_parent_context() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -4680,7 +4677,7 @@ async fn incorrect_parent_context() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4699,7 +4696,7 @@ async fn incorrect_parent_context() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(foo1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(foo1.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4723,7 +4720,7 @@ async fn incorrect_parent_context() {
     bar1.record_id = bar1.entry_id(alice.did()).expect("should create record ID");
     bar1.sign_as_author(None, None, alice).await.expect("should sign");
 
-    let Err(Error::Forbidden(e)) = alice_node.request(bar1).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bar1).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "incorrect parent `context_id`");
@@ -4732,7 +4729,7 @@ async fn incorrect_parent_context() {
 // Should allow writes when protocol and grant scope matches.
 #[tokio::test]
 async fn protocol_grant_match() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4747,7 +4744,7 @@ async fn protocol_grant_match() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4764,7 +4761,7 @@ async fn protocol_grant_match() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4782,14 +4779,14 @@ async fn protocol_grant_match() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevents writes when protocol and grant scope do not match.
 #[tokio::test]
 async fn protocol_grant_mismatch() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4804,7 +4801,7 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let email = include_bytes!("../examples/protocols/email.json");
@@ -4815,7 +4812,7 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4832,7 +4829,7 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4850,7 +4847,7 @@ async fn protocol_grant_mismatch() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_write).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_write).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "scope protocol does not match write protocol");
@@ -4859,7 +4856,7 @@ async fn protocol_grant_mismatch() {
 // Should allow writes when protocol and context grant scope match.
 #[tokio::test]
 async fn protocol_context_grant() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4874,7 +4871,7 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4893,7 +4890,7 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4910,7 +4907,7 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4930,14 +4927,14 @@ async fn protocol_context_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevent writes when protocol and context grant scope do not match.
 #[tokio::test]
 async fn protocol_context_no_grant() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -4952,7 +4949,7 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4971,7 +4968,7 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4988,7 +4985,7 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5008,7 +5005,7 @@ async fn protocol_context_no_grant() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_write).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_write).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "record not part of grant context");
@@ -5017,7 +5014,7 @@ async fn protocol_context_no_grant() {
 // Should allow writes when protocol and protocol path grant scope match.
 #[tokio::test]
 async fn protocol_path_grant() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5032,7 +5029,7 @@ async fn protocol_path_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5049,7 +5046,7 @@ async fn protocol_path_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5067,14 +5064,14 @@ async fn protocol_path_grant() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(bob_write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevent writes when protocol and protocol path grant scope do not match.
 #[tokio::test]
 async fn protocol_path_no_grant() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5089,7 +5086,7 @@ async fn protocol_path_no_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5106,7 +5103,7 @@ async fn protocol_path_no_grant() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5124,7 +5121,7 @@ async fn protocol_path_no_grant() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(bob_write).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(bob_write).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant and record protocol paths do not match");
@@ -5134,7 +5131,7 @@ async fn protocol_path_no_grant() {
 // published.
 #[tokio::test]
 async fn grant_publish_required() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5149,7 +5146,7 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5169,7 +5166,7 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5188,7 +5185,7 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(published).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(published).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5206,7 +5203,7 @@ async fn grant_publish_required() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(unpublished).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(unpublished).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant requires message to be published");
@@ -5216,7 +5213,7 @@ async fn grant_publish_required() {
 // published.
 #[tokio::test]
 async fn grant_publish_prohibited() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5231,7 +5228,7 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5251,7 +5248,7 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5269,7 +5266,7 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(unpublished).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(unpublished).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5288,7 +5285,7 @@ async fn grant_publish_prohibited() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::Forbidden(e)) = alice_node.request(published).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(published).owner(alice.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant prohibits publishing message");
@@ -5298,7 +5295,7 @@ async fn grant_publish_prohibited() {
 // does not specify.
 #[tokio::test]
 async fn grant_publish_undefined() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5313,7 +5310,7 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should build");
-    let reply = alice_node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5331,7 +5328,7 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5350,7 +5347,7 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(published).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(published).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5368,14 +5365,14 @@ async fn grant_publish_undefined() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(unpublished).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(unpublished).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
 // Should prevent writes where neither data stream nor data CID are provided.
 #[tokio::test]
 async fn missing_data_cid() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5390,7 +5387,7 @@ async fn missing_data_cid() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
@@ -5403,7 +5400,7 @@ async fn missing_data_cid() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(update).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "referenced data does not exist");
@@ -5412,7 +5409,7 @@ async fn missing_data_cid() {
 // Should prevent writes where neither data stream nor encoded data are provided.
 #[tokio::test]
 async fn missing_encoded_data() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5427,7 +5424,7 @@ async fn missing_encoded_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
@@ -5440,7 +5437,7 @@ async fn missing_encoded_data() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(update).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "referenced data does not exist");
@@ -5449,7 +5446,7 @@ async fn missing_encoded_data() {
 // Should prevent updates to a record after it has been deleted.
 #[tokio::test]
 async fn write_after_delete() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5461,7 +5458,7 @@ async fn write_after_delete() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5473,7 +5470,7 @@ async fn write_after_delete() {
         .build()
         .await
         .expect("should create delete");
-    let reply = alice_node.request(delete).owner(alice.did()).execute().await.expect("should delete");
+    let reply = node.request(delete).owner(alice.did()).execute().await.expect("should delete");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5486,7 +5483,7 @@ async fn write_after_delete() {
         .build()
         .await
         .expect("should create write");
-    let Err(Error::BadRequest(e)) = alice_node.request(update).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(update).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "record has been deleted");
@@ -5495,8 +5492,7 @@ async fn write_after_delete() {
 // Should prevent referencing data across web nodes.
 #[tokio::test]
 async fn cross_tenant_data() {
-    let alice_node = alice_node().await;
-    let bob_node = bob_node().await;
+    let node = node().await;
     let alice = alice().await;
     let bob = bob().await;
 
@@ -5509,7 +5505,7 @@ async fn cross_tenant_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -5521,7 +5517,7 @@ async fn cross_tenant_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(query.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -5542,7 +5538,7 @@ async fn cross_tenant_data() {
         .build()
         .await
         .expect("should create write");
-    let reply = bob_node.request(bob_write.clone()).owner(bob.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write.clone()).owner(bob.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
@@ -5554,7 +5550,7 @@ async fn cross_tenant_data() {
         .build()
         .await
         .expect("should create read");
-    let reply = bob_node.request(query.clone()).owner(bob.did()).execute().await.expect("should write");
+    let reply = node.request(query.clone()).owner(bob.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 }
@@ -5562,7 +5558,7 @@ async fn cross_tenant_data() {
 // Should fail when `record_id` does not match signature `record_id`.
 #[tokio::test]
 async fn record_id_mismatch() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5578,7 +5574,7 @@ async fn record_id_mismatch() {
     // alter the record ID
     write.record_id = "somerandomrecordid".to_string();
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization record IDs do not match");
@@ -5587,7 +5583,7 @@ async fn record_id_mismatch() {
 // Should fail when `context_id` does not match signature `context_id`.
 #[tokio::test]
 async fn context_id_mismatch() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5624,7 +5620,7 @@ async fn context_id_mismatch() {
         .await
         .expect("should sign");
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization context IDs do not match");
@@ -5634,7 +5630,7 @@ async fn context_id_mismatch() {
 // `descriptor_cid`.
 #[tokio::test]
 async fn invalid_attestation() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5672,7 +5668,7 @@ async fn invalid_attestation() {
         .await
         .expect("should sign");
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization attestation CIDs do not match");
@@ -5689,7 +5685,7 @@ async fn multiple_attesters() {
 // `descriptor_cid`.
 #[tokio::test]
 async fn attestation_descriptor_cid() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -5745,7 +5741,7 @@ async fn attestation_descriptor_cid() {
         .await
         .expect("should sign");
 
-    let Err(Error::BadRequest(e)) = alice_node.request(write).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(write).owner(alice.did()).execute().await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "message and authorization attestation CIDs do not match");
@@ -5755,14 +5751,14 @@ async fn attestation_descriptor_cid() {
 #[tokio::test]
 #[ignore]
 async fn unknown_error() {
-    let alice_node = alice_node().await;
+    let node = node().await;
     let alice = alice().await;
 
     // --------------------------------------------------
     // Write a record without data.
     // --------------------------------------------------
     let initial = WriteBuilder::new().sign(alice).build().await.expect("should create write");
-    let reply = alice_node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(initial.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::NO_CONTENT);
 
     // --------------------------------------------------
@@ -5774,7 +5770,7 @@ async fn unknown_error() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(update.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // simulate throwing unexpected error
