@@ -11,7 +11,7 @@ use axum::{Json, Router};
 use credibil_dwn::api::Client;
 use credibil_dwn::http::IntoHttp;
 use credibil_dwn::interfaces::{messages, protocols, records};
-use test_utils::{Identity, Provider};
+use test_utils::Provider;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -21,7 +21,6 @@ use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let owner = Identity::new("alice").await.did().to_string();
     let client = Client::new(Provider::new().await);
 
     let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG).finish();

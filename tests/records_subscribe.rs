@@ -22,8 +22,7 @@ async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("records_subscribe_alice").await }).await
 }
 async fn alice_node() -> &'static Client<Provider> {
-    let alice = alice().await;
-    ALICE_NODE.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
+    ALICE_NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
 }
 
 // The owner should be able to subscribe their own event stream.
@@ -38,7 +37,12 @@ async fn owner_events() {
     let filter = RecordsFilter::new().add_author(alice.did());
     let subscribe =
         SubscribeBuilder::new().filter(filter).sign(alice).build().await.expect("should build");
-    let reply = alice_node.request(subscribe).execute().await.expect("should configure protocol");
+    let reply = alice_node
+        .request(subscribe)
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::OK);
     let mut subscribe_reply: SubscribeReply = reply.body;
 
@@ -56,7 +60,8 @@ async fn owner_events() {
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply = alice_node.request(write.clone()).execute().await.expect("should write");
+    let reply =
+        alice_node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -65,7 +70,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query =
         QueryBuilder::new().filter(filter).sign(alice).build().await.expect("should create query");
-    let reply = alice_node.request(query).execute().await.expect("should query");
+    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;

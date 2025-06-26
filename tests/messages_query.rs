@@ -29,12 +29,10 @@ async fn bob() -> &'static Identity {
     BOB.get_or_init(|| async { Identity::new("messages_query_bob").await }).await
 }
 async fn alice_node() -> &'static Client<Provider> {
-    let alice = alice().await;
-    ALICE_NODE.get_or_init(|| async { Client::new(alice.did(), Provider::new().await) }).await
+    ALICE_NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
 }
 async fn bob_node() -> &'static Client<Provider> {
-    let bob = bob().await;
-    BOB_NODE.get_or_init(|| async { Client::new(bob.did(), Provider::new().await) }).await
+    BOB_NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
 }
 
 // Should fetch all messages for owner beyond a provided cursor.
@@ -58,7 +56,12 @@ async fn owner_messages() {
 
     let mut expected_cids = vec![configure.cid().unwrap()];
 
-    let reply = alice_node.request(configure).execute().await.expect("should configure protocol");
+    let reply = alice_node
+        .request(configure)
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -86,7 +89,8 @@ async fn owner_messages() {
 
         expected_cids.push(write.cid().unwrap());
 
-        let reply = alice_node.request(write).execute().await.expect("should write");
+        let reply =
+            alice_node.request(write).owner(alice.did()).execute().await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -95,7 +99,7 @@ async fn owner_messages() {
     // all 5 records as well as the protocol configuration message.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
-    let reply = alice_node.request(query).execute().await.expect("should query");
+    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -125,7 +129,8 @@ async fn owner_messages() {
 
     expected_cids.push(message.cid().unwrap());
 
-    let reply = alice_node.request(message).execute().await.expect("should write");
+    let reply =
+        alice_node.request(message).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -133,7 +138,7 @@ async fn owner_messages() {
     // expects to see only the additional record.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
-    let reply = alice_node.request(query).execute().await.expect("should query");
+    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -149,7 +154,7 @@ async fn owner_messages() {
         .build()
         .await
         .expect("should create read");
-    let reply = alice_node.request(read).execute().await.expect("should read");
+    let reply = alice_node.request(read).owner(alice.did()).execute().await.expect("should read");
     assert_eq!(reply.status, StatusCode::OK);
 }
 
@@ -159,9 +164,10 @@ async fn owner_messages() {
 async fn no_grant() {
     let bob_node = bob_node().await;
     let alice = alice().await;
+    let bob = bob().await;
 
     let query = QueryBuilder::new().sign(alice).build().await.expect("should create write");
-    let Err(Error::Forbidden(e)) = bob_node.request(query).execute().await else {
+    let Err(Error::Forbidden(e)) = bob_node.request(query).owner(bob.did()).execute().await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "author has no grant");
@@ -176,7 +182,8 @@ async fn invalid_request() {
     let mut query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
     query.descriptor.base.interface = Interface::Protocols;
 
-    let Err(Error::BadRequest(e)) = alice_node.request(query).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(query).owner(alice.did()).execute().await
+    else {
         panic!("should be BadRequest");
     };
     assert!(e.contains("validation failed:"));
@@ -191,7 +198,8 @@ async fn empty_filter() {
     let mut query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
     query.descriptor.filters = vec![MessagesFilter::default()];
 
-    let Err(Error::BadRequest(e)) = alice_node.request(query).execute().await else {
+    let Err(Error::BadRequest(e)) = alice_node.request(query).owner(alice.did()).execute().await
+    else {
         panic!("should be BadRequest");
     };
     assert!(e.contains("validation failed:"));
@@ -218,7 +226,12 @@ async fn match_grant_scope() {
         .await
         .expect("should create grant");
 
-    let reply = alice_node.request(bob_grant.clone()).execute().await.expect("should write");
+    let reply = alice_node
+        .request(bob_grant.clone())
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -236,6 +249,7 @@ async fn match_grant_scope() {
 
     let reply = alice_node
         .request(configure_any.clone())
+        .owner(alice.did())
         .execute()
         .await
         .expect("should configure protocol");
@@ -253,6 +267,7 @@ async fn match_grant_scope() {
 
     let reply = alice_node
         .request(configure_rand.clone())
+        .owner(alice.did())
         .execute()
         .await
         .expect("should configure protocol");
@@ -279,7 +294,12 @@ async fn match_grant_scope() {
         .await
         .expect("should create write");
 
-    let reply = alice_node.request(write_any.clone()).execute().await.expect("should write");
+    let reply = alice_node
+        .request(write_any.clone())
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -295,7 +315,12 @@ async fn match_grant_scope() {
         .await
         .expect("should create write");
 
-    let reply = alice_node.request(write_rand.clone()).execute().await.expect("should write");
+    let reply = alice_node
+        .request(write_rand.clone())
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -307,7 +332,7 @@ async fn match_grant_scope() {
         .build()
         .await
         .expect("should create write");
-    let reply = alice_node.request(query).execute().await.expect("should write");
+    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -344,7 +369,12 @@ async fn mismatched_grant_scope() {
     });
     let bob_grant = builder.sign(alice).build().await.expect("should create grant");
 
-    let reply = alice_node.request(bob_grant.clone()).execute().await.expect("should write");
+    let reply = alice_node
+        .request(bob_grant.clone())
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -357,7 +387,8 @@ async fn mismatched_grant_scope() {
         .await
         .expect("should create write");
 
-    let Err(Error::Forbidden(e)) = alice_node.request(query).execute().await else {
+    let Err(Error::Forbidden(e)) = alice_node.request(query).owner(alice.did()).execute().await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "method is not within grant scope");
@@ -386,6 +417,7 @@ async fn match_protocol_scope() {
 
     let reply = alice_node
         .request(configure_any.clone())
+        .owner(alice.did())
         .execute()
         .await
         .expect("should configure protocol");
@@ -401,6 +433,7 @@ async fn match_protocol_scope() {
         .expect("should build");
     let reply = alice_node
         .request(configure_any.clone())
+        .owner(alice.did())
         .execute()
         .await
         .expect("should configure protocol");
@@ -419,7 +452,12 @@ async fn match_protocol_scope() {
         .build()
         .await
         .expect("should create grant");
-    let reply = alice_node.request(bob_grant.clone()).execute().await.expect("should write");
+    let reply = alice_node
+        .request(bob_grant.clone())
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -433,7 +471,7 @@ async fn match_protocol_scope() {
         .await
         .expect("should create write");
 
-    let reply = alice_node.request(query).execute().await.expect("should write");
+    let reply = alice_node.request(query).owner(alice.did()).execute().await.expect("should write");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -466,6 +504,7 @@ async fn mismatched_protocol_scope() {
 
     let reply = alice_node
         .request(configure_any.clone())
+        .owner(alice.did())
         .execute()
         .await
         .expect("should configure protocol");
@@ -482,6 +521,7 @@ async fn mismatched_protocol_scope() {
 
     let reply = alice_node
         .request(configure_any.clone())
+        .owner(alice.did())
         .execute()
         .await
         .expect("should configure protocol");
@@ -501,7 +541,12 @@ async fn mismatched_protocol_scope() {
         .await
         .expect("should create grant");
 
-    let reply = alice_node.request(bob_grant.clone()).execute().await.expect("should write");
+    let reply = alice_node
+        .request(bob_grant.clone())
+        .owner(alice.did())
+        .execute()
+        .await
+        .expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -516,7 +561,8 @@ async fn mismatched_protocol_scope() {
         .await
         .expect("should create write");
 
-    let Err(Error::Forbidden(e)) = alice_node.request(query).execute().await else {
+    let Err(Error::Forbidden(e)) = alice_node.request(query).owner(alice.did()).execute().await
+    else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "filter and grant protocols do not match");
