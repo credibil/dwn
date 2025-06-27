@@ -37,12 +37,8 @@ async fn owner_events() {
     let filter = RecordsFilter::new().add_author(alice.did());
     let subscribe =
         SubscribeBuilder::new().filter(filter).sign(alice).build().await.expect("should build");
-    let reply = node
-        .request(subscribe)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(subscribe).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::OK);
     let mut subscribe_reply: SubscribeReply = reply.body;
 
@@ -60,8 +56,7 @@ async fn owner_events() {
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -70,7 +65,7 @@ async fn owner_events() {
     let filter = RecordsFilter::new().record_id(&write.record_id);
     let query =
         QueryBuilder::new().filter(filter).sign(alice).build().await.expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;

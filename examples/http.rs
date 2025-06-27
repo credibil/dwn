@@ -56,7 +56,7 @@ async fn messages_query(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<messages::Query>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -64,7 +64,7 @@ async fn messages_read(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<messages::Read>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -72,7 +72,7 @@ async fn messages_subscribe(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<messages::Subscribe>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -80,7 +80,7 @@ async fn protocols_configure(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<protocols::Configure>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -88,7 +88,7 @@ async fn protocols_query(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<protocols::Query>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -96,7 +96,7 @@ async fn records_delete(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<records::Delete>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -104,7 +104,7 @@ async fn records_query(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<records::Query>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -112,7 +112,7 @@ async fn records_read(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<records::Read>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -120,7 +120,7 @@ async fn records_subscribe(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<records::Subscribe>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }
 
 #[axum::debug_handler]
@@ -128,5 +128,5 @@ async fn records_write(
     State(client): State<Client<Provider>>, Path(did): Path<String>,
     Json(request): Json<records::Write>,
 ) -> impl IntoResponse {
-    client.request(request).owner(&did).execute().await.into_http()
+    client.request(request).owner(&did).await.into_http()
 }

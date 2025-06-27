@@ -77,43 +77,43 @@ impl Svc {
         let response = match format!("{}{}", desc.interface, desc.method).as_str() {
             "MessagesQuery" => {
                 let request = from_value::<messages::Query>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "MessagesRead" => {
                 let request = from_value::<messages::Read>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "MessagesSubscribe" => {
                 let request = from_value::<messages::Subscribe>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "ProtocolsConfigure" => {
                 let request = from_value::<protocols::Configure>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "ProtocolsQuery" => {
                 let request = from_value::<protocols::Query>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "RecordsDelete" => {
                 let request = from_value::<records::Delete>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "RecordsQuery" => {
                 let request = from_value::<records::Query>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "RecordsRead" => {
                 let request = from_value::<records::Read>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "RecordsSubscribe" => {
                 let request = from_value::<records::Subscribe>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             "RecordsWrite" => {
                 let request = from_value::<records::Write>(rpc.params.message)?;
-                self.client.request(request).owner(&self.owner).execute().await.into_http()
+                self.client.request(request).owner(&self.owner).await.into_http()
             }
             _ => return Err(anyhow!("{}{} is invalid", desc.interface, desc.method)),
         };

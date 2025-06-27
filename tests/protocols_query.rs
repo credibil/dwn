@@ -55,8 +55,7 @@ async fn authorized() {
             .build()
             .await
             .expect("should build");
-        let reply =
-            node.request(configure).owner(alice.did()).execute().await.expect("should configure");
+        let reply = node.request(configure).owner(alice.did()).await.expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -69,7 +68,7 @@ async fn authorized() {
         .build()
         .await
         .expect("should build");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -79,7 +78,7 @@ async fn authorized() {
     // Execute a 'fetch-all' query without filter.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(alice).build().await.expect("should build");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -107,8 +106,7 @@ async fn unauthorized() {
             .build()
             .await
             .expect("should build");
-        let reply =
-            node.request(configure).owner(alice.did()).execute().await.expect("should configure");
+        let reply = node.request(configure).owner(alice.did()).await.expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -116,7 +114,7 @@ async fn unauthorized() {
     // Query for a protocol as an anonymous (unauthenticated) user.
     // --------------------------------------------------
     let query = QueryBuilder::new().filter("http://protocol-2.xyz").build();
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -131,7 +129,7 @@ async fn unauthorized() {
         .build()
         .await
         .expect("should build");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -141,7 +139,7 @@ async fn unauthorized() {
     // Query all published protocols as an anonymous (unauthenticated) user.
     // --------------------------------------------------
     let query = QueryBuilder::new().build();
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -151,7 +149,7 @@ async fn unauthorized() {
     // Query all published protocols as an unauthorized user.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(bob).build().await.expect("should build");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -175,7 +173,7 @@ async fn bad_protocol() {
         protocol: "protocol-3.xyz/".to_string(),
     });
 
-    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "invalid URL: protocol-3.xyz/");
@@ -198,7 +196,7 @@ async fn tampered_signature() {
     let base64 = Base64UrlUnpadded::encode_string(&bytes);
     authorization.signature.payload = base64;
 
-    let Err(Error::Unauthorized(_)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Unauthorized(_)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Unauthorized");
     };
 }
@@ -220,7 +218,7 @@ async fn bad_signature() {
         }],
     };
 
-    let Err(Error::Unauthorized(_)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Unauthorized(_)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Unauthorized");
     };
 }
@@ -243,8 +241,7 @@ async fn valid_grant() {
             .build()
             .await
             .expect("should build");
-        let reply =
-            node.request(configure).owner(alice.did()).execute().await.expect("should configure");
+        let reply = node.request(configure).owner(alice.did()).await.expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -264,8 +261,7 @@ async fn valid_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -277,7 +273,7 @@ async fn valid_grant() {
         .build()
         .await
         .expect("should build");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -293,7 +289,7 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -308,8 +304,7 @@ async fn valid_grant() {
         .await
         .expect("should create revocation");
 
-    let reply =
-        node.request(bob_revocation).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_revocation).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -326,7 +321,7 @@ async fn valid_grant() {
         }],
     };
 
-    let Err(Error::Unauthorized(_)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Unauthorized(_)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Unauthorized");
     };
 }
@@ -348,8 +343,7 @@ async fn valid_scope() {
             .build()
             .await
             .expect("should build");
-        let reply =
-            node.request(configure).owner(alice.did()).execute().await.expect("should configure");
+        let reply = node.request(configure).owner(alice.did()).await.expect("should configure");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -369,8 +363,7 @@ async fn valid_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -384,7 +377,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -403,7 +396,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -421,7 +414,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -439,7 +432,7 @@ async fn valid_scope() {
         .await
         .expect("should build");
 
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should match");
+    let reply = node.request(query).owner(alice.did()).await.expect("should match");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -472,8 +465,7 @@ async fn expired_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -488,7 +480,7 @@ async fn expired_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant has expired");
@@ -517,8 +509,7 @@ async fn inactive_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -540,7 +531,7 @@ async fn inactive_grant() {
         .expect("should subtract");
     query.descriptor.base.message_timestamp = older_timestamp;
 
-    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant is not yet active");
@@ -570,8 +561,7 @@ async fn invalid_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply =
-        node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -584,7 +574,7 @@ async fn invalid_scope() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "interface is not within grant scope");
@@ -607,7 +597,7 @@ async fn missing_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "no grant found");
@@ -635,8 +625,7 @@ async fn incorrect_grantor() {
         .build()
         .await
         .expect("should create grant");
-    let reply =
-        node.request(carol_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(carol_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -645,7 +634,7 @@ async fn incorrect_grantor() {
     let mut grant = carol_grant.clone();
     grant.sign_as_owner(bob).await.expect("should sign");
 
-    let reply = node.request(grant).owner(bob.did()).execute().await.expect("should write");
+    let reply = node.request(grant).owner(bob.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -658,7 +647,7 @@ async fn incorrect_grantor() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(query).owner(bob.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(bob.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted by grantor");

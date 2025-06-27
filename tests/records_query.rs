@@ -51,14 +51,13 @@ async fn invalid_sort() {
         .expect("should create query");
 
     query.descriptor.date_sort = Some(Sort::PublishedAsc);
-    let Err(Error::BadRequest(e)) = node.request(query.clone()).owner(alice.did()).execute().await
-    else {
+    let Err(Error::BadRequest(e)) = node.request(query.clone()).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "cannot sort by `date_published` when querying for unpublished records");
 
     query.descriptor.date_sort = Some(Sort::PublishedDesc);
-    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "cannot sort by `date_published` when querying for unpublished records");
@@ -84,8 +83,7 @@ async fn response() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -94,7 +92,7 @@ async fn response() {
     let filter = RecordsFilter::new().add_author(alice.did()).data_format("awesome_data_format");
     let query =
         QueryBuilder::new().filter(filter).sign(alice).build().await.expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -122,7 +120,7 @@ async fn matches() {
         }
 
         let write = builder.sign(alice).build().await.expect("should create write");
-        let reply = node.request(write).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -135,7 +133,7 @@ async fn matches() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -151,7 +149,7 @@ async fn matches() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -176,8 +174,7 @@ async fn encoded_data() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -189,7 +186,7 @@ async fn encoded_data() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -216,8 +213,7 @@ async fn no_encoded_data() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -229,7 +225,7 @@ async fn no_encoded_data() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -254,14 +250,12 @@ async fn initial_write() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // update existing record
     let write = WriteBuilder::from(write).sign(alice).build().await.expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -273,7 +267,7 @@ async fn initial_write() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -301,8 +295,7 @@ async fn attester() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write = WriteBuilder::new()
@@ -313,8 +306,7 @@ async fn attester() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -326,7 +318,7 @@ async fn attester() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -346,7 +338,7 @@ async fn attester() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -366,7 +358,7 @@ async fn attester() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 }
@@ -389,12 +381,8 @@ async fn author() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -414,8 +402,7 @@ async fn author() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(alice_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_write = WriteBuilder::new()
@@ -431,8 +418,7 @@ async fn author() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(bob_write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -450,7 +436,7 @@ async fn author() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -473,7 +459,7 @@ async fn author() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -498,7 +484,7 @@ async fn author() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -525,12 +511,8 @@ async fn owner_recipient() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -550,8 +532,7 @@ async fn owner_recipient() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(alice_bob.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_bob.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_carol = WriteBuilder::new()
@@ -568,8 +549,7 @@ async fn owner_recipient() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(alice_carol.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_carol.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -587,7 +567,7 @@ async fn owner_recipient() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -610,7 +590,7 @@ async fn owner_recipient() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -634,7 +614,7 @@ async fn owner_recipient() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -659,7 +639,7 @@ async fn owner_recipient() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -685,8 +665,7 @@ async fn published() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(published.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(published.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let unpublished = WriteBuilder::new()
@@ -696,8 +675,7 @@ async fn published() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(unpublished.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(unpublished.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -709,7 +687,7 @@ async fn published() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -726,7 +704,7 @@ async fn published() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -741,7 +719,7 @@ async fn published() {
         .filter(RecordsFilter::new().schema("post").published(true))
         .build()
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -758,8 +736,7 @@ async fn published() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(published.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(published.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -771,7 +748,7 @@ async fn published() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -785,7 +762,7 @@ async fn published() {
         .filter(RecordsFilter::new().schema("post").published(true))
         .build()
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -811,8 +788,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(published.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(published.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let unpublished = WriteBuilder::new()
@@ -822,8 +798,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(unpublished.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(unpublished.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -835,7 +810,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -851,7 +826,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     assert!(reply.body.entries.is_none());
@@ -865,8 +840,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(published.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(published.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -878,7 +852,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -894,7 +868,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -910,7 +884,7 @@ async fn unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     assert!(reply.body.entries.is_none());
@@ -933,8 +907,7 @@ async fn data_cid() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -946,7 +919,7 @@ async fn data_cid() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -972,8 +945,7 @@ async fn data_size_part_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write10.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write10.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 50];
@@ -985,8 +957,7 @@ async fn data_size_part_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write50.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write50.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 100];
@@ -998,8 +969,7 @@ async fn data_size_part_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write100.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write100.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1011,7 +981,7 @@ async fn data_size_part_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1027,7 +997,7 @@ async fn data_size_part_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1043,7 +1013,7 @@ async fn data_size_part_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1059,7 +1029,7 @@ async fn data_size_part_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1085,8 +1055,7 @@ async fn data_size_full_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write10.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write10.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 50];
@@ -1098,8 +1067,7 @@ async fn data_size_full_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write50.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write50.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let mut data = [0u8; 100];
@@ -1111,8 +1079,7 @@ async fn data_size_full_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write100.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write100.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1124,7 +1091,7 @@ async fn data_size_full_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1140,7 +1107,7 @@ async fn data_size_full_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1156,7 +1123,7 @@ async fn data_size_full_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1172,7 +1139,7 @@ async fn data_size_full_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1198,8 +1165,7 @@ async fn date_created_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2022.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2022.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
@@ -1211,8 +1177,7 @@ async fn date_created_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2023.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2023.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
@@ -1224,8 +1189,7 @@ async fn date_created_range() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2024.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2024.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1240,7 +1204,7 @@ async fn date_created_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1261,7 +1225,7 @@ async fn date_created_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1285,7 +1249,7 @@ async fn date_created_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1306,7 +1270,7 @@ async fn date_created_range() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1335,8 +1299,7 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2022.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2022.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
@@ -1350,8 +1313,7 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2023.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2023.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
@@ -1365,8 +1327,7 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2024.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2024.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1381,7 +1342,7 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1400,8 +1361,7 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply =
-        node.request(owner_range.clone()).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(owner_range.clone()).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     // owner-requested date range
@@ -1411,12 +1371,8 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node
-        .request(owner_published.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should query");
+    let reply =
+        node.request(owner_published.clone()).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1429,8 +1385,7 @@ async fn published_unpublished() {
         .date_sort(Sort::CreatedAsc)
         .build()
         .expect("should create query");
-    let reply =
-        node.request(anon_range.clone()).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(anon_range.clone()).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1444,8 +1399,7 @@ async fn published_unpublished() {
         .date_sort(Sort::CreatedAsc)
         .build()
         .expect("should create query");
-    let reply =
-        node.request(anon_range.clone()).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(anon_range.clone()).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1460,7 +1414,7 @@ async fn published_unpublished() {
         .filter(RecordsFilter::new().published(true))
         .build()
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1476,12 +1430,7 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(unwrite_2022.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply = node.request(unwrite_2022.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let unwrite_2023 = WriteBuilder::from(write_2023)
@@ -1490,12 +1439,7 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(unwrite_2023.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply = node.request(unwrite_2023.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let unwrite_2024 = WriteBuilder::from(write_2024)
@@ -1504,25 +1448,19 @@ async fn published_unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(unwrite_2024.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply = node.request(unwrite_2024.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Earlier anonymous requests should return no results.
     // --------------------------------------------------
     // published date range filter
-    let reply = node.request(anon_range).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(anon_range).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
     // published 'true' filter
-    let reply =
-        node.request(anon_published).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(anon_published).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
@@ -1530,13 +1468,12 @@ async fn published_unpublished() {
     // Earlier anonymous requests should return no results.
     // --------------------------------------------------
     // published date range filter
-    let reply = node.request(owner_range).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(owner_range).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 
     // published 'true' filter
-    let reply =
-        node.request(owner_published).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(owner_published).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 }
@@ -1562,8 +1499,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2022.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2022.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
@@ -1577,8 +1513,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2023.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2023.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
@@ -1592,8 +1527,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2024.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2024.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1607,7 +1541,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1627,7 +1561,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1650,7 +1584,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1671,7 +1605,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1687,8 +1621,7 @@ async fn date_published() {
         .date_sort(Sort::CreatedAsc)
         .build()
         .expect("should create query");
-    let reply =
-        node.request(anon_range.clone()).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(anon_range.clone()).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1706,8 +1639,7 @@ async fn date_published() {
         .build()
         .await
         .expect("should create query");
-    let reply =
-        node.request(anon_range.clone()).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(anon_range.clone()).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1735,8 +1667,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write_2 = WriteBuilder::new()
@@ -1747,8 +1678,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write_3 = WriteBuilder::new()
@@ -1759,8 +1689,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_3.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_3.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1779,8 +1708,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2022.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2022.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write_2023 = WriteBuilder::from(write_2)
@@ -1792,8 +1720,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2023.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2023.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write_2024 = WriteBuilder::from(write_3)
@@ -1805,8 +1732,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2024.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2024.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1823,7 +1749,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1840,7 +1766,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1862,7 +1788,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1883,7 +1809,7 @@ async fn date_updated() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1911,8 +1837,7 @@ async fn range_and_match() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2022.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2022.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2023 = DateTime::parse_from_rfc3339("2023-01-01T00:00:00-00:00").unwrap();
@@ -1925,8 +1850,7 @@ async fn range_and_match() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2023.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2023.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let first_2024 = DateTime::parse_from_rfc3339("2024-01-01T00:00:00-00:00").unwrap();
@@ -1938,8 +1862,7 @@ async fn range_and_match() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2024.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2024.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1958,7 +1881,7 @@ async fn range_and_match() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -1983,8 +1906,7 @@ async fn authorization() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -1996,7 +1918,7 @@ async fn authorization() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2022,8 +1944,7 @@ async fn attestation() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2035,7 +1956,7 @@ async fn attestation() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2062,8 +1983,7 @@ async fn exclude_unpublished() {
         .build()
         .await
         .expect("should) create write");
-    let reply =
-        node.request(published.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(published.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let unpublished = WriteBuilder::new()
@@ -2073,8 +1993,7 @@ async fn exclude_unpublished() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(unpublished.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(unpublished.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2087,7 +2006,7 @@ async fn exclude_unpublished() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2119,8 +2038,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write_2 = WriteBuilder::new()
@@ -2133,8 +2051,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write_3 = WriteBuilder::new()
@@ -2147,8 +2064,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_3.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_3.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2161,7 +2077,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2181,7 +2097,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2200,7 +2116,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2218,7 +2134,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2238,7 +2154,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2257,7 +2173,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2275,7 +2191,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2295,7 +2211,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2314,7 +2230,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2332,7 +2248,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2352,7 +2268,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2371,7 +2287,7 @@ async fn date_sort() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2428,14 +2344,11 @@ async fn sort_identical() {
     let mut sorted_write = vec![write_1.clone(), write_2.clone(), write_3.clone()];
     sorted_write.sort_by(|a, b| b.cid().unwrap().cmp(&a.cid().unwrap()));
 
-    let reply =
-        node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
-    let reply =
-        node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
-    let reply =
-        node.request(write_3.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_3.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2448,7 +2361,7 @@ async fn sort_identical() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2467,7 +2380,7 @@ async fn sort_identical() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2502,8 +2415,7 @@ async fn paginate_ascending() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
         writes.push(write);
     }
@@ -2526,7 +2438,7 @@ async fn paginate_ascending() {
             .build()
             .await
             .expect("should create query");
-        let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+        let reply = node.request(query).owner(alice.did()).await.expect("should query");
         assert_eq!(reply.status, StatusCode::OK);
 
         let query_reply: QueryReply = reply.body;
@@ -2571,8 +2483,7 @@ async fn paginate_descending() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
         writes.push(write);
     }
@@ -2595,7 +2506,7 @@ async fn paginate_descending() {
             .build()
             .await
             .expect("should create query");
-        let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+        let reply = node.request(query).owner(alice.did()).await.expect("should query");
         assert_eq!(reply.status, StatusCode::OK);
 
         let query_reply: QueryReply = reply.body;
@@ -2632,8 +2543,7 @@ async fn anonymous() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let write_2 = WriteBuilder::new()
@@ -2643,8 +2553,7 @@ async fn anonymous() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(write_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write_2.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2656,7 +2565,7 @@ async fn anonymous() {
         .filter(RecordsFilter::new().date_created(DateRange::new().gt(early_date.into())))
         .build()
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -2684,12 +2593,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2709,12 +2614,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_bob_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_bob_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_bob_public = WriteBuilder::new()
@@ -2732,12 +2633,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_bob_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_bob_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_carol_private = WriteBuilder::new()
@@ -2754,12 +2651,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_carol_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_carol_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_carol_public = WriteBuilder::new()
@@ -2777,12 +2670,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_carol_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_carol_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2802,12 +2691,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_alice_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_alice_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_alice_public = WriteBuilder::new()
@@ -2825,12 +2710,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_alice_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_alice_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_bob_private = WriteBuilder::new()
@@ -2847,12 +2728,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_bob_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_bob_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_bob_public = WriteBuilder::new()
@@ -2870,12 +2747,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_bob_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_bob_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2895,12 +2768,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_alice_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_alice_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_alice_public = WriteBuilder::new()
@@ -2918,12 +2787,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_alice_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_alice_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_carol_private = WriteBuilder::new()
@@ -2940,12 +2805,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_carol_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_carol_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_carol_public = WriteBuilder::new()
@@ -2963,12 +2824,8 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_carol_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_carol_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -2986,7 +2843,7 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3016,7 +2873,7 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3045,7 +2902,7 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3074,7 +2931,7 @@ async fn recipient_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3106,12 +2963,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3131,12 +2984,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_bob_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_bob_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_bob_public = WriteBuilder::new()
@@ -3154,12 +3003,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_bob_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_bob_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_carol_private = WriteBuilder::new()
@@ -3176,12 +3021,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_carol_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_carol_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_carol_public = WriteBuilder::new()
@@ -3199,12 +3040,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(alice_carol_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(alice_carol_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3224,12 +3061,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_alice_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_alice_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_alice_public = WriteBuilder::new()
@@ -3247,12 +3080,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_alice_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_alice_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_bob_private = WriteBuilder::new()
@@ -3269,12 +3098,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_bob_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_bob_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_bob_public = WriteBuilder::new()
@@ -3292,12 +3117,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(carol_bob_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(carol_bob_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3317,12 +3138,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_alice_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_alice_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_alice_public = WriteBuilder::new()
@@ -3340,12 +3157,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_alice_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_alice_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_carol_private = WriteBuilder::new()
@@ -3362,12 +3175,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_carol_private.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_carol_private.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_carol_public = WriteBuilder::new()
@@ -3385,12 +3194,8 @@ async fn author_query() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(bob_carol_public.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(bob_carol_public.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3408,7 +3213,7 @@ async fn author_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3438,7 +3243,7 @@ async fn author_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3467,7 +3272,7 @@ async fn author_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3496,7 +3301,7 @@ async fn author_query() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3527,12 +3332,8 @@ async fn paginate_non_owner() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3560,8 +3361,7 @@ async fn paginate_non_owner() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
         sorted_writes.push(write);
     }
@@ -3585,8 +3385,7 @@ async fn paginate_non_owner() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
         sorted_writes.push(write);
     }
@@ -3612,8 +3411,7 @@ async fn paginate_non_owner() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
         sorted_writes.push(write);
     }
@@ -3636,8 +3434,7 @@ async fn paginate_non_owner() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
         sorted_writes.push(write);
     }
@@ -3661,8 +3458,7 @@ async fn paginate_non_owner() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(write.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(write.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
         sorted_writes.push(write);
     }
@@ -3686,7 +3482,7 @@ async fn paginate_non_owner() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3703,7 +3499,7 @@ async fn paginate_non_owner() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3720,7 +3516,7 @@ async fn paginate_non_owner() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3747,7 +3543,7 @@ async fn paginate_non_owner() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3764,7 +3560,7 @@ async fn paginate_non_owner() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3807,8 +3603,7 @@ async fn published_false() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(unpublished.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(unpublished.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3820,7 +3615,7 @@ async fn published_false() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3836,7 +3631,7 @@ async fn published_false() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
     assert!(reply.body.entries.is_none());
 }
@@ -3858,7 +3653,7 @@ async fn tenant_bound() {
         .build()
         .await
         .expect("should create write");
-    let reply = node.request(alice_write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(alice_write).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_write = WriteBuilder::new()
@@ -3868,7 +3663,7 @@ async fn tenant_bound() {
         .build()
         .await
         .expect("should create write");
-    let reply = node.request(bob_write).owner(bob.did()).execute().await.expect("should write");
+    let reply = node.request(bob_write).owner(bob.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -3880,7 +3675,7 @@ async fn tenant_bound() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -3904,7 +3699,7 @@ async fn bad_protocol() {
     // builder corrects invalid protocols
     query.descriptor.filter.protocol = Some("example.com/".to_string());
 
-    let Err(Error::BadRequest(msg)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(msg)) = node.request(query).owner(alice.did()).await else {
         panic!("should return BadRequest");
     };
     assert_eq!(msg, "invalid URL: example.com/");
@@ -3926,7 +3721,7 @@ async fn bad_schema() {
     // builder corrects invalid protocols
     query.descriptor.filter.schema = Some("example.com/".to_string());
 
-    let Err(Error::BadRequest(msg)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(msg)) = node.request(query).owner(alice.did()).await else {
         panic!("should return BadRequest");
     };
     assert_eq!(msg, "invalid URL: example.com/");
@@ -3946,7 +3741,7 @@ async fn bad_date_published() {
         .build()
         .await
         .expect("should create query");
-    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should return BadRequest");
     };
     assert!(e.contains("validation failed:"));
@@ -3963,7 +3758,7 @@ async fn anonymous_unpublished() {
         .filter(RecordsFilter::new().published(false).schema("http://schema"))
         .build()
         .expect("should create query");
-    let Err(Error::Forbidden(msg)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(msg)) = node.request(query).owner(alice.did()).await else {
         panic!("should return BadRequest");
     };
     assert_eq!(msg, "missing authorization");
@@ -3986,12 +3781,8 @@ async fn context_id() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4010,8 +3801,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(foo_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(foo_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let foo_2 = WriteBuilder::new()
@@ -4027,8 +3817,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(foo_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(foo_2.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4047,8 +3836,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(bar_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bar_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bar_2 = WriteBuilder::new()
@@ -4064,8 +3852,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(bar_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bar_2.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4084,8 +3871,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(baz_1.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(baz_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let baz_2 = WriteBuilder::new()
@@ -4101,8 +3887,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(baz_2.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(baz_2.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4114,7 +3899,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4137,7 +3922,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4158,7 +3943,7 @@ async fn context_id() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4187,12 +3972,8 @@ async fn protocol_no_role() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4209,8 +3990,7 @@ async fn protocol_no_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4229,8 +4009,7 @@ async fn protocol_no_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(chat_bob.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(chat_bob.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4250,8 +4029,7 @@ async fn protocol_no_role() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(chat.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(chat.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -4264,7 +4042,7 @@ async fn protocol_no_role() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4281,7 +4059,7 @@ async fn protocol_no_role() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4308,12 +4086,8 @@ async fn protocol_role() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4331,8 +4105,7 @@ async fn protocol_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(bob_friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_friend.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4352,8 +4125,7 @@ async fn protocol_role() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(chat.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(chat.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -4367,7 +4139,7 @@ async fn protocol_role() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4389,7 +4161,7 @@ async fn protocol_role() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4415,12 +4187,8 @@ async fn context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4438,8 +4206,7 @@ async fn context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4457,12 +4224,8 @@ async fn context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(participant_role.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(participant_role.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4482,8 +4245,7 @@ async fn context_role() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(chat.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(chat.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -4502,7 +4264,7 @@ async fn context_role() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -4528,12 +4290,8 @@ async fn no_protocol_path() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4551,8 +4309,7 @@ async fn no_protocol_path() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(friend.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(friend.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4572,8 +4329,7 @@ async fn no_protocol_path() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(chat.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(chat.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -4587,7 +4343,7 @@ async fn no_protocol_path() {
         .build()
         .await
         .expect("should create query");
-    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "missing `protocol_path`");
@@ -4611,12 +4367,8 @@ async fn no_context_id() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4635,8 +4387,7 @@ async fn no_context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4654,12 +4405,8 @@ async fn no_context_id() {
         .build()
         .await
         .expect("should create write");
-    let reply = node
-        .request(participant_role.clone())
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should write");
+    let reply =
+        node.request(participant_role.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4679,8 +4426,7 @@ async fn no_context_id() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(chat.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(chat.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -4696,7 +4442,7 @@ async fn no_context_id() {
         .build()
         .await
         .expect("should create query");
-    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "missing `context_id`");
@@ -4721,12 +4467,8 @@ async fn no_root_role_record() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4746,8 +4488,7 @@ async fn no_root_role_record() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(chat.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(chat.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -4761,7 +4502,7 @@ async fn no_root_role_record() {
         .build()
         .await
         .expect("should create query");
-    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "unable to find record for role");
@@ -4785,12 +4526,8 @@ async fn no_context_role() {
         .build()
         .await
         .expect("should build");
-    let reply = node
-        .request(configure)
-        .owner(alice.did())
-        .execute()
-        .await
-        .expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4809,8 +4546,7 @@ async fn no_context_role() {
         .build()
         .await
         .expect("should create write");
-    let reply =
-        node.request(thread.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(thread.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -4830,8 +4566,7 @@ async fn no_context_role() {
             .build()
             .await
             .expect("should create write");
-        let reply =
-            node.request(chat.clone()).owner(alice.did()).execute().await.expect("should write");
+        let reply = node.request(chat.clone()).owner(alice.did()).await.expect("should write");
         assert_eq!(reply.status, StatusCode::ACCEPTED);
     }
 
@@ -4850,7 +4585,7 @@ async fn no_context_role() {
         .build()
         .await
         .expect("should create query");
-    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert_eq!(e, "unable to find record for role");
@@ -4872,7 +4607,7 @@ async fn bad_signature() {
     query.authorization.as_mut().unwrap().signature.signatures[0].signature =
         "badsignature".to_string();
 
-    let Err(Error::Unauthorized(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::Unauthorized(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be Unauthorized");
     };
     assert!(e.starts_with("failed to authenticate: "));
@@ -4893,7 +4628,7 @@ async fn bad_message() {
 
     query.descriptor.filter = RecordsFilter::default();
 
-    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert!(e.contains("validation failed:"));

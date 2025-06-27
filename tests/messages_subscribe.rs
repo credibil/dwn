@@ -48,7 +48,7 @@ async fn invalid_message() {
     let mut subscribe = SubscribeBuilder::new().sign(alice).build().await.expect("should build");
     subscribe.descriptor.filters.push(MessagesFilter::default());
 
-    let Err(Error::BadRequest(e)) = node.request(subscribe).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(subscribe).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert!(e.contains("validation failed:"));
@@ -66,7 +66,7 @@ async fn owner_events() {
     let filter = MessagesFilter::new().interface(Interface::Records);
     let subscribe =
         SubscribeBuilder::new().add_filter(filter).sign(alice).build().await.expect("should build");
-    let reply = node.request(subscribe).owner(alice.did()).execute().await.expect("should subscribe");
+    let reply = node.request(subscribe).owner(alice.did()).await.expect("should subscribe");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: SubscribeReply = reply.body;
@@ -85,14 +85,14 @@ async fn owner_events() {
 
     let message_cid = write.cid().expect("should have cid");
 
-    let reply = node.request(write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Ensure the RecordsWrite event exists.
     // --------------------------------------------------
     let query = QueryBuilder::new().sign(alice).build().await.expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -130,7 +130,7 @@ async fn unauthorized() {
     let mut subscribe = SubscribeBuilder::new().sign(alice).build().await.expect("should build");
     subscribe.authorization = Authorization::default();
 
-    let Err(Error::BadRequest(e)) = node.request(subscribe).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(subscribe).owner(alice.did()).await else {
         panic!("should be BadRequest");
     };
     assert!(e.contains("validation failed:"));
@@ -139,7 +139,7 @@ async fn unauthorized() {
     // Bob attempts to subscribe to Alice's event stream.
     // --------------------------------------------------
     let subscribe = SubscribeBuilder::new().sign(bob).build().await.expect("should build");
-    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "missing permission grant");
@@ -168,7 +168,7 @@ async fn interface_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = node.request(bob_grant).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -181,7 +181,7 @@ async fn interface_scope() {
         .await
         .expect("should build");
 
-    let reply = node.request(subscribe).owner(alice.did()).execute().await.expect("should subscribe");
+    let reply = node.request(subscribe).owner(alice.did()).await.expect("should subscribe");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: SubscribeReply = reply.body;
@@ -204,7 +204,8 @@ async fn interface_scope() {
 
     message_cids.push(configure.cid().expect("should have cid"));
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // 2. configure a random protocol
@@ -217,7 +218,8 @@ async fn interface_scope() {
 
     message_cids.push(configure.cid().expect("should have cid"));
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // 3. write a record to the 'allow-any' protocol
@@ -237,7 +239,7 @@ async fn interface_scope() {
 
     message_cids.push(write.cid().expect("should have cid"));
 
-    let reply = node.request(write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // 4. write a random record
@@ -251,7 +253,7 @@ async fn interface_scope() {
 
     message_cids.push(write.cid().expect("should have cid"));
 
-    let reply = node.request(write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -297,7 +299,7 @@ async fn unauthorized_interface() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = node.request(bob_grant).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -310,7 +312,7 @@ async fn unauthorized_interface() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "interface is not within grant scope");
@@ -339,7 +341,7 @@ async fn unauthorized_method() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = node.request(bob_grant).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -352,7 +354,7 @@ async fn unauthorized_method() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "method is not within grant scope");
@@ -381,7 +383,8 @@ async fn protocol_filter() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // protocol2
@@ -393,7 +396,8 @@ async fn protocol_filter() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -412,7 +416,7 @@ async fn protocol_filter() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = node.request(bob_grant).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -427,7 +431,7 @@ async fn protocol_filter() {
         .await
         .expect("should build");
 
-    let reply = node.request(subscribe).owner(alice.did()).execute().await.expect("should subscribe");
+    let reply = node.request(subscribe).owner(alice.did()).await.expect("should subscribe");
     assert_eq!(reply.status, StatusCode::OK);
 
     let body: SubscribeReply = reply.body;
@@ -453,7 +457,7 @@ async fn protocol_filter() {
 
     let protocol1_cid = write.cid().expect("should have cid");
 
-    let reply = node.request(write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // protocol2
@@ -471,7 +475,7 @@ async fn protocol_filter() {
         .await
         .expect("should create write");
 
-    let reply = node.request(write).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(write).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -521,7 +525,8 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // protocol2
@@ -533,7 +538,8 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -552,7 +558,7 @@ async fn invalid_protocol() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = node.request(bob_grant).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -566,7 +572,7 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "filter and grant protocols do not match");
@@ -583,7 +589,7 @@ async fn invalid_protocol() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(subscribe).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "filter and grant protocols do not match");

@@ -54,7 +54,8 @@ async fn minimal() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
@@ -80,7 +81,7 @@ async fn forbidden() {
     // set a bad_request signature
     configure.authorization.signature.signatures[0].signature = "bad_request".to_string();
 
-    let Err(Error::Unauthorized(_)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::Unauthorized(_)) = node.request(configure).owner(alice.did()).await else {
         panic!("should be Unauthorized");
     };
 }
@@ -115,13 +116,13 @@ async fn overwrite_older() {
         .await
         .expect("should build");
 
-    let reply = node.request(newer).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(newer).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
     // Alice attempts to configure the older protocol and fails.
     // --------------------------------------------------
-    let Err(Error::Conflict(e)) = node.request(older).owner(alice.did()).execute().await else {
+    let Err(Error::Conflict(e)) = node.request(older).owner(alice.did()).await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message is not the latest");
@@ -136,7 +137,7 @@ async fn overwrite_older() {
         .await
         .expect("should build");
 
-    let reply = node.request(update).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(update).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -148,7 +149,7 @@ async fn overwrite_older() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -221,19 +222,25 @@ async fn overwrite_smaller() {
     // CID is smaller than the existing entry.
     // --------------------------------------------------
     // configure protocol
-    let reply =
-        node.request(messages[1].clone()).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node
+        .request(messages[1].clone())
+        .owner(alice.did())
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check the protocol with the smallest CID cannot be written
-    let Err(Error::Conflict(e)) = node.request(messages[0].clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Conflict(e)) = node.request(messages[0].clone()).owner(alice.did()).await else {
         panic!("should be Conflict");
     };
     assert_eq!(e, "message CID is smaller than existing entry");
 
     // check the protocol with the largest CID can be written
-    let reply =
-        node.request(messages[2].clone()).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node
+        .request(messages[2].clone())
+        .owner(alice.did())
+        .await
+        .expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -245,7 +252,7 @@ async fn overwrite_smaller() {
         .build()
         .await
         .expect("should create query");
-    let reply = node.request(query).owner(alice.did()).execute().await.expect("should query");
+    let reply = node.request(query).owner(alice.did()).await.expect("should query");
     assert_eq!(reply.status, StatusCode::OK);
 
     let query_reply: QueryReply = reply.body;
@@ -269,7 +276,7 @@ async fn invalid_protocol() {
     // override builder's normalizing of  protocol
     configure.descriptor.definition.protocol = "minimal.xyz/".to_string();
 
-    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "invalid URL: minimal.xyz/");
@@ -303,7 +310,7 @@ async fn invalid_schema() {
         },
     );
 
-    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "invalid URL: bad_request-schema.xyz/");
@@ -323,7 +330,7 @@ async fn no_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(configure).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "author has no grant");
@@ -367,7 +374,7 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -414,7 +421,7 @@ async fn duplicate_actor() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "an actor may only have one rule within a rule set");
@@ -469,7 +476,7 @@ async fn duplicate_role() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert!(e.contains("validation failed:"));
@@ -514,7 +521,7 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = node.request(configure.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure.clone()).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "role friend is missing read-like actions");
@@ -544,7 +551,7 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = node.request(configure.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure.clone()).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "role friend is missing read-like actions");
@@ -574,7 +581,7 @@ async fn invalid_read_action() {
             },
         );
 
-    let Err(Error::BadRequest(e)) = node.request(configure.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::BadRequest(e)) = node.request(configure.clone()).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "role friend is missing read-like actions");
@@ -604,7 +611,8 @@ async fn invalid_read_action() {
             },
         );
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 }
 
@@ -632,7 +640,7 @@ async fn valid_grant() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -646,7 +654,8 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -660,7 +669,7 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(configure.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(configure.clone()).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -675,7 +684,7 @@ async fn valid_grant() {
         .await
         .expect("should create revocation");
 
-    let reply = node.request(bob_revocation).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_revocation).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -689,7 +698,7 @@ async fn valid_grant() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(configure).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(configure).owner(alice.did()).await else {
         panic!("should be Forbidden");
     };
     assert_eq!(e, "grant not granted to grantee");
@@ -718,7 +727,7 @@ async fn configure_scope() {
 
     let bob_grant_id = bob_grant.record_id.clone();
 
-    let reply = node.request(bob_grant.clone()).owner(alice.did()).execute().await.expect("should write");
+    let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -732,7 +741,8 @@ async fn configure_scope() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // --------------------------------------------------
@@ -746,7 +756,7 @@ async fn configure_scope() {
         .await
         .expect("should build");
 
-    let Err(Error::Forbidden(e)) = node.request(configure.clone()).owner(alice.did()).execute().await else {
+    let Err(Error::Forbidden(e)) = node.request(configure.clone()).owner(alice.did()).await else {
         panic!("should not configure protocol");
     };
     assert_eq!(e, "message and grant protocols do not match");
@@ -765,7 +775,8 @@ async fn configure_event() {
         .await
         .expect("should build");
 
-    let reply = node.request(configure).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply =
+        node.request(configure).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check log
@@ -788,7 +799,7 @@ async fn delete_older_events() {
         .await
         .expect("should build");
 
-    let reply = node.request(oldest).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(oldest).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     time::sleep(time::Duration::from_secs(1)).await;
@@ -802,7 +813,7 @@ async fn delete_older_events() {
 
     let newest_cid = newest.cid().expect("should have CID");
 
-    let reply = node.request(newest).owner(alice.did()).execute().await.expect("should configure protocol");
+    let reply = node.request(newest).owner(alice.did()).await.expect("should configure protocol");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     // check log
