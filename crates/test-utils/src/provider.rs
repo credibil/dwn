@@ -86,12 +86,8 @@ impl<'a> Identitifier<'a> {
 impl Resolver for Provider {
     async fn resolve(&self, url: &str) -> Result<Vec<u8>> {
         let request = DocumentRequest { url: url.to_string() };
-        let document = Client::new(Store)
-            .request(request)
-            .owner("owner")
-            .execute()
-            .await
-            .map(|r| r.0.clone())?;
+        let document =
+            Client::new(Store).request(request).owner("owner").await.map(|r| r.0.clone())?;
         serde_json::to_vec(&document).map_err(|e| e.into())
     }
 }

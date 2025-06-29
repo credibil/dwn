@@ -561,11 +561,12 @@ dependencies = [
 [[package]]
 name = "credibil-core"
 version = "0.1.0"
-source = "git+https://github.com/credibil/core.git#cda67a45f43ac42b17837e67eb04901836230326"
+source = "git+https://github.com/credibil/core.git#4721d0b303d6615791e61ff75dc6afd154ebff26"
 dependencies = [
  "anyhow",
  "bytes",
  "chrono",
+ "futures",
  "http",
  "http-body",
  "http-body-util",
