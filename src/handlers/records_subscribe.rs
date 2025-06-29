@@ -56,11 +56,9 @@ pub async fn handle(
 impl<P: Provider> Handler<SubscribeReply, P> for Request<Subscribe> {
     type Error = Error;
 
-    async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Response<SubscribeReply>>> {
+    async fn handle(self, owner: &str, provider: &P) -> Result<Response<SubscribeReply>> {
         self.body.validate(provider).await?;
-        handle(verifier, provider, self.body).await
+        Ok(handle(owner, provider, self.body).await?.into())
     }
 }
 

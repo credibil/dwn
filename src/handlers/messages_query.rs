@@ -34,9 +34,9 @@ async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Result<Q
 impl<P: Provider> Handler<QueryReply, P> for Request<Query> {
     type Error = Error;
 
-    async fn handle(self, verifier: &str, provider: &P) -> Result<impl Into<Response<QueryReply>>> {
+    async fn handle(self, owner: &str, provider: &P) -> Result<Response<QueryReply>> {
         self.body.validate(provider).await?;
-        handle(verifier, provider, self.body).await
+        Ok(handle(owner, provider, self.body).await?.into())
     }
 }
 

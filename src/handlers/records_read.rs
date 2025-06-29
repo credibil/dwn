@@ -134,9 +134,9 @@ pub async fn handle(
 impl<P: Provider> Handler<ReadReply, P> for Request<Read> {
     type Error = Error;
 
-    async fn handle(self, verifier: &str, provider: &P) -> Result<impl Into<Response<ReadReply>>> {
+    async fn handle(self, owner: &str, provider: &P) -> Result<Response<ReadReply>> {
         self.body.validate(provider).await?;
-        handle(verifier, provider, self.body).await
+        handle(owner, provider, self.body).await
     }
 }
 

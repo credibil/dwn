@@ -86,10 +86,10 @@ impl<P: Provider> Handler<DeleteReply, P> for Request<Delete> {
     type Error = Error;
 
     async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Response<DeleteReply>>> {
+        self, owner: &str, provider: &P,
+    ) -> Result<Response<DeleteReply>> {
         self.body.validate(provider).await?;
-        handle(verifier, provider, self.body).await
+        handle(owner, provider, self.body).await
     }
 }
 

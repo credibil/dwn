@@ -153,10 +153,10 @@ impl<P: Provider> Handler<ConfigureReply, P> for Request<Configure> {
     type Error = Error;
 
     async fn handle(
-        self, verifier: &str, provider: &P,
-    ) -> Result<impl Into<Response<ConfigureReply>>> {
+        self, owner: &str, provider: &P,
+    ) -> Result<Response<ConfigureReply>> {
         BodyExt::validate(&self.body, provider).await?;
-        handle(verifier, provider, self.body).await
+        handle(owner, provider, self.body).await
     }
 }
 

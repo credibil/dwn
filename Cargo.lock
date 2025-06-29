@@ -561,12 +561,11 @@ dependencies = [
 [[package]]
 name = "credibil-core"
 version = "0.1.0"
-source = "git+https://github.com/credibil/core.git#4721d0b303d6615791e61ff75dc6afd154ebff26"
+source = "git+https://github.com/credibil/core.git#a68726d10f58e8469c2e50c0a4b06df29f410360"
 dependencies = [
  "anyhow",
  "bytes",
  "chrono",
- "futures",
  "http",
  "http-body",
  "http-body-util",
@@ -579,7 +578,7 @@ dependencies = [
 [[package]]
 name = "credibil-did"
 version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#39348a6eb3095291828574b1f87603b41a04c415"
+source = "git+https://github.com/credibil/proof.git#b2b8760a6c7122366dae1b768f44a0c03ca02d57"
 dependencies = [
  "anyhow",
  "chrono",
@@ -680,7 +679,7 @@ dependencies = [
 [[package]]
 name = "credibil-proof"
 version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#39348a6eb3095291828574b1f87603b41a04c415"
+source = "git+https://github.com/credibil/proof.git#b2b8760a6c7122366dae1b768f44a0c03ca02d57"
 dependencies = [
  "anyhow",
  "credibil-core",
