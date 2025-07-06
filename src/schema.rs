@@ -118,7 +118,7 @@ struct Retriever;
 impl Retrieve for Retriever {
     fn retrieve(
         &self, uri: &Uri<String>,
-    ) -> anyhow::Result<Value, Box<(dyn Error + Send + Sync + 'static)>> {
+    ) -> anyhow::Result<Value, Box<dyn Error + Send + Sync + 'static>> {
         match uri.path().as_str() {
             "/dwn/json-schemas/defs.json" => {
                 let schema = include_bytes!("../schemas/definitions.json");
