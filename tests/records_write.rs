@@ -5667,7 +5667,7 @@ async fn context_id_mismatch() {
         context_id: Some("somerandomrecordid".to_string()),
         ..SignaturePayload::default()
     };
-    let key_ref = alice
+    let key_binding = alice
         .verification_method()
         .await
         .expect("should get key reference")
@@ -5676,7 +5676,7 @@ async fn context_id_mismatch() {
     write.authorization.signature = JwsBuilder::new()
         .payload(payload)
         .add_signer(alice)
-        .key_ref(&key_ref)
+        .key_binding(&key_binding)
         .build()
         .await
         .expect("should sign");
@@ -5715,7 +5715,7 @@ async fn invalid_attestation() {
         attestation_cid: Some("somerandomrecordid".to_string()),
         ..SignaturePayload::default()
     };
-    let key_ref = alice
+    let key_binding = alice
         .verification_method()
         .await
         .expect("should get key reference")
@@ -5724,7 +5724,7 @@ async fn invalid_attestation() {
     write.authorization.signature = JwsBuilder::new()
         .payload(payload)
         .add_signer(alice)
-        .key_ref(&key_ref)
+        .key_binding(&key_binding)
         .build()
         .await
         .expect("should sign");
@@ -5764,7 +5764,7 @@ async fn attestation_descriptor_cid() {
     let payload = Attestation {
         descriptor_cid: cid::from_value(&"somerandomrecordid").expect("should create CID"),
     };
-    let key_ref = alice
+    let key_binding = alice
         .verification_method()
         .await
         .expect("should get key reference")
@@ -5773,7 +5773,7 @@ async fn attestation_descriptor_cid() {
     let attestation = JwsBuilder::new()
         .payload(payload)
         .add_signer(alice)
-        .key_ref(&key_ref)
+        .key_binding(&key_binding)
         .build()
         .await
         .expect("should sign");
@@ -5788,7 +5788,7 @@ async fn attestation_descriptor_cid() {
         attestation_cid: Some(cid::from_value(&attestation).unwrap()),
         ..SignaturePayload::default()
     };
-    let key_ref = alice
+    let key_binding = alice
         .verification_method()
         .await
         .expect("should get key reference")
@@ -5797,7 +5797,7 @@ async fn attestation_descriptor_cid() {
     write.authorization.signature = JwsBuilder::new()
         .payload(payload)
         .add_signer(alice)
-        .key_ref(&key_ref)
+        .key_binding(&key_binding)
         .build()
         .await
         .expect("should sign");

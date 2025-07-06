@@ -247,9 +247,13 @@ impl AuthorizationBuilder {
             protocol_role: self.protocol_role,
         };
         let key = signer.verification_method().await?;
-        let key_ref = key.try_into()?;
-        let signature =
-            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
+        let key_binding = key.try_into()?;
+        let signature = JwsBuilder::new()
+            .payload(payload)
+            .add_signer(signer)
+            .key_binding(&key_binding)
+            .build()
+            .await?;
 
         Ok(Authorization {
             signature,

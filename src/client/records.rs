@@ -1127,8 +1127,13 @@ impl<O, A: Signature, S: Signature> WriteBuilder<'_, O, Attested<'_, A>, Signed<
         let Some(attester) = self.attesters.0.first() else {
             return Err(anyhow!("attesters is empty"));
         };
-        let key_ref = attester.verification_method().await?.try_into()?;
-        JwsBuilder::new().payload(payload).add_signer(*attester).key_ref(&key_ref).build().await
+        let key_binding = attester.verification_method().await?.try_into()?;
+        JwsBuilder::new()
+            .payload(payload)
+            .add_signer(*attester)
+            .key_binding(&key_binding)
+            .build()
+            .await
     }
 }
 
@@ -1143,8 +1148,8 @@ impl<O, S: Signature> WriteBuilder<'_, O, Unattested, Signed<'_, S>> {
         let author_did = if let Some(grant) = &self.delegated_grant {
             authorization::kid_did(&grant.authorization.signature)?
         } else {
-            let key_ref = self.signer.0.verification_method().await?;
-            let VerifyBy::KeyId(kid) = &key_ref else {
+            let key_binding = self.signer.0.verification_method().await?;
+            let VerifyBy::KeyId(kid) = &key_binding else {
                 return Err(anyhow!("key reference is not a DID"));
             };
             did_from_kid(kid)?
@@ -1168,8 +1173,8 @@ impl<'a, O, A: Signature, S: Signature> WriteBuilder<'a, O, Attested<'a, A>, Sig
         let author_did = if let Some(grant) = &self.delegated_grant {
             authorization::kid_did(&grant.authorization.signature)?
         } else {
-            let key_ref = self.signer.0.verification_method().await?;
-            let VerifyBy::KeyId(kid) = &key_ref else {
+            let key_binding = self.signer.0.verification_method().await?;
+            let VerifyBy::KeyId(kid) = &key_binding else {
                 return Err(anyhow!("key reference is not a DID"));
             };
             did_from_kid(kid)?
@@ -1231,10 +1236,14 @@ impl Write {
             encryption_cid,
         };
 
-        let key_ref = signer.verification_method().await?.try_into()?;
+        let key_binding = signer.verification_method().await?.try_into()?;
 
-        self.authorization.signature =
-            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
+        self.authorization.signature = JwsBuilder::new()
+            .payload(payload)
+            .add_signer(signer)
+            .key_binding(&key_binding)
+            .build()
+            .await?;
 
         Ok(())
     }
@@ -1260,9 +1269,13 @@ impl Write {
             descriptor_cid: cid::from_value(&self.descriptor)?,
             ..JwsPayload::default()
         };
-        let key_ref = signer.verification_method().await?.try_into()?;
-        let owner_jws =
-            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
+        let key_binding = signer.verification_method().await?.try_into()?;
+        let owner_jws = JwsBuilder::new()
+            .payload(payload)
+            .add_signer(signer)
+            .key_binding(&key_binding)
+            .build()
+            .await?;
         self.authorization.owner_signature = Some(owner_jws);
 
         Ok(())
@@ -1297,9 +1310,13 @@ impl Write {
             delegated_grant_id: Some(delegated_grant_id),
             ..JwsPayload::default()
         };
-        let key_ref = signer.verification_method().await?.try_into()?;
-        let owner_jws =
-            JwsBuilder::new().payload(payload).add_signer(signer).key_ref(&key_ref).build().await?;
+        let key_binding = signer.verification_method().await?.try_into()?;
+        let owner_jws = JwsBuilder::new()
+            .payload(payload)
+            .add_signer(signer)
+            .key_binding(&key_binding)
+            .build()
+            .await?;
 
         self.authorization.owner_signature = Some(owner_jws);
         self.authorization.owner_delegated_grant = Some(delegated_grant);

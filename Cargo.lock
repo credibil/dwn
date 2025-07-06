@@ -408,9 +408,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.27"
+version = "1.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d487aa071b5f64da6f19a3e848e3578944b726ee5a4854b82172f02aa876bfdc"
+checksum = "5c1599538de2394445747c8cf7935946e3cc27e9625f889d979bfb2aaf569362"
 dependencies = [
  "shlex",
 ]
@@ -578,7 +578,7 @@ dependencies = [
 [[package]]
 name = "credibil-did"
 version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#b2b8760a6c7122366dae1b768f44a0c03ca02d57"
+source = "git+https://github.com/credibil/proof.git#cff11ae2f7b1c8c6a5da7a7901044ca0b38f7941"
 dependencies = [
  "anyhow",
  "chrono",
@@ -641,7 +641,7 @@ dependencies = [
 [[package]]
 name = "credibil-ecc"
 version = "0.1.2"
-source = "git+https://github.com/credibil/key.git#a014404c3e3b4f1296b7f5aa7a8b9419390131fa"
+source = "git+https://github.com/credibil/key.git#3e112c2e0c5eeadfd9a66c1f4e7eb81514dff06a"
 dependencies = [
  "aes-gcm",
  "aes-kw",
@@ -664,7 +664,7 @@ dependencies = [
 [[package]]
 name = "credibil-jose"
 version = "0.1.2"
-source = "git+https://github.com/credibil/key.git#a014404c3e3b4f1296b7f5aa7a8b9419390131fa"
+source = "git+https://github.com/credibil/key.git#3e112c2e0c5eeadfd9a66c1f4e7eb81514dff06a"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -679,7 +679,7 @@ dependencies = [
 [[package]]
 name = "credibil-proof"
 version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#b2b8760a6c7122366dae1b768f44a0c03ca02d57"
+source = "git+https://github.com/credibil/proof.git#cff11ae2f7b1c8c6a5da7a7901044ca0b38f7941"
 dependencies = [
  "anyhow",
  "credibil-core",
@@ -1206,9 +1206,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9421a676d1b147b16b82c9225157dc629087ef8ec4d5e2960f9437a90dac0a5"
+checksum = "17da50a276f1e01e0ba6c029e47b7100754904ee8a278f886546e98575380785"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -1502,6 +1502,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-uring"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b86e202f00093dcba4275d4636b93ef9dd75d025ae560d2521b45ea28ab49013"
+dependencies = [
+ "bitflags 2.9.1",
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "ipld-core"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1770,9 +1781,9 @@ dependencies = [
 
 [[package]]
 name = "nkeys"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f49e787f4c61cbd0f9320b31cc26e58719f6aa5068e34697dd3aea361412fe3"
+checksum = "879011babc47a1c7fdf5a935ae3cfe94f34645ca0cac1c7f6424b36fc743d1bf"
 dependencies = [
  "data-encoding",
  "ed25519",
@@ -2836,15 +2847,17 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.45.1"
+version = "1.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
+checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
 dependencies = [
  "backtrace",
  "bytes",
+ "io-uring",
  "libc",
  "mio",
  "pin-project-lite",
+ "slab",
  "socket2",
  "tokio-macros",
  "windows-sys 0.52.0",
