@@ -22,7 +22,7 @@ use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, store};
 use credibil_ecc::{Curve, KeyType};
 use credibil_jose::{JwsBuilder, PublicKeyJwk};
-use credibil_proof::{Signature, VerifyBy};
+use credibil_binding::{Signature, VerifyBy};
 use rand::RngCore;
 use test_utils::{Identity, Provider};
 use tokio::sync::OnceCell;

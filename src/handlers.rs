@@ -19,7 +19,7 @@ mod verify_protocol;
 use std::future::Future;
 
 use credibil_core::api::Body;
-use credibil_proof::Resolver;
+use credibil_binding::Resolver;
 use serde::Serialize;
 
 use crate::authorization::Authorization;

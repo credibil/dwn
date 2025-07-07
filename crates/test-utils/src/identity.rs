@@ -1,9 +1,9 @@
 use anyhow::Result;
+use credibil_binding::did::{Document, DocumentBuilder, KeyId, VerificationMethod};
+use credibil_binding::{Signature, VerifyBy};
 use credibil_ecc::Curve::Ed25519;
 use credibil_ecc::{Algorithm, Entry, Keyring, PublicKey, Receiver, SharedSecret, Signer};
 use credibil_jose::PublicKeyJwk;
-use credibil_proof::did::{Document, DocumentBuilder, KeyId, VerificationMethod};
-use credibil_proof::{Signature, VerifyBy};
 
 use crate::store::Store;
 
@@ -26,7 +26,8 @@ impl Identity {
         let url = format!("https://credibil.io/{}", uuid::Uuid::new_v4());
         let vm = VerificationMethod::build().key(jwk).key_id(KeyId::Index("key-0".to_string()));
         let builder = DocumentBuilder::new().verification_method(vm).derive_key_agreement(true);
-        let document = credibil_proof::create(&url, builder, &Store).await.expect("should create");
+        let document =
+            credibil_binding::create(&url, builder, &Store).await.expect("should create");
 
         Self {
             document,

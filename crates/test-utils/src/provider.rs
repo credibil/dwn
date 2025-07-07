@@ -8,7 +8,7 @@ use cid::Cid;
 use credibil_core::api::Client;
 use credibil_dwn::event::{Event, Subscriber};
 use credibil_dwn::provider::{BlockStore, EventStream, Resolver};
-use credibil_proof::DocumentRequest;
+use credibil_binding::DocumentRequest;
 use futures::stream::StreamExt;
 use multihash_codetable::MultihashDigest;
 use serde::{Deserialize, Serialize};

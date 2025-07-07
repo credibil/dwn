@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::io::Read;
 
 use anyhow::Result;
-pub use credibil_proof::Resolver;
+pub use credibil_binding::Resolver;
 pub use datastore::BlockStore;
 use datastore::{data, store};
 use ipld_core::ipld::Ipld;

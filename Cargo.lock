@@ -559,6 +559,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "credibil-binding"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "credibil-core",
+ "credibil-did",
+ "credibil-ecc",
+ "credibil-jose",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "credibil-core"
 version = "0.1.0"
 source = "git+https://github.com/credibil/core.git#a68726d10f58e8469c2e50c0a4b06df29f410360"
@@ -578,7 +592,6 @@ dependencies = [
 [[package]]
 name = "credibil-did"
 version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#cff11ae2f7b1c8c6a5da7a7901044ca0b38f7941"
 dependencies = [
  "anyhow",
  "chrono",
@@ -607,10 +620,10 @@ dependencies = [
  "chrono",
  "ciborium",
  "cid",
+ "credibil-binding",
  "credibil-core",
  "credibil-ecc",
  "credibil-jose",
- "credibil-proof",
  "datastore",
  "derive_more",
  "futures",
@@ -641,7 +654,6 @@ dependencies = [
 [[package]]
 name = "credibil-ecc"
 version = "0.1.2"
-source = "git+https://github.com/credibil/key.git#3e112c2e0c5eeadfd9a66c1f4e7eb81514dff06a"
 dependencies = [
  "aes-gcm",
  "aes-kw",
@@ -664,7 +676,6 @@ dependencies = [
 [[package]]
 name = "credibil-jose"
 version = "0.1.2"
-source = "git+https://github.com/credibil/key.git#3e112c2e0c5eeadfd9a66c1f4e7eb81514dff06a"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -674,21 +685,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "zeroize",
-]
-
-[[package]]
-name = "credibil-proof"
-version = "0.1.2"
-source = "git+https://github.com/credibil/proof.git#cff11ae2f7b1c8c6a5da7a7901044ca0b38f7941"
-dependencies = [
- "anyhow",
- "credibil-core",
- "credibil-did",
- "credibil-ecc",
- "credibil-jose",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -2742,11 +2738,11 @@ dependencies = [
  "blockstore",
  "ciborium",
  "cid",
+ "credibil-binding",
  "credibil-core",
  "credibil-dwn",
  "credibil-ecc",
  "credibil-jose",
- "credibil-proof",
  "dashmap",
  "futures",
  "multihash-codetable",

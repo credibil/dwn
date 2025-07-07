@@ -22,7 +22,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use credibil_ecc::Signer;
-use credibil_proof::Signature;
+use credibil_binding::Signature;
 
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;

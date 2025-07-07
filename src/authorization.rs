@@ -4,10 +4,10 @@
 //! to message authorization and authentication.
 
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_jose::{Jws, JwsBuilder, Jwt};
-use credibil_proof::Signature;
+use credibil_binding::Signature;
 #[cfg(feature = "server")]
-use credibil_proof::{Resolver, resolve_jwk};
+use credibil_binding::{Resolver, resolve_jwk};
+use credibil_jose::{Jws, JwsBuilder, Jwt};
 use serde::{Deserialize, Serialize};
 
 use crate::error::bad_request;
