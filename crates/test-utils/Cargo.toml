@@ -5,7 +5,7 @@ publish = false
 rust-version.workspace = true
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+# crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
@@ -19,8 +19,11 @@ credibil-dwn.workspace = true
 credibil-ecc.workspace = true
 credibil-jose.workspace = true
 dashmap = "6.1.0"
+datastore.workspace = true
 futures.workspace = true
+ipld-core.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+ulid = "1.2.1"
 uuid.workspace = true

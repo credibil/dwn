@@ -15,13 +15,13 @@ use credibil_dwn::client::records::{Data, ProtocolBuilder, WriteBuilder};
 use credibil_dwn::interfaces::messages::{QueryReply, SubscribeReply};
 use credibil_dwn::{Error, Interface, Method, StatusCode};
 use futures::StreamExt;
-use test_utils::{Identity, Provider};
+use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;
 use tokio::time;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
 static BOB: OnceCell<Identity> = OnceCell::const_new();
-static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<WebNode>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("messages_subscribe_alice").await }).await
@@ -29,8 +29,8 @@ async fn alice() -> &'static Identity {
 async fn bob() -> &'static Identity {
     BOB.get_or_init(|| async { Identity::new("messages_subscribe_bob").await }).await
 }
-async fn node() -> &'static Client<Provider> {
-    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<WebNode> {
+    NODE.get_or_init(|| async { Client::new(WebNode::new().await) }).await
 }
 
 // TODO: implement fake provider with no subscription support for this test.

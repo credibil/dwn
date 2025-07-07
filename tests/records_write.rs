@@ -24,7 +24,7 @@ use credibil_ecc::{Curve, KeyType};
 use credibil_jose::{JwsBuilder, PublicKeyJwk};
 use credibil_binding::{Signature, VerifyBy};
 use rand::RngCore;
-use test_utils::{Identity, Provider};
+use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
@@ -32,7 +32,7 @@ static BOB: OnceCell<Identity> = OnceCell::const_new();
 static CAROL: OnceCell<Identity> = OnceCell::const_new();
 static ISSUER: OnceCell<Identity> = OnceCell::const_new();
 static PFI: OnceCell<Identity> = OnceCell::const_new();
-static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<WebNode>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("records_write_alice").await }).await
@@ -49,8 +49,8 @@ async fn issuer() -> &'static Identity {
 async fn pfi() -> &'static Identity {
     PFI.get_or_init(|| async { Identity::new("records_write_pfi").await }).await
 }
-async fn node() -> &'static Client<Provider> {
-    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<WebNode> {
+    NODE.get_or_init(|| async { Client::new(WebNode::new().await) }).await
 }
 
 // // Should handle pre-processing errors
@@ -3757,7 +3757,7 @@ async fn owner_no_rule() {
 #[tokio::test]
 async fn deep_nesting() {
     let pfi = pfi().await;
-    let pfi_client = Client::new(Provider::new().await);
+    let pfi_client = Client::new(WebNode::new().await);
     let alice = alice().await;
 
     // --------------------------------------------------
@@ -3857,7 +3857,7 @@ async fn deep_nesting() {
 #[tokio::test]
 async fn invalid_parent_id() {
     let pfi = pfi().await;
-    let pfi_client = Client::new(Provider::new().await);
+    let pfi_client = Client::new(WebNode::new().await);
     let alice = alice().await;
 
     // --------------------------------------------------

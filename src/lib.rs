@@ -18,10 +18,13 @@ pub mod event;
 pub mod hd_key;
 pub mod interfaces;
 
-// mod api;
 mod error;
 mod grants;
 mod utils;
+
+pub use credibil_ecc::{Receiver, Signer};
+
+pub use self::utils::*;
 
 #[cfg(feature = "client")]
 pub mod client;
@@ -35,17 +38,16 @@ cfg_if::cfg_if! {
         mod schema;
         mod tasks;
 
-        // re-exports
         pub use ::http::StatusCode;
         pub use credibil_core::{http, api};
 
-        pub use crate::provider::Provider;
-        pub use crate::utils::cid;
+        pub use self::tasks::*;
+        pub use self::provider::Provider;
+        pub use self::utils::cid;
     }
 }
 
 use ::serde::{Deserialize, Serialize};
-pub use credibil_ecc::{Receiver, Signer};
 use derive_more::Display;
 
 pub use self::handlers::*;

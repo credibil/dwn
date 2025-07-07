@@ -16,13 +16,13 @@ use credibil_dwn::client::records::{
 use credibil_dwn::interfaces::records::ReadReply;
 use credibil_dwn::provider::{EventLog, MessageStore};
 use credibil_dwn::{Error, Interface, Method, StatusCode, store};
-use test_utils::{Identity, Provider};
+use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
 static BOB: OnceCell<Identity> = OnceCell::const_new();
 static CAROL: OnceCell<Identity> = OnceCell::const_new();
-static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<WebNode>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("records_delete_alice").await }).await
@@ -33,8 +33,8 @@ async fn bob() -> &'static Identity {
 async fn carol() -> &'static Identity {
     CAROL.get_or_init(|| async { Identity::new("records_delete_carol").await }).await
 }
-async fn node() -> &'static Client<Provider> {
-    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<WebNode> {
+    NODE.get_or_init(|| async { Client::new(WebNode::new().await) }).await
 }
 
 // Should successfully delete a record and then fail when attempting to delete it again.

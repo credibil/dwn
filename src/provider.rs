@@ -12,32 +12,20 @@
 //! `BlockStore` trait, which is used to store and retrieve data. Users can
 //! implement the other traits as needed.
 
-use std::collections::BTreeMap;
 use std::io::Read;
 
 use anyhow::Result;
 pub use credibil_binding::Resolver;
 pub use datastore::BlockStore;
-use datastore::{data, store};
-use ipld_core::ipld::Ipld;
-use ulid::Ulid;
 
 use crate::event::{Event, Subscriber};
 use crate::interfaces::Document;
-use crate::store::{Cursor, Pagination, Query, Sort, Storable};
+use crate::store::{Cursor, Query, Storable};
 use crate::tasks::ResumableTask;
-use crate::utils::ipfs::Block;
 
 /// Provider trait.
 pub trait Provider:
     MessageStore + DataStore + TaskStore + EventLog + EventStream + Resolver
-{
-}
-
-/// A blanket implementation for `Provider` trait  to allow any type
-/// implementing the required super traits to be considered a `Provider`.
-impl<T> Provider for T where
-    T: MessageStore + DataStore + TaskStore + EventLog + EventStream + Resolver
 {
 }
 
@@ -181,123 +169,123 @@ pub trait EventStream: Send + Sync {
     fn emit(&self, owner: &str, event: &Event) -> impl Future<Output = Result<()>> + Send;
 }
 
-impl<T: BlockStore> MessageStore for T {
-    async fn put(&self, owner: &str, entry: &impl Storable) -> Result<()> {
-        store::put(owner, "MESSAGE", entry, self).await
-    }
+// impl<T: BlockStore> MessageStore for T {
+//     async fn put(&self, owner: &str, entry: &impl Storable) -> Result<()> {
+//         store::put(owner, "message", entry, self).await
+//     }
 
-    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Document>, Option<Cursor>)> {
-        store::query(owner, "MESSAGE", query, self).await
-    }
+//     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Document>, Option<Cursor>)> {
+//         store::query(owner, "message", query, self).await
+//     }
 
-    async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Document>> {
-        store::get(owner, "MESSAGE", message_cid, self).await
-    }
+//     async fn get(&self, owner: &str, message_cid: &str) -> Result<Option<Document>> {
+//         store::get(owner, "message", message_cid, self).await
+//     }
 
-    async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
-        store::delete(owner, "MESSAGE", message_cid, self).await
-    }
+//     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
+//         store::delete(owner, "message", message_cid, self).await
+//     }
 
-    async fn purge(&self) -> Result<()> {
-        todo!("implement purge")
-    }
-}
+//     async fn purge(&self) -> Result<()> {
+//         todo!("implement purge")
+//     }
+// }
 
-impl<T: BlockStore> DataStore for T {
-    async fn put(
-        &self, owner: &str, record_id: &str, data_cid: &str, reader: impl Read + Send,
-    ) -> anyhow::Result<(String, usize)> {
-        let cid = safe_cid(record_id, data_cid)?;
-        data::put(owner, "DATA", &cid, reader, self).await
-    }
+// impl<T: BlockStore> DataStore for T {
+//     async fn put(
+//         &self, owner: &str, record_id: &str, data_cid: &str, reader: impl Read + Send,
+//     ) -> anyhow::Result<(String, usize)> {
+//         let cid = safe_cid(record_id, data_cid)?;
+//         data::put(owner, "data", &cid, reader, self).await
+//     }
 
-    async fn get(
-        &self, owner: &str, record_id: &str, data_cid: &str,
-    ) -> anyhow::Result<Option<impl Read>> {
-        let cid = safe_cid(record_id, data_cid)?;
-        data::get(owner, "DATA", &cid, self).await
-    }
+//     async fn get(
+//         &self, owner: &str, record_id: &str, data_cid: &str,
+//     ) -> anyhow::Result<Option<impl Read>> {
+//         let cid = safe_cid(record_id, data_cid)?;
+//         data::get(owner, "data", &cid, self).await
+//     }
 
-    async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> anyhow::Result<()> {
-        let cid = safe_cid(record_id, data_cid)?;
-        data::delete(owner, "DATA", &cid, self).await
-    }
+//     async fn delete(&self, owner: &str, record_id: &str, data_cid: &str) -> anyhow::Result<()> {
+//         let cid = safe_cid(record_id, data_cid)?;
+//         data::delete(owner, "data", &cid, self).await
+//     }
 
-    async fn purge(&self) -> anyhow::Result<()> {
-        todo!("implement purge")
-    }
-}
+//     async fn purge(&self) -> anyhow::Result<()> {
+//         todo!("implement purge")
+//     }
+// }
 
-impl<T: BlockStore> TaskStore for T {
-    async fn register(
-        &self, _owner: &str, _task: &ResumableTask, _timeout_secs: u64,
-    ) -> Result<()> {
-        Ok(())
-    }
+// impl<T: BlockStore> TaskStore for T {
+//     async fn register(
+//         &self, _owner: &str, _task: &ResumableTask, _timeout_secs: u64,
+//     ) -> Result<()> {
+//         Ok(())
+//     }
 
-    async fn grab(&self, _owner: &str, _count: u64) -> Result<Vec<ResumableTask>> {
-        unimplemented!("implement grab")
-    }
+//     async fn grab(&self, _owner: &str, _count: u64) -> Result<Vec<ResumableTask>> {
+//         unimplemented!("implement grab")
+//     }
 
-    async fn read(&self, _owner: &str, _task_id: &str) -> Result<Option<ResumableTask>> {
-        unimplemented!("implement read")
-    }
+//     async fn read(&self, _owner: &str, _task_id: &str) -> Result<Option<ResumableTask>> {
+//         unimplemented!("implement read")
+//     }
 
-    async fn extend(&self, _owner: &str, _task_id: &str, _timeout_secs: u64) -> Result<()> {
-        unimplemented!("implement extend")
-    }
+//     async fn extend(&self, _owner: &str, _task_id: &str, _timeout_secs: u64) -> Result<()> {
+//         unimplemented!("implement extend")
+//     }
 
-    async fn delete(&self, _owner: &str, _task_id: &str) -> Result<()> {
-        unimplemented!("implement delete")
-    }
+//     async fn delete(&self, _owner: &str, _task_id: &str) -> Result<()> {
+//         unimplemented!("implement delete")
+//     }
 
-    async fn purge(&self, _owner: &str) -> Result<()> {
-        unimplemented!("implement purge")
-    }
-}
+//     async fn purge(&self, _owner: &str) -> Result<()> {
+//         unimplemented!("implement purge")
+//     }
+// }
 
-impl<T> EventLog for T
-where
-    T: BlockStore,
-{
-    async fn append(&self, owner: &str, event: &impl Storable) -> Result<()> {
-        // add a 'watermark' index entry for sorting and pagination
-        let mut event = event.clone();
-        event.add_index("watermark".to_string(), Ulid::new().to_string());
-        store::put(owner, "EVENTLOG", &event, self).await
-    }
+// impl<T> EventLog for T
+// where
+//     T: BlockStore,
+// {
+//     async fn append(&self, owner: &str, event: &impl Storable) -> Result<()> {
+//         // add a 'watermark' index entry for sorting and pagination
+//         let mut event = event.clone();
+//         event.add_index("watermark".to_string(), Ulid::new().to_string());
+//         store::put(owner, "eventlog", &event, self).await
+//     }
 
-    async fn events(
-        &self, owner: &str, cursor: Option<Cursor>,
-    ) -> Result<(Vec<Event>, Option<Cursor>)> {
-        let q = Query {
-            match_sets: vec![],
-            pagination: Some(Pagination {
-                limit: Some(100),
-                cursor,
-            }),
-            sort: Sort::Ascending("watermark".to_string()),
-        };
-        EventLog::query(self, owner, &q).await
-    }
+//     async fn events(
+//         &self, owner: &str, cursor: Option<Cursor>,
+//     ) -> Result<(Vec<Event>, Option<Cursor>)> {
+//         let q = Query {
+//             match_sets: vec![],
+//             pagination: Some(Pagination {
+//                 limit: Some(100),
+//                 cursor,
+//             }),
+//             sort: Sort::Ascending("watermark".to_string()),
+//         };
+//         EventLog::query(self, owner, &q).await
+//     }
 
-    async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Option<Cursor>)> {
-        store::query(owner, "EVENTLOG", query, self).await
-    }
+//     async fn query(&self, owner: &str, query: &Query) -> Result<(Vec<Event>, Option<Cursor>)> {
+//         store::query(owner, "eventlog", query, self).await
+//     }
 
-    async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
-        store::delete(owner, "EVENTLOG", message_cid, self).await
-    }
+//     async fn delete(&self, owner: &str, message_cid: &str) -> Result<()> {
+//         store::delete(owner, "eventlog", message_cid, self).await
+//     }
 
-    async fn purge(&self) -> Result<()> {
-        todo!()
-    }
-}
+//     async fn purge(&self) -> Result<()> {
+//         todo!()
+//     }
+// }
 
-fn safe_cid(record_id: &str, data_cid: &str) -> anyhow::Result<String> {
-    let block = Block::encode(&Ipld::Map(BTreeMap::from([
-        (String::from("record_id"), Ipld::String(record_id.to_string())),
-        (String::from("data_cid"), Ipld::String(data_cid.to_string())),
-    ])))?;
-    Ok(block.cid().to_string())
-}
+// fn safe_cid(record_id: &str, data_cid: &str) -> anyhow::Result<String> {
+//     let block = Block::encode(&Ipld::Map(BTreeMap::from([
+//         (String::from("record_id"), Ipld::String(record_id.to_string())),
+//         (String::from("data_cid"), Ipld::String(data_cid.to_string())),
+//     ])))?;
+//     Ok(block.cid().to_string())
+// }

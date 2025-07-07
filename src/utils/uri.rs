@@ -6,7 +6,7 @@ use http::uri::Uri;
 use crate::error::bad_request;
 use crate::handlers::Result;
 
-pub fn clean(uri: &str) -> Result<String> {
+pub(crate) fn clean(uri: &str) -> Result<String> {
     let stripped = uri.strip_suffix('/').unwrap_or(uri);
     let parsed = stripped.parse::<Uri>().context("parsing URL")?;
 
@@ -20,7 +20,7 @@ pub fn clean(uri: &str) -> Result<String> {
 }
 
 #[cfg(feature = "server")]
-pub fn validate(uri: &str) -> Result<()> {
+pub(crate) fn validate(uri: &str) -> Result<()> {
     uri.parse::<Uri>().map_or_else(|_| Err(bad_request!("invalid URL: {uri}")), |_| Ok(()))
 }
 

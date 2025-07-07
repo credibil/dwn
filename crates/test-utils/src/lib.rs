@@ -6,4 +6,4 @@ mod store;
 
 pub use identity::Identity;
 
-pub use self::provider::Provider;
+pub use self::provider::WebNode;

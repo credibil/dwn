@@ -17,14 +17,14 @@ use credibil_dwn::client::protocols::{
 use credibil_dwn::interfaces::protocols::QueryReply;
 use credibil_dwn::{Error, Method, StatusCode, cid};
 use credibil_jose::{Jws, Protected, Signature};
-use test_utils::{Identity, Provider};
+use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;
 use tokio::time;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
 static BOB: OnceCell<Identity> = OnceCell::const_new();
 static CAROL: OnceCell<Identity> = OnceCell::const_new();
-static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<WebNode>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("protocols_query_alice").await }).await
@@ -35,8 +35,8 @@ async fn bob() -> &'static Identity {
 async fn carol() -> &'static Identity {
     CAROL.get_or_init(|| async { Identity::new("protocols_query_carol").await }).await
 }
-async fn node() -> &'static Client<Provider> {
-    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<WebNode> {
+    NODE.get_or_init(|| async { Client::new(WebNode::new().await) }).await
 }
 
 // Should return protocols matching the query.

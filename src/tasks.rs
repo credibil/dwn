@@ -39,6 +39,10 @@ use crate::provider::{Provider, TaskStore};
 const EXTEND_SECS: u64 = 30;
 
 /// Runs a resumable task with automatic timeout extension.
+///
+/// # Errors
+///
+/// Returns an error if the task fails to run or if the timeout extension fails.
 pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Result<()> {
     // register the task
     let timeout = (Utc::now() + Duration::from_secs(EXTEND_SECS * 2)).timestamp();
@@ -97,18 +101,30 @@ pub struct ResumableTask {
     pub retry_count: u64,
 }
 
+/// The types of [`ResumableTask`]s that can be run by the task manager.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum TaskType {
+    /// Delete a record.
     RecordsDelete(Delete),
 }
 
 impl TaskType {
+    /// The CID of the task, used to identify the task in the store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the task type does not have a CID.
     pub fn cid(&self) -> Result<String> {
         match self {
             Self::RecordsDelete(delete) => Ok(delete.cid()?),
         }
     }
 
+    /// Runs the task.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the task fails to run.
     pub async fn run(&self, owner: &str, provider: &impl Provider) -> Result<()> {
         match self {
             Self::RecordsDelete(delete) => delete.run(owner, provider).await,

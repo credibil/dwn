@@ -24,13 +24,13 @@ use credibil_ecc::{Curve, KeyType};
 use credibil_jose::PublicKeyJwk;
 use credibil_binding::{Signature, VerifyBy};
 use rand::RngCore;
-use test_utils::{Identity, Provider};
+use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
 static BOB: OnceCell<Identity> = OnceCell::const_new();
 static CAROL: OnceCell<Identity> = OnceCell::const_new();
-static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<WebNode>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("records_read_alice").await }).await
@@ -41,8 +41,8 @@ async fn bob() -> &'static Identity {
 async fn carol() -> &'static Identity {
     CAROL.get_or_init(|| async { Identity::new("records_read_carol").await }).await
 }
-async fn node() -> &'static Client<Provider> {
-    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<WebNode> {
+    NODE.get_or_init(|| async { Client::new(WebNode::new().await) }).await
 }
 
 // Should allow an owner to read their own records.

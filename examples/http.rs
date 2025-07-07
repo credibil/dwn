@@ -11,7 +11,7 @@ use axum::{Json, Router};
 use credibil_dwn::api::Client;
 use credibil_dwn::http::IntoHttp;
 use credibil_dwn::interfaces::{messages, protocols, records};
-use test_utils::Provider;
+use test_utils::WebNode;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -21,7 +21,7 @@ use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let client = Client::new(Provider::new().await);
+    let client = Client::new(WebNode::new().await);
 
     let subscriber = FmtSubscriber::builder().with_max_level(Level::DEBUG).finish();
     tracing::subscriber::set_global_default(subscriber).expect("set subscriber");
@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
 #[axum::debug_handler]
 async fn messages_query(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<messages::Query>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -61,7 +61,7 @@ async fn messages_query(
 
 #[axum::debug_handler]
 async fn messages_read(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<messages::Read>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -69,7 +69,7 @@ async fn messages_read(
 
 #[axum::debug_handler]
 async fn messages_subscribe(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<messages::Subscribe>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -77,7 +77,7 @@ async fn messages_subscribe(
 
 #[axum::debug_handler]
 async fn protocols_configure(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<protocols::Configure>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -85,7 +85,7 @@ async fn protocols_configure(
 
 #[axum::debug_handler]
 async fn protocols_query(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<protocols::Query>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -93,7 +93,7 @@ async fn protocols_query(
 
 #[axum::debug_handler]
 async fn records_delete(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<records::Delete>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -101,7 +101,7 @@ async fn records_delete(
 
 #[axum::debug_handler]
 async fn records_query(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<records::Query>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -109,7 +109,7 @@ async fn records_query(
 
 #[axum::debug_handler]
 async fn records_read(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<records::Read>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -117,7 +117,7 @@ async fn records_read(
 
 #[axum::debug_handler]
 async fn records_subscribe(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<records::Subscribe>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()
@@ -125,7 +125,7 @@ async fn records_subscribe(
 
 #[axum::debug_handler]
 async fn records_write(
-    State(client): State<Client<Provider>>, Path(did): Path<String>,
+    State(client): State<Client<WebNode>>, Path(did): Path<String>,
     Json(request): Json<records::Write>,
 ) -> impl IntoResponse {
     client.request(request).owner(&did).await.into_http()

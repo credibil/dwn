@@ -17,13 +17,13 @@ use credibil_dwn::provider::MessageStore;
 use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode};
 use rand::RngCore;
-use test_utils::{Identity, Provider};
+use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;
 
 static ALICE: OnceCell<Identity> = OnceCell::const_new();
 static BOB: OnceCell<Identity> = OnceCell::const_new();
 static CAROL: OnceCell<Identity> = OnceCell::const_new();
-static NODE: OnceCell<Client<Provider>> = OnceCell::const_new();
+static NODE: OnceCell<Client<WebNode>> = OnceCell::const_new();
 
 async fn alice() -> &'static Identity {
     ALICE.get_or_init(|| async { Identity::new("messages_read_alice").await }).await
@@ -34,8 +34,8 @@ async fn bob() -> &'static Identity {
 async fn carol() -> &'static Identity {
     CAROL.get_or_init(|| async { Identity::new("messages_read_carol").await }).await
 }
-async fn node() -> &'static Client<Provider> {
-    NODE.get_or_init(|| async { Client::new(Provider::new().await) }).await
+async fn node() -> &'static Client<WebNode> {
+    NODE.get_or_init(|| async { Client::new(WebNode::new().await) }).await
 }
 
 // Bob should be able to read any message in Alice's web node.
@@ -105,7 +105,7 @@ async fn read_message() {
 #[tokio::test]
 async fn invalid_signature() {
     let invalid = Identity::invalid("invalid_signature").await;
-    let invalid_client = Client::new(Provider::new().await);
+    let invalid_client = Client::new(WebNode::new().await);
 
     let read = ReadBuilder::new()
         .message_cid("bafkreihxrkspxsocoaoetqjm3iop26svz2k622cgart56v2ng7g6q6ofwa".to_string())

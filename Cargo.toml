@@ -38,13 +38,13 @@ credibil-binding.workspace = true
 credibil-core.workspace = true
 credibil-ecc.workspace = true
 credibil-jose.workspace = true
-datastore = { path = "./crates/datastore" }
+datastore.workspace = true
 derive_more = { version = "2.0.1", features = ["display"] }
 futures.workspace = true
 hkdf = "0.12.4"
 http = "1.3.1"
 http-body-util = "0.1"
-ipld-core = "0.4.2"
+ipld-core.workspace = true
 jsonschema = { version = "0.30.0", default-features = false, features = ["resolve-file"] }
 multihash-codetable.workspace = true
 rand = "0.9.1"
@@ -55,7 +55,6 @@ sha2 = "0.10.9"
 thiserror = "2.0.12"
 tokio = { workspace = true, optional = true }
 tracing = "0.1.41"
-ulid = "1.2.1"
 uuid.workspace = true
 zeroize = "1.8.1"
 
@@ -106,8 +105,10 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
+ipld-core = "0.4.2"
 anyhow = "1.0.98"
 ciborium = "0.2.2"
+datastore = { path = "crates/datastore" }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-binding = { git = "https://github.com/credibil/key.git" }
 credibil-core = { git = "https://github.com/credibil/core.git" }
@@ -121,13 +122,14 @@ serde_json = { version = "1.0.140", features = ["alloc"] }
 tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 uuid = { version = "1.17.0", features = ["fast-rng", "v4"] }
 
+
 # [patch."https://github.com/credibil/core"]
 # credibil-core = { path = "../core" }
 
-[patch."https://github.com/credibil/key"]
-credibil-ecc = { path = "../key/ecc" }
-credibil-jose = { path = "../key/jose" }
-credibil-binding = { path = "../key/binding" }
+# [patch."https://github.com/credibil/key"]
+# credibil-ecc = { path = "../key/ecc" }
+# credibil-jose = { path = "../key/jose" }
+# credibil-binding = { path = "../key/binding" }
 
 [profile.release]
 # optimize for small code size

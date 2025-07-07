@@ -11,7 +11,7 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json};
-use test_utils::{Identity, Provider};
+use test_utils::{Identity, WebNode};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     println!("Alice's DWN listening on http://0.0.0.0:8080");
 
     let owner = Identity::new("alice").await.did().to_string();
-    let client = Client::new(Provider::new().await);
+    let client = Client::new(WebNode::new().await);
     let svc = Svc { client, owner };
 
     loop {
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
 
 #[derive(Clone)]
 struct Svc {
-    client: Client<Provider>,
+    client: Client<WebNode>,
     owner: String,
 }
 
