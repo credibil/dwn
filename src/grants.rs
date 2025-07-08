@@ -212,11 +212,7 @@ pub enum Scope {
 
 impl Default for Scope {
     fn default() -> Self {
-        Self::Records {
-            method: Method::default(),
-            protocol: String::new(),
-            limited_to: None,
-        }
+        Self::Records { method: Method::default(), protocol: String::new(), limited_to: None }
     }
 }
 

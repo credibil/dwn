@@ -145,11 +145,7 @@ pub async fn handle(
         write.revoke_grants(owner, provider).await?;
     }
 
-    Ok(Response {
-        status: code,
-        headers: None,
-        body: WriteReply,
-    })
+    Ok(Response { status: code, headers: None, body: WriteReply })
 }
 
 impl<P: Provider> Handler<WriteReply, P> for Request<Write> {

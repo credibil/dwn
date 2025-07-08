@@ -32,25 +32,13 @@ pub async fn insert(
 
     for (field, value) in fields {
         let mut index = all_indexes.get(field).await?;
-        index.insert(
-            value,
-            IndexItem {
-                fields: fields.clone(),
-                message_cid: message_cid.clone(),
-            },
-        );
+        index.insert(value, IndexItem { fields: fields.clone(), message_cid: message_cid.clone() });
         all_indexes.put(index).await?;
     }
 
     // add reverse lookup to use when message is updated or deleted
     let mut index = all_indexes.get("message_cid").await?;
-    index.items.insert(
-        message_cid.clone(),
-        IndexItem {
-            fields: fields.clone(),
-            message_cid,
-        },
-    );
+    index.items.insert(message_cid.clone(), IndexItem { fields: fields.clone(), message_cid });
     all_indexes.put(index).await?;
 
     Ok(())
@@ -261,10 +249,7 @@ pub struct IndexItem {
 
 impl Index {
     fn new(field: impl Into<String>) -> Self {
-        Self {
-            field: field.into(),
-            items: BTreeMap::new(),
-        }
+        Self { field: field.into(), items: BTreeMap::new() }
     }
 
     fn insert(&mut self, value: &str, item: IndexItem) {
@@ -318,12 +303,7 @@ struct NoStore;
 
 impl IndexesBuilder<NoOwner, NoPartition, NoStore> {
     const fn new() -> Self {
-        Self {
-            owner: NoOwner,
-            partition: NoPartition,
-            indexes: None,
-            store: NoStore,
-        }
+        Self { owner: NoOwner, partition: NoPartition, indexes: None, store: NoStore }
     }
 }
 
@@ -362,11 +342,7 @@ impl<O, P> IndexesBuilder<O, P, NoStore> {
 
 impl<'a, S: BlockStore> IndexesBuilder<Owner<'a>, Partition<'a>, Store<'a, S>> {
     fn build(self) -> Indexes<'a, S> {
-        Indexes {
-            owner: self.owner.0,
-            partition: self.partition.0,
-            store: self.store.0,
-        }
+        Indexes { owner: self.owner.0, partition: self.partition.0, store: self.store.0 }
     }
 }
 

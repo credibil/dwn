@@ -37,9 +37,7 @@ async fn handle(
         subscriber.inner = Box::pin(filtered);
     }
 
-    Ok(SubscribeReply {
-        subscription: subscriber,
-    })
+    Ok(SubscribeReply { subscription: subscriber })
 }
 
 impl<P: Provider> Handler<SubscribeReply, P> for Request<Subscribe> {

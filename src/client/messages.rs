@@ -111,10 +111,7 @@ impl<S: Signature> QueryBuilder<Signed<'_, S>> {
         }
         let authorization = builder.build(self.signer.0).await?;
 
-        Ok(Query {
-            descriptor,
-            authorization,
-        })
+        Ok(Query { descriptor, authorization })
     }
 }
 
@@ -219,10 +216,7 @@ impl<S: Signature> ReadBuilder<MessageCid, Signed<'_, S>> {
         }
         let authorization = builder.build(self.signer.0).await?;
 
-        Ok(Read {
-            descriptor,
-            authorization,
-        })
+        Ok(Read { descriptor, authorization })
     }
 }
 
@@ -308,9 +302,6 @@ impl<S: Signature> SubscribeBuilder<Signed<'_, S>> {
         }
         let authorization = builder.build(self.signer.0).await?;
 
-        Ok(Subscribe {
-            descriptor,
-            authorization,
-        })
+        Ok(Subscribe { descriptor, authorization })
     }
 }

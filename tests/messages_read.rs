@@ -67,10 +67,7 @@ async fn read_message() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Messages {
-            method: Method::Read,
-            protocol: None,
-        })
+        .scope(Scope::Messages { method: Method::Read, protocol: None })
         .sign(alice)
         .build()
         .await
@@ -586,10 +583,7 @@ async fn permissive_grant() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Messages {
-            method: Method::Read,
-            protocol: None,
-        })
+        .scope(Scope::Messages { method: Method::Read, protocol: None })
         .sign(alice)
         .build()
         .await

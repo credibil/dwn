@@ -99,10 +99,7 @@ async fn grant_builder() {
 
     let grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Messages {
-            method: Method::Query,
-            protocol: None,
-        })
+        .scope(Scope::Messages { method: Method::Query, protocol: None })
         .sign(alice)
         .build()
         .await

@@ -48,9 +48,7 @@ pub async fn handle(
     let filtered = subscriber.inner.filter(move |event| future::ready(filter.is_match(event)));
     subscriber.inner = Box::pin(filtered);
 
-    Ok(SubscribeReply {
-        subscription: subscriber,
-    })
+    Ok(SubscribeReply { subscription: subscriber })
 }
 
 impl<P: Provider> Handler<SubscribeReply, P> for Request<Subscribe> {

@@ -230,10 +230,7 @@ impl Grant {
     }
 
     pub(crate) fn verify_scope(&self, write: &Write) -> Result<()> {
-        let Scope::Records {
-            protocol, limited_to, ..
-        } = &self.data.scope
-        else {
+        let Scope::Records { protocol, limited_to, .. } = &self.data.scope else {
             return Err(forbidden!("invalid scope: `Records` scope must have protocol set"));
         };
 

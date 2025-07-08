@@ -4392,13 +4392,7 @@ async fn protocol_size_range() {
         .add_type("blob", ProtocolType::default())
         .add_rule(
             "blob",
-            RuleSet {
-                size: Some(Size {
-                    min: Some(1),
-                    max: Some(1000),
-                }),
-                ..RuleSet::default()
-            },
+            RuleSet { size: Some(Size { min: Some(1), max: Some(1000) }), ..RuleSet::default() },
         );
 
     let configure = ConfigureBuilder::new()
@@ -4492,13 +4486,7 @@ async fn protocol_min_size() {
         .add_type("blob", ProtocolType::default())
         .add_rule(
             "blob",
-            RuleSet {
-                size: Some(Size {
-                    min: Some(1000),
-                    max: None,
-                }),
-                ..RuleSet::default()
-            },
+            RuleSet { size: Some(Size { min: Some(1000), max: None }), ..RuleSet::default() },
         );
 
     let configure = ConfigureBuilder::new()
@@ -4571,13 +4559,7 @@ async fn protocol_max_size() {
         .add_type("blob", ProtocolType::default())
         .add_rule(
             "blob",
-            RuleSet {
-                size: Some(Size {
-                    min: None,
-                    max: Some(1000),
-                }),
-                ..RuleSet::default()
-            },
+            RuleSet { size: Some(Size { min: None, max: Some(1000) }), ..RuleSet::default() },
         );
 
     let configure = ConfigureBuilder::new()
@@ -5218,9 +5200,7 @@ async fn grant_publish_required() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: None,
         })
-        .conditions(Conditions {
-            publication: Some(Publication::Required),
-        })
+        .conditions(Conditions { publication: Some(Publication::Required) })
         .sign(alice)
         .build()
         .await
@@ -5301,9 +5281,7 @@ async fn grant_publish_prohibited() {
             protocol: "http://minimal.xyz".to_string(),
             limited_to: None,
         })
-        .conditions(Conditions {
-            publication: Some(Publication::Prohibited),
-        })
+        .conditions(Conditions { publication: Some(Publication::Prohibited) })
         .sign(alice)
         .build()
         .await

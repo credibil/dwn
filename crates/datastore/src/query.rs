@@ -191,10 +191,7 @@ impl<T: PartialEq> Range<T> {
     /// Create a new range filter.
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            lower: None,
-            upper: None,
-        }
+        Self { lower: None, upper: None }
     }
 
     /// Specify a 'greater-than' lower bound for the filter.
@@ -267,10 +264,7 @@ impl DateRange {
     /// Create a new range filter.
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            lower: None,
-            upper: None,
-        }
+        Self { lower: None, upper: None }
     }
 
     /// Specify a 'greater-than' lower bound for the filter.

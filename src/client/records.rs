@@ -154,11 +154,7 @@ impl<S: Signature> DeleteBuilder<RecordId, Signed<'_, S>> {
         let authorization = auth_builder.build(self.signer.0).await?;
 
         #[allow(clippy::needless_update)]
-        Ok(Delete {
-            descriptor,
-            authorization,
-            ..Delete::default()
-        })
+        Ok(Delete { descriptor, authorization, ..Delete::default() })
     }
 }
 
@@ -340,10 +336,7 @@ impl<S: Signature> QueryBuilder<Filtered, Signed<'_, S>> {
         }
         let authorization = Some(auth_builder.build(self.signer.0).await?);
 
-        Ok(Query {
-            descriptor,
-            authorization,
-        })
+        Ok(Query { descriptor, authorization })
     }
 }
 
@@ -451,10 +444,7 @@ impl ReadBuilder<Filtered, Unsigned> {
             filter: self.filter.0,
         };
 
-        Read {
-            descriptor,
-            authorization: None,
-        }
+        Read { descriptor, authorization: None }
     }
 }
 
@@ -487,10 +477,7 @@ impl<S: Signature> ReadBuilder<Filtered, Signed<'_, S>> {
             auth_builder = auth_builder.delegated_grant(delegated_grant);
         }
 
-        Ok(Read {
-            descriptor,
-            authorization: Some(auth_builder.build(self.signer.0).await?),
-        })
+        Ok(Read { descriptor, authorization: Some(auth_builder.build(self.signer.0).await?) })
     }
 }
 
@@ -625,10 +612,7 @@ impl<S: Signature> SubscribeBuilder<Filtered, Signed<'_, S>> {
             None
         };
 
-        Ok(Subscribe {
-            descriptor,
-            authorization,
-        })
+        Ok(Subscribe { descriptor, authorization })
     }
 }
 
@@ -1121,9 +1105,7 @@ impl<O, A, S: Signature> WriteBuilder<'_, O, A, Signed<'_, S>> {
 
 impl<O, A: Signature, S: Signature> WriteBuilder<'_, O, Attested<'_, A>, Signed<'_, S>> {
     async fn attestation(self, descriptor: &WriteDescriptor) -> Result<Jws> {
-        let payload = Attestation {
-            descriptor_cid: cid::from_value(descriptor)?,
-        };
+        let payload = Attestation { descriptor_cid: cid::from_value(descriptor)? };
         let Some(attester) = self.attesters.0.first() else {
             return Err(anyhow!("attesters is empty"));
         };

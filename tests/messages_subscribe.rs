@@ -157,10 +157,7 @@ async fn interface_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Messages {
-            method: Method::Subscribe,
-            protocol: None,
-        })
+        .scope(Scope::Messages { method: Method::Subscribe, protocol: None })
         .sign(alice)
         .build()
         .await
@@ -330,10 +327,7 @@ async fn unauthorized_method() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Messages {
-            method: Method::Query,
-            protocol: None,
-        })
+        .scope(Scope::Messages { method: Method::Query, protocol: None })
         .sign(alice)
         .build()
         .await

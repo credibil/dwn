@@ -27,11 +27,7 @@ impl<'a> Authorizer<'a> {
     /// Create a new `Authorizer` instance for the specified protocol.
     #[must_use]
     pub const fn new(protocol: &'a str) -> Self {
-        Self {
-            protocol,
-            context_id: None,
-            initial_write: None,
-        }
+        Self { protocol, context_id: None, initial_write: None }
     }
 
     /// The context ID to use when verifying a role.

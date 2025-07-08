@@ -205,10 +205,7 @@ async fn match_grant_scope() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Messages {
-            method: Method::Query,
-            protocol: None,
-        })
+        .scope(Scope::Messages { method: Method::Query, protocol: None })
         .sign(alice)
         .build()
         .await
@@ -334,10 +331,9 @@ async fn mismatched_grant_scope() {
     // --------------------------------------------------
     // Alice creates a grant scoped to `MessagesSubscribe` for BOB.
     // --------------------------------------------------
-    let builder = GrantBuilder::new().granted_to(bob.did()).scope(Scope::Messages {
-        method: Method::Subscribe,
-        protocol: None,
-    });
+    let builder = GrantBuilder::new()
+        .granted_to(bob.did())
+        .scope(Scope::Messages { method: Method::Subscribe, protocol: None });
     let bob_grant = builder.sign(alice).build().await.expect("should create grant");
 
     let reply = node.request(bob_grant.clone()).owner(alice.did()).await.expect("should write");

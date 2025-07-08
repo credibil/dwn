@@ -641,10 +641,7 @@ impl Write {
             descriptor: &'a WriteDescriptor,
             author: &'a str,
         }
-        Ok(utils::cid::from_value(&EntryId {
-            descriptor: &self.descriptor,
-            author,
-        })?)
+        Ok(utils::cid::from_value(&EntryId { descriptor: &self.descriptor, author })?)
     }
 }
 
@@ -945,10 +942,7 @@ impl<'a> EncryptOptions<'a> {
     /// encryption algorithm.
     pub fn encrypt(&mut self) -> Result<Encrypted> {
         let (cek, _) = self.key_algorithm.generate_cek(&PublicKey::empty());
-        let protected = Protected {
-            enc: self.content_algorithm.clone(),
-            alg: None,
-        };
+        let protected = Protected { enc: self.content_algorithm.clone(), alg: None };
         let aad = serde_json::to_vec(&protected).context("deserializing protected header")?;
         let encrypted = self.content_algorithm.encrypt(self.data, &cek, &aad)?;
 

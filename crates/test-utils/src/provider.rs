@@ -188,10 +188,7 @@ impl EventLog for WebNode {
     ) -> Result<(Vec<Event>, Option<Cursor>)> {
         let q = Query {
             match_sets: vec![],
-            pagination: Some(Pagination {
-                limit: Some(100),
-                cursor,
-            }),
+            pagination: Some(Pagination { limit: Some(100), cursor }),
             sort: Sort::Ascending("watermark".to_string()),
         };
         EventLog::query(self, owner, &q).await
@@ -244,11 +241,7 @@ struct UniqueCid<'a> {
 
 impl<'a> UniqueCid<'a> {
     fn new(owner: &'a str, partition: &'a str, key: &'a str) -> Self {
-        Self {
-            owner,
-            partition,
-            key,
-        }
+        Self { owner, partition, key }
     }
 
     fn to_cid(&self) -> Result<Cid> {

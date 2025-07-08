@@ -41,10 +41,7 @@ pub async fn decrypt(
     // ------------------------------------------------------------------------
 
     // recreate JWE
-    let protected = Protected {
-        enc: encryption.algorithm.clone(),
-        alg: None,
-    };
+    let protected = Protected { enc: encryption.algorithm.clone(), alg: None };
     let aad = serde_json::to_vec(&protected)?;
 
     let jwe = Jwe {

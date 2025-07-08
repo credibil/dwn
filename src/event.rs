@@ -50,9 +50,7 @@ impl Subscriber {
     /// surfacing to consumers.
     #[must_use]
     pub fn new(stream: impl Stream<Item = Event> + Send + 'static) -> Self {
-        Self {
-            inner: Box::pin(stream),
-        }
+        Self { inner: Box::pin(stream) }
     }
 }
 
@@ -67,9 +65,7 @@ impl Stream for Subscriber {
 
 impl Default for Subscriber {
     fn default() -> Self {
-        Self {
-            inner: Box::pin(stream::empty()),
-        }
+        Self { inner: Box::pin(stream::empty()) }
     }
 }
 

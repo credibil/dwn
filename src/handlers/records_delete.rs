@@ -75,11 +75,7 @@ pub async fn handle(
     // run the delete task as a resumable task
     tasks::run(owner, TaskType::RecordsDelete(delete.clone()), provider).await?;
 
-    Ok(Response {
-        status: StatusCode::ACCEPTED,
-        headers: None,
-        body: DeleteReply,
-    })
+    Ok(Response { status: StatusCode::ACCEPTED, headers: None, body: DeleteReply })
 }
 
 impl<P: Provider> Handler<DeleteReply, P> for Request<Delete> {

@@ -48,12 +48,8 @@ pub async fn run(owner: &str, task: TaskType, provider: &impl Provider) -> Resul
     let timeout = (Utc::now() + Duration::from_secs(EXTEND_SECS * 2)).timestamp();
     let timeout = u64::try_from(timeout).context("converting timeout")?;
 
-    let resumable = ResumableTask {
-        task_id: task.cid()?,
-        task: task.clone(),
-        timeout,
-        retry_count: 0,
-    };
+    let resumable =
+        ResumableTask { task_id: task.cid()?, task: task.clone(), timeout, retry_count: 0 };
     TaskStore::register(provider, owner, &resumable, timeout).await?;
 
     // wait until the task is complete or the timeout is reached

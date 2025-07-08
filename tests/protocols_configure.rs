@@ -166,24 +166,15 @@ async fn overwrite_smaller() {
 
     let definition_1 = Definition::new("http://minimal.xyz").add_type(
         "foo1",
-        ProtocolType {
-            schema: None,
-            data_formats: Some(vec!["bar1".to_string()]),
-        },
+        ProtocolType { schema: None, data_formats: Some(vec!["bar1".to_string()]) },
     );
     let definition_2 = Definition::new("http://minimal.xyz").add_type(
         "foo2",
-        ProtocolType {
-            schema: None,
-            data_formats: Some(vec!["bar2".to_string()]),
-        },
+        ProtocolType { schema: None, data_formats: Some(vec!["bar2".to_string()]) },
     );
     let definition_3 = Definition::new("http://minimal.xyz").add_type(
         "foo3",
-        ProtocolType {
-            schema: None,
-            data_formats: Some(vec!["bar3".to_string()]),
-        },
+        ProtocolType { schema: None, data_formats: Some(vec!["bar3".to_string()]) },
     );
 
     // --------------------------------------------------
@@ -304,10 +295,7 @@ async fn invalid_schema() {
     // override builder's normalizing of  protocol
     configure.descriptor.definition.types.insert(
         "foo".to_string(),
-        ProtocolType {
-            schema: Some("bad_request-schema.xyz/".to_string()),
-            data_formats: None,
-        },
+        ProtocolType { schema: Some("bad_request-schema.xyz/".to_string()), data_formats: None },
     );
 
     let Err(Error::BadRequest(e)) = node.request(configure).owner(alice.did()).await else {
@@ -393,13 +381,7 @@ async fn duplicate_actor() {
     configure.descriptor.definition = Definition::new("http://user-foo.xyz")
         .add_type("foo", ProtocolType::default())
         .add_type("bar", ProtocolType::default())
-        .add_rule(
-            "user",
-            RuleSet {
-                role: Some(true),
-                ..RuleSet::default()
-            },
-        )
+        .add_rule("user", RuleSet { role: Some(true), ..RuleSet::default() })
         .add_rule(
             "foo",
             RuleSet {
@@ -444,13 +426,7 @@ async fn duplicate_role() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("user", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule(
-            "user",
-            RuleSet {
-                role: Some(true),
-                ..RuleSet::default()
-            },
-        )
+        .add_rule("user", RuleSet { role: Some(true), ..RuleSet::default() })
         .add_rule(
             "foo",
             RuleSet {
@@ -502,13 +478,7 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule(
-            "friend",
-            RuleSet {
-                role: Some(true),
-                ..RuleSet::default()
-            },
-        )
+        .add_rule("friend", RuleSet { role: Some(true), ..RuleSet::default() })
         .add_rule(
             "foo",
             RuleSet {
@@ -532,13 +502,7 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule(
-            "friend",
-            RuleSet {
-                role: Some(true),
-                ..RuleSet::default()
-            },
-        )
+        .add_rule("friend", RuleSet { role: Some(true), ..RuleSet::default() })
         .add_rule(
             "foo",
             RuleSet {
@@ -562,13 +526,7 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule(
-            "friend",
-            RuleSet {
-                role: Some(true),
-                ..RuleSet::default()
-            },
-        )
+        .add_rule("friend", RuleSet { role: Some(true), ..RuleSet::default() })
         .add_rule(
             "foo",
             RuleSet {
@@ -592,13 +550,7 @@ async fn invalid_read_action() {
     configure.descriptor.definition = Definition::new("http://foo.xyz")
         .add_type("friend", ProtocolType::default())
         .add_type("foo", ProtocolType::default())
-        .add_rule(
-            "friend",
-            RuleSet {
-                role: Some(true),
-                ..RuleSet::default()
-            },
-        )
+        .add_rule("friend", RuleSet { role: Some(true), ..RuleSet::default() })
         .add_rule(
             "foo",
             RuleSet {
@@ -629,10 +581,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Protocols {
-            method: Method::Configure,
-            protocol: None,
-        })
+        .scope(Scope::Protocols { method: Method::Configure, protocol: None })
         .sign(alice)
         .build()
         .await

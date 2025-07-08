@@ -169,9 +169,7 @@ async fn bad_protocol() {
         .await
         .expect("should build");
 
-    query.descriptor.filter = Some(ProtocolsFilter {
-        protocol: "protocol-3.xyz/".to_string(),
-    });
+    query.descriptor.filter = Some(ProtocolsFilter { protocol: "protocol-3.xyz/".to_string() });
 
     let Err(Error::BadRequest(e)) = node.request(query).owner(alice.did()).await else {
         panic!("should be BadRequest");
@@ -250,10 +248,7 @@ async fn valid_grant() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Protocols {
-            method: Method::Query,
-            protocol: None,
-        })
+        .scope(Scope::Protocols { method: Method::Query, protocol: None })
         .sign(alice)
         .build()
         .await
@@ -453,10 +448,7 @@ async fn expired_grant() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Protocols {
-            method: Method::Query,
-            protocol: None,
-        })
+        .scope(Scope::Protocols { method: Method::Query, protocol: None })
         .expires_in(1)
         .sign(alice)
         .build()
@@ -498,10 +490,7 @@ async fn inactive_grant() {
     // --------------------------------------------------
     let bob_grant = GrantBuilder::new()
         .granted_to(bob.did())
-        .scope(Scope::Protocols {
-            method: Method::Query,
-            protocol: None,
-        })
+        .scope(Scope::Protocols { method: Method::Query, protocol: None })
         .sign(alice)
         .build()
         .await

@@ -2430,10 +2430,7 @@ async fn paginate_ascending() {
         let query = QueryBuilder::new()
             .filter(RecordsFilter::new().schema("schema"))
             .date_sort(Sort::CreatedAsc)
-            .pagination(Pagination {
-                limit: Some(5),
-                cursor,
-            })
+            .pagination(Pagination { limit: Some(5), cursor })
             .sign(alice)
             .build()
             .await
@@ -2498,10 +2495,7 @@ async fn paginate_descending() {
         let query = QueryBuilder::new()
             .filter(RecordsFilter::new().schema("schema"))
             .date_sort(Sort::CreatedDesc)
-            .pagination(Pagination {
-                limit: Some(5),
-                cursor,
-            })
+            .pagination(Pagination { limit: Some(5), cursor })
             .sign(alice)
             .build()
             .await

@@ -44,10 +44,7 @@ pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Resu
         entries.push(Configure::try_from(record)?);
     }
 
-    Ok(QueryReply {
-        entries: Some(entries),
-        cursor,
-    })
+    Ok(QueryReply { entries: Some(entries), cursor })
 }
 
 impl<P: Provider> Handler<QueryReply, P> for Request<Query> {

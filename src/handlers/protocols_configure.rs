@@ -35,10 +35,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
     types.insert("grant".to_string(), default_type.clone());
     types.insert("revocation".to_string(), default_type);
 
-    let default_size = Size {
-        min: None,
-        max: Some(10000),
-    };
+    let default_size = Size { min: None, max: Some(10000) };
 
     // default structure (aka rules)
     let structure = BTreeMap::from([
@@ -82,12 +79,7 @@ pub static DEFINITION: LazyLock<Definition> = LazyLock::new(|| {
         ),
     ]);
 
-    Definition {
-        protocol: PROTOCOL_URI.to_string(),
-        published: true,
-        types,
-        structure,
-    }
+    Definition { protocol: PROTOCOL_URI.to_string(), published: true, types, structure }
 });
 
 /// Handle — or process — a [`Configure`] message.

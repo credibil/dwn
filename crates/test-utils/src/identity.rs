@@ -33,11 +33,7 @@ impl Identity {
         let document =
             credibil_binding::create(&url, builder, &Datastore).await.expect("should create");
 
-        Self {
-            document,
-            signer,
-            invalid: false,
-        }
+        Self { document, signer, invalid: false }
     }
 
     pub async fn invalid(owner: &str) -> Self {

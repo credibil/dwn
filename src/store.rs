@@ -66,10 +66,7 @@ impl From<records::Read> for Query {
             value: MatchOn::Equal(false.to_string()),
         });
 
-        Self {
-            match_sets: vec![match_set],
-            ..Self::default()
-        }
+        Self { match_sets: vec![match_set], ..Self::default() }
     }
 }
 
@@ -118,11 +115,7 @@ impl From<messages::Query> for Query {
             match_sets.push(match_set);
         }
 
-        Self {
-            match_sets,
-            sort: Sort::Ascending("messageTimestamp".to_string()),
-            pagination: None,
-        }
+        Self { match_sets, sort: Sort::Ascending("messageTimestamp".to_string()), pagination: None }
     }
 }
 
@@ -322,10 +315,7 @@ impl ProtocolsQueryBuilder {
             });
         }
 
-        Query {
-            match_sets: vec![match_set],
-            ..Query::default()
-        }
+        Query { match_sets: vec![match_set], ..Query::default() }
     }
 }
 
@@ -343,10 +333,7 @@ impl RecordsQueryBuilder {
     /// Create a new `RecordsQueryBuilder` instance.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            method: Some(Method::Write),
-            ..Self::default()
-        }
+        Self { method: Some(Method::Write), ..Self::default() }
     }
 
     /// Add a filter to the query.
@@ -417,11 +404,7 @@ impl RecordsQueryBuilder {
             }
         }
 
-        Query {
-            match_sets,
-            sort: self.sort,
-            pagination: self.pagination,
-        }
+        Query { match_sets, sort: self.sort, pagination: self.pagination }
     }
 }
 
@@ -483,10 +466,7 @@ impl GrantedQueryBuilder {
             });
         }
 
-        Query {
-            match_sets: vec![match_set],
-            ..Query::default()
-        }
+        Query { match_sets: vec![match_set], ..Query::default() }
     }
 }
 

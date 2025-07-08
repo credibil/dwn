@@ -362,21 +362,13 @@ impl RevocationBuilder<NoGrant, Unsigned> {
     /// Returns a new [`RevocationBuilder`]
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            grant: NoGrant,
-            description: None,
-            signer: Unsigned,
-        }
+        Self { grant: NoGrant, description: None, signer: Unsigned }
     }
 
     /// The grant to revoke.
     #[must_use]
     pub fn grant(self, grant: Write) -> RevocationBuilder<Grant, Unsigned> {
-        RevocationBuilder {
-            grant: Grant(grant),
-            description: self.description,
-            signer: Unsigned,
-        }
+        RevocationBuilder { grant: Grant(grant), description: self.description, signer: Unsigned }
     }
 }
 
@@ -422,9 +414,8 @@ impl<S: Signature> RevocationBuilder<Grant, Signed<'_, S>> {
         let grant_bytes = Base64UrlUnpadded::decode_vec(encoded)?;
         let grant_data: GrantData = serde_json::from_slice(&grant_bytes)?;
 
-        let revocation_bytes = serde_json::to_vec(&RevocationData {
-            description: self.description,
-        })?;
+        let revocation_bytes =
+            serde_json::to_vec(&RevocationData { description: self.description })?;
 
         let mut builder = WriteBuilder::new()
             .protocol(ProtocolBuilder {

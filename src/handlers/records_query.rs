@@ -58,10 +58,7 @@ pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Resu
 
         // short-circuit when the record is an initial write
         if write.is_initial()? {
-            entries.push(QueryReplyEntry {
-                write,
-                initial_write: None,
-            });
+            entries.push(QueryReplyEntry { write, initial_write: None });
             continue;
         }
 
@@ -74,16 +71,10 @@ pub async fn handle(owner: &str, provider: &impl Provider, query: Query) -> Resu
         let mut initial_write: Write = (&results[0]).try_into()?;
         initial_write.encoded_data = None;
 
-        entries.push(QueryReplyEntry {
-            write,
-            initial_write: Some(initial_write),
-        });
+        entries.push(QueryReplyEntry { write, initial_write: Some(initial_write) });
     }
 
-    Ok(QueryReply {
-        entries: Some(entries),
-        cursor,
-    })
+    Ok(QueryReply { entries: Some(entries), cursor })
 }
 
 impl<P: Provider> Handler<QueryReply, P> for Request<Query> {

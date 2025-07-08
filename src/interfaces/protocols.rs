@@ -94,10 +94,7 @@ impl Definition {
     /// Returns a new [`Definition`]
     #[must_use]
     pub fn new(protocol: impl Into<String>) -> Self {
-        Self {
-            protocol: protocol.into(),
-            ..Self::default()
-        }
+        Self { protocol: protocol.into(), ..Self::default() }
     }
 
     /// Whether the definition should be published.
@@ -157,10 +154,8 @@ fn add_encryption(
             &DerivationPath::Relative(slice::from_ref(key)),
         )?;
         let public_key_jwk = derived_jwk.derived_private_key.public_key.clone();
-        rule_set.encryption = Some(PathEncryption {
-            root_key_id: parent_key.root_key_id.clone(),
-            public_key_jwk,
-        });
+        rule_set.encryption =
+            Some(PathEncryption { root_key_id: parent_key.root_key_id.clone(), public_key_jwk });
 
         // recurse into nested rules sets
         add_encryption(&mut rule_set.structure, &derived_jwk)?;

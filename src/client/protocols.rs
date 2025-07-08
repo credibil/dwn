@@ -168,11 +168,7 @@ impl<S: Signature> ConfigureBuilder<Defined, Signed<'_, S>> {
         //     })
         // } else {
         // #[allow(clippy::needless_update)]
-        Ok(Configure {
-            descriptor,
-            authorization,
-            ..Configure::default()
-        })
+        Ok(Configure { descriptor, authorization, ..Configure::default() })
         // }
     }
 }
@@ -208,9 +204,7 @@ impl QueryBuilder<Unsigned> {
     /// Specify a permission grant ID to use with the configuration.
     #[must_use]
     pub fn filter(mut self, protocol: impl Into<String>) -> Self {
-        self.filter = Some(ProtocolsFilter {
-            protocol: protocol.into(),
-        });
+        self.filter = Some(ProtocolsFilter { protocol: protocol.into() });
         self
     }
 
@@ -274,9 +268,6 @@ impl<S: Signature> QueryBuilder<Signed<'_, S>> {
             authorization = authorization.permission_grant_id(id);
         }
 
-        Ok(Query {
-            descriptor,
-            authorization: Some(authorization.build(self.signer.0).await?),
-        })
+        Ok(Query { descriptor, authorization: Some(authorization.build(self.signer.0).await?) })
     }
 }
