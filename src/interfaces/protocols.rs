@@ -446,10 +446,11 @@ fn validate_rule_set(
     rule_set: &RuleSet, protocol_path: &str, types: &Vec<&String>, roles: &Vec<String>,
 ) -> Result<()> {
     // validate size rule
-    if let Some(size) = &rule_set.size {
-        if size.max.is_some() && size.min > size.max {
-            return Err(bad_request!("invalid size range"));
-        }
+    if let Some(size) = &rule_set.size
+        && size.max.is_some()
+        && size.min > size.max
+    {
+        return Err(bad_request!("invalid size range"));
     }
 
     // validate tags schemas

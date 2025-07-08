@@ -80,9 +80,9 @@ pub struct Block {
 
 impl Block {
     /// Encode a block using DAG-CBOR codec and SHA-2 256 hash.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if the payload is too large or if encoding fails.
     pub fn encode<T>(payload: &T) -> Result<Self>
     where

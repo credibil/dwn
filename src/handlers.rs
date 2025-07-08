@@ -18,8 +18,8 @@ mod verify_protocol;
 
 use std::future::Future;
 
-use credibil_core::api::Body;
 use credibil_binding::Resolver;
+use credibil_core::api::Body;
 use serde::Serialize;
 
 use crate::authorization::Authorization;
@@ -58,10 +58,10 @@ pub trait BodyExt: Body + Serialize {
             schema::validate(self)?;
 
             // authenticate the requestor
-            if let Some(authzn) = self.authorization() {
-                if let Err(e) = authzn.verify(resolver).await {
-                    return Err(unauthorized!("failed to authenticate: {e}"));
-                }
+            if let Some(authzn) = self.authorization()
+                && let Err(e) = authzn.verify(resolver).await
+            {
+                return Err(unauthorized!("failed to authenticate: {e}"));
             }
 
             Ok(())

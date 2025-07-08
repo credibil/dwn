@@ -112,10 +112,10 @@ impl RecordsFilter {
         };
         let descriptor = &write.descriptor;
 
-        if let Some(author) = &self.author {
-            if !author.to_vec().contains(&write.authorization.author().unwrap_or_default()) {
-                return false;
-            }
+        if let Some(author) = &self.author
+            && !author.to_vec().contains(&write.authorization.author().unwrap_or_default())
+        {
+            return false;
         }
         if let Some(attester) = self.attester.clone() {
             let Some(attestation) = &write.attestation else {
@@ -125,46 +125,45 @@ impl RecordsFilter {
                 return false;
             }
         }
-        if let Some(recipient) = &self.recipient {
-            if !recipient.to_vec().contains(descriptor.recipient.as_ref().unwrap_or(&String::new()))
-            {
-                return false;
-            }
+        if let Some(recipient) = &self.recipient
+            && !recipient.to_vec().contains(descriptor.recipient.as_ref().unwrap_or(&String::new()))
+        {
+            return false;
         }
-        if let Some(protocol) = &self.protocol {
-            if Some(protocol) != descriptor.protocol.as_ref() {
-                return false;
-            }
+        if let Some(protocol) = &self.protocol
+            && Some(protocol) != descriptor.protocol.as_ref()
+        {
+            return false;
         }
-        if let Some(protocol_path) = &self.protocol_path {
-            if Some(protocol_path) != descriptor.protocol_path.as_ref() {
-                return false;
-            }
+        if let Some(protocol_path) = &self.protocol_path
+            && Some(protocol_path) != descriptor.protocol_path.as_ref()
+        {
+            return false;
         }
-        if let Some(published) = &self.published {
-            if *published != descriptor.published.unwrap_or_default() {
-                return false;
-            }
+        if let Some(published) = &self.published
+            && *published != descriptor.published.unwrap_or_default()
+        {
+            return false;
         }
-        if let Some(context_id) = &self.context_id {
-            if !write.context_id.as_ref().unwrap_or(&String::new()).starts_with(context_id) {
-                return false;
-            }
+        if let Some(context_id) = &self.context_id
+            && !write.context_id.as_ref().unwrap_or(&String::new()).starts_with(context_id)
+        {
+            return false;
         }
-        if let Some(schema) = &self.schema {
-            if Some(schema) != descriptor.schema.as_ref() {
-                return false;
-            }
+        if let Some(schema) = &self.schema
+            && Some(schema) != descriptor.schema.as_ref()
+        {
+            return false;
         }
-        if let Some(record_id) = &self.record_id {
-            if record_id != &write.record_id {
-                return false;
-            }
+        if let Some(record_id) = &self.record_id
+            && record_id != &write.record_id
+        {
+            return false;
         }
-        if let Some(parent_id) = &self.parent_id {
-            if Some(parent_id) != descriptor.parent_id.as_ref() {
-                return false;
-            }
+        if let Some(parent_id) = &self.parent_id
+            && Some(parent_id) != descriptor.parent_id.as_ref()
+        {
+            return false;
         }
         if let Some(tags) = &self.tags {
             for (property, filter) in tags {
@@ -176,35 +175,35 @@ impl RecordsFilter {
                 }
             }
         }
-        if let Some(data_format) = &self.data_format {
-            if data_format != &descriptor.data_format {
-                return false;
-            }
+        if let Some(data_format) = &self.data_format
+            && data_format != &descriptor.data_format
+        {
+            return false;
         }
-        if let Some(data_size) = &self.data_size {
-            if !data_size.contains(&descriptor.data_size) {
-                return false;
-            }
+        if let Some(data_size) = &self.data_size
+            && !data_size.contains(&descriptor.data_size)
+        {
+            return false;
         }
-        if let Some(data_cid) = &self.data_cid {
-            if data_cid != &descriptor.data_cid {
-                return false;
-            }
+        if let Some(data_cid) = &self.data_cid
+            && data_cid != &descriptor.data_cid
+        {
+            return false;
         }
-        if let Some(date_created) = &self.date_created {
-            if !date_created.contains(&descriptor.date_created) {
-                return false;
-            }
+        if let Some(date_created) = &self.date_created
+            && !date_created.contains(&descriptor.date_created)
+        {
+            return false;
         }
-        if let Some(date_published) = &self.date_published {
-            if !date_published.contains(&descriptor.date_published.unwrap_or_default()) {
-                return false;
-            }
+        if let Some(date_published) = &self.date_published
+            && !date_published.contains(&descriptor.date_published.unwrap_or_default())
+        {
+            return false;
         }
-        if let Some(date_updated) = &self.date_updated {
-            if !date_updated.contains(&descriptor.base.message_timestamp) {
-                return false;
-            }
+        if let Some(date_updated) = &self.date_updated
+            && !date_updated.contains(&descriptor.base.message_timestamp)
+        {
+            return false;
         }
         true
     }
@@ -230,15 +229,15 @@ impl MessagesFilter {
     fn is_match(&self, event: &Event) -> bool {
         let descriptor = &event.descriptor();
 
-        if let Some(interface) = &self.interface {
-            if interface != &descriptor.interface {
-                return false;
-            }
+        if let Some(interface) = &self.interface
+            && interface != &descriptor.interface
+        {
+            return false;
         }
-        if let Some(method) = &self.method {
-            if method != &descriptor.method {
-                return false;
-            }
+        if let Some(method) = &self.method
+            && method != &descriptor.method
+        {
+            return false;
         }
         if let Some(protocol) = &self.protocol {
             match event {
@@ -257,10 +256,10 @@ impl MessagesFilter {
                 }
             }
         }
-        if let Some(message_timestamp) = &self.message_timestamp {
-            if !message_timestamp.contains(&descriptor.message_timestamp) {
-                return false;
-            }
+        if let Some(message_timestamp) = &self.message_timestamp
+            && !message_timestamp.contains(&descriptor.message_timestamp)
+        {
+            return false;
         }
 
         true

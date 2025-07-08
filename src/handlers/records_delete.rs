@@ -85,9 +85,7 @@ pub async fn handle(
 impl<P: Provider> Handler<DeleteReply, P> for Request<Delete> {
     type Error = Error;
 
-    async fn handle(
-        self, owner: &str, provider: &P,
-    ) -> Result<Response<DeleteReply>> {
+    async fn handle(self, owner: &str, provider: &P) -> Result<Response<DeleteReply>> {
         self.body.validate(provider).await?;
         handle(owner, provider, self.body).await
     }
@@ -347,10 +345,10 @@ async fn delete_data(
     };
 
     // keep data if referenced by latest message
-    if let Some(latest_write) = latest.as_write() {
-        if existing_write.descriptor.data_cid == latest_write.descriptor.data_cid {
-            return Ok(());
-        }
+    if let Some(latest_write) = latest.as_write()
+        && existing_write.descriptor.data_cid == latest_write.descriptor.data_cid
+    {
+        return Ok(());
     }
 
     // // short-circuit when data is encoded in message (i.e. not in block store)

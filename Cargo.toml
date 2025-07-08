@@ -14,7 +14,7 @@ rust-version.workspace = true
 version.workspace = true
 
 [lib]
-# crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [lints]
 workspace = true
@@ -90,7 +90,7 @@ exclude = [".*", "/docs"]
 homepage = "https://credibil.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/credibil/dwn"
-rust-version = "1.87"
+rust-version = "1.88"
 version = "0.1.2"
 
 [workspace.lints.rust]
@@ -105,23 +105,22 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
-ipld-core = "0.4.2"
 anyhow = "1.0.98"
 ciborium = "0.2.2"
-datastore = { path = "crates/datastore" }
 cid = { version = "0.11.1", features = ["alloc"] }
 credibil-binding = { git = "https://github.com/credibil/key.git" }
 credibil-core = { git = "https://github.com/credibil/core.git" }
 credibil-dwn = { path = "." }
 credibil-ecc = { git = "https://github.com/credibil/key.git" }
 credibil-jose = { git = "https://github.com/credibil/key.git" }
+datastore = { path = "crates/datastore" }
 futures = "0.3.31"
+ipld-core = "0.4.2"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = ["alloc"] }
 tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 uuid = { version = "1.17.0", features = ["fast-rng", "v4"] }
-
 
 # [patch."https://github.com/credibil/core"]
 # credibil-core = { path = "../core" }

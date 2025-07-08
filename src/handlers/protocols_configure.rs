@@ -152,9 +152,7 @@ async fn handle(
 impl<P: Provider> Handler<ConfigureReply, P> for Request<Configure> {
     type Error = Error;
 
-    async fn handle(
-        self, owner: &str, provider: &P,
-    ) -> Result<Response<ConfigureReply>> {
+    async fn handle(self, owner: &str, provider: &P) -> Result<Response<ConfigureReply>> {
         BodyExt::validate(&self.body, provider).await?;
         handle(owner, provider, self.body).await
     }

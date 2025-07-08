@@ -8,8 +8,8 @@ use std::str::FromStr;
 use ::cid::Cid;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use credibil_ecc::Signer;
 use credibil_binding::Signature;
+use credibil_ecc::Signer;
 
 use crate::authorization::AuthorizationBuilder;
 use crate::interfaces::Descriptor;

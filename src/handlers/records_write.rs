@@ -290,10 +290,10 @@ impl Write {
             return Err(forbidden!("invalid schema"));
         }
 
-        if let Some(data_formats) = &protocol_type.data_formats {
-            if !data_formats.contains(&self.descriptor.data_format) {
-                return Err(forbidden!("invalid data format"));
-            }
+        if let Some(data_formats) = &protocol_type.data_formats
+            && !data_formats.contains(&self.descriptor.data_format)
+        {
+            return Err(forbidden!("invalid data format"));
         }
 
         Ok(())
@@ -421,15 +421,15 @@ impl Write {
         let Some(range) = &rule_set.size else {
             return Ok(());
         };
-        if let Some(start) = range.min {
-            if data_size < start {
-                return Err(forbidden!("data size is less than allowed"));
-            }
+        if let Some(start) = range.min
+            && data_size < start
+        {
+            return Err(forbidden!("data size is less than allowed"));
         }
-        if let Some(end) = range.max {
-            if data_size > end {
-                return Err(forbidden!("data size is greater than allowed"));
-            }
+        if let Some(end) = range.max
+            && data_size > end
+        {
+            return Err(forbidden!("data size is greater than allowed"));
         }
         Ok(())
     }
@@ -542,10 +542,10 @@ impl Write {
 
         // special values
         indexes.insert("author".to_string(), self.authorization.author().unwrap_or_default());
-        if let Ok(jws) = &self.authorization.payload() {
-            if let Some(grant_id) = &jws.permission_grant_id {
-                indexes.insert("permissionGrantId".to_string(), grant_id.clone());
-            }
+        if let Ok(jws) = &self.authorization.payload()
+            && let Some(grant_id) = &jws.permission_grant_id
+        {
+            indexes.insert("permissionGrantId".to_string(), grant_id.clone());
         }
         if let Some(attestation) = &self.attestation {
             let attester = authorization::kid_did(attestation).unwrap_or_default();
@@ -795,12 +795,11 @@ impl Write {
         let grant = verify_grant::fetch_grant(owner, grant_id, provider).await?;
 
         // verify protocols match
-        if let Some(tags) = &self.descriptor.tags {
-            if let Some(tag_protocol) = tags.get("protocol") {
-                if tag_protocol.as_str() != grant.data.scope.protocol() {
-                    return Err(bad_request!("revocation protocol does not match grant protocol"));
-                }
-            }
+        if let Some(tags) = &self.descriptor.tags
+            && let Some(tag_protocol) = tags.get("protocol")
+            && tag_protocol.as_str() != grant.data.scope.protocol()
+        {
+            return Err(bad_request!("revocation protocol does not match grant protocol"));
         }
 
         // find grant-authorized messages with created after revocation

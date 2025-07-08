@@ -220,10 +220,10 @@ impl Grant {
             .build();
 
         let (entries, _) = store.query(grantor, &query).await?;
-        if let Some(oldest) = entries.first().cloned() {
-            if oldest.descriptor().message_timestamp.lt(timestamp) {
-                return Err(forbidden!("grant has been revoked"));
-            }
+        if let Some(oldest) = entries.first().cloned()
+            && oldest.descriptor().message_timestamp.lt(timestamp)
+        {
+            return Err(forbidden!("grant has been revoked"));
         }
 
         Ok(())

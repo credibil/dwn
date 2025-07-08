@@ -33,7 +33,7 @@ impl Datastore {
         Ok(())
     }
 
-    pub async fn get_all( owner: &str, partition: &str) -> Result<Vec<(String, Vec<u8>)>> {
+    pub async fn get_all(owner: &str, partition: &str) -> Result<Vec<(String, Vec<u8>)>> {
         let all = STORE
             .iter()
             .filter(move |r| r.key().starts_with(&format!("{owner}-{partition}-")))

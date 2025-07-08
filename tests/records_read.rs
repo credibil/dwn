@@ -5,6 +5,7 @@
 use std::io::{Cursor, Read};
 
 use base64ct::{Base64UrlUnpadded, Encoding};
+use credibil_binding::{Signature, VerifyBy};
 use credibil_dwn::api::Client;
 use credibil_dwn::client::grants::{GrantBuilder, RecordsScope, Scope};
 use credibil_dwn::client::protocols::{ConfigureBuilder, Definition, QueryBuilder};
@@ -22,7 +23,6 @@ use credibil_dwn::store::{MAX_ENCODED_SIZE, Storable};
 use credibil_dwn::{Error, Method, StatusCode, cid};
 use credibil_ecc::{Curve, KeyType};
 use credibil_jose::PublicKeyJwk;
-use credibil_binding::{Signature, VerifyBy};
 use rand::RngCore;
 use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;

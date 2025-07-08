@@ -12,9 +12,9 @@ use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
+use credibil_binding::{Signature, VerifyBy};
 use credibil_ecc::Signer;
 use credibil_jose::{Jws, JwsBuilder};
-use credibil_binding::{Signature, VerifyBy};
 
 use crate::authorization::{self, Authorization, AuthorizationBuilder, JwsPayload};
 pub use crate::client::encryption::decrypt;

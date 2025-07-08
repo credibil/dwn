@@ -169,10 +169,10 @@ impl Read {
         }
 
         // recipient can read records they received
-        if let Some(recipient) = &write.descriptor.recipient {
-            if &author == recipient {
-                return Ok(());
-            }
+        if let Some(recipient) = &write.descriptor.recipient
+            && &author == recipient
+        {
+            return Ok(());
         }
         // author can read records they authored
         if author == write.authorization.author()? {

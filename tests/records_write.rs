@@ -6,6 +6,7 @@ use std::io::Cursor;
 
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::{DateTime, Duration, Utc};
+use credibil_binding::{Signature, VerifyBy};
 use credibil_dwn::api::Client;
 use credibil_dwn::authorization::JwsPayload;
 use credibil_dwn::client::grants::{Conditions, GrantBuilder, Publication, RecordsScope, Scope};
@@ -22,7 +23,6 @@ use credibil_dwn::store::MAX_ENCODED_SIZE;
 use credibil_dwn::{Error, Interface, Method, StatusCode, cid, client, store};
 use credibil_ecc::{Curve, KeyType};
 use credibil_jose::{JwsBuilder, PublicKeyJwk};
-use credibil_binding::{Signature, VerifyBy};
 use rand::RngCore;
 use test_utils::{Identity, WebNode};
 use tokio::sync::OnceCell;
