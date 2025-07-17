@@ -66,7 +66,7 @@ impl Svc {
     ) -> Result<hyper::Response<Full<Bytes>>> {
         // process body into json-rpc
         let body = req.into_body().collect().await?.to_bytes();
-        let rpc = serde_json::from_slice::<JsonRpc>(&body)?;
+        let rpc = serde_json::from_slice::<JsonRpcRequest>(&body)?;
 
         // partially parse the message to determine the interface and method
         let Some(value) = rpc.params.message.get("descriptor") else {
@@ -124,16 +124,27 @@ impl Svc {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct JsonRpc {
+struct JsonRpcRequest {
+    /// The JSON-RPC version identifier. Must be "2.0".
+    jsonrpc: String,
+
     /// A string with the name of the method to be invoked.
     /// Should be `dwn.processMessage`
     method: String,
 
-    /// An object or array of values to be passed as parameters to the defined method.
+    /// An object or array of values to be passed as parameters to the defined
+    /// method.
     params: Params,
 
     /// Used to match the response with the request that it is replying to.
-    id: String,
+    ///
+    /// When the `id` member is omitted, the request is considered a
+    /// Notification. A Notification is a Request object without an "id"
+    /// member. A Request object that is a Notification signifies the Client's
+    /// lack of interest in the corresponding Response object, and as such no
+    /// Response object needs to be returned to the client.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -148,4 +159,57 @@ struct Params {
     /// Data associated with the message (e.g. `RecordsWrite` encoded data)
     #[serde(skip_serializing_if = "Option::is_none")]
     encoded_data: Option<String>,
+}
+
+/// When a rpc call is made, the Server MUST reply with a Response, except for
+/// in the case of Notifications.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonRpcResponse<T: Default + Serialize> {
+    /// The JSON-RPC version identifier. Must be "2.0".
+    jsonrpc: String,
+
+    /// The JSON-RPC response member — result or error.
+    #[serde(flatten)]
+    response: ResponseMember<T>,
+
+    /// Used to match the response with the request that it is replying to.
+    id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ResponseMember<T: Default + Serialize> {
+    /// The result of the rpc call.
+    Result(T),
+
+    /// An error that occurred during the rpc call.
+    Error(JsonRpcError),
+}
+
+impl<T: Default + Serialize> Default for ResponseMember<T> {
+    fn default() -> Self {
+        ResponseMember::Result(T::default())
+    }
+}
+
+/// When a rpc call encounters an error, the Response Object MUST contain the
+/// error type.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonRpcError {
+    /// A Number that indicates the error type that occurred.
+    code: i32,
+
+    /// A String providing a short description of the error.
+    ///
+    /// The message SHOULD be limited to a concise single sentence.
+    message: String,
+
+    /// A Primitive or Structured value that contains additional information
+    /// about the error.
+    ///
+    /// The value of this member is defined by the Server (e.g. detailed error
+    /// information, nested errors etc.).
+    data: Option<serde_json::Value>,
 }
