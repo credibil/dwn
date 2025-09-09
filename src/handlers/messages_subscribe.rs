@@ -3,7 +3,7 @@
 //! The messages subscribe endpoint handles `MessagesSubscribe` messages —
 //! requests to subscribe to message events matching the provided filter(s).
 
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 use futures::{StreamExt, future};
 
 use crate::authorization::Authorization;

@@ -1,6 +1,8 @@
 //! Records Read
 
 #![cfg(all(feature = "client", feature = "server"))]
+#![allow(clippy::large_stack_arrays)]
+#![allow(clippy::too_many_lines)]
 
 use std::io::{Cursor, Read};
 
@@ -2010,7 +2012,7 @@ async fn block_data() {
         panic!("should have data");
     };
 
-    let read_cid = cid::from_reader(read_stream.clone()).expect("should compute CID");
+    let read_cid = cid::from_reader(read_stream).expect("should compute CID");
     let write_cid = cid::from_reader(write_stream.clone()).expect("should compute CID");
 
     assert_eq!(read_cid, write_cid);
@@ -2088,7 +2090,7 @@ async fn decrypt_schema() {
         });
 
     // generate data and encrypt
-    let data = "hello world".as_bytes().to_vec();
+    let data = b"hello world".to_vec();
     let encrypted = options.data(&data).encrypt().expect("should encrypt");
     let ciphertext = encrypted.ciphertext.clone();
     let encryption = encrypted.finalize().expect("should encrypt");
@@ -2201,7 +2203,7 @@ async fn decrypt_schemaless() {
     // Alice writes a record with encrypted data.
     // --------------------------------------------------
     // generate data and encrypt
-    let data = "hello world".as_bytes().to_vec();
+    let data = b"hello world".to_vec();
 
     let encrypted = EncryptOptions::new()
         .data(&data)
@@ -2359,7 +2361,7 @@ async fn decrypt_context() {
     //  Bob writes an initiating chat thread to ALice's web node.
     // --------------------------------------------------
     // generate data and encrypt
-    let data = "Hello Alice".as_bytes().to_vec();
+    let data = b"Hello Alice".to_vec();
     let mut options = EncryptOptions::new().data(&data);
     let mut encrypted = options.encrypt().expect("should encrypt");
 
@@ -2454,7 +2456,7 @@ async fn decrypt_context() {
     // context public key derived above.
     // --------------------------------------------------
     // generate data and encrypt
-    let data = "Hello Bob".as_bytes().to_vec();
+    let data = b"Hello Bob".to_vec();
     let mut options = EncryptOptions::new().data(&data);
     let mut encrypted = options.encrypt().expect("should encrypt");
 
@@ -2478,7 +2480,7 @@ async fn decrypt_context() {
     let _encryption = rule_set.encryption.as_ref().unwrap();
 
     let context_id = write.context_id.clone().unwrap();
-    let segment_1 = context_id.split("/").collect::<Vec<&str>>()[0];
+    let segment_1 = context_id.split('/').collect::<Vec<&str>>()[0];
     let context_path = [DerivationScheme::ProtocolContext.to_string(), segment_1.to_string()];
     let context_jwk = hd_key::derive_jwk(bob_root.clone(), &DerivationPath::Full(&context_path))
         .expect("should derive key");
@@ -2590,7 +2592,7 @@ async fn decrypt_protocol() {
     //  Bob writes an encrypted email to ALICE.
     // --------------------------------------------------
     // generate data and encrypt
-    let data = "Hello Alice".as_bytes().to_vec();
+    let data = b"Hello Alice".to_vec();
     let mut options = EncryptOptions::new().data(&data);
     let mut encrypted = options.encrypt().expect("should encrypt");
     let ciphertext = encrypted.ciphertext.clone();

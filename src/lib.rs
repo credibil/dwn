@@ -39,7 +39,8 @@ cfg_if::cfg_if! {
         mod tasks;
 
         pub use ::http::StatusCode;
-        pub use credibil_core::{http, api};
+        pub use credibil_encoding as encoding;
+        pub use credibil_api as api;
 
         pub use self::tasks::*;
         pub use self::provider::Provider;

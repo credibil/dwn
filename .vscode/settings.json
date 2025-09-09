@@ -2,9 +2,5 @@
     "rust-analyzer.linkedProjects": [
         "Cargo.toml",
     ],
-    // "rust-analyzer.cargo.features": [],
-    // "lldb.launch.envFile": "${workspaceFolder}/.env",
-    "lldb.launch.env": {
-        "INSTA_WORKSPACE_ROOT": "${workspaceFolder}",
-    }
+    "rust-analyzer.check.command": "clippy",
 }

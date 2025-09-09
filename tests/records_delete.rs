@@ -1015,7 +1015,7 @@ async fn index_additional() {
         .include_archived(true)
         .build();
 
-    let (entries, _) = MessageStore::query(&node.provider, alice.did(), &query.clone().into())
+    let (entries, _) = MessageStore::query(&node.provider, alice.did(), &query.clone())
         .await
         .expect("should query");
     assert_eq!(entries.len(), 1);

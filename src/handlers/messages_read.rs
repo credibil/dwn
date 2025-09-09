@@ -12,7 +12,7 @@ use std::str::FromStr;
 use ::cid::Cid;
 use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 
 use crate::Interface;
 use crate::authorization::Authorization;

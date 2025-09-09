@@ -112,7 +112,7 @@ impl Binding for Datastore {
         Datastore::get_all(owner, "proof")
             .await?
             .iter()
-            .map(|(k, v)| Ok((k.to_string(), serde_json::from_slice(v)?)))
+            .map(|(k, v)| Ok((k.clone(), serde_json::from_slice(v)?)))
             .collect()
     }
 }

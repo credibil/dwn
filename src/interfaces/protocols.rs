@@ -567,7 +567,7 @@ fn role_paths(
         };
 
         if rule_set.role.is_some() {
-            roles.push(protocol_path.to_string());
+            roles.push(protocol_path.clone());
         } else {
             roles = role_paths(protocol_path, &rule_set.structure, &roles)?;
         }

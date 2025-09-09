@@ -3,7 +3,7 @@
 //! The protocols query endpoint handles `ProtocolsQuery` messages — requests
 //! to query the [`MessageStore`] for protocols configured for the DWN.
 
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 
 use crate::authorization::Authorization;
 use crate::handlers::{BodyExt, Error, Result, verify_grant};

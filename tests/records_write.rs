@@ -1,6 +1,7 @@
 //! Records Write
 
 #![cfg(all(feature = "client", feature = "server"))]
+#![allow(clippy::large_stack_arrays)]
 
 use std::io::Cursor;
 
@@ -178,7 +179,7 @@ async fn update_smaller_cid() {
 
     let write_1 = WriteBuilder::from(initial.clone())
         .data(Data::from(b"message 1".to_vec()))
-        .message_timestamp(message_timestamp.into())
+        .message_timestamp(message_timestamp)
         .sign(alice)
         .build()
         .await
@@ -186,15 +187,15 @@ async fn update_smaller_cid() {
 
     let write_2 = WriteBuilder::from(initial.clone())
         .data(Data::from(b"message 2".to_vec()))
-        .message_timestamp(message_timestamp.into())
+        .message_timestamp(message_timestamp)
         .sign(alice)
         .build()
         .await
         .expect("should create write");
 
     // determine the order of the writes by CID size
-    let mut sorted = vec![write_1.clone(), write_2.clone()];
-    sorted.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
+    let mut sorted = [write_1.clone(), write_2.clone()];
+    sorted.sort_by_key(|a| a.cid().unwrap());
 
     // --------------------------------------------------
     // Update the initial record with the first update (ordered by CID size).
@@ -3966,7 +3967,7 @@ async fn invalid_encryption_cid() {
     //  Bob writes an encrypted email to ALICE.
     // --------------------------------------------------
     // generate data and encrypt
-    let data = "Hello Alice".as_bytes().to_vec();
+    let data = b"Hello Alice".to_vec();
     let mut options = EncryptOptions::new().data(&data);
     let mut encrypted = options.encrypt().expect("should encrypt");
     let ciphertext = encrypted.ciphertext.clone();
@@ -4104,7 +4105,7 @@ async fn small_data_cid_protocol() {
     let bob_write = WriteBuilder::new()
         .data(Data::Cid {
             data_cid: alice_write.descriptor.data_cid.clone(),
-            data_size: alice_write.descriptor.data_size.clone(),
+            data_size: alice_write.descriptor.data_size,
         })
         .recipient(alice.did())
         .protocol(ProtocolBuilder {
@@ -4221,7 +4222,7 @@ async fn large_data_cid_protocol() {
     let bob_write = WriteBuilder::new()
         .data(Data::Cid {
             data_cid: alice_write.descriptor.data_cid.clone(),
-            data_size: alice_write.descriptor.data_size.clone(),
+            data_size: alice_write.descriptor.data_size,
         })
         .recipient(alice.did())
         .protocol(ProtocolBuilder {
@@ -5715,7 +5716,6 @@ async fn invalid_attestation() {
 
 // TODO: Should fail validation when more than 1 attester is given.
 #[tokio::test]
-#[ignore]
 async fn multiple_attesters() {
     // TODO: add support for multiple attesters
 }
@@ -5788,7 +5788,7 @@ async fn attestation_descriptor_cid() {
 
 // TODO: Should fail when an unknown error is returned.
 #[tokio::test]
-#[ignore]
+#[ignore = "unknown error"]
 async fn unknown_error() {
     let node = node().await;
     let alice = alice().await;

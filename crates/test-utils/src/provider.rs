@@ -7,9 +7,9 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use blockstore::{Blockstore as _, InMemoryBlockstore};
 use cid::Cid;
+use credibil_api::Client;
 use credibil_binding::did::Document as DidDocument;
 use credibil_binding::{Binding, DocumentRequest};
-use credibil_core::api::Client;
 use credibil_dwn::ResumableTask;
 use credibil_dwn::event::{Event, Subscriber};
 use credibil_dwn::interfaces::Document;
@@ -79,7 +79,7 @@ impl Binding for WebNode {
         Datastore::get_all(owner, "proof")
             .await?
             .iter()
-            .map(|(k, v)| Ok((k.to_string(), serde_json::from_slice(v)?)))
+            .map(|(k, v)| Ok((k.clone(), serde_json::from_slice(v)?)))
             .collect()
     }
 }

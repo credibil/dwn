@@ -3,7 +3,7 @@
 //! The messages query endpoint handles `MessagesQuery` messages — requests
 //! to query the [`EventLog`] for matching persisted messages (of any type).
 
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 
 use crate::authorization::Authorization;
 use crate::error::forbidden;

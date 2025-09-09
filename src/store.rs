@@ -102,13 +102,13 @@ impl From<messages::Query> for Query {
                 let mut ms = match_set.clone();
                 ms.add(Matcher {
                     field: "tag.protocol".to_string(),
-                    value: MatchOn::Equal(protocol.to_string()),
+                    value: MatchOn::Equal(protocol.clone()),
                 });
                 match_sets.push(ms);
 
                 match_set.add(Matcher {
                     field: "protocol".to_string(),
-                    value: MatchOn::Equal(protocol.to_string()),
+                    value: MatchOn::Equal(protocol.clone()),
                 });
             }
 
@@ -136,7 +136,7 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(record_id) = &filter.record_id {
             match_set.add(Matcher {
                 field: "recordId".to_string(),
-                value: MatchOn::Equal(record_id.to_string()),
+                value: MatchOn::Equal(record_id.clone()),
             });
         }
         if let Some(published) = &filter.published {
@@ -160,37 +160,37 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(protocol) = &filter.protocol {
             match_set.add(Matcher {
                 field: "protocol".to_string(),
-                value: MatchOn::Equal(protocol.to_string()),
+                value: MatchOn::Equal(protocol.clone()),
             });
         }
         if let Some(protocol_path) = &filter.protocol_path {
             match_set.add(Matcher {
                 field: "protocolPath".to_string(),
-                value: MatchOn::Equal(protocol_path.to_string()),
+                value: MatchOn::Equal(protocol_path.clone()),
             });
         }
         if let Some(context_id) = &filter.context_id {
             match_set.add(Matcher {
                 field: "contextId".to_string(),
-                value: MatchOn::StartsWith(context_id.to_string()),
+                value: MatchOn::StartsWith(context_id.clone()),
             });
         }
         if let Some(schema) = &filter.schema {
             match_set.add(Matcher {
                 field: "schema".to_string(),
-                value: MatchOn::Equal(schema.to_string()),
+                value: MatchOn::Equal(schema.clone()),
             });
         }
         if let Some(parent_id) = &filter.parent_id {
             match_set.add(Matcher {
                 field: "parentId".to_string(),
-                value: MatchOn::Equal(parent_id.to_string()),
+                value: MatchOn::Equal(parent_id.clone()),
             });
         }
         if let Some(data_format) = &filter.data_format {
             match_set.add(Matcher {
                 field: "dataFormat".to_string(),
-                value: MatchOn::Equal(data_format.to_string()),
+                value: MatchOn::Equal(data_format.clone()),
             });
         }
         if let Some(data_size) = &filter.data_size {
@@ -202,7 +202,7 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(data_cid) = &filter.data_cid {
             match_set.add(Matcher {
                 field: "dataCid".to_string(),
-                value: MatchOn::Equal(data_cid.to_string()),
+                value: MatchOn::Equal(data_cid.clone()),
             });
         }
         if let Some(date_created) = &filter.date_created {
@@ -226,7 +226,7 @@ impl From<&RecordsFilter> for MatchSet {
         if let Some(attester) = &filter.attester {
             match_set.add(Matcher {
                 field: "attester".to_string(),
-                value: MatchOn::Equal(attester.to_string()),
+                value: MatchOn::Equal(attester.clone()),
             });
         }
 
@@ -244,7 +244,7 @@ impl From<&RecordsFilter> for MatchSet {
                     TagFilter::StartsWith(value) => {
                         match_set.add(Matcher {
                             field: format!("tag.{property}"),
-                            value: MatchOn::Equal(value.to_string()),
+                            value: MatchOn::Equal(value.clone()),
                         });
                     }
                     TagFilter::Range(range) => {
@@ -305,7 +305,7 @@ impl ProtocolsQueryBuilder {
         if let Some(protocol) = &self.protocol {
             match_set.add(Matcher {
                 field: "protocol".to_string(),
-                value: MatchOn::Equal(protocol.to_string()),
+                value: MatchOn::Equal(protocol.clone()),
             });
         }
         if let Some(published) = &self.published {
@@ -456,7 +456,7 @@ impl GrantedQueryBuilder {
         if let Some(permission_grant_id) = &self.permission_grant_id {
             match_set.add(Matcher {
                 field: "permissionGrantId".to_string(),
-                value: MatchOn::Equal(permission_grant_id.to_string()),
+                value: MatchOn::Equal(permission_grant_id.clone()),
             });
         }
         if let Some(date_created) = &self.date_created {

@@ -83,7 +83,5 @@ async fn owner_events() {
             }
         }
     };
-    if let Err(_) = time::timeout(Duration::from_millis(500), find_event).await {
-        panic!("should have found event");
-    }
+    time::timeout(Duration::from_millis(500), find_event).await.expect("should have found event");
 }

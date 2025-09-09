@@ -7,7 +7,7 @@ use std::io::Cursor;
 
 use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 use http::StatusCode;
 
 use crate::Method;

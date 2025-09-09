@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 
 use chrono::SecondsFormat::Micros;
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 use http::StatusCode;
 
 use crate::authorization::Authorization;

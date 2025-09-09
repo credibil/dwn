@@ -1,5 +1,8 @@
 //! Records Query
 
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::large_stack_frames)]
+#![allow(clippy::similar_names)]
 #![cfg(all(feature = "client", feature = "server"))]
 
 use std::io::Cursor;
@@ -204,6 +207,7 @@ async fn no_encoded_data() {
     // --------------------------------------------------
     // Alice creates a record.
     // --------------------------------------------------
+    #[allow(clippy::large_stack_arrays)]
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::rng().fill_bytes(&mut data);
 
@@ -2341,8 +2345,8 @@ async fn sort_identical() {
         .expect("should create write");
 
     // reverse sort newest to oldest by message_cid
-    let mut sorted_write = vec![write_1.clone(), write_2.clone(), write_3.clone()];
-    sorted_write.sort_by(|a, b| b.cid().unwrap().cmp(&a.cid().unwrap()));
+    let mut sorted_write = [write_1.clone(), write_2.clone(), write_3.clone()];
+    sorted_write.sort_by_key(|b| std::cmp::Reverse(b.cid().unwrap()));
 
     let reply = node.request(write_1.clone()).owner(alice.did()).await.expect("should write");
     assert_eq!(reply.status, StatusCode::ACCEPTED);
@@ -2408,7 +2412,7 @@ async fn paginate_ascending() {
         let write = WriteBuilder::new()
             .date_created(date_created.into())
             .message_timestamp(date_created.into())
-            .data(Data::from(format!("write_{}", i).into_bytes()))
+            .data(Data::from(format!("write_{i}").into_bytes()))
             .schema("schema")
             .published(true)
             .sign(alice)
@@ -2471,7 +2475,7 @@ async fn paginate_descending() {
         date_created += Duration::days(1);
 
         let write = WriteBuilder::new()
-            .data(Data::from(format!("write_{}", i).into_bytes()))
+            .data(Data::from(format!("write_{i}").into_bytes()))
             .schema("schema")
             .published(true)
             .date_created(date_created.into())
@@ -2595,7 +2599,7 @@ async fn recipient_query() {
     // Alice creates 2 records each for Bob and Carol; 2 public, 2 private.
     // --------------------------------------------------
     let alice_bob_private = WriteBuilder::new()
-        .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
+        .data(Data::from(b"Hello Bob (private)".to_vec()))
         .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2613,7 +2617,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_bob_public = WriteBuilder::new()
-        .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
+        .data(Data::from(b"Hello Bob (public)".to_vec()))
         .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2632,7 +2636,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_carol_private = WriteBuilder::new()
-        .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
+        .data(Data::from(b"Hello Carol (private)".to_vec()))
         .recipient(carol.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2650,7 +2654,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let alice_carol_public = WriteBuilder::new()
-        .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
+        .data(Data::from(b"Hello Carol (public)".to_vec()))
         .recipient(carol.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2672,7 +2676,7 @@ async fn recipient_query() {
     // Carol creates 2 records each for Alice and Bob; 2 public, 2 private.
     // --------------------------------------------------
     let carol_alice_private = WriteBuilder::new()
-        .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
+        .data(Data::from(b"Hello Alice (private)".to_vec()))
         .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2690,7 +2694,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_alice_public = WriteBuilder::new()
-        .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
+        .data(Data::from(b"Hello Alice (public)".to_vec()))
         .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2709,7 +2713,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_bob_private = WriteBuilder::new()
-        .data(Data::from(br#"Hello Bob (private)"#.to_vec()))
+        .data(Data::from(b"Hello Bob (private)".to_vec()))
         .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2727,7 +2731,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let carol_bob_public = WriteBuilder::new()
-        .data(Data::from(br#"Hello Bob (public)"#.to_vec()))
+        .data(Data::from(b"Hello Bob (public)".to_vec()))
         .recipient(bob.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2749,7 +2753,7 @@ async fn recipient_query() {
     // Bob creates 2 records each for Alice and Carol; 2 public, 2 private.
     // --------------------------------------------------
     let bob_alice_private = WriteBuilder::new()
-        .data(Data::from(br#"Hello Alice (private)"#.to_vec()))
+        .data(Data::from(b"Hello Alice (private)".to_vec()))
         .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2767,7 +2771,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_alice_public = WriteBuilder::new()
-        .data(Data::from(br#"Hello Alice (public)"#.to_vec()))
+        .data(Data::from(b"Hello Alice (public)".to_vec()))
         .recipient(alice.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2786,7 +2790,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_carol_private = WriteBuilder::new()
-        .data(Data::from(br#"Hello Carol (private)"#.to_vec()))
+        .data(Data::from(b"Hello Carol (private)".to_vec()))
         .recipient(carol.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -2804,7 +2808,7 @@ async fn recipient_query() {
     assert_eq!(reply.status, StatusCode::ACCEPTED);
 
     let bob_carol_public = WriteBuilder::new()
-        .data(Data::from(br#"Hello Carol (public)"#.to_vec()))
+        .data(Data::from(b"Hello Carol (public)".to_vec()))
         .recipient(carol.did())
         .protocol(ProtocolBuilder {
             protocol: "http://allow-any.xyz",
@@ -3343,7 +3347,7 @@ async fn paginate_non_owner() {
         let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::from(format!("bob_private_{}", i).into_bytes()))
+            .data(Data::from(format!("bob_private_{i}").into_bytes()))
             .protocol(ProtocolBuilder {
                 protocol: "http://allow-any.xyz",
                 protocol_path: "post",
@@ -3367,7 +3371,7 @@ async fn paginate_non_owner() {
         let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::from(format!("alice_private_{}", i).into_bytes()))
+            .data(Data::from(format!("alice_private_{i}").into_bytes()))
             .protocol(ProtocolBuilder {
                 protocol: "http://allow-any.xyz",
                 protocol_path: "post",
@@ -3394,7 +3398,7 @@ async fn paginate_non_owner() {
         let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::from(format!("alice_public_{}", i).into_bytes()))
+            .data(Data::from(format!("alice_public_{i}").into_bytes()))
             .protocol(ProtocolBuilder {
                 protocol: "http://allow-any.xyz",
                 protocol_path: "post",
@@ -3417,7 +3421,7 @@ async fn paginate_non_owner() {
         let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::from(format!("bob_public_{}", i).into_bytes()))
+            .data(Data::from(format!("bob_public_{i}").into_bytes()))
             .protocol(ProtocolBuilder {
                 protocol: "http://allow-any.xyz",
                 protocol_path: "post",
@@ -3440,7 +3444,7 @@ async fn paginate_non_owner() {
         let write = WriteBuilder::new()
             .message_timestamp(timestamp.into())
             .date_created(timestamp.into())
-            .data(Data::from(format!("alice_public_{}", i).into_bytes()))
+            .data(Data::from(format!("alice_public_{i}").into_bytes()))
             .protocol(ProtocolBuilder {
                 protocol: "http://allow-any.xyz",
                 protocol_path: "post",
@@ -3944,8 +3948,7 @@ async fn context_id() {
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 1);
 
-    let record_ids = entries.iter().map(|e| &e.write.record_id).collect::<Vec<_>>();
-    assert!(record_ids.contains(&&baz_1.record_id));
+    assert!(entries.iter().map(|e| &e.write.record_id).any(|x| x == &baz_1.record_id));
 }
 
 // Should not use protocol authorization if protocol_role is not set.

@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use async_recursion::async_recursion;
 use chrono::SecondsFormat::Micros;
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 use http::StatusCode;
 
 use crate::authorization::Authorization;

@@ -307,7 +307,7 @@ async fn match_grant_scope() {
     let entries = query_reply.entries.expect("should have entries");
     assert_eq!(entries.len(), 5);
 
-    let expected_cids = vec![
+    let expected_cids = [
         bob_grant.cid().expect("should have cid"),
         configure_any.cid().expect("should have cid"),
         configure_rand.cid().expect("should have cid"),

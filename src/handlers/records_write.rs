@@ -9,7 +9,7 @@ use std::io::{Cursor, Read};
 use anyhow::Context;
 use base64ct::{Base64UrlUnpadded, Encoding};
 use chrono::format::SecondsFormat::Micros;
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 use http::StatusCode;
 use serde_json::json;
 
@@ -498,7 +498,7 @@ impl Write {
 
         indexes.insert("interface".to_string(), descriptor.base.interface.to_string());
         indexes.insert("method".to_string(), descriptor.base.method.to_string());
-        // indexes.insert("initial".to_string(), false.to_string());
+        // indexes.insert("initial".to_string(), false.clone());
         indexes.insert("recordId".to_string(), self.record_id.clone());
         if let Some(context_id) = &self.context_id {
             indexes.insert("contextId".to_string(), context_id.clone());

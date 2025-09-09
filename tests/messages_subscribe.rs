@@ -112,9 +112,7 @@ async fn owner_events() {
             }
         }
     };
-    if let Err(_) = time::timeout(Duration::from_millis(500), find_event).await {
-        panic!("should have found event");
-    }
+    time::timeout(Duration::from_millis(500), find_event).await.expect("should have found event");
 }
 
 // Should not allow non-owners to subscribe to unauthorized event streams.
@@ -267,9 +265,7 @@ async fn interface_scope() {
             }
         }
     };
-    if let Err(_) = time::timeout(Duration::from_millis(500), find_event).await {
-        panic!("should have found events");
-    }
+    time::timeout(Duration::from_millis(500), find_event).await.expect("should have found events");
 }
 
 // Should reject subscriptions when interface is not authorized.
@@ -484,9 +480,7 @@ async fn protocol_filter() {
         };
         assert_eq!(protocol1_cid, event.cid().unwrap());
     };
-    if let Err(_) = time::timeout(Duration::from_millis(500), protocol1).await {
-        panic!("should have found events");
-    }
+    time::timeout(Duration::from_millis(500), protocol1).await.expect("should have found events");
 
     let remaining = async move {
         if let Some(event) = alice_events.next().await {

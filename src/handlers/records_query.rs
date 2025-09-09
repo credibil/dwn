@@ -4,7 +4,7 @@
 //! to query the [`MessageStore`] for matching [`Write`] (and possibly
 //! [`Delete`]) messages.
 
-use credibil_core::api::{Body, Handler, Request, Response};
+use credibil_api::{Body, Handler, Request, Response};
 
 use crate::authorization::Authorization;
 use crate::error::{bad_request, forbidden};

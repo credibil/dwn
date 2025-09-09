@@ -275,6 +275,7 @@ async fn data_gt_threshold() {
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
+    #[allow(clippy::large_stack_arrays)]
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::rng().fill_bytes(&mut data);
     let reader = Cursor::new(data.to_vec());
@@ -322,6 +323,7 @@ async fn no_data_after_update() {
     // --------------------------------------------------
     // Alice writes a record.
     // --------------------------------------------------
+    #[allow(clippy::large_stack_arrays)]
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::rng().fill_bytes(&mut data);
     let reader = Cursor::new(data.to_vec());
@@ -341,6 +343,7 @@ async fn no_data_after_update() {
     // --------------------------------------------------
     // Alice updates the record.
     // --------------------------------------------------
+    #[allow(clippy::large_stack_arrays)]
     let mut data = [0u8; MAX_ENCODED_SIZE + 10];
     rand::rng().fill_bytes(&mut data);
     let reader = Cursor::new(data.to_vec());
@@ -615,6 +618,7 @@ async fn permissive_grant() {
 
 // Should allow reading protocol messages with a protocol-based grant.
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn protocol_grant() {
     let node = node().await;
     let alice = alice().await;
@@ -1048,7 +1052,7 @@ async fn delete_with_no_write() {
     // Bob attempts to use the grant to read the protocol message, but fails.
     // --------------------------------------------------
     let read = ReadBuilder::new()
-        .message_cid(&delete.cid().expect("should get CID"))
+        .message_cid(delete.cid().expect("should get CID"))
         .permission_grant_id(bob_grant_id)
         .sign(bob)
         .build()

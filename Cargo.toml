@@ -30,13 +30,14 @@ server = ["dep:async-recursion", "dep:tokio"]
 anyhow.workspace = true
 async-recursion = { version = "1.1.1", optional = true }
 base64ct = { version = "1.8.0", features = ["std"] }
-cfg-if = "1.0.1"
-chrono = { version = "0.4.41", features = ["serde"] }
+cfg-if = "1.0.3"
+chrono = { version = "0.4.42", features = ["serde"] }
 ciborium.workspace = true
 cid.workspace = true
+credibil-api.workspace = true
 credibil-binding.workspace = true
-credibil-core.workspace = true
 credibil-ecc.workspace = true
+credibil-encoding.workspace = true
 credibil-jose.workspace = true
 datastore.workspace = true
 derive_more = { version = "2.0.1", features = ["display"] }
@@ -47,12 +48,12 @@ http-body-util = "0.1"
 ipld-core.workspace = true
 jsonschema = { version = "0.30.0", default-features = false, features = ["resolve-file"] }
 multihash-codetable.workspace = true
-rand = "0.9.1"
+rand = "0.9.2"
 serde.workspace = true
 serde_ipld_dagcbor = "0.6.3"
 serde_json.workspace = true
 sha2 = "0.10.9"
-thiserror = "2.0.12"
+thiserror = "2.0.16"
 tokio = { workspace = true, optional = true }
 tracing = "0.1.41"
 uuid.workspace = true
@@ -64,7 +65,7 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["full"] }
 test-utils = { path = "crates/test-utils" }
 tower-http = { version = "0.6.6", features = ["cors", "set-header", "trace"] }
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
 
 [[example]]
 name = "json_rpc"
@@ -91,7 +92,7 @@ homepage = "https://credibil.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/credibil/dwn"
 rust-version = "1.88"
-version = "0.1.2"
+version = "0.2.0"
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -105,22 +106,24 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.98"
+anyhow = "1.0.99"
 ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
-credibil-binding = { git = "https://github.com/credibil/key.git" }
-credibil-core = { git = "https://github.com/credibil/core.git" }
+credibil-api = { git = "https://github.com/credibil/core.git", tag = "v0.1.0" }
+credibil-binding = { git = "https://github.com/credibil/key.git", tag = "v0.1.0" }
+credibil-core = { git = "https://github.com/credibil/core.git", tag = "v0.1.0" }
 credibil-dwn = { path = "." }
-credibil-ecc = { git = "https://github.com/credibil/key.git" }
-credibil-jose = { git = "https://github.com/credibil/key.git" }
+credibil-ecc = { git = "https://github.com/credibil/key.git", tag = "v0.1.0" }
+credibil-encoding = { git = "https://github.com/credibil/core.git", tag = "v0.1.0" }
+credibil-jose = { git = "https://github.com/credibil/key.git", tag = "v0.1.0" }
 datastore = { path = "crates/datastore" }
 futures = "0.3.31"
 ipld-core = "0.4.2"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.140", features = ["alloc"] }
-tokio = { version = "1.46.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
-uuid = { version = "1.17.0", features = ["fast-rng", "v4"] }
+serde_json = { version = "1.0.143", features = ["alloc"] }
+tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+uuid = { version = "1.18.1", features = ["fast-rng", "v4"] }
 
 # [patch."https://github.com/credibil/core"]
 # credibil-core = { path = "../core" }

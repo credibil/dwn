@@ -180,7 +180,7 @@ async fn overwrite_smaller() {
     // --------------------------------------------------
     // Alice creates 3 messages sorted in by CID.
     // --------------------------------------------------
-    let mut messages = vec![
+    let mut messages = [
         ConfigureBuilder::new()
             .definition(definition_1)
             .sign(alice)
@@ -205,8 +205,7 @@ async fn overwrite_smaller() {
     let timestamp = messages[0].descriptor.base.message_timestamp;
     messages[1].descriptor.base.message_timestamp = timestamp;
     messages[2].descriptor.base.message_timestamp = timestamp;
-
-    messages.sort_by(|a, b| a.cid().unwrap().cmp(&b.cid().unwrap()));
+    messages.sort_by_key(|a| a.cid().unwrap());
 
     // --------------------------------------------------
     // Alice attempts to configure all 3 protocols, failing when the protocol

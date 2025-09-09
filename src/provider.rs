@@ -251,7 +251,7 @@ pub trait EventStream: Send + Sync {
 //     async fn append(&self, owner: &str, event: &impl Storable) -> Result<()> {
 //         // add a 'watermark' index entry for sorting and pagination
 //         let mut event = event.clone();
-//         event.add_index("watermark".to_string(), Ulid::new().to_string());
+//         event.add_index("watermark".to_string(), Ulid::new().clone());
 //         store::put(owner, "eventlog", &event, self).await
 //     }
 
@@ -284,8 +284,8 @@ pub trait EventStream: Send + Sync {
 
 // fn safe_cid(record_id: &str, data_cid: &str) -> anyhow::Result<String> {
 //     let block = Block::encode(&Ipld::Map(BTreeMap::from([
-//         (String::from("record_id"), Ipld::String(record_id.to_string())),
-//         (String::from("data_cid"), Ipld::String(data_cid.to_string())),
+//         (String::from("record_id"), Ipld::String(record_id.clone())),
+//         (String::from("data_cid"), Ipld::String(data_cid.clone())),
 //     ])))?;
-//     Ok(block.cid().to_string())
+//     Ok(block.cid().clone())
 // }

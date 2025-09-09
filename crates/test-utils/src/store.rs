@@ -37,7 +37,7 @@ impl Datastore {
         let all = STORE
             .iter()
             .filter(move |r| r.key().starts_with(&format!("{owner}-{partition}-")))
-            .map(|r| (r.key().to_string(), r.value().clone()))
+            .map(|r| (r.key().clone(), r.value().clone()))
             .collect::<Vec<_>>();
         Ok(all)
     }

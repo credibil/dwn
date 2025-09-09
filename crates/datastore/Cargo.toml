@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
-chrono = { version = "0.4.41", features = ["serde"] }
+chrono = { version = "0.4.42", features = ["serde"] }
 ciborium.workspace = true
 cid = { version = "0.11.1", features = ["alloc"] }
 ipld-core = "0.4.2"

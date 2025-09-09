@@ -1,8 +1,7 @@
 //! A simple Hyper HTTP server that handles DWN messages.
 
 use anyhow::{Result, anyhow};
-use credibil_dwn::api::Client;
-use credibil_dwn::http::IntoHttp;
+use credibil_dwn::api::{Client, IntoHttp};
 use credibil_dwn::interfaces::{Descriptor, messages, protocols, records};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
@@ -165,6 +164,7 @@ struct Params {
 /// in the case of Notifications.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct JsonRpcResponse<T: Default + Serialize> {
     /// The JSON-RPC version identifier. Must be "2.0".
     jsonrpc: String,
@@ -189,7 +189,7 @@ enum ResponseMember<T: Default + Serialize> {
 
 impl<T: Default + Serialize> Default for ResponseMember<T> {
     fn default() -> Self {
-        ResponseMember::Result(T::default())
+        Self::Result(T::default())
     }
 }
 
