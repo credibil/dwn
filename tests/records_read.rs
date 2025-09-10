@@ -3,6 +3,7 @@
 #![cfg(all(feature = "client", feature = "server"))]
 #![allow(clippy::large_stack_arrays)]
 #![allow(clippy::too_many_lines)]
+#![cfg(not(miri))] // waiting for https://github.com/rust-lang/miri/issues/602
 
 use std::io::{Cursor, Read};
 

@@ -4,6 +4,7 @@
 #![allow(clippy::large_stack_frames)]
 #![allow(clippy::similar_names)]
 #![cfg(all(feature = "client", feature = "server"))]
+#![cfg(not(miri))] // waiting for https://github.com/rust-lang/miri/issues/602
 
 use std::io::Cursor;
 

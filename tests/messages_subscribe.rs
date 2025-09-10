@@ -1,6 +1,7 @@
 //! Messages Subscribe
 
 #![cfg(all(feature = "client", feature = "server"))]
+#![cfg(not(miri))] // waiting for https://github.com/rust-lang/miri/issues/602
 
 use core::panic;
 use std::io::Cursor;
