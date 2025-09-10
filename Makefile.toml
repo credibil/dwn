@@ -68,7 +68,7 @@ args = ["audit"]
 
 [tasks.miri]
 command = "cargo"
-args = ["miri", "nextest", "run", "-j10"]
+args = ["miri", "nextest", "run"]
 env = { RUSTFLAGS = "-Dwarnings" }
 
 [tasks.vet]
