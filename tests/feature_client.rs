@@ -4,6 +4,7 @@
 //! subsequently query for them.
 
 #![cfg(feature = "client")]
+#![cfg(not(miri))] // waiting for https://github.com/rust-lang/miri/issues/602
 
 use std::io::Cursor;
 
