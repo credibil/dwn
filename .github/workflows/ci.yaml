@@ -1,4 +1,4 @@
-name: Verify
+name: CI
 
 on:
   push:
@@ -8,4 +8,4 @@ on:
 
 jobs:
   verify:
-    uses: credibil/pipeline/.github/workflows/verify.yaml@main
+    uses: credibil/pipeline/.github/workflows/ci.yaml@main
