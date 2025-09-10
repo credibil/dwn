@@ -7,5 +7,5 @@ on:
     #   - '**/tests/**'
 
 jobs:
-  verify:
+  ci:
     uses: credibil/pipeline/.github/workflows/ci.yaml@main
