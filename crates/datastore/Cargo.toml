@@ -9,10 +9,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow.workspace = true
-chrono = { version = "0.4.42", features = ["serde"] }
+chrono.workspace = true
 ciborium.workspace = true
-cid = { version = "0.11.1", features = ["alloc"] }
-ipld-core = "0.4.2"
+cid.workspace = true
+ipld-core.workspace = true
 multihash-codetable.workspace = true
 serde.workspace = true
-serde_ipld_dagcbor = "0.6.3"
+serde_ipld_dagcbor.workspace = true
