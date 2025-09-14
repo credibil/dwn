@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    # paths:
-    #   - '**/src/**'
-    #   - '**/tests/**'
+    branches:
+      - 'release-*'
 
 jobs:
   ci:
