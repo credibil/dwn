@@ -91,7 +91,7 @@ homepage = "https://credibil.io"
 keywords = ["decentralized", "didcomm", "web", "node", "storage"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/credibil/dwn"
-rust-version = "1.88"
+rust-version = "1.89"
 version = "0.3.0"
 
 [workspace.lints.rust]

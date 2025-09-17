@@ -169,7 +169,7 @@ version = "0.1.0@git:b27dc201fea251e6270bc88eac04d74006a9a54f"
 criteria = "safe-to-deploy"
 
 [[exemptions.credibil-dwn]]
-version = "0.2.0"
+version = "0.1.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.critical-section]]
