@@ -284,15 +284,15 @@ impl DateRange {
     /// Check if the range contains the value.
     #[must_use]
     pub fn contains(&self, value: &DateTime<Utc>) -> bool {
-        if let Some(lower) = &self.lower {
-            if value < lower {
-                return false;
-            }
+        if let Some(lower) = &self.lower
+            && value < lower
+        {
+            return false;
         }
-        if let Some(upper) = &self.upper {
-            if value >= upper {
-                return false;
-            }
+        if let Some(upper) = &self.upper
+            && value >= upper
+        {
+            return false;
         }
 
         true

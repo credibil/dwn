@@ -121,7 +121,7 @@ version = "0.2.14"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.2.36"
+version = "1.2.37"
 criteria = "safe-to-deploy"
 
 [[exemptions.chacha20]]
@@ -300,6 +300,10 @@ criteria = "safe-to-deploy"
 version = "0.12.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.iana-time-zone]]
+version = "0.1.64"
+criteria = "safe-to-deploy"
+
 [[exemptions.idna]]
 version = "1.1.0"
 criteria = "safe-to-deploy"
@@ -317,7 +321,7 @@ version = "2.11.0"
 criteria = "safe-to-run"
 
 [[exemptions.js-sys]]
-version = "0.3.78"
+version = "0.3.79"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
@@ -453,7 +457,7 @@ version = "0.13.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.proc-macro-crate]]
-version = "3.3.0"
+version = "3.4.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.r-efi]]
@@ -501,7 +505,7 @@ version = "0.102.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-webpki]]
-version = "0.103.4"
+version = "0.103.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.ryu-js]]
@@ -522,6 +526,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.security-framework-sys]]
 version = "2.15.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.semver]]
+version = "1.0.27"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde_ipld_dagcbor]]
@@ -580,6 +588,10 @@ criteria = "safe-to-deploy"
 version = "0.10.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.toml_parser]]
+version = "1.0.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.tower-layer]]
 version = "0.3.3"
 criteria = "safe-to-run"
@@ -606,6 +618,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ulid]]
 version = "1.2.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.unicode-ident]]
+version = "1.0.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.unsigned-varint]]
@@ -637,23 +653,23 @@ version = "0.8.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen]]
-version = "0.2.101"
+version = "0.2.102"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-backend]]
-version = "0.2.101"
+version = "0.2.102"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-macro]]
-version = "0.2.101"
+version = "0.2.102"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-macro-support]]
-version = "0.2.101"
+version = "0.2.102"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-shared]]
-version = "0.2.101"
+version = "0.2.102"
 criteria = "safe-to-deploy"
 
 [[exemptions.web-time]]

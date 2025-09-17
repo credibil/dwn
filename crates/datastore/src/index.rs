@@ -194,10 +194,10 @@ impl<S: BlockStore> Indexes<'_, S> {
         // starting from `start_key`, select matching index items until limit
         for (value, item) in index.lower_bound(start_key) {
             // stop when page limit + 1 is reached
-            if let Some(lim) = limit {
-                if items.len() == lim + 1 {
-                    break;
-                }
+            if let Some(lim) = limit
+                && items.len() == lim + 1
+            {
+                break;
             }
 
             if matches.contains(&item.message_cid) {
