@@ -13,8 +13,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.anyhow]]
-version = "1.0.99"
-when = "2025-08-11"
+version = "1.0.100"
+when = "2025-09-19"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -88,8 +88,8 @@ user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
 [[publisher.hashbrown]]
-version = "0.15.5"
-when = "2025-08-07"
+version = "0.16.0"
+when = "2025-08-29"
 user-id = 55123
 user-login = "rust-lang-owner"
 
@@ -129,8 +129,8 @@ user-login = "seanmonstar"
 user-name = "Sean McArthur"
 
 [[publisher.indexmap]]
-version = "2.11.3"
-when = "2025-09-15"
+version = "2.11.4"
+when = "2025-09-18"
 user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
@@ -386,15 +386,15 @@ user-login = "Darksonn"
 user-name = "Alice Ryhl"
 
 [[publisher.toml_datetime]]
-version = "0.7.1"
-when = "2025-09-15"
+version = "0.7.2"
+when = "2025-09-18"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.toml_edit]]
-version = "0.23.5"
-when = "2025-09-15"
+version = "0.23.6"
+when = "2025-09-18"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
