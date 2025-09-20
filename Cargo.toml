@@ -91,7 +91,7 @@ homepage = "https://credibil.io"
 keywords = ["decentralized", "didcomm", "web", "node", "storage"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/credibil/dwn"
-rust-version = "1.89"
+rust-version = "1.90"
 version = "0.3.0"
 
 [workspace.lints.rust]
@@ -106,7 +106,7 @@ pedantic = "warn"
 nursery = "warn"
 
 [workspace.dependencies]
-anyhow = "1.0.99"
+anyhow = "1.0.100"
 chrono = { version = "0.4.42", features = ["serde"] }
 ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
@@ -122,18 +122,13 @@ futures = "0.3.31"
 ipld-core = "0.4.2"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
 serde = { version = "1.0.225", features = ["derive"] }
-serde_ipld_dagcbor = "0.6.3"
+serde_ipld_dagcbor = "0.6.4"
 serde_json = { version = "1.0.145", features = ["alloc"] }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 uuid = { version = "1.18.1", features = ["fast-rng", "v4"] }
 
 # [patch."https://github.com/credibil/core"]
 # credibil-core = { path = "../core" }
-
-# [patch."https://github.com/credibil/key"]
-# credibil-ecc = { path = "../key/ecc" }
-# credibil-jose = { path = "../key/jose" }
-# credibil-binding = { path = "../key/binding" }
 
 [profile.release]
 # optimize for small code size
