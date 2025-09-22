@@ -1001,7 +1001,7 @@ impl Encrypted {
                 public_key: PublicKey::try_from(decoded)?,
             };
             let cek: [u8; 32] =
-                self.cek.clone().try_into().map_err(|_| bad_request!("invalid CEK key"))?;
+                self.cek.clone().try_into().map_err(|_secret| bad_request!("invalid CEK key"))?;
 
             // encrypt cek
             let ke = match self.key_algorithm {
