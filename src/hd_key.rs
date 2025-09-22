@@ -139,7 +139,7 @@ pub fn derive_jwk(ancestor: DerivedPrivateJwk, path: &DerivationPath) -> Result<
 
     let ancestor_secret = Base64UrlUnpadded::decode_vec(&ancestor.derived_private_key.d)?;
     let secret_bytes: [u8; PUBLIC_KEY_LENGTH] =
-        ancestor_secret.try_into().map_err(|_| anyhow!("invalid secret key"))?;
+        ancestor_secret.try_into().map_err(|_secret| anyhow!("invalid secret key"))?;
 
     // derive descendant private/public keypair
     let derived_secret = derive_key(secret_bytes, sub_path)?;

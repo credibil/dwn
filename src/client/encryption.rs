@@ -125,7 +125,7 @@ impl Receiver for ReceiverImpl {
         // EdDSA signing key
         let decoded = Base64UrlUnpadded::decode_vec(&self.0)?;
         let bytes: [u8; PUBLIC_KEY_LENGTH] =
-            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
+            decoded.try_into().map_err(|_secret| anyhow!("invalid secret key"))?;
         Ok(PublicKey::from(bytes))
     }
 
@@ -133,7 +133,7 @@ impl Receiver for ReceiverImpl {
         // EdDSA signing key
         let decoded = Base64UrlUnpadded::decode_vec(&self.0)?;
         let bytes: [u8; PUBLIC_KEY_LENGTH] =
-            decoded.try_into().map_err(|_| anyhow!("invalid secret key"))?;
+            decoded.try_into().map_err(|_secret| anyhow!("invalid secret key"))?;
         derive_x25519_secret(&bytes, &sender_public)
     }
 }

@@ -1,3 +1,13 @@
 # https://doc.rust-lang.org/stable/clippy/index.html
 
 doc-valid-idents = ["OAuth", "TypeScript"]
+
+allowed-duplicate-crates = [
+    "bitflags",
+    "digest",
+    "getrandom",
+    "rand",
+    "rand_chacha",
+    "rand_core",
+    "wasi",
+]
