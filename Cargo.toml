@@ -139,7 +139,6 @@ anyhow = "1.0.100"
 chrono = { version = "0.4.42", features = ["serde"] }
 ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
-
 futures = "0.3.31"
 ipld-core = "0.4.2"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
