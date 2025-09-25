@@ -93,7 +93,7 @@ keywords = ["decentralized", "didcomm", "web", "node", "storage"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/credibil/dwn"
 rust-version = "1.90"
-version = "0.3.0"
+version = "0.4.0"
 
 [workspace.lints.rust]
 # https://dirname.github.io/rust-std-doc/rustc/lints/listing/allowed-by-default.html
@@ -157,8 +157,8 @@ credibil-encoding = { version = "0.2.1", registry = "credibil" }
 credibil-jose = { version = "0.3.0", registry = "credibil" }
 
 # internal references
-credibil-dwn = { path = ".", version = "0.3.0", registry = "credibil" }
-datastore = { path = "crates/datastore", version = "0.3.0", registry = "credibil" }
+credibil-dwn = { path = ".", version = "0.4.0", registry = "credibil" }
+datastore = { path = "crates/datastore", version = "0.4.0", registry = "credibil" }
 
 # [patch."https://github.com/credibil/core"]
 # credibil-core = { path = "../core" }
