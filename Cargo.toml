@@ -139,14 +139,6 @@ anyhow = "1.0.100"
 chrono = { version = "0.4.42", features = ["serde"] }
 ciborium = "0.2.2"
 cid = { version = "0.11.1", features = ["alloc"] }
-credibil-api = { git = "https://github.com/credibil/core.git", tag = "v0.1.0" }
-credibil-binding = { git = "https://github.com/credibil/key.git", tag = "v0.2.0" }
-credibil-core = { git = "https://github.com/credibil/core.git", tag = "v0.1.0" }
-credibil-dwn = { path = "." }
-credibil-ecc = { git = "https://github.com/credibil/key.git", tag = "v0.2.0" }
-credibil-encoding = { git = "https://github.com/credibil/core.git", tag = "v0.1.0" }
-credibil-jose = { git = "https://github.com/credibil/key.git", tag = "v0.2.0" }
-datastore = { path = "crates/datastore" }
 futures = "0.3.31"
 ipld-core = "0.4.2"
 multihash-codetable = { version = "0.1.4", features = ["sha2"] }
@@ -155,6 +147,18 @@ serde_ipld_dagcbor = "0.6.4"
 serde_json = { version = "1.0.145", features = ["alloc"] }
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 uuid = { version = "1.18.1", features = ["fast-rng", "v4"] }
+
+# credibil registry
+credibil-api = { version = "0.2.1", registry = "credibil" }
+credibil-binding = { version = "0.3.0", registry = "credibil" }
+credibil-core = { version = "0.2.1", registry = "credibil" }
+credibil-ecc = { version = "0.3.0", registry = "credibil" }
+credibil-encoding = { version = "0.2.1", registry = "credibil" }
+credibil-jose = { version = "0.3.0", registry = "credibil" }
+
+# internal references
+credibil-dwn = { path = ".", version = "0.3.0", registry = "credibil" }
+datastore = { path = "crates/datastore", version = "0.3.0", registry = "credibil" }
 
 # [patch."https://github.com/credibil/core"]
 # credibil-core = { path = "../core" }

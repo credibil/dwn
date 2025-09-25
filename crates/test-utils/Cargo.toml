@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-async-nats = "0.42.0"
+async-nats = "0.43.0"
 blockstore = "0.8.0"
 ciborium.workspace = true
 cid.workspace = true
