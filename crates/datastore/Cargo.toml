@@ -1,6 +1,7 @@
 [package]
 name = "datastore"
-publish = false
+description = "Datastore module for DWN"
+readme = "README.md"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
