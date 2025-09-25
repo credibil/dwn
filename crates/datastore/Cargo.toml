@@ -3,6 +3,7 @@ name = "datastore"
 description = "Datastore module for DWN"
 readme = "README.md"
 authors.workspace = true
+categories.workspace = true
 edition.workspace = true
 homepage.workspace = true
 keywords.workspace = true
