@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "credibil-dwn"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -828,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "datastore"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
