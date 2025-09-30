@@ -44,9 +44,7 @@ env = { RUSTFLAGS = "-Dwarnings" }
 # -----------------------------------------------------------------------------
 
 [tasks.fmt]
-command = "cargo"
-args = ["fmt", "--all"]
-install_crate = "rustfmt"
+script = "cargo +nightly fmt --all"
 
 [tasks.lint]
 command = "cargo"
